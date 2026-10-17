@@ -12,6 +12,7 @@ void main() {
     String metric = 'reps',
     String? winnerUserId,
     String? completedAt,
+    String format = 'first_to_goal',
   }) {
     return Race(
       id: 'race-1',
@@ -23,7 +24,7 @@ void main() {
       unit: metric,
       activityId: activityId,
       metric: metric,
-      format: 'first_to_goal',
+      format: format,
       scoringRule: 'cumulative_sum',
       status: status,
       winnerUserId: winnerUserId,
@@ -65,6 +66,25 @@ void main() {
       scoreValue: scoreValue,
     );
   }
+
+  group('Open-ended races have no finish line', () {
+    Race windowRace(String format) =>
+        makeRace(status: 'active', targetValue: 60, format: format);
+
+    test('most-in-window shows a score, never N / placeholder', () {
+      final race = windowRace('most_in_window');
+      final me = participant(userId: 'me', score: 0, percent: 0);
+      expect(raceHasFinishLine(race), isFalse);
+      expect(raceProgressLabel(race, me), isNot(contains('/ 60')));
+    });
+
+    test('first-to-goal still shows the target', () {
+      final race = makeRace(status: 'active', targetValue: 60);
+      final me = participant(userId: 'me', score: 3, percent: 5);
+      expect(raceHasFinishLine(race), isTrue);
+      expect(raceProgressLabel(race, me), '3 / 60 reps');
+    });
+  });
 
   group('Progress rendering', () {
     test('caps visual progress but keeps raw over-target score labels', () {

@@ -1,0 +1,49 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "sumo_squats-tree-2026.10.0",
+  "activityId": "sumo_squats",
+  "engineType": "rep_tree_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "rep_tree_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTree": {
+    "start": {
+      "all": [
+        {
+          "signal": "hipToKneeRatio",
+          "gt": 0.72
+        },
+        {
+          "signal": "ankleWidthToBodyWidth",
+          "gt": 1.5
+        }
+      ]
+    },
+    "active": {
+      "all": [
+        {
+          "signal": "hipToKneeRatio",
+          "lt": 0.5
+        },
+        {
+          "signal": "ankleWidthToBodyWidth",
+          "gt": 1.5
+        }
+      ]
+    }
+  }
+}

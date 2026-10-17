@@ -12,9 +12,8 @@
 // Canonical mapping under test:
 //   0 Arena   /arena    → ArenaScreen
 //   1 Compete /compete  → CompeteScreen
-//   2 Verify  /move     → MoveScreen
-//   3 Crew    /pass     → PassScreen
-//   4 Profile /profile  → ProfileScreen
+//   2 Crew    /pass     → PassScreen
+//   3 Profile /profile  → ProfileScreen
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -37,12 +36,13 @@ import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
 import 'package:nuvo/features/crew/application/crew_controller.dart';
 import 'package:nuvo/features/crew/data/crew_api.dart';
 import 'package:nuvo/features/crew/data/crew_repository.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/notifications/application/notification_controller.dart';
 import 'package:nuvo/features/notifications/data/notification_models.dart';
 import 'package:nuvo/features/notifications/data/notification_repository.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 import 'package:nuvo/features/pass/presentation/pass_screen.dart';
+import 'package:nuvo/features/profile/application/progression_controller.dart';
+import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
 import 'package:nuvo/features/races/data/motion_catalog.dart';
 import 'package:nuvo/features/races/data/motion_catalog_cache.dart';
@@ -60,15 +60,17 @@ class _AuthRepo extends AuthRepository {
   _AuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'user-1',
-        email: 'test@getnuvo.net',
-        fullName: 'Test User',
-        username: 'testuser',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 }
 
 class _RaceRepo extends RaceRepository {
@@ -97,7 +99,8 @@ class _CrewRepo implements CrewRepository {
   Future<List<CrewSearchResult>> search(String query) async => const [];
 
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
   @override
   Future<ConnectOutcome> add(String userId) async => ConnectOutcome.active;
   @override
@@ -129,7 +132,7 @@ class _FeedRepo extends CrewActivityRepository {
 
 class _NotifRepo implements NotificationRepository {
   @override
-  Future<NotificationPage> list({String? cursor}) async =>
+  Future<NotificationPage> list({String? cursor, String? etag}) async =>
       const NotificationPage(items: [], unreadCount: 0);
   @override
   Future<void> markRead(String id) async {}
@@ -145,6 +148,13 @@ class _CatalogRepo extends MotionCatalogRepository {
       MotionCatalogSnapshot.bundled();
 }
 
+class _CountingProgression extends ProgressionController {
+  _CountingProgression() : super(ProgressionApi(), SecureTokenStore());
+  int revalidations = 0;
+  @override
+  void revalidate() => revalidations++;
+}
+
 // ── Harness ───────────────────────────────────────────────────────────────────
 
 class _App {
@@ -155,7 +165,10 @@ class _App {
 
 /// Pumps the REAL router from lib/app/router.dart — same StatefulShellRoute,
 /// same branch order, same _tabScreenFor — behind MaterialApp.router.
-Future<_App> _pumpRealApp(WidgetTester tester) async {
+Future<_App> _pumpRealApp(
+  WidgetTester tester, {
+  List<Override> extraOverrides = const [],
+}) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
@@ -177,9 +190,8 @@ Future<_App> _pumpRealApp(WidgetTester tester) async {
       // A guide-eligible account landing on /arena is redirected to /compete —
       // legitimate product behavior, not a mapping bug. Complete the guide so
       // this test exercises destination mapping only.
-      firstRaceGuideProvider.overrideWith(
-        (ref) => FirstRaceGuideStep.complete,
-      ),
+      firstRaceGuideProvider.overrideWith((ref) => FirstRaceGuideStep.complete),
+      ...extraOverrides,
     ],
   );
   addTearDown(container.dispose);
@@ -188,10 +200,7 @@ Future<_App> _pumpRealApp(WidgetTester tester) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp.router(
-        theme: AppTheme.light(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
     ),
   );
   // /splash → restore → SplashScreen hands off on its own timer; drive the
@@ -208,18 +217,23 @@ Future<_App> _pumpRealApp(WidgetTester tester) async {
 final _matrix = <String, (Type screen, String path)>{
   'Arena': (ArenaScreen, '/arena'),
   'Compete': (CompeteScreen, '/compete'),
-  'Verify': (MoveScreen, '/move'),
-  'Crew': (PassScreen, '/pass'),
+  'Friends': (PassScreen, '/pass'),
   'Profile': (ProfileScreen, '/profile'),
 };
 
 Finder _navLabel(String label) => find.descendant(
-      of: find.byKey(TrackSideLayoutKeys.navigationRow),
-      matching: find.text(label),
-    );
+  of: find.byKey(TrackSideLayoutKeys.navigationRow),
+  matching: find.text(label),
+);
 
 Future<void> _tapNav(WidgetTester tester, String label) async {
-  await tester.tap(_navLabel(label));
+  await tester.tap(
+    find.byKey(
+      ValueKey(
+        'nuvo-nav-slot-${['Arena', 'Compete', 'Friends', 'Profile'].indexOf(label)}',
+      ),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -241,10 +255,11 @@ void _expectDestination(_App app, WidgetTester tester, String label) {
     );
   }
 
-  // 2. Highlight: the destination's nav label reads through Nuvo blue.
+  // 2. Highlight: the selected destination sits in Nuvo's electric-blue pill
+  // with a white label.
   expect(
     tester.widget<Text>(_navLabel(label)).style?.color,
-    NuvoColors.blue,
+    NuvoColors.white,
     reason: '$label must be the highlighted nav destination',
   );
 
@@ -257,6 +272,20 @@ void _expectDestination(_App app, WidgetTester tester, String label) {
 }
 
 void main() {
+  testWidgets('Profile tab tap revalidates progression', (tester) async {
+    final counting = _CountingProgression();
+    final app = await _pumpRealApp(
+      tester,
+      extraOverrides: [
+        progressionControllerProvider.overrideWith((ref) => counting),
+      ],
+    );
+    expect(app.router, isNotNull);
+    final before = counting.revalidations;
+    await _tapNav(tester, 'Profile');
+    expect(counting.revalidations, before + 1);
+  });
+
   testWidgets('production router: every nav tap renders its own screen', (
     tester,
   ) async {
@@ -276,7 +305,7 @@ void main() {
     tester,
   ) async {
     final app = await _pumpRealApp(tester);
-    for (final label in ['Crew', 'Compete', 'Profile', 'Verify', 'Arena']) {
+    for (final label in ['Friends', 'Compete', 'Profile', 'Arena']) {
       await _tapNav(tester, label);
       _expectDestination(app, tester, label);
     }
@@ -303,7 +332,7 @@ void main() {
     // goBranch(navIndex) land on the wrong screen while every label-level
     // test stays green. Assert the observable contract, not the structure.
     final app = await _pumpRealApp(tester);
-    const taps = ['Compete', 'Verify', 'Crew', 'Arena', 'Profile'];
+    const taps = ['Compete', 'Friends', 'Arena', 'Profile'];
     for (final label in taps) {
       await _tapNav(tester, label);
       _expectDestination(app, tester, label);

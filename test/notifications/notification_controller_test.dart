@@ -14,7 +14,7 @@ class _FakeNotifRepo implements NotificationRepository {
   int markAllReadCalls = 0;
 
   @override
-  Future<NotificationPage> list({String? cursor}) async {
+  Future<NotificationPage> list({String? cursor, String? etag}) async {
     listCalls++;
     return const NotificationPage(items: [], unreadCount: 0);
   }

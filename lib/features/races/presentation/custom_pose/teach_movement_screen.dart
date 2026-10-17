@@ -17,7 +17,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_geometry.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
-import '../../../../core/widgets/nuvo_confirm_dialog.dart';
+import '../../../../core/widgets/nuvo_focused_stage.dart';
 import '../../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
@@ -34,6 +34,8 @@ import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
 import '../../ai/custom_pose/pose_calibration_flow.dart';
 import '../../ai/custom_pose/pose_stream_controller.dart';
+import '../../../auth/presentation/auth_controller.dart';
+import '../../ai/motion_session/motion_session_providers.dart';
 import '../race_controller.dart';
 import 'learned_custom_movement_provider.dart';
 import 'learned_movement_preview.dart';
@@ -109,6 +111,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   // Raw pose-stream capture — one list of NuvoPoseFrames per accepted demo.
   // Feeds Motion V2 (learn) + the fixture export in the debug report.
   final List<List<NuvoPoseFrame>> _rawDemos = [];
+  // Untrimmed copies for the V2 learner — segmentAction finds the active
+  // region itself, and a slow lead-in (walk to the bar) must not be cut.
+  final List<List<NuvoPoseFrame>> _v2Demos = [];
   List<NuvoPoseFrame> _rawCurrent = [];
   int _rawAcceptedSnapshot = 0;
 
@@ -171,8 +176,17 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   List<NuvoPoseFrame> _lastFailedAttemptFrames = const [];
   final List<NuvoPoseFrame> _v2AttemptWindow = [];
 
-  /// Motion V2 is the default; V1 only when explicitly forced for troubleshooting.
-  bool get _useMotionV2 => !kMotionV1Forced;
+  /// Set when the V2 engine itself could not run on this device (its native
+  /// runtime or model failed to load) — not a problem with the user's examples.
+  /// Teaching then continues on the V1 matcher instead of dead-ending.
+  bool _v2Unavailable = false;
+
+  /// The centred "here's what happens" screen shown before the camera opens.
+  bool _introPending = false;
+
+  /// Motion V2 is the default; V1 when forced for troubleshooting, or when V2
+  /// proved unavailable on this device.
+  bool get _useMotionV2 => !kMotionV1Forced && !_v2Unavailable;
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
@@ -185,6 +199,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     super.initState();
     _flow = SingleSessionTeachingCapture(onChanged: _onFlowChanged);
     WidgetsBinding.instance.addObserver(this);
+    // Retry teach sessions that failed to upload on a previous run.
+    unawaited(ref.read(teachSessionUploadQueueProvider).flush());
     if (kDebugMode && widget.seedReadyFixture) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _seedDebugReadyFixture();
@@ -196,10 +212,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final preset = widget.args?.movementName.trim() ?? '';
     if (preset.isNotEmpty) {
       _nameController.text = preset;
+      _introPending = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (_flow.setMovementName(preset) == null) {
-          _initializeCamera();
+        // The camera opens from the intro's Start button, not automatically.
+        if (_flow.setMovementName(preset) != null) {
+          setState(() => _introPending = false);
         }
       });
     }
@@ -208,6 +226,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   @override
   void dispose() {
     _disposed = true;
+    // Seal the teach session — the abandoned/failed ones are often the most
+    // useful diagnostic. 'used' already finalized on the Use tap, so this is
+    // a no-op on the happy path.
+    _finalizeTeachSession(
+      outcome:
+          _v2Error != null ||
+              _flow.lastBuildFailure != null ||
+              (_selfValidation != null && !_selfValidation!.passed)
+          ? 'failed'
+          : (_effectiveSpec != null || _v2Spec != null)
+          ? 'learned'
+          : 'abandoned',
+    );
     WidgetsBinding.instance.removeObserver(this);
     _nameController.dispose();
     _raceTitleController.dispose();
@@ -234,6 +265,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       }
       _stopCamera();
     } else if (state == AppLifecycleState.resumed &&
+        !_introPending &&
         _flow.stage != TeachMovementStage.name) {
       _initializeCamera(camera: _selectedCamera);
     }
@@ -521,7 +553,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if ((_showDiagnostics || _useMotionV2) && accepted) {
       final trimmed = _autoTrimSetup(_rawCurrent);
       if (trimmed.length >= 4) _rawDemos.add(trimmed);
+      if (_rawCurrent.length >= 4) {
+        _v2Demos.add(List<NuvoPoseFrame>.of(_rawCurrent));
+      }
       _snapshotDemoDiag(trimmed);
+      _snapshotTeachSession();
     }
     _rawCurrent = [];
     _preRoll.clear();
@@ -551,6 +587,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   void _redoExample() {
     _flow.removeLastAccepted();
     if (_rawDemos.length > _confirmedExamples) _rawDemos.removeLast();
+    if (_v2Demos.length > _confirmedExamples) _v2Demos.removeLast();
     _rawAcceptedSnapshot = _flow.acceptedCount;
     setState(() => _awaitingExampleSave = false);
   }
@@ -585,16 +622,29 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         movementName: _flow.movementName.isEmpty
             ? 'Custom movement'
             : _flow.movementName,
-        demos: _rawDemos.map((d) => List<NuvoPoseFrame>.of(d)).toList(),
+        demos: (_v2Demos.isNotEmpty ? _v2Demos : _rawDemos)
+            .map((d) => List<NuvoPoseFrame>.of(d))
+            .toList(),
       );
       await _v2?.dispose();
       _v2 = runtime;
       _selfValidation = runtime.lastSelfValidation;
       if (!mounted) return;
+      // V2's encoder just proved the demos are one learnable movement. If V1's
+      // pairwise-consistency heuristic rejected them anyway, rebuild V1 under
+      // independent evidence — its own spec self-validation still arbitrates.
+      // Without this, "Let's try that again" fires on a teach V2 got right.
+      final v1ConsistencyRejected =
+          _flow.verifierSpec == null && _flow.lastFailureWasConsistency;
+      if (v1ConsistencyRejected && (_selfValidation?.passed ?? false)) {
+        _flow.retryBuildLenient();
+      }
       setState(() {
         _v2Spec = spec;
         _v2Learning = false;
       });
+      _syncLearnedProvider();
+      _snapshotTeachSession();
     } on MotionV2LearnException catch (e) {
       // Self-validation failed — the spec is junk. Keep the report for the
       // debug bundle, show the user something actionable.
@@ -602,11 +652,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       await runtime.dispose();
       if (!mounted) return;
       setState(() {
-        _v2Error =
-            "Let's record that again — the three examples were too "
-            'different for Nuvo to learn from.';
+        _v2Error = e.message.startsWith('NOT_ENOUGH_MOTION')
+            ? 'Nuvo could not see the movement — try a fuller rep with your '
+                  'whole body in frame.'
+            : "Let's record that again — the three examples were too "
+                  'different for Nuvo to learn from.';
         _v2Learning = false;
       });
+      _snapshotTeachSession();
     } on MotionV2Exception catch (e) {
       await runtime.dispose();
       if (!mounted) return;
@@ -615,10 +668,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _v2Learning = false;
       });
     } catch (e) {
-      await runtime.dispose();
+      // Not a MotionV2Exception: the engine could not run at all (e.g. the
+      // ONNX Runtime library failed to load). Don't show the user a raw
+      // native error or ask them to re-record — fall back to the V1 matcher,
+      // which the teaching flow has already been building in parallel.
+      debugPrint('Motion V2 unavailable, falling back to V1: $e');
+      try {
+        await runtime.dispose();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
-        _v2Error = 'Learning failed: $e';
+        _v2Unavailable = true;
+        _v2Error = null;
         _v2Learning = false;
       });
     }
@@ -644,7 +705,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           r.state == MotionV2RuntimeState.neutral) {
         _v2AttemptWindow.clear();
       }
-      if (kNuvoDiagnosticsEnabled) _recordMatchWindow(r);
+      _recordMatchWindow(r);
       _latencyMs
           .putIfAbsent('encoder+matcher', () => [])
           .add(r.inferenceLatency.inMilliseconds);
@@ -677,7 +738,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     };
   }
 
-  // ── Diagnostic session recording (behind NUVO_DIAGNOSTICS) ─────────────────
+  // ── Teach session recording ───────────────────────────────────────────────
+  // Always on (bounded): the artifact carries the data the offline evaluator
+  // replays — demos, both matcher specs, self-validation, the live-test trace.
+  // Upload is consent-gated at finalize; the NUVO_DIAGNOSTICS flag only gates
+  // the debug UI and the manual share actions now.
 
   int _sessionMs(DateTime t) => t.difference(_sessionStart ?? t).inMilliseconds;
 
@@ -686,7 +751,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     NuvoPoseFrame raw,
     NuvoPoseFrame smoothed,
   ) {
-    if (!kNuvoDiagnosticsEnabled) return;
     if (_testingVerifier) {
       if (_liveTestFrames.length > 900) return;
       _liveTestFrames.add({
@@ -734,7 +798,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _snapshotDemoDiag(List<NuvoPoseFrame> trimmed) {
-    if (!kNuvoDiagnosticsEnabled || _diagCaptureRaw.isEmpty) return;
+    if (_diagCaptureRaw.isEmpty) return;
     final raw = List<NuvoPoseFrame>.of(_diagCaptureRaw);
     final sm = List<NuvoPoseFrame>.of(_diagCaptureSmoothed);
     final start = raw.first.createdAt, end = raw.last.createdAt;
@@ -775,9 +839,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     };
   }
 
-  NuvoMotionDiagnosticSession _buildDiagnosticSession() {
+  /// Which matcher ran this teach's learn/test — `v1_fallback` means the V2
+  /// engine could not run on this device at all (native load failure), so the
+  /// cloud triage can split "user examples were bad" from "the engine broke".
+  String get _teachEngine =>
+      _v2Unavailable ? 'v1_fallback' : (_useMotionV2 ? 'v2' : 'v1');
+
+  NuvoMotionDiagnosticSession _buildDiagnosticSession({
+    String? outcome,
+    String? failureStage,
+    String failureReason = '',
+  }) {
     final now = DateTime.now();
-    final id = NuvoMotionDiagnosticSession.newId(
+    // One id per teach run — snapshots and the final upload share it so the
+    // server upserts a single row instead of one per step.
+    final id = _teachDiagId ??= NuvoMotionDiagnosticSession.newId(
       now,
       const Uuid().v4().replaceAll('-', '').substring(0, 6),
     );
@@ -877,6 +953,26 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
     }
 
+    // The V1 half — the spec a created race actually verifies with, the
+    // builder's feature/threshold diagnostics, and the V1 live-test verdict.
+    // Without this the replay can only ever judge V2, never the shipped path.
+    final v1Spec = _effectiveSpec;
+    final v1Test = _customTestResult;
+    final v2LiveTest = _useMotionV2 && _v2Spec != null;
+    final liveTestMatched = _liveTestStart == null
+        ? null
+        : v2LiveTest
+        ? _v2Result.matched
+        : v1Test?.isVerified;
+    final v1 = {
+      if (v1Spec != null) 'spec': v1Spec.toJson(),
+      'build': _flow.debugReport(),
+      if (v1Test != null) 'testResult': v1Test.toJson(),
+      if (_runtimeDiagnostics.isNotEmpty)
+        'runtimeDiagnostics': _runtimeDiagnostics,
+      'buildFailure': ?_flow.lastBuildFailure,
+    };
+
     return NuvoMotionDiagnosticSession(
       sessionId: id,
       timestamp: now,
@@ -905,10 +1001,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         'matcher': 'multi_reference/schema4',
         'normalization': 'root_scale_normalize',
         'diagSchema': kMotionDiagSchema,
+        if (_v2Unavailable) 'v2Unavailable': true,
+        'liveTestMatched': ?liveTestMatched,
+        'poseFrameCount': _poseFrameCount,
+        'poseFrameValid': _poseFrameValid,
       },
       teaching: demos,
       selfValidation: _selfValidation?.toJson(),
       spec: _v2Spec?.toJson(),
+      v1: v1,
       liveTest: live,
       performance: {
         'framesReceived': _framesReceived,
@@ -918,7 +1019,88 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           for (final e in _latencyMs.entries) e.key: _latencyStats(e.value),
         },
       },
+      movementName: _flow.movementName,
+      outcome: outcome ?? (_effectiveSpec != null ? 'learned' : 'abandoned'),
+      engine: _teachEngine,
+      failureStage: failureStage,
+      failureReason: failureReason,
+      durationMs: _sessionStart == null
+          ? 0
+          : now.difference(_sessionStart!).inMilliseconds,
     );
+  }
+
+  /// Upload the teach session as it stands after a step (demo recorded, V2
+  /// learned, live test done).
+  void _snapshotTeachSession() => _finalizeTeachSession(
+    outcome: _effectiveSpec != null ? 'learned' : 'abandoned',
+    snapshot: true,
+  );
+
+  /// Seal the teach session and hand it to the upload queue — consent-gated
+  /// exactly like verification sessions. Idempotent: [outcome] is only sent
+  /// the first time, so a "used" finalize wins over the dispose-path one.
+  bool _teachSessionFinalized = false;
+  String? _teachDiagId;
+
+  void _finalizeTeachSession({required String outcome, bool snapshot = false}) {
+    if (_teachSessionFinalized) return;
+    // A snapshot uploads the session as it stands (same id, server upserts) so
+    // each teach step is visible even if the screen never reaches its end.
+    if (!snapshot) _teachSessionFinalized = true;
+
+    // Where did it stop being happy? The stage tells the triage whether the
+    // user gave up recording, the V1 builder failed, V2 learning failed, or
+    // the live test couldn't match.
+    final String? failureStage;
+    final String failureReason;
+    if (outcome == 'used' || outcome == 'learned') {
+      failureStage = null;
+      failureReason = '';
+    } else if (_v2Error != null ||
+        _selfValidation != null && _selfValidation!.passed == false) {
+      failureStage = 'v2_learn';
+      failureReason = _selfValidation != null && !_selfValidation!.passed
+          ? 'self_validation_failed'
+          : 'v2_learn_error';
+    } else if (_flow.lastBuildFailure != null) {
+      failureStage = 'v1_build';
+      failureReason = _flow.lastBuildFailure!;
+    } else if (_customTestResult != null && !_customTestResult!.isVerified) {
+      failureStage = 'live_test';
+      failureReason = 'test_not_matched';
+    } else if (outcome == 'abandoned' && _demoDiag.isEmpty) {
+      return; // never recorded anything — nothing worth uploading
+    } else {
+      failureStage = 'recording';
+      failureReason = '';
+    }
+
+    final session = _buildDiagnosticSession(
+      outcome: outcome,
+      failureStage: failureStage,
+      failureReason: failureReason,
+    );
+    // Telemetry must never break the app — this also runs inside dispose(),
+    // where a provider edge should degrade to "not uploaded", not a crash.
+    try {
+      final consented =
+          ref.read(authControllerProvider).user?.motionTrainingConsent == true;
+      if (!consented) return;
+      // Fire-and-forget: staging + upload happen off the UI path, identical
+      // to verification sessions (a failure just retries on the next flush).
+      unawaited(
+        ref
+            .read(teachSessionUploadQueueProvider)
+            .enqueueRaw(
+              sessionId: session.sessionId,
+              metadata: session.metadata(),
+              gzipBytes: session.toGzipBytes(),
+            ),
+      );
+    } catch (e) {
+      debugPrint('teach session upload skipped: $e');
+    }
   }
 
   Future<void> _copyMotionV2Log() async {
@@ -967,18 +1149,30 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     setState(() {
       _nameError = null;
+      _introPending = true;
     });
-    await _initializeCamera();
   }
 
   void _onFlowChanged() {
-    final spec = _effectiveSpec;
-    if (spec != null && !_learnedWrittenToProvider) {
-      _learnedWrittenToProvider = true;
-      ref.read(learnedCustomMovementProvider.notifier).state =
-          LearnedCustomMovement(verifierSpec: spec, learnedAt: DateTime.now());
-    }
+    _syncLearnedProvider();
     _requestSetState();
+  }
+
+  void _syncLearnedProvider() {
+    final spec = _effectiveSpec;
+    final v2 = _v2Spec;
+    if (spec == null && v2 == null) return;
+    // Don't rewrite an already-learned movement until the V2 spec lands — the
+    // race prefers V2 and the provider is what carries it into race creation.
+    if (_learnedWrittenToProvider && v2 == null) return;
+    _learnedWrittenToProvider = true;
+    ref
+        .read(learnedCustomMovementProvider.notifier)
+        .state = LearnedCustomMovement(
+      verifierSpec: spec,
+      motionV2Spec: v2,
+      learnedAt: DateTime.now(),
+    );
   }
 
   void _resetTeachFlags() {
@@ -1010,6 +1204,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _framesReceived = 0;
     _framesProcessed = 0;
     _sessionStart = null;
+    // A retried teach is a NEW session — without this, a 'used'/'failed'
+    // finalize earlier in the screen's life would swallow it.
+    _teachSessionFinalized = false;
+    _teachDiagId = null;
   }
 
   void _restart() {
@@ -1023,6 +1221,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customTestResult = null;
     _runtimeDiagnostics.clear();
     _rawDemos.clear();
+    _v2Demos.clear();
     _rawCurrent = [];
 
     _testingVerifier = false;
@@ -1054,6 +1253,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customTestResult = null;
     _runtimeDiagnostics.clear();
     _rawDemos.clear();
+    _v2Demos.clear();
     _rawCurrent = [];
 
     _testingVerifier = false;
@@ -1091,6 +1291,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customTestResult = null;
     _runtimeDiagnostics.clear();
     _rawDemos.clear();
+    _v2Demos.clear();
     _rawCurrent = [];
     _ensureCameraStream();
     setState(() {});
@@ -1158,6 +1359,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _customTestResult = result;
       _testingVerifier = false;
     });
+    _snapshotTeachSession();
   }
 
   void _completeVerifierTest() {
@@ -1176,6 +1378,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _customTestResult = result;
       _testingVerifier = false;
     });
+    _snapshotTeachSession();
   }
 
   void _seedDebugReadyFixture() {
@@ -1219,6 +1422,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     // The camera is the product. Capture + live-test run full-screen, matching
     // the verification camera (`ai_motion_proof_screen_io`). Naming and the
     // learned/summary screens stay on the light sheet.
+    if (_introPending && !_debugReadyFixture) return _introScaffold();
     final immersive =
         !_debugReadyFixture &&
         (_testingVerifier ||
@@ -1246,28 +1450,185 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   );
 
   Widget _sheetScaffold() {
+    final naming =
+        _flow.stage == TeachMovementStage.name && !_debugReadyFixture;
+    return _stageScaffold(naming ? _nameStage() : _summaryStage());
+  }
+
+  /// Every non-camera Teach screen: one centred stage with a back arrow.
+  Widget _stageScaffold(Widget stage) {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Stack(
           children: [
-            NuvoBackButton(onPressed: () => context.pop()),
-            const SizedBox(height: 18),
-            Text('Teach Nuvo', style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 6),
-            Text(
-              'Record three examples so Nuvo can recognize your movement.',
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+            Positioned.fill(child: stage),
+            Positioned(
+              top: 8,
+              left: 12,
+              child: NuvoBackButton(onPressed: () => context.pop()),
             ),
-            const SizedBox(height: 20),
-            if (_flow.stage == TeachMovementStage.name && !_debugReadyFixture)
-              _nameStep()
-            else
-              _summaryStep(),
           ],
         ),
       ),
+    );
+  }
+
+  /// Shown first when Teach Nuvo opens — before the camera — so nobody is
+  /// dropped into a live camera without knowing what to do.
+  Widget _introScaffold() {
+    final name = _flow.movementName.trim();
+    return _stageScaffold(
+      NuvoFocusedStage(
+        icon: Icons.videocam_rounded,
+        title: name.isEmpty ? 'Teach Nuvo' : 'Teach Nuvo $name',
+        body:
+            'Nuvo learns by watching. Do it 3 times, then Nuvo counts every '
+            'rep for you.',
+        content: const _TeachSteps(),
+        primaryLabel: 'Start',
+        onPrimary: _startFromIntro,
+        links: [('Not now', () => context.pop())],
+      ),
+    );
+  }
+
+  Future<void> _startFromIntro() async {
+    setState(() => _introPending = false);
+    await _initializeCamera();
+  }
+
+  Widget _nameStage() {
+    return NuvoFocusedStage(
+      icon: Icons.edit_rounded,
+      title: 'Name your movement',
+      body: 'What should Nuvo call it?',
+      content: TextField(
+        controller: _nameController,
+        maxLength: 40,
+        textAlign: TextAlign.center,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(
+          hintText: 'Overhead knee touch',
+          errorText: _nameError,
+        ),
+        onSubmitted: (_) => _submitName(),
+      ),
+      primaryLabel: 'Continue',
+      onPrimary: _submitName,
+    );
+  }
+
+  /// Building / failed / learned — one centred message and one clear action.
+  Widget _summaryStage() {
+    final v2 =
+        _useMotionV2 &&
+        !_debugReadyFixture &&
+        (_v2Spec != null ||
+            _v2Learning ||
+            _learnRequested ||
+            _v2Error != null ||
+            _effectiveSpec == null);
+    final name = _flow.movementName.trim().isEmpty
+        ? 'your movement'
+        : _flow.movementName.trim();
+    final spec = _effectiveSpec;
+    final bool learned;
+    final bool building;
+    if (v2) {
+      // "Learned" means there is something to USE. The race verifies with the
+      // V2 spec — the matcher that learned and live-tested the demos — so a
+      // learned V2 spec is sufficient on its own; a V1 spec may also exist
+      // (consistency-lenient rebuild) and rides along for diagnostics only.
+      learned = _v2Spec != null;
+      building =
+          _flow.stage == TeachMovementStage.building ||
+          _v2Learning ||
+          (_v2Spec != null &&
+              spec == null &&
+              _flow.stage != TeachMovementStage.failed) ||
+          (_learnRequested &&
+              !learned &&
+              _v2Error == null &&
+              _flow.stage != TeachMovementStage.failed);
+    } else {
+      learned = _flow.stage == TeachMovementStage.learned || _debugReadyFixture;
+      building = _flow.stage == TeachMovementStage.building;
+    }
+    final failed = !learned && !building;
+    // Seal + upload the moment the failure is shown — a failed teach is a
+    // terminal session and the most diagnostic-rich one. Waiting for the V2
+    // learn to settle first so its error/self-validation lands in the record.
+    if (failed && !_v2Learning) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _finalizeTeachSession(outcome: 'failed');
+      });
+    }
+    final testResult = _customTestResult;
+    final matched =
+        testResult != null &&
+        testResult.verificationStatus == 'custom_verified';
+    final failedTest = testResult != null && !matched;
+    final extras = <Widget>[
+      if (learned && !v2 && spec != null) LearnedMovementPreview(spec: spec),
+      if (learned && testResult != null) _testResultStatus(testResult),
+      if (_showDiagnostics && v2) _motionV2DebugPanel(),
+      if (_showDiagnostics && !v2) _debugPanel(),
+    ];
+    final child = extras.isEmpty
+        ? null
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final w in extras) ...[w, const SizedBox(height: 12)],
+            ],
+          );
+
+    if (building) {
+      return NuvoFocusedStage(
+        busy: true,
+        title: 'Learning $name',
+        body: 'This only takes a few seconds.',
+        content: child,
+      );
+    }
+    if (failed) {
+      return NuvoFocusedStage(
+        icon: Icons.refresh_rounded,
+        accent: NuvoColors.warning,
+        title: "Let's try that again",
+        body:
+            _v2Error ??
+            (_flow.message.isNotEmpty
+                ? _flow.message
+                : 'That was hard to read. Record it again.'),
+        content: child,
+        primaryLabel: 'Try again',
+        onPrimary: _restart,
+        links: [('Change name', _changeName)],
+      );
+    }
+    return NuvoFocusedStage(
+      icon: Icons.check_circle_rounded,
+      accent: NuvoColors.success,
+      title: 'Nuvo can count $name',
+      body: testResult == null
+          ? 'Use it now, or test it once first to make sure it recognises you.'
+          : null,
+      content: child,
+      // Using the movement is the point; testing is optional. Only a test
+      // that did NOT match makes "Test again" the lead action.
+      primaryLabel: failedTest ? 'Test again' : 'Use this movement',
+      onPrimary: failedTest
+          ? _startVerifierTest
+          : (_navigating ? null : _goToRaceCreation),
+      secondaryLabel: failedTest
+          ? 'Use this movement'
+          : (testResult == null ? 'Test it' : 'Test again'),
+      onSecondary: failedTest
+          ? (_navigating ? null : _goToRaceCreation)
+          : _startVerifierTest,
+      links: [('Retry teaching', _restart), ('Change name', _changeName)],
     );
   }
 
@@ -1432,11 +1793,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         ),
       ),
       const SizedBox(height: 14),
-      NuvoPrimaryButton(
-        label: 'Stop test',
-        expand: true,
-        onPressed: _stopVerifierTest,
-      ),
+      _colorActionButton('Stop test', NuvoColors.danger, _stopVerifierTest),
       if (_showDiagnostics) ...[
         const SizedBox(height: 12),
         v2 ? _motionV2DebugPanel() : _debugPanel(),
@@ -1471,29 +1828,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         overflow: TextOverflow.ellipsis,
         style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
       ),
-    );
-  }
-
-  Widget _nameStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _nameController,
-          maxLength: 40,
-          decoration: InputDecoration(
-            labelText: 'Movement name',
-            hintText: 'Overhead knee touch',
-            errorText: _nameError,
-          ),
-        ),
-        const SizedBox(height: 14),
-        NuvoPrimaryButton(
-          label: 'Continue',
-          expand: true,
-          onPressed: _submitName,
-        ),
-      ],
     );
   }
 
@@ -1929,14 +2263,34 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  /// Record = green, Stop = red, so the state is readable at a glance.
+  Widget _colorActionButton(String label, Color color, VoidCallback? onTap) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: NuvoColors.white,
+          disabledBackgroundColor: color.withValues(alpha: 0.4),
+          disabledForegroundColor: NuvoColors.white.withValues(alpha: 0.7),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
+        ),
+      ),
+    );
+  }
+
   Widget _cameraActionButton() {
     final stage = _flow.stage;
     if (_preparing || stage == TeachMovementStage.recording) {
-      return NuvoPrimaryButton(
-        label: 'Stop',
-        expand: true,
-        onPressed: _finishRecording,
-      );
+      return _colorActionButton('Stop', NuvoColors.danger, _finishRecording);
     }
     if (stage == TeachMovementStage.building || _learnRequested) {
       return const Center(child: NuvoLoadingIndicator());
@@ -1957,10 +2311,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     if (stage == TeachMovementStage.readyToRecord) {
       // Always pressable — the user gets into position AFTER tapping Record.
-      return NuvoPrimaryButton(
-        label: 'Record example ${_confirmedExamples + 1}',
-        expand: true,
-        onPressed: _cameraReady ? _startRecording : null,
+      return _colorActionButton(
+        'Record example ${_confirmedExamples + 1}',
+        NuvoColors.success,
+        _cameraReady ? _startRecording : null,
       );
     }
     return NuvoOutlineButton(
@@ -2165,197 +2519,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  Widget _v2SummaryStep() {
-    final learned = _v2Spec != null;
-    final building =
-        _flow.stage == TeachMovementStage.building ||
-        _v2Learning ||
-        (_learnRequested &&
-            !learned &&
-            _v2Error == null &&
-            _flow.stage != TeachMovementStage.failed);
-    final failed =
-        _flow.stage == TeachMovementStage.failed && !learned && !building;
-    final testResult = _customTestResult;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(_flow.movementName, style: AppTextStyles.titleLarge),
-        const SizedBox(height: 10),
-        if (building) ...[
-          Row(
-            children: [
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Learning your movement…',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: NuvoColors.muted,
-                ),
-              ),
-            ],
-          ),
-        ] else if (_v2Error != null || failed) ...[
-          Text(
-            _v2Error ?? 'That was hard to read. Record it again.',
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.danger),
-          ),
-          const SizedBox(height: 14),
-          NuvoPrimaryButton(
-            label: 'Retry teaching',
-            expand: true,
-            onPressed: _restart,
-          ),
-          const SizedBox(height: 12),
-          NuvoOutlineButton(
-            label: 'Change name',
-            expand: true,
-            onPressed: _changeName,
-          ),
-        ] else if (learned) ...[
-          Text(
-            'Movement learned',
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.success),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Nuvo watched your 3 examples and learned the shared motion. '
-            'Test it to make sure it recognizes you.',
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-          ),
-          const SizedBox(height: 16),
-          if (testResult != null) ...[
-            _testResultStatus(testResult),
-            const SizedBox(height: 14),
-          ],
-          NuvoPrimaryButton(
-            label: testResult == null ? 'Test movement' : 'Test again',
-            expand: true,
-            onPressed: _startVerifierTest,
-          ),
-          const SizedBox(height: 12),
-          NuvoOutlineButton(
-            label: 'Use this movement',
-            expand: true,
-            onPressed: _navigating ? null : _confirmUseMovement,
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _smallButton('Retry teaching', _restart),
-              const SizedBox(width: 8),
-              _smallButton('Change name', _changeName),
-            ],
-          ),
-        ],
-        if (_showDiagnostics) ...[
-          const SizedBox(height: 12),
-          _motionV2DebugPanel(),
-        ],
-      ],
-    );
-  }
-
-  Widget _summaryStep() {
-    if (_useMotionV2 &&
-        !_debugReadyFixture &&
-        (_v2Spec != null ||
-            _v2Learning ||
-            _learnRequested ||
-            _v2Error != null ||
-            _effectiveSpec == null)) {
-      return _v2SummaryStep();
-    }
-    final spec = _effectiveSpec;
-    final movementName = _flow.movementName;
-    final testResult = _customTestResult;
-    final canUseMovement = spec != null;
-    final testLabel = testResult == null ? 'Test movement' : 'Test again';
-    final isLearned =
-        _flow.stage == TeachMovementStage.learned || _debugReadyFixture;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(movementName, style: AppTextStyles.titleLarge),
-        const SizedBox(height: 8),
-        if (isLearned) ...[
-          Text(
-            'Movement learned',
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.success),
-          ),
-          if (spec != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Here’s what Nuvo learned',
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            LearnedMovementPreview(spec: spec),
-            const SizedBox(height: 16),
-            Text(
-              'Does this look like your movement?',
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (testResult != null) ...[
-            _testResultStatus(testResult),
-            const SizedBox(height: 14),
-          ],
-          if (spec != null)
-            NuvoPrimaryButton(
-              label: testLabel,
-              expand: true,
-              onPressed: _startVerifierTest,
-            ),
-          if (canUseMovement) ...[
-            const SizedBox(height: 12),
-            NuvoOutlineButton(
-              label: 'Use this movement',
-              expand: true,
-              onPressed: _navigating ? null : _confirmUseMovement,
-            ),
-          ],
-          const SizedBox(height: 24),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _smallButton('Retry teaching', _restart),
-              _smallButton('Change name', _changeName),
-            ],
-          ),
-        ] else ...[
-          Text(
-            _flow.message,
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.danger),
-          ),
-          const SizedBox(height: 14),
-          NuvoPrimaryButton(
-            label: 'Retry teaching',
-            expand: true,
-            onPressed: _restart,
-          ),
-          const SizedBox(height: 12),
-          NuvoOutlineButton(
-            label: 'Change name',
-            expand: true,
-            onPressed: _changeName,
-          ),
-        ],
-        if (_showDiagnostics) ...[const SizedBox(height: 12), _debugPanel()],
-      ],
-    );
-  }
-
   Widget _testResultStatus(CustomPoseRuntimeResult result) {
     final matched = result.isVerified;
     return Container(
@@ -2380,35 +2543,31 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Future<void> _goToRaceCreation() async {
     final spec = _effectiveSpec;
-    if (spec == null || _navigating) return;
+    final v2Spec = _v2Spec;
+    if ((spec == null && v2Spec == null) || _navigating) return;
     setState(() => _navigating = true);
+    _finalizeTeachSession(outcome: 'used');
 
-    // Launched from the composer as its training stage → hand the spec back and
-    // let the composer resume. Never push a second composer.
+    // Launched from the composer as its training stage → hand the specs back
+    // and let the composer resume. Never push a second composer.
     if (widget.returnsSpec) {
-      context.pop(spec);
+      context.pop(
+        LearnedCustomMovement(
+          verifierSpec: spec,
+          motionV2Spec: v2Spec,
+          learnedAt: DateTime.now(),
+        ),
+      );
       return;
     }
+
+    _syncLearnedProvider();
 
     try {
       await context.push('/races/new');
     } finally {
       if (mounted) setState(() => _navigating = false);
     }
-  }
-
-  Future<void> _confirmUseMovement() async {
-    if (_effectiveSpec == null || _navigating) return;
-    final confirmed = await showNuvoConfirmDialog(
-      context,
-      title: 'Use this movement?',
-      message:
-          'Nuvo will use the movement you taught to verify this race on your device.',
-      cancelLabel: 'Keep teaching',
-      confirmLabel: 'Use movement',
-      destructive: false,
-    );
-    if (confirmed == true && mounted) await _goToRaceCreation();
   }
 
   String _nuvoTestStatus({
@@ -2568,3 +2727,56 @@ NormalizedPose _debugPose(PoseFeatureValue feature) => NormalizedPose(
   validLandmarkCount: 5,
   validFeatureCount: 1,
 );
+
+/// The three things to know before recording — shown on the Teach intro.
+class _TeachSteps extends StatelessWidget {
+  const _TeachSteps();
+
+  static const _steps = [
+    'Prop your phone up so your whole body is in frame.',
+    'Do one rep, then stop. Do that 3 times.',
+    'Test it, then race with it.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.themeColors;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < _steps.length; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${i + 1}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _steps[i],
+                    style: AppTextStyles.bodyMedium.copyWith(color: colors.ink),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}

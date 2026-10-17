@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../social/presentation/theme_ink.dart';
 
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
@@ -103,7 +104,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
         );
       });
       _snack(outcome == ConnectOutcome.active
-          ? 'Added to your crew.'
+          ? 'Added to your friends.'
           : 'Request sent.');
     } on ApiException catch (e) {
       if (mounted) {
@@ -124,7 +125,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
           _busy = false;
           _card = _withStatus(card, CrewConnectionStatus.connected);
         });
-        _snack('Added to your crew.');
+        _snack('Added to your friends.');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -139,9 +140,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
     if (card == null) return;
     final confirmed = await showNuvoConfirmDialog(
       context,
-      title: 'Remove from crew?',
+      title: 'Remove friend?',
       message:
-          '${card.displayName} will no longer be in your crew. You can add '
+          '${card.displayName} will no longer be in your friends. You can add '
           'them again later.',
       confirmLabel: 'Remove',
     );
@@ -154,7 +155,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
           _busy = false;
           _card = _withStatus(card, CrewConnectionStatus.none);
         });
-        _snack('Removed from your crew.');
+        _snack('Removed from your friends.');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -173,7 +174,6 @@ class _State extends ConsumerState<PublicProfileScreen> {
         username: c.username,
         memberId: c.memberId,
         profilePhotoUrl: c.profilePhotoUrl,
-        isPrivate: c.isPrivate,
         level: c.level,
         levelProgress: c.levelProgress,
         achievementsEarned: c.achievementsEarned,
@@ -235,7 +235,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
     final value = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: NuvoColors.surface,
+      backgroundColor: context.themeColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -255,7 +255,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
             Text(
               'What\u2019s wrong? This goes to the Nuvo review team.',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: NuvoColors.textMuted),
+                  .copyWith(color: context.themeColors.inkSubtle),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -283,7 +283,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
   void _overflow() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NuvoColors.surface,
+      backgroundColor: context.themeColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -463,7 +463,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
                     Text(
                       'LEVEL ${card.level}',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.blue,
+                        color: context.blueInk,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
                       ),
@@ -565,7 +565,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
                         Text(
                           'You ${shared.viewerWins}  ·  $first ${shared.targetWins}',
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: NuvoColors.blue,
+                            color: context.blueInk,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -603,9 +603,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
       padding: const EdgeInsets.only(top: 18),
       child: Container(
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: context.themeColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: NuvoColors.border),
+          border: Border.all(color: context.themeColors.border),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(15),
@@ -635,7 +635,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
             children: [
               const _Badge(
                 icon: Icons.check_circle_rounded,
-                label: 'In your crew',
+                label: 'Friends',
                 color: NuvoColors.success,
               ),
               const SizedBox(height: 14),
@@ -652,7 +652,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
               ),
               const SizedBox(height: 10),
               NuvoTertiaryButton(
-                label: 'Remove from crew',
+                label: 'Remove friend',
                 expand: true,
                 onPressed: _busy ? null : _remove,
               ),
@@ -664,13 +664,13 @@ class _State extends ConsumerState<PublicProfileScreen> {
             color: NuvoColors.warning,
           ),
         CrewConnectionStatus.pendingIncoming => NuvoPrimaryButton(
-            label: 'Accept crew request',
+            label: 'Accept friend request',
             expand: true,
             loading: _busy,
             onPressed: _busy ? null : _accept,
           ),
         CrewConnectionStatus.none => NuvoPrimaryButton(
-            label: card.isPrivate ? 'Send crew request' : 'Add to crew',
+            label: 'Add friend',
             expand: true,
             loading: _busy,
             onPressed: _busy ? null : _connect,
@@ -725,7 +725,7 @@ class _SharedRaceRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.navy,
+                          color: context.themeColors.ink,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -735,15 +735,15 @@ class _SharedRaceRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.textMuted,
+                          color: context.themeColors.inkSubtle,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  color: NuvoColors.textMuted,
+                  color: context.themeColors.inkSubtle,
                   size: 20,
                 ),
               ],
@@ -751,7 +751,7 @@ class _SharedRaceRow extends StatelessWidget {
           ),
         ),
         if (!isLast)
-          const Divider(height: 1, color: NuvoColors.border, indent: 14),
+          Divider(height: 1, color: context.themeColors.border, indent: 14),
       ],
     );
   }
@@ -768,14 +768,14 @@ class _Badge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 14),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: context.tintOf(color),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 18, color: color),
+        Icon(icon, size: 18, color: context.onTintOf(color)),
         const SizedBox(width: 8),
         Text(label,
-            style: AppTextStyles.labelLarge.copyWith(color: color)),
+            style: AppTextStyles.labelLarge.copyWith(color: context.onTintOf(color))),
       ]),
     );
   }
@@ -800,8 +800,9 @@ class _PublicProgressionPlane extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 20, 20, docksBadges ? 34 : 14),
       decoration: BoxDecoration(
-        color: c.panelLight,
+        color: c.surface,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: c.border, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,7 +828,7 @@ class _PublicProgressionPlane extends StatelessWidget {
                           text: '${card.level}',
                           style: AppTextStyles.statLarge(
                             30,
-                            color: NuvoColors.blue,
+                            color: context.blueInk,
                             weight: FontWeight.w900,
                           ),
                         ),
@@ -901,7 +902,7 @@ class _PubStatsStrip extends StatelessWidget {
     final rate = races > 0 ? ((wins / races) * 100).round() : 0;
     return Row(
       children: [
-        _PubStat(value: '$races', label: 'RACING', color: NuvoColors.blue),
+        _PubStat(value: '$races', label: 'RACING', color: context.blueInk),
         _divider(c),
         _PubStat(value: '$wins', label: 'WINS', color: NuvoColors.gold),
         _divider(c),
@@ -1075,10 +1076,10 @@ class _PublicAchievements extends ConsumerWidget {
                 maxLines: 1,
               ),
               const SizedBox(width: 4),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 16,
-                color: NuvoColors.blue,
+                color: context.blueInk,
               ),
             ],
           ),
@@ -1140,7 +1141,7 @@ class _SharedResultRow extends StatelessWidget {
                   result,
                   style: AppTextStyles.labelSmall.copyWith(
                     color: won
-                        ? NuvoColors.blue
+                        ? context.blueInk
                         : c.inkSubtle,
                     fontWeight: FontWeight.w800,
                   ),

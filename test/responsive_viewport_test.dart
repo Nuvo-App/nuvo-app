@@ -15,7 +15,6 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/pass/presentation/pass_screen.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
@@ -165,22 +164,6 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('Verify renders without overflow at this width', (
-        tester,
-      ) async {
-        tester.view.physicalSize = Size(width, height);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.resetPhysicalSize);
-        await tester.pumpWidget(
-          _buildApp(
-            const MoveScreen(),
-            _StubRaceRepo([_race(id: 'r1'), _race(id: 'r2', title: 'Squat Race')]),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-      });
-
       testWidgets(
         'Crew renders its header (hero + metadata + actions) without overflow',
         (tester) async {
@@ -196,7 +179,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 300));
           expect(tester.takeException(), isNull);
 
-          expect(find.text('Crew'), findsOneWidget);
+          expect(find.text('Friends'), findsOneWidget);
           // Header actions are icon affordances with semantics labels —
           // search opens Add to Crew, the QR icon opens My Nuvo.
           expect(find.bySemanticsLabel('Find people'), findsOneWidget);

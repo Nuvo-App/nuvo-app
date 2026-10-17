@@ -112,7 +112,7 @@ void main() {
     expect(find.text('Push'), findsNWidgets(3));
     expect(find.text('RACES'), findsOneWidget);
     expect(find.text('PROOF'), findsOneWidget);
-    expect(find.text('CREW'), findsOneWidget);
+    expect(find.text('FRIENDS'), findsOneWidget);
 
     // Concise labels.
     expect(find.text('Race starting'), findsOneWidget);
@@ -134,7 +134,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.bySemanticsLabel('Crew requests, push notifications'),
+      find.bySemanticsLabel('Friend requests, push notifications'),
       findsOneWidget,
     );
   });

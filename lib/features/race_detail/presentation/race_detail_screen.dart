@@ -31,6 +31,7 @@ import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
+import '../domain/race_poll_backoff.dart';
 import '../../races/presentation/ai_motion_proof_entry.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
@@ -46,46 +47,109 @@ class RaceDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<RaceDetailScreen> createState() => _RaceDetailScreenState();
 }
 
-class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
+class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
+    with WidgetsBindingObserver {
   Race? _race;
   bool _loading = true;
   bool _busy = false;
   bool _navigating = false;
   String? _error;
   Timer? _refreshTimer;
+  final RacePollBackoff _backoff = RacePollBackoff();
+  bool _inFlight = false;
+  bool _resumed = true;
+  bool _wasGated = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _resumed =
+        (WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed) ==
+        AppLifecycleState.resumed;
     _load();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _silentRefresh(),
-    );
+    _scheduleNext();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_resumed) return;
+      _resumed = true;
+      _wasGated = false;
+      _backoff.reset();
+      _silentRefresh();
+      _scheduleNext();
+    } else {
+      _resumed = false;
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+    }
+  }
+
+  /// Poll only while the app is resumed, this page is the visible route and
+  /// the race is still active.
+  bool get _shouldPoll {
+    if (!_resumed || !mounted || _loading) return false;
+    if (ModalRoute.of(context)?.isCurrent == false) return false;
+    final race = _race;
+    return race != null && !raceIsCompleted(race);
+  }
+
+  void _scheduleNext() {
+    _refreshTimer?.cancel();
+    if (!_resumed || !mounted) return;
+    _refreshTimer = Timer(_backoff.current, _pollTick);
+  }
+
+  Future<void> _pollTick() async {
+    if (!mounted || !_resumed) return;
+    if (!_shouldPoll) {
+      _wasGated = true;
+      _scheduleNext();
+      return;
+    }
+    if (_wasGated) {
+      // Became visible/active again: start from the fast interval.
+      _wasGated = false;
+      _backoff.reset();
+    }
+    await _silentRefresh();
+    _scheduleNext();
+  }
+
   Future<void> _silentRefresh({bool syncArena = false}) async {
-    if (_loading) return;
+    if (_loading || _inFlight) return;
+    _inFlight = true;
     try {
+      final before = _race == null ? null : raceSignature(_race!);
       final race = await ref
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.id, syncArena: syncArena);
+      _backoff.recordResult(
+        changed: before == null || before != raceSignature(race),
+      );
       if (mounted) setState(() => _race = race);
     } catch (e) {
       // Background refresh failed — preserve the already-loaded race on
       // screen and log diagnostics. We intentionally do NOT clear _race or
-      // surface a disruptive error here; the periodic timer keeps running.
+      // surface a disruptive error here; the poll schedule keeps running.
       debugPrint('RACE_DETAIL_REFRESH_ERROR: ${e.runtimeType}: $e');
+      _backoff.recordResult(changed: false);
+    } finally {
+      _inFlight = false;
     }
   }
 
   Future<void> _load() async {
+    _backoff.reset();
     // Use cached race from controller first to prevent stale 0% flash
     final cachedRaces = ref.read(raceControllerProvider).races;
     final cached = cachedRaces.where((r) => r.id == widget.id).firstOrNull;
@@ -484,7 +548,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         !myRaceComplete && onPrimary != null && primaryLabel != 'Unsupported';
 
     final screen = Scaffold(
-      backgroundColor: context.themeColors.panelLight,
+      backgroundColor: context.themeColors.page,
       bottomNavigationBar: showBottomBar
           ? _VerifyBar(
               key: FirstRaceGuideKeys.racePrimary,
@@ -569,9 +633,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     icon: Icons.group_add_rounded,
                     title: 'No one on the board yet',
                     body:
-                        'Invite your crew — the leaderboard fills in as '
+                        'Invite your friends — the leaderboard fills in as '
                         'people join and log their first move.',
-                    ctaLabel: isOwner ? 'Invite crew' : null,
+                    ctaLabel: isOwner ? 'Invite friends' : null,
                     onCta: isOwner ? () => _goToInviteCrew(race.id) : null,
                     compact: true,
                   )
@@ -609,6 +673,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 _YourProgressCard(
                   measurementType: raceMeasurementType(race),
                   progressValue: myPart?.progressValue ?? 0,
+                  hasFinishLine: raceHasFinishLine(race),
                   targetValue: race.targetValue!,
                   unit: raceDisplayUnit(race),
                   rankLabel: raceRankLabel(race, user.id),
@@ -682,7 +747,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     if (!myRaceComplete)
                       _ManageRow(
                         icon: Icons.person_add_alt_1_rounded,
-                        label: 'Invite crew',
+                        label: 'Invite friends',
                         onTap: (_busy || _navigating)
                             ? null
                             : () => _goToInviteCrew(race.id),
@@ -890,6 +955,7 @@ class _YourProgressCard extends StatelessWidget {
     required this.targetValue,
     required this.unit,
     required this.rankLabel,
+    this.hasFinishLine = true,
     this.chaseCopy,
     this.leaderGap,
     this.isLeading = false,
@@ -898,6 +964,7 @@ class _YourProgressCard extends StatelessWidget {
   final MotionMeasurementType measurementType;
   final int progressValue;
   final int targetValue;
+  final bool hasFinishLine;
   final String unit;
   final String rankLabel;
   final String? chaseCopy;
@@ -906,7 +973,7 @@ class _YourProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = targetValue <= 0
+    final pct = !hasFinishLine || targetValue <= 0
         ? 0.0
         : (progressValue / targetValue).clamp(0.0, 1.0);
     final remaining = (targetValue - progressValue).clamp(0, targetValue);
@@ -917,9 +984,11 @@ class _YourProgressCard extends StatelessWidget {
         : gap > 0
         ? '$gapText behind the leader'
         : chaseCopy;
-    final done = remaining <= 0;
+    final done = hasFinishLine && remaining <= 0;
     // Green while you hold the lead or have crossed the line, blue otherwise.
-    final accent = (isLeading || done) ? NuvoColors.success : NuvoColors.blue;
+    final accent = (isLeading || done)
+        ? context.themeColors.successText
+        : context.themeColors.accent;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -932,7 +1001,7 @@ class _YourProgressCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'YOUR PROGRESS',
+            hasFinishLine ? 'YOUR PROGRESS' : 'YOUR SCORE',
             style: AppTextStyles.eyebrow.copyWith(color: accent),
           ),
           const SizedBox(height: 8),
@@ -942,12 +1011,14 @@ class _YourProgressCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  formatMotionProgress(
-                    measurementType,
-                    progressValue,
-                    targetValue,
-                    unit,
-                  ),
+                  hasFinishLine
+                      ? formatMotionProgress(
+                          measurementType,
+                          progressValue,
+                          targetValue,
+                          unit,
+                        )
+                      : formatMotionTarget(measurementType, progressValue, unit),
                   style: AppTextStyles.statLarge(
                     context.rs(30),
                     color: accent,
@@ -961,32 +1032,34 @@ class _YourProgressCard extends StatelessWidget {
                 rankLabel,
                 style: AppTextStyles.statLarge(
                   context.rs(26),
-                  color: isLeading ? NuvoColors.gold : context.themeColors.ink,
+                  color: isLeading ? context.themeColors.goldText : context.themeColors.ink,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(NuvoRadii.pill),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 8,
-              color: accent,
-              backgroundColor: context.themeColors.track,
+          if (hasFinishLine) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(NuvoRadii.pill),
+              child: LinearProgressIndicator(
+                value: pct,
+                minHeight: 8,
+                color: accent,
+                backgroundColor: context.themeColors.track,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            remaining > 0
-                ? '${formatMotionTarget(measurementType, remaining, unit)} '
-                      'to the finish'
-                : 'Finish line reached',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.themeColors.ink,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 12),
+            Text(
+              remaining > 0
+                  ? '${formatMotionTarget(measurementType, remaining, unit)} '
+                        'to the finish'
+                  : 'Finish line reached',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.themeColors.ink,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+          ],
           if (gapLine != null && gapLine.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
@@ -1017,7 +1090,7 @@ class _VerifyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: context.themeColors.panelLight,
+      color: context.themeColors.surface,
       padding: EdgeInsets.fromLTRB(
         18,
         10,
@@ -1161,7 +1234,7 @@ class _RaceSummaryCard extends StatelessWidget {
           Text(
             isComplete ? 'FINISHED' : 'ON-GOING',
             style: AppTextStyles.labelSmall.copyWith(
-              color: isComplete ? NuvoColors.success : NuvoColors.actionBlue,
+              color: isComplete ? context.themeColors.successText : context.themeColors.accent,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.1,
             ),
@@ -1187,7 +1260,7 @@ class _RaceSummaryCard extends StatelessWidget {
                     score,
                     style: AppTextStyles.headlineMedium.copyWith(
                       color: isComplete
-                          ? NuvoColors.success
+                          ? context.themeColors.successText
                           : NuvoColors.actionBlue,
                       fontWeight: FontWeight.w900,
                     ),
@@ -1252,16 +1325,14 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: NuvoColors.actionBlue.withValues(alpha: 0.09),
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(
-          color: NuvoColors.actionBlue.withValues(alpha: 0.22),
-        ),
+        border: Border.all(color: context.themeColors.border, width: 1.5),
       ),
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.actionBlue,
+          color: context.themeColors.ink,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -1400,7 +1471,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Container(
-      color: isCurrentUser ? context.semanticColors.neutral.surface : null,
+      color: isCurrentUser ? context.semanticColors.accent.surface : null,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
@@ -1422,7 +1493,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
             bgColor: nuvoAvatarColorFor(participant.userId),
             textColor: NuvoColors.white,
             borderColor:
-                isCurrentUser ? NuvoColors.blue : context.themeColors.border,
+                isCurrentUser ? context.themeColors.accent : context.themeColors.border,
             borderWidth: isCurrentUser ? 2 : 1.5,
           ),
           const SizedBox(width: 12),
@@ -1453,7 +1524,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
           Text(
             raceProgressLabel(race, participant),
             style: AppTextStyles.raceRowMeta.copyWith(
-              color: isCurrentUser ? NuvoColors.blue : context.themeColors.inkMuted,
+              color: isCurrentUser ? context.themeColors.accent : context.themeColors.inkMuted,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1763,9 +1834,11 @@ class _CheckpointRow extends StatelessWidget {
                     c.marker,
                     style: AppTextStyles.number(
                       12,
-                      color: c.state == _NodeState.todo
-                          ? context.themeColors.inkDim
-                          : Colors.white,
+                      color: switch (c.state) {
+                        _NodeState.todo => context.themeColors.inkMuted,
+                        _NodeState.current => context.themeColors.page,
+                        _NodeState.done => Colors.white,
+                      },
                     ),
                   ),
                 ),
@@ -1853,15 +1926,17 @@ class _CompleteCallout extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: NuvoColors.success.withValues(alpha: 0.08),
+        color: NuvoColors.success.withValues(
+          alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.08,
+        ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: NuvoColors.success.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          const NuvoIcon(
+          NuvoIcon(
             NuvoIconType.checkCircle,
-            color: NuvoColors.success,
+            color: context.themeColors.successText,
             size: 20,
           ),
           const SizedBox(width: 10),
@@ -1872,7 +1947,7 @@ class _CompleteCallout extends StatelessWidget {
                 Text('$scoreText$rankText', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 2),
                 Text(
-                  'Start another race with your crew.',
+                  'Start another race with your friends.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: context.themeColors.inkMuted,
                   ),
@@ -1918,7 +1993,7 @@ String _heroSubcopy({
   final leader = sorted.isEmpty ? null : sorted.first;
   final me = userId == null ? null : race.participantFor(userId);
   if (me != null && raceIsCompleted(race)) {
-    return 'You hit the finish line. Pull in your crew and move the board again.';
+    return 'You hit the finish line. Invite your friends and move the board again.';
   }
   final parts = <String>[];
 
@@ -1987,11 +2062,25 @@ class _FinalStandingRow extends StatelessWidget {
       3 => NuvoColors.bronze,
       _ => NuvoColors.actionBlue,
     };
-    final selectedFill = isCurrentUser ? rankColor : null;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Dark: gold/silver/bronze fills are too light for white text and glare
+    // on a dark card, so the current user's row becomes a soft tint with
+    // normal ink text; rank text uses lifted tones.
+    final textRank = dark
+        ? (standing.rank == 3
+              ? Color.lerp(rankColor, Colors.white, 0.3)!
+              : standing.rank > 3
+              ? context.themeColors.accent
+              : rankColor)
+        : rankColor;
+    final selectedFill = isCurrentUser
+        ? (dark ? rankColor.withValues(alpha: 0.22) : rankColor)
+        : null;
+    final onFill = dark ? context.themeColors.ink : NuvoColors.white;
     final outlineColor = standing.rank <= 3
         ? rankColor
         : isCurrentUser
-        ? NuvoColors.actionBlue
+        ? context.themeColors.accent
         : null;
     final row = Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
@@ -2010,7 +2099,7 @@ class _FinalStandingRow extends StatelessWidget {
             child: Text(
               rankLabel,
               style: AppTextStyles.labelLarge.copyWith(
-                color: selectedFill != null ? NuvoColors.white : rankColor,
+                color: selectedFill != null && !dark ? onFill : textRank,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -2022,7 +2111,7 @@ class _FinalStandingRow extends StatelessWidget {
               style: AppTextStyles.bodyMedium.copyWith(
                 fontWeight: isCurrentUser ? FontWeight.w700 : FontWeight.w500,
                 color: selectedFill != null
-                    ? NuvoColors.white
+                    ? onFill
                     : context.themeColors.ink,
               ),
               maxLines: 1,
@@ -2034,8 +2123,8 @@ class _FinalStandingRow extends StatelessWidget {
               'Lv. ${standing.level}',
               style: AppTextStyles.labelSmall.copyWith(
                 color: selectedFill != null
-                    ? NuvoColors.white
-                    : context.themeColors.inkDim,
+                    ? onFill
+                    : context.themeColors.inkMuted,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -2045,7 +2134,7 @@ class _FinalStandingRow extends StatelessWidget {
             Text(
               raceScoreLabel(race, standing.scoreValue),
               style: AppTextStyles.labelMedium.copyWith(
-                color: selectedFill != null ? NuvoColors.white : rankColor,
+                color: selectedFill != null && !dark ? onFill : textRank,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -2120,8 +2209,9 @@ class _ManageRow extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: context.semanticColors.neutral.surface,
+                color: context.themeColors.surface,
                 shape: BoxShape.circle,
+                border: Border.all(color: context.themeColors.border, width: 1.5),
               ),
               child: Icon(icon, color: context.themeColors.ink, size: 18),
             ),

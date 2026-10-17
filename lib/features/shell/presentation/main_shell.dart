@@ -12,6 +12,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../notifications/application/notification_controller.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../social/data/crew_activity.dart';
 import '../../races/presentation/motion_catalog_provider.dart';
 import '../../profile/application/progression_controller.dart';
 import '../../profile/presentation/widgets/level_up_dialog.dart';
@@ -38,7 +39,7 @@ class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.child});
 
   /// In production this is the `StatefulNavigationShell` handed to the
-  /// router's `StatefulShellRoute` builder — it renders the five branch
+  /// router's `StatefulShellRoute` builder — it renders the four branch
   /// Navigators through [NuvoTabStack] (see `navigatorContainerBuilder` in
   /// router.dart), which keeps every visited tab mounted and animates the
   /// switch directionally. In widget tests it can be any plain child.
@@ -74,8 +75,7 @@ class _MainShellState extends ConsumerState<MainShell>
     // miss (e.g. a load that was in flight across a sign-out — see the
     // _generation guards in RaceController/ArenaController/CrewController/
     // NotificationController). Previously only Compete patched this itself
-    // (per-screen initState check), which left every other tab — Verify
-    // included — exposed to the exact same "stuck cold, no error, no retry"
+    // (per-screen initState check), which left every other tab exposed to the exact same "stuck cold, no error, no retry"
     // state until the user happened to open Compete or force-refresh.
     // Centralized here once, for every domain, instead of duplicated per
     // screen (docs/agents/18 designates MainShell as the one freshness
@@ -116,6 +116,16 @@ class _MainShellState extends ConsumerState<MainShell>
         !notifState.loading) {
       ref.read(notificationControllerProvider.notifier).load(force: false);
     }
+    final progressionState = ref.read(progressionControllerProvider);
+    if (progressionState.isLoading && !progressionState.hasValue) {
+      ref.read(progressionControllerProvider.notifier).load(force: false);
+    }
+    final activityState = ref.read(crewActivityProvider);
+    if (!activityState.hasData &&
+        activityState.error == null &&
+        !activityState.loading) {
+      ref.read(crewActivityProvider.notifier).load(force: false);
+    }
   }
 
   @override
@@ -133,6 +143,7 @@ class _MainShellState extends ConsumerState<MainShell>
       ref.read(arenaControllerProvider.notifier).revalidate();
       ref.read(crewControllerProvider.notifier).revalidate();
       ref.read(notificationControllerProvider.notifier).revalidate();
+      ref.read(progressionControllerProvider.notifier).revalidate();
     }
   }
 
@@ -162,13 +173,15 @@ class _MainShellState extends ConsumerState<MainShell>
         ref.read(arenaControllerProvider.notifier).revalidate();
         break;
       case 1:
-      case 2:
         unawaited(refreshMotionCatalog(ref));
         ref.read(raceControllerProvider.notifier).revalidate();
         break;
-      case 3:
+      case 2:
         ref.read(crewControllerProvider.notifier).revalidate();
         ref.read(notificationControllerProvider.notifier).revalidate();
+        break;
+      case 3:
+        ref.read(progressionControllerProvider.notifier).revalidate();
         break;
     }
     // Each branch keeps its own Navigator and its last location — goBranch
@@ -227,7 +240,6 @@ class _MainShellState extends ConsumerState<MainShell>
       rowKey: TrackSideLayoutKeys.navigationRow,
       currentIndex: currentIndex,
       onTap: _onTapTab,
-      isDark: false,
     );
 
     return Scaffold(
@@ -257,7 +269,7 @@ class _MainShellState extends ConsumerState<MainShell>
 /// every tab. The nav widget only paints the rounded dock itself; its
 /// margins are transparent, so without this band scrolled body content
 /// showed through (and under) the dock. The band is page-colored and
-/// spans the nav's rendered extent plus Verify's raised-circle strip —
+/// spans the nav's rendered extent plus the breathing strip above the dock —
 /// content scrolls behind it and re-emerges above the dock's top edge,
 /// which is what the shared `bottomPadding` scroll clearance reserves.
 /// IgnorePointer so taps still reach the nav painted on top.
@@ -270,7 +282,8 @@ class _DockOcclusion extends StatelessWidget {
       child: Container(
         key: const ValueKey('nuvo-dock-occlusion'),
         height: MediaQuery.paddingOf(context).bottom +
-            NuvoBottomNav.navVerifyRaise,
+            NuvoBottomNav.navDockGap +
+            NuvoBottomNav.navTopBreath,
         color: context.themeColors.page,
       ),
     );

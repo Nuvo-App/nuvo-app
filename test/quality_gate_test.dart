@@ -7,7 +7,6 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/pass/presentation/pass_screen.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
@@ -173,35 +172,6 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Start'), findsOneWidget);
         expect(find.text('Join'), findsOneWidget);
-      });
-
-      testWidgets('Verify: no overflow with 10 ready races', (tester) async {
-        tester.view.physicalSize = Size(width, height);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.resetPhysicalSize);
-        await tester.pumpWidget(
-          _buildApp(const MoveScreen(), _StubRaceRepo(_generateRaces(10))),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-      });
-
-      testWidgets('Verify: segments switch', (tester) async {
-        tester.view.physicalSize = Size(width, height);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.resetPhysicalSize);
-        await tester.pumpWidget(
-          _buildApp(const MoveScreen(), _StubRaceRepo(_generateRaces(5))),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        // Tap "Completed" segment
-        final completedFinder = find.textContaining('Completed');
-        if (completedFinder.evaluate().isNotEmpty) {
-          await tester.tap(completedFinder.first);
-          await tester.pumpAndSettle();
-          expect(tester.takeException(), isNull);
-        }
       });
 
       testWidgets('Profile: no overflow with 15 races', (tester) async {

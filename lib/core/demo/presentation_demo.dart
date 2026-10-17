@@ -38,7 +38,8 @@ class PresentationModePreferences extends ChangeNotifier {
   PresentationModePreferences({
     required Future<bool> Function() read,
     required Future<void> Function(bool enabled) write,
-  }) : _read = read, _write = write;
+  }) : _read = read,
+       _write = write;
 
   final Future<bool> Function() _read;
   final Future<void> Function(bool enabled) _write;
@@ -124,9 +125,30 @@ bool isPresentationDemoUser(AuthUser? user) {
   return false;
 }
 
+/// The account owner's own name and handle in presentation mode — their demo
+/// shows who they are, not a stand-in persona.
+const presentationOwnerName = 'Akshayraj Sanjai';
+const presentationOwnerUsername = 'akshayraj';
+
+/// The generic persona the store-review demo identity keeps.
+const _presentationPersonaName = 'Maya Chen';
+
+/// The name the viewer carries inside presentation fixtures (leaderboards,
+/// race rosters). The owner's presentation mode (the Profile toggle) uses their
+/// own name; the store-review identity keeps the persona.
+String get presentationViewerName => presentationModeToggleEnabled
+    ? presentationOwnerName
+    : _presentationPersonaName;
+
 AuthUser presentedUser(AuthUser user) {
   if (!isPresentationDemoUser(user)) return user;
-  return user.copyWith(fullName: 'Maya Chen', username: 'maya');
+  if (user.email.trim().toLowerCase() == presentationDemoEmail) {
+    return user.copyWith(
+      fullName: presentationOwnerName,
+      username: presentationOwnerUsername,
+    );
+  }
+  return user.copyWith(fullName: _presentationPersonaName, username: 'maya');
 }
 
 bool isPresentationDemoRace(String id) =>
@@ -146,17 +168,16 @@ PassInfo presentationDemoPassInfo() => const PassInfo(
 /// profile instead of a dead offline error. Progression bundles are
 /// deliberately varied across levels so the public identity reads
 /// differently for a newcomer (Lv. 1) and a veteran (Lv. 52).
-PublicProfileCard? presentationDemoProfile(String userId,
-    {String? viewerId}) {
+PublicProfileCard? presentationDemoProfile(String userId, {String? viewerId}) {
   final members = PresentationDemoData.crewMembers();
   final requests = PresentationDemoData.crewRequestPage();
   final status = members.any((m) => m.id == userId)
       ? CrewConnectionStatus.connected
       : requests.incoming.any((m) => m.id == userId)
-          ? CrewConnectionStatus.pendingIncoming
-          : requests.outgoing.any((m) => m.id == userId)
-              ? CrewConnectionStatus.pendingOutgoing
-              : null;
+      ? CrewConnectionStatus.pendingIncoming
+      : requests.outgoing.any((m) => m.id == userId)
+      ? CrewConnectionStatus.pendingOutgoing
+      : null;
   if (status == null) return null;
   final me = viewerId ?? 'presentation-demo-viewer';
   for (final person in PresentationDemoData.knownPeople()) {
@@ -194,21 +215,20 @@ NuvoBadge _demoBadge(
   String category, {
   bool featured = false,
   bool milestone = false,
-}) =>
-    NuvoBadge(
-      unlockId: 'demo-ach-$key',
-      type: 'achievement',
-      key: key,
-      name: name,
-      description: null,
-      requiredLevel: 0,
-      metadata: milestone ? const {'rarity': 'milestone'} : null,
-      unlocked: true,
-      unlockedAt: '2026-09-10T12:00:00.000Z',
-      featured: featured,
-      category: category,
-      iconKey: iconKey,
-    );
+}) => NuvoBadge(
+  unlockId: 'demo-ach-$key',
+  type: 'achievement',
+  key: key,
+  name: name,
+  description: null,
+  requiredLevel: 0,
+  metadata: milestone ? const {'rarity': 'milestone'} : null,
+  unlocked: true,
+  unlockedAt: '2026-09-10T12:00:00.000Z',
+  featured: featured,
+  category: category,
+  iconKey: iconKey,
+);
 
 const _demoAchievementTotal = 43;
 
@@ -223,19 +243,20 @@ class _DemoShared {
   final int targetWins;
   final List<PublicSharedRace> recent;
   PublicRacesWithYou toCard(String viewerId) => PublicRacesWithYou(
-        total: total,
-        viewerWins: viewerWins,
-        targetWins: targetWins,
-        recent: [
-          for (final r in recent)
-            PublicSharedRace(
-              raceId: r.raceId,
-              title: r.title,
-              winnerUserId:
-                  r.winnerUserId == _demoViewerId ? viewerId : r.winnerUserId,
-            ),
-        ],
-      );
+    total: total,
+    viewerWins: viewerWins,
+    targetWins: targetWins,
+    recent: [
+      for (final r in recent)
+        PublicSharedRace(
+          raceId: r.raceId,
+          title: r.title,
+          winnerUserId: r.winnerUserId == _demoViewerId
+              ? viewerId
+              : r.winnerUserId,
+        ),
+    ],
+  );
 }
 
 class _DemoProgression {
@@ -255,12 +276,14 @@ class _DemoProgression {
   final _DemoShared? shared;
   List<PublicFeaturedBadge> get featured => earned
       .where((b) => b.featured)
-      .map((b) => PublicFeaturedBadge(
-            unlockId: b.unlockId,
-            key: b.key,
-            name: b.name,
-            iconKey: b.iconKey,
-          ))
+      .map(
+        (b) => PublicFeaturedBadge(
+          unlockId: b.unlockId,
+          key: b.key,
+          name: b.name,
+          iconKey: b.iconKey,
+        ),
+      )
       .toList();
 }
 
@@ -278,22 +301,42 @@ final _demoProgression = <String, _DemoProgression>{
       _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
       _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
       _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing'),
-      _demoBadge('quarter_century', 'Quarter Century', 'num_25', 'racing',
-          milestone: true),
+      _demoBadge(
+        'quarter_century',
+        'Quarter Century',
+        'num_25',
+        'racing',
+        milestone: true,
+      ),
       _demoBadge('first_w', 'First W', 'trophy_1', 'winning'),
       _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning'),
       _demoBadge('high_five', 'High Five', 'trophy_5', 'winning'),
-      _demoBadge('ten_up', 'Ten Up', 'trophy_10', 'winning',
-          featured: true, milestone: true),
+      _demoBadge(
+        'ten_up',
+        'Ten Up',
+        'trophy_10',
+        'winning',
+        featured: true,
+        milestone: true,
+      ),
       _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
-      _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance',
-          featured: true),
-      _demoBadge('getting_better', 'Getting Better', 'chart_up',
-          'performance'),
+      _demoBadge(
+        'personal_best',
+        'Personal Best',
+        'spark_up',
+        'performance',
+        featured: true,
+      ),
+      _demoBadge('getting_better', 'Getting Better', 'chart_up', 'performance'),
       _demoBadge('motion_rookie', 'Motion Rookie', 'motion_figure', 'motion'),
       _demoBadge('crewmate', 'Crewmate', 'people', 'social'),
-      _demoBadge('variety_pack', 'Variety Pack', 'crossed_flags', 'variety',
-          featured: true),
+      _demoBadge(
+        'variety_pack',
+        'Variety Pack',
+        'crossed_flags',
+        'variety',
+        featured: true,
+      ),
       _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
       _demoBadge('level_10', 'Level 10', 'num_10', 'level'),
       _demoBadge('level_25', 'Level 25', 'num_25', 'level', milestone: true),
@@ -315,12 +358,21 @@ final _demoProgression = <String, _DemoProgression>{
       _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
       _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
       _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
-      _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing',
-          featured: true),
-      _demoBadge('first_w', 'First W', 'trophy_1', 'winning',
-          featured: true),
-      _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning',
-          featured: true),
+      _demoBadge(
+        'double_digits',
+        'Double Digits',
+        'num_10',
+        'racing',
+        featured: true,
+      ),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning', featured: true),
+      _demoBadge(
+        'hat_trick',
+        'Hat Trick',
+        'trophy_3',
+        'winning',
+        featured: true,
+      ),
       _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
       _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance'),
       _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
@@ -344,27 +396,42 @@ final _demoProgression = <String, _DemoProgression>{
       _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
       _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing'),
       _demoBadge('quarter_century', 'Quarter Century', 'num_25', 'racing'),
-      _demoBadge('fifty_strong', 'Fifty Strong', 'num_50', 'racing',
-          featured: true, milestone: true),
+      _demoBadge(
+        'fifty_strong',
+        'Fifty Strong',
+        'num_50',
+        'racing',
+        featured: true,
+        milestone: true,
+      ),
       _demoBadge('first_w', 'First W', 'trophy_1', 'winning'),
       _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning'),
       _demoBadge('high_five', 'High Five', 'trophy_5', 'winning'),
       _demoBadge('ten_up', 'Ten Up', 'trophy_10', 'winning'),
       _demoBadge('twenty_five_wins', '25 Wins', 'trophy_25', 'winning'),
-      _demoBadge('champion', 'Champion', 'crown', 'winning',
-          featured: true, milestone: true),
+      _demoBadge(
+        'champion',
+        'Champion',
+        'crown',
+        'winning',
+        featured: true,
+        milestone: true,
+      ),
       _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
       _demoBadge('starter_pack', 'Starter Pack', 'flags_stack', 'creation'),
       _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance'),
-      _demoBadge('getting_better', 'Getting Better', 'chart_up',
-          'performance'),
+      _demoBadge('getting_better', 'Getting Better', 'chart_up', 'performance'),
       _demoBadge('comeback', 'Comeback', 'arrow_curve', 'performance'),
       _demoBadge('wire_to_wire', 'Wire to Wire', 'crown', 'performance'),
       _demoBadge('motion_rookie', 'Motion Rookie', 'motion_figure', 'motion'),
-      _demoBadge('motion_regular', 'Motion Regular', 'motion_figure',
-          'motion'),
-      _demoBadge('motion_machine', 'Motion Machine', 'motion_figure',
-          'motion', featured: true),
+      _demoBadge('motion_regular', 'Motion Regular', 'motion_figure', 'motion'),
+      _demoBadge(
+        'motion_machine',
+        'Motion Machine',
+        'motion_figure',
+        'motion',
+        featured: true,
+      ),
       _demoBadge('crewmate', 'Crewmate', 'people', 'social'),
       _demoBadge('crowd_favorite', 'Crowd Favorite', 'people', 'social'),
       _demoBadge('rivalry', 'Rivalry', 'crossed_flags', 'social'),
@@ -392,18 +459,33 @@ final _demoProgression = <String, _DemoProgression>{
       _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
       _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
       _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
-      _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing',
-          featured: true),
+      _demoBadge(
+        'double_digits',
+        'Double Digits',
+        'num_10',
+        'racing',
+        featured: true,
+      ),
       _demoBadge('first_w', 'First W', 'trophy_1', 'winning'),
       _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning'),
-      _demoBadge('high_five', 'High Five', 'trophy_5', 'winning',
-          featured: true),
+      _demoBadge(
+        'high_five',
+        'High Five',
+        'trophy_5',
+        'winning',
+        featured: true,
+      ),
       _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
       _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance'),
       _demoBadge('motion_rookie', 'Motion Rookie', 'motion_figure', 'motion'),
       _demoBadge('crewmate', 'Crewmate', 'people', 'social'),
-      _demoBadge('rivalry', 'Rivalry', 'crossed_flags', 'social',
-          featured: true),
+      _demoBadge(
+        'rivalry',
+        'Rivalry',
+        'crossed_flags',
+        'social',
+        featured: true,
+      ),
       _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
       _demoBadge('level_10', 'Level 10', 'num_10', 'level'),
     ],
@@ -424,8 +506,7 @@ final _demoProgression = <String, _DemoProgression>{
       _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
       _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
       _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
-      _demoBadge('first_w', 'First W', 'trophy_1', 'winning',
-          featured: true),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning', featured: true),
       _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
       _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
     ],
@@ -565,7 +646,7 @@ abstract final class PresentationDemoData {
           displayName: 'Sam Rivera',
           username: 'samr',
           memberId: 'NV-2070',
-        level: 5,
+          level: 5,
           initials: 'SR',
           addedAt: _createdAt,
           profilePhotoUrl: 'https://i.pravatar.cc/160?img=68',
@@ -578,7 +659,7 @@ abstract final class PresentationDemoData {
           displayName: 'Ellie Brooks',
           username: 'ellieb',
           memberId: 'NV-2073',
-        level: 3,
+          level: 3,
           initials: 'EB',
           addedAt: _createdAt,
           profilePhotoUrl: 'https://i.pravatar.cc/160?img=49',
@@ -601,7 +682,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-request',
       category: 'crew_request',
-      title: 'Sam Rivera wants to connect',
+      title: 'Sam Rivera sent you a friend request',
       actorName: 'Sam Rivera',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=68',
       createdAt: DateTime.now().toUtc().subtract(const Duration(minutes: 8)),
@@ -611,7 +692,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-accepted',
       category: 'crew_request_accepted',
-      title: 'Priya Shah accepted your crew request',
+      title: 'Priya Shah accepted your friend request',
       actorName: 'Priya Shah',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=32',
       createdAt: DateTime.now().toUtc().subtract(const Duration(minutes: 15)),
@@ -621,7 +702,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-joined',
       category: 'crew_connected',
-      title: 'Theo Martin joined your crew',
+      title: 'Theo Martin is now your friend',
       actorName: 'Theo Martin',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=53',
       createdAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
@@ -660,14 +741,12 @@ abstract final class PresentationDemoData {
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=32',
       createdAt: DateTime.now().toUtc().subtract(const Duration(hours: 7)),
       read: true,
-      destination: const RaceDestination(
-        '${presentationDemoRacePrefix}squats',
-      ),
+      destination: const RaceDestination('${presentationDemoRacePrefix}squats'),
     ),
     NuvoNotification(
       id: 'presentation-demo-notif-jules',
       category: 'crew_connected',
-      title: 'Jules Carter joined your crew',
+      title: 'Jules Carter is now your friend',
       actorName: 'Jules Carter',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=15',
       createdAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
@@ -682,247 +761,229 @@ abstract final class PresentationDemoData {
   /// so the LIVE card contract renders offline, and payload shapes that
   /// exercise the For-you tab (overtakes naming [userId]) and post CTAs.
   static List<CrewActivityItem> crewActivity(String userId) => [
-        CrewActivityItem(
-          id: 'evt:demo-live',
-          type: 'race_live',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
-          raceId: '${presentationDemoRacePrefix}pushups',
-          raceTitle: 'Pushup Battle',
-          entityType: 'race_event',
-          entityId: 'demo-live',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}pushups'),
-          reactions: const {'fire': 3},
-          payload: const {
-            'title': 'Pushup Battle',
-            'endsAt': null,
-            'participants': [
-              {'name': 'Noah', 'score': 41, 'rank': 1, 'isCrew': true},
-              {'name': 'You', 'score': 39, 'rank': 2, 'isMe': true},
-            ],
-          },
-        ),
-        // A second LIVE card — timed, so the countdown presentation
-        // renders too. Mirrors the squats fixture board (Priya 16 · You 12).
-        CrewActivityItem(
-          id: 'evt:demo-live-timed',
-          type: 'race_live',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 4)),
-          raceId: '${presentationDemoRacePrefix}squats',
-          raceTitle: 'First To 25 Squats',
-          entityType: 'race_event',
-          entityId: 'demo-live-timed',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}squats'),
-          reactions: const {'fire': 1},
-          payload: {
-            'title': 'First To 25 Squats',
-            'endsAt': DateTime.now()
-                .toUtc()
-                .add(const Duration(minutes: 35))
-                .toIso8601String(),
-            'participants': [
-              {'name': 'Priya', 'score': 16, 'rank': 1, 'isCrew': true},
-              {'name': 'You', 'score': 12, 'rank': 2, 'isMe': true},
-            ],
-          },
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-lead',
-          type: 'rank_changed',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 8)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-noah',
-            displayName: 'Noah Williams',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
-          ),
-          raceId: '${presentationDemoRacePrefix}pushups',
-          raceTitle: 'Pushup Battle',
-          entityType: 'race_event',
-          entityId: 'demo-lead',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}pushups'),
-          payload: {
-            'previousRank': 2,
-            'newRank': 1,
-            'overtakenUserIds': [userId],
-          },
-          reactions: const {'fire': 2, 'muscle': 1},
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-spot',
-          type: 'lead_changed',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 20)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-priya',
-            displayName: 'Priya Shah',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
-          ),
-          raceId: '${presentationDemoRacePrefix}squats',
-          raceTitle: 'First To 25 Squats',
-          entityType: 'race_event',
-          entityId: 'demo-spot',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}squats'),
-          payload: {
-            'newLeaderUserId': 'presentation-demo-crew-priya',
-            'displacedUserId': userId,
-          },
-          reactions: const {'fire': 1},
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-reaction',
-          type: 'reaction',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(hours: 2)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-noah',
-            displayName: 'Noah Williams',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
-          ),
-          raceId: '${presentationDemoRacePrefix}pushups',
-          raceTitle: 'Pushup Battle',
-          title: 'Noah Williams reacted 🔥 to Pushup Battle',
-          entityType: 'race_event',
-          entityId: 'demo-reaction',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}pushups'),
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-created',
-          type: 'race_created',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 30)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-noah',
-            displayName: 'Noah Williams',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
-          ),
-          raceId: '${presentationDemoRacePrefix}mountain-climbers',
-          raceTitle: 'First To 100 Mountain Climbers',
-          entityType: 'race_event',
-          entityId: 'demo-created',
-          destination: const RaceDestination(
-            '${presentationDemoRacePrefix}mountain-climbers',
-          ),
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-joined',
-          type: 'race_joined',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 45)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-jules',
-            displayName: 'Jules Carter',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=15',
-          ),
-          raceId: '${presentationDemoRacePrefix}mountain-climbers',
-          raceTitle: 'First To 100 Mountain Climbers',
-          entityType: 'race_event',
-          entityId: 'demo-joined',
-          destination: const RaceDestination(
-            '${presentationDemoRacePrefix}mountain-climbers',
-          ),
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-finish',
-          type: 'participant_finished',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(hours: 3)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-priya',
-            displayName: 'Priya Shah',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
-          ),
-          raceId: '${presentationDemoRacePrefix}squats',
-          raceTitle: 'First To 25 Squats',
-          entityType: 'race_event',
-          entityId: 'demo-finish',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}squats'),
-          payload: const {'score': 25},
-        ),
-        // "You won a race" — lands on the viewer, so it earns For you.
-        // Mirrors the lunges fixture board (You 30 · Priya 24).
-        CrewActivityItem(
-          id: 'evt:demo-win',
-          type: 'winner_determined',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(hours: 4)),
-          actor: CrewActivityActor(
-            id: userId,
-            displayName: 'You',
-            profilePhotoUrl: presentationDemoAvatarUrl,
-          ),
-          raceId: '${presentationDemoRacePrefix}lunges',
-          raceTitle: 'First To 30 Lunges',
-          entityType: 'race_event',
-          entityId: 'demo-win',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}lunges'),
-          payload: {'winnerUserId': userId},
-          reactions: const {'clap': 2, 'fire': 1},
-        ),
-        CrewActivityItem(
-          id: 'ntf:demo-accepted',
-          type: 'crew_request_accepted',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(hours: 6)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-priya',
-            displayName: 'Priya Shah',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
-          ),
-          title: 'Priya Shah accepted your crew request',
-          entityType: 'crew',
-          entityId: 'demo-conn-priya',
-          destination:
-              const ProfileDestination('presentation-demo-crew-priya'),
-          reactions: const {'clap': 1},
-        ),
-        CrewActivityItem(
-          id: 'evt:demo-best',
-          type: 'personal_best',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(hours: 5)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-lena',
-            displayName: 'Lena Ortiz',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=44',
-          ),
-          raceId: '${presentationDemoRacePrefix}pushups',
-          raceTitle: 'Pushup Battle',
-          entityType: 'race_event',
-          entityId: 'demo-best',
-          destination:
-              const RaceDestination('${presentationDemoRacePrefix}pushups'),
-          payload: const {
-            'previousBest': 36,
-            'newBest': 42,
-            'metric': 'pushups',
-          },
-        ),
-        CrewActivityItem(
-          id: 'ntf:demo-jules',
-          type: 'crew_connected',
-          occurredAt:
-              DateTime.now().toUtc().subtract(const Duration(days: 2)),
-          actor: const CrewActivityActor(
-            id: 'presentation-demo-crew-jules',
-            displayName: 'Jules Carter',
-            profilePhotoUrl: 'https://i.pravatar.cc/160?img=15',
-          ),
-          title: 'Jules Carter joined your crew',
-          entityType: 'crew',
-          entityId: 'demo-conn-jules',
-          destination:
-              const ProfileDestination('presentation-demo-crew-jules'),
-        ),
-      ];
+    CrewActivityItem(
+      id: 'evt:demo-live',
+      type: 'race_live',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+      raceId: '${presentationDemoRacePrefix}pushups',
+      raceTitle: 'Pushup Battle',
+      entityType: 'race_event',
+      entityId: 'demo-live',
+      destination: const RaceDestination(
+        '${presentationDemoRacePrefix}pushups',
+      ),
+      reactions: const {'fire': 3},
+      payload: const {
+        'title': 'Pushup Battle',
+        'endsAt': null,
+        'participants': [
+          {'name': 'Noah', 'score': 41, 'rank': 1, 'isCrew': true},
+          {'name': 'You', 'score': 39, 'rank': 2, 'isMe': true},
+        ],
+      },
+    ),
+    // A second LIVE card — timed, so the countdown presentation
+    // renders too. Mirrors the squats fixture board (Priya 16 · You 12).
+    CrewActivityItem(
+      id: 'evt:demo-live-timed',
+      type: 'race_live',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(minutes: 4)),
+      raceId: '${presentationDemoRacePrefix}squats',
+      raceTitle: 'First To 25 Squats',
+      entityType: 'race_event',
+      entityId: 'demo-live-timed',
+      destination: const RaceDestination('${presentationDemoRacePrefix}squats'),
+      reactions: const {'fire': 1},
+      payload: {
+        'title': 'First To 25 Squats',
+        'endsAt': DateTime.now()
+            .toUtc()
+            .add(const Duration(minutes: 35))
+            .toIso8601String(),
+        'participants': [
+          {'name': 'Priya', 'score': 16, 'rank': 1, 'isCrew': true},
+          {'name': 'You', 'score': 12, 'rank': 2, 'isMe': true},
+        ],
+      },
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-lead',
+      type: 'rank_changed',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(minutes: 8)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-noah',
+        displayName: 'Noah Williams',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
+      ),
+      raceId: '${presentationDemoRacePrefix}pushups',
+      raceTitle: 'Pushup Battle',
+      entityType: 'race_event',
+      entityId: 'demo-lead',
+      destination: const RaceDestination(
+        '${presentationDemoRacePrefix}pushups',
+      ),
+      payload: {
+        'previousRank': 2,
+        'newRank': 1,
+        'overtakenUserIds': [userId],
+      },
+      reactions: const {'fire': 2, 'muscle': 1},
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-spot',
+      type: 'lead_changed',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(minutes: 20)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-priya',
+        displayName: 'Priya Shah',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
+      ),
+      raceId: '${presentationDemoRacePrefix}squats',
+      raceTitle: 'First To 25 Squats',
+      entityType: 'race_event',
+      entityId: 'demo-spot',
+      destination: const RaceDestination('${presentationDemoRacePrefix}squats'),
+      payload: {
+        'newLeaderUserId': 'presentation-demo-crew-priya',
+        'displacedUserId': userId,
+      },
+      reactions: const {'fire': 1},
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-reaction',
+      type: 'reaction',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-noah',
+        displayName: 'Noah Williams',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
+      ),
+      raceId: '${presentationDemoRacePrefix}pushups',
+      raceTitle: 'Pushup Battle',
+      title: 'Noah Williams reacted 🔥 to Pushup Battle',
+      entityType: 'race_event',
+      entityId: 'demo-reaction',
+      destination: const RaceDestination(
+        '${presentationDemoRacePrefix}pushups',
+      ),
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-created',
+      type: 'race_created',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(minutes: 30)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-noah',
+        displayName: 'Noah Williams',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
+      ),
+      raceId: '${presentationDemoRacePrefix}mountain-climbers',
+      raceTitle: 'First To 100 Mountain Climbers',
+      entityType: 'race_event',
+      entityId: 'demo-created',
+      destination: const RaceDestination(
+        '${presentationDemoRacePrefix}mountain-climbers',
+      ),
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-joined',
+      type: 'race_joined',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(minutes: 45)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-jules',
+        displayName: 'Jules Carter',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=15',
+      ),
+      raceId: '${presentationDemoRacePrefix}mountain-climbers',
+      raceTitle: 'First To 100 Mountain Climbers',
+      entityType: 'race_event',
+      entityId: 'demo-joined',
+      destination: const RaceDestination(
+        '${presentationDemoRacePrefix}mountain-climbers',
+      ),
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-finish',
+      type: 'participant_finished',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(hours: 3)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-priya',
+        displayName: 'Priya Shah',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
+      ),
+      raceId: '${presentationDemoRacePrefix}squats',
+      raceTitle: 'First To 25 Squats',
+      entityType: 'race_event',
+      entityId: 'demo-finish',
+      destination: const RaceDestination('${presentationDemoRacePrefix}squats'),
+      payload: const {'score': 25},
+    ),
+    // "You won a race" — lands on the viewer, so it earns For you.
+    // Mirrors the lunges fixture board (You 30 · Priya 24).
+    CrewActivityItem(
+      id: 'evt:demo-win',
+      type: 'winner_determined',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(hours: 4)),
+      actor: CrewActivityActor(
+        id: userId,
+        displayName: 'You',
+        profilePhotoUrl: presentationDemoAvatarUrl,
+      ),
+      raceId: '${presentationDemoRacePrefix}lunges',
+      raceTitle: 'First To 30 Lunges',
+      entityType: 'race_event',
+      entityId: 'demo-win',
+      destination: const RaceDestination('${presentationDemoRacePrefix}lunges'),
+      payload: {'winnerUserId': userId},
+      reactions: const {'clap': 2, 'fire': 1},
+    ),
+    CrewActivityItem(
+      id: 'ntf:demo-accepted',
+      type: 'crew_request_accepted',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(hours: 6)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-priya',
+        displayName: 'Priya Shah',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
+      ),
+      title: 'Priya Shah accepted your friend request',
+      entityType: 'crew',
+      entityId: 'demo-conn-priya',
+      destination: const ProfileDestination('presentation-demo-crew-priya'),
+      reactions: const {'clap': 1},
+    ),
+    CrewActivityItem(
+      id: 'evt:demo-best',
+      type: 'personal_best',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(hours: 5)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-lena',
+        displayName: 'Lena Ortiz',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=44',
+      ),
+      raceId: '${presentationDemoRacePrefix}pushups',
+      raceTitle: 'Pushup Battle',
+      entityType: 'race_event',
+      entityId: 'demo-best',
+      destination: const RaceDestination(
+        '${presentationDemoRacePrefix}pushups',
+      ),
+      payload: const {'previousBest': 36, 'newBest': 42, 'metric': 'pushups'},
+    ),
+    CrewActivityItem(
+      id: 'ntf:demo-jules',
+      type: 'crew_connected',
+      occurredAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
+      actor: const CrewActivityActor(
+        id: 'presentation-demo-crew-jules',
+        displayName: 'Jules Carter',
+        profilePhotoUrl: 'https://i.pravatar.cc/160?img=15',
+      ),
+      title: 'Jules Carter is now your friend',
+      entityType: 'crew',
+      entityId: 'demo-conn-jules',
+      destination: const ProfileDestination('presentation-demo-crew-jules'),
+    ),
+  ];
 
   static List<Race> races(String userId) => [
     _race(
@@ -983,10 +1044,14 @@ abstract final class PresentationDemoData {
       opponentName: 'Theo Martin',
       opponentId: 'presentation-demo-crew-theo',
       status: 'scheduled',
-      startLineAt:
-          DateTime.now().toUtc().add(const Duration(minutes: 18)).toIso8601String(),
-      finishLineAt:
-          DateTime.now().toUtc().add(const Duration(days: 2)).toIso8601String(),
+      startLineAt: DateTime.now()
+          .toUtc()
+          .add(const Duration(minutes: 18))
+          .toIso8601String(),
+      finishLineAt: DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 2))
+          .toIso8601String(),
     ),
     _race(
       id: '${presentationDemoRacePrefix}running',
@@ -1061,7 +1126,7 @@ abstract final class PresentationDemoData {
     final focus = active.first;
     return ArenaSnapshot(
       mode: 'real',
-      headerPulse: 'Your crew is moving',
+      headerPulse: 'Your friends are moving',
       focusBoard: _boardFor(focus, userId),
       liveBoards: [for (final race in active.skip(1)) _boardFor(race, userId)],
       activity: const [
@@ -1093,7 +1158,7 @@ abstract final class PresentationDemoData {
     final rows = [
       if (me != null)
         ArenaMiniLeaderboardRow(
-          label: 'Maya Chen',
+          label: presentationViewerName,
           value: '$progress / $target',
           isCurrentUser: true,
           profilePhotoUrl: presentationDemoAvatarUrl,
@@ -1113,7 +1178,7 @@ abstract final class PresentationDemoData {
       title: race.title,
       proofLabel: 'AI Motion Proof',
       progressLabel: '$progress / $target reps',
-      boardContext: 'Your crew is moving toward the finish line.',
+      boardContext: 'Your friends are moving toward the finish line.',
       primaryActionLabel: 'Open race',
       primaryActionType: 'open_board',
       progressPercent: percent.clamp(0, 100),
@@ -1164,7 +1229,7 @@ abstract final class PresentationDemoData {
       {
         'id': '$id-me',
         'userId': creatorId,
-        'displayName': 'Maya Chen',
+        'displayName': presentationViewerName,
         'profilePhotoUrl': presentationDemoAvatarUrl,
         'progressValue': meValue,
         'progressPercent': ((meValue / targetValue) * 100).round(),

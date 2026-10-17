@@ -1,4 +1,5 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 import 'race_mode_semantics.dart';
@@ -47,6 +48,7 @@ class RaceDraft {
     this.customActivityName,
     this.customUnit,
     this.verifierSpec,
+    this.motionV2Spec,
     this.goalKind = RaceGoalKind.movement,
     this.manualGoalName,
     this.manualUnit,
@@ -92,6 +94,14 @@ class RaceDraft {
 
   final CustomPoseVerifierSpec? verifierSpec;
 
+  /// Motion-V2 learned spec — the verifier of record for the race when
+  /// present (the ONNX matcher that learned the movement). [verifierSpec]
+  /// may be absent when V1 couldn't build one but V2 validated the demos.
+  final TaughtMotionV2Spec? motionV2Spec;
+
+  /// Some verifier spec exists — V2 or V1. What custom creation requires.
+  bool get hasVerifierSpec => verifierSpec != null || motionV2Spec != null;
+
   /// Absolute finish line (ISO-8601). Required for [RaceFormat.mostInWindow]
   /// and any attempt race that should close on a deadline; the server is the
   /// authority on what "before the finish line" means.
@@ -131,11 +141,11 @@ class RaceDraft {
   /// deadline modes need a finish line; timed battles need a duration.
   bool get isValidToCreate {
     if (resolvedTitle.trim().isEmpty) return false;
-    final needsTarget =
-        format.usesScoreTarget || isManual || isCustom;
+    // A custom movement needs a target only when the race is to a target —
+    // a window / attempt race has nothing to reach.
+    final needsTarget = format.usesScoreTarget || isManual;
     if (needsTarget && targetValue <= 0) return false;
-    if (format == RaceFormat.mostInWindow &&
-        (finishLineAt ?? '').isEmpty) {
+    if (format == RaceFormat.mostInWindow && (finishLineAt ?? '').isEmpty) {
       return false;
     }
     if (format == RaceFormat.timedAttempt &&
@@ -147,7 +157,7 @@ class RaceDraft {
           (manualUnit ?? '').trim().isNotEmpty;
     }
     if (isCustom) {
-      return verifierSpec != null && customActivityName!.isNotEmpty;
+      return hasVerifierSpec && customActivityName!.isNotEmpty;
     }
     return activity.activityId.isNotEmpty;
   }
@@ -163,10 +173,17 @@ class RaceDraft {
   /// title never claims a finish line the format doesn't have.
   String get generatedTitleText => isManual
       ? (format.usesScoreTarget
-          ? 'First to $targetValue ${manualUnit ?? 'done'}'
-          : (manualGoalName ?? 'Custom goal'))
+            ? 'First to $targetValue ${manualUnit ?? 'done'}'
+            : (manualGoalName ?? 'Custom goal'))
       : isCustom
-      ? 'First to $targetValue $customActivityName'
+      ? switch (format) {
+          RaceFormat.mostInWindow => 'Most $customActivityName',
+          RaceFormat.bestAttempt => 'Best $customActivityName attempt',
+          RaceFormat.timedAttempt =>
+            '${formatDurationShort(attemptDurationSeconds ?? 60)} '
+                '$customActivityName battle',
+          _ => 'First to $targetValue $customActivityName',
+        }
       : switch (format) {
           RaceFormat.mostInWindow => 'Most ${activity.title}',
           RaceFormat.bestAttempt => 'Best ${activity.title} attempt',
@@ -183,9 +200,10 @@ class RaceDraft {
     return switch (format) {
       RaceFormat.mostInWindow =>
         'Most verified $name before the finish line wins.',
-      RaceFormat.bestAttempt => lowerWins
-          ? 'Lowest score wins — every verified attempt counts.'
-          : 'Best single attempt wins — every verified score counts.',
+      RaceFormat.bestAttempt =>
+        lowerWins
+            ? 'Lowest score wins — every verified attempt counts.'
+            : 'Best single attempt wins — every verified score counts.',
       RaceFormat.timedAttempt =>
         'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} wins.',
       // "First to 20 verified jumping jacks wins." — the bare figure for
@@ -213,6 +231,7 @@ class RaceDraft {
     String? customActivityName,
     String? customUnit,
     CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
     RaceGoalKind? goalKind,
     String? manualGoalName,
     String? manualUnit,
@@ -245,6 +264,7 @@ class RaceDraft {
           : customActivityName ?? this.customActivityName,
       customUnit: clearCustom ? null : customUnit ?? this.customUnit,
       verifierSpec: clearCustom ? null : verifierSpec ?? this.verifierSpec,
+      motionV2Spec: clearCustom ? null : motionV2Spec ?? this.motionV2Spec,
       goalKind: goalKind ?? this.goalKind,
       manualGoalName: manualGoalName ?? this.manualGoalName,
       manualUnit: manualUnit ?? this.manualUnit,
@@ -338,7 +358,8 @@ class RaceDraft {
     final unit = (manualUnit ?? 'done').trim();
     return {
       'title': resolvedTitle,
-      'description': '${manualGoalName ?? 'Custom goal'} — progress logged manually.',
+      'description':
+          '${manualGoalName ?? 'Custom goal'} — progress logged manually.',
       'category': 'goal',
       'goalType': format.backendValue,
       'targetValue': targetValue,

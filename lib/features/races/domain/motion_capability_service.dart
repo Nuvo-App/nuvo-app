@@ -77,8 +77,7 @@ class MotionVerifierCapability {
 
   bool get installed => status == MotionCapabilityStatus.installed;
 
-  bool get installPending =>
-      status == MotionCapabilityStatus.installPending;
+  bool get installPending => status == MotionCapabilityStatus.installPending;
 }
 
 /// Answers "can this activity be camera-verified on this build right now?"
@@ -110,6 +109,17 @@ class MotionCapabilityService {
     if (compiled != null &&
         compiled != MotionActivityType.remote &&
         supportedMotionActivityTypes.contains(compiled)) {
+      // A live catalog that no longer lists the motion means it was hidden
+      // from the control plane; it must not start even though it is compiled.
+      if (catalog != null &&
+          catalog.catalogVersion != 'bundled' &&
+          _catalogActivity(catalog, activityId) == null) {
+        return MotionVerifierCapability(
+          activityId: activityId,
+          status: MotionCapabilityStatus.disabled,
+          reason: 'hidden_by_catalog',
+        );
+      }
       return MotionVerifierCapability(
         activityId: activityId,
         status: MotionCapabilityStatus.available,
@@ -150,8 +160,9 @@ class MotionCapabilityService {
       );
     }
 
-    final release =
-        activity.releaseId == null ? null : releases[activity.releaseId!];
+    final release = activity.releaseId == null
+        ? null
+        : releases[activity.releaseId!];
     if (release == null) {
       // Catalog advertises a release that is not retrievable — treated as
       // disabled rather than guessed at.
@@ -187,12 +198,11 @@ class MotionCapabilityService {
   Future<MotionVerifierCapability> checkResolvedSpec(
     RemoteVerifierSpec spec, {
     String? releaseVersion,
-  }) =>
-      _releaseStatus(
-        activityId: spec.activityId,
-        spec: spec,
-        releaseVersion: releaseVersion,
-      );
+  }) => _releaseStatus(
+    activityId: spec.activityId,
+    spec: spec,
+    releaseVersion: releaseVersion,
+  );
 
   Future<MotionVerifierCapability> _releaseStatus({
     required String activityId,

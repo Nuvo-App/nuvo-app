@@ -177,7 +177,7 @@ class _State extends ConsumerState<NotificationsScreen> {
         child: NuvoEmptyState(
           icon: Icons.notifications_none_rounded,
           title: 'You’re all caught up',
-          body: 'Race invites, crew requests and results will show up here.',
+          body: 'Race invites, friend requests and results will show up here.',
           align: TextAlign.center,
         ),
       );

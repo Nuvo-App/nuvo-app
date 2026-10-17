@@ -1,5 +1,6 @@
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
+import '../../../core/network/conditional.dart';
 import 'arena_api.dart';
 import 'arena_models.dart';
 
@@ -28,6 +29,26 @@ class ArenaRepository {
     }
   }
 
-  Future<ArenaSnapshot> getArenaSnapshot() =>
-      _withRefresh(_api.fetchArenaSnapshot);
+  String? _lastEtag;
+  Object? _lastRaw;
+
+  Future<ArenaSnapshot> getArenaSnapshot() async {
+    final result = await _withRefresh((t) => _api.fetchArenaSnapshot(t));
+    _lastEtag = result.etag;
+    _lastRaw = result.raw;
+    return result.data!;
+  }
+
+  /// Conditional fetch. With no [etag] this is a plain [getArenaSnapshot]
+  /// (and reports that fetch's ETag); with one it sends If-None-Match and
+  /// returns a not-modified result on 304.
+  Future<Conditional<ArenaSnapshot>> getArenaSnapshotConditional({
+    String? etag,
+  }) async {
+    if (etag == null) {
+      final snapshot = await getArenaSnapshot();
+      return Conditional(data: snapshot, etag: _lastEtag, raw: _lastRaw);
+    }
+    return _withRefresh((t) => _api.fetchArenaSnapshot(t, etag: etag));
+  }
 }

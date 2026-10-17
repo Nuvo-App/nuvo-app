@@ -281,14 +281,12 @@ class AuthApi {
     String accessToken, {
     String? fullName,
     String? username,
-    bool? privateProfile,
     String? profilePhotoUrl,
     bool removePhoto = false,
   }) async {
     final body = <String, dynamic>{};
     if (fullName != null) body['fullName'] = fullName;
     if (username != null) body['username'] = username;
-    if (privateProfile != null) body['privateProfile'] = privateProfile;
     if (removePhoto) {
       body['profilePhotoUrl'] = null;
     } else if (profilePhotoUrl != null) {

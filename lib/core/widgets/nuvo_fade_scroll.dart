@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Faded-edge scroll treatment — a Flutter port of the scroll-area masking
 /// used by skiper-ui.com/v1/skiper87: content approaching the top/bottom (or
@@ -62,11 +63,22 @@ class _NuvoFadeScrollState extends State<NuvoFadeScroll> {
   double _trailing = 0;
   late Axis _axis = widget.axis;
 
-  bool _onScroll(ScrollNotification notification) {
-    // Nested scrollables report at depth > 0 — only the direct child drives
-    // this mask.
-    if (notification.depth != 0) return false;
-    final metrics = notification.metrics;
+  bool _onScroll(Notification notification) {
+    // ScrollMetricsNotification fires after the first layout, so content that
+    // already overflows its viewport at rest gets its bottom fade on first
+    // load instead of only after the first drag.
+    final ScrollMetrics metrics;
+    if (notification is ScrollNotification) {
+      // Nested scrollables report at depth > 0 — only the direct child drives
+      // this mask.
+      if (notification.depth != 0) return false;
+      metrics = notification.metrics;
+    } else if (notification is ScrollMetricsNotification) {
+      if (notification.depth != 0) return false;
+      metrics = notification.metrics;
+    } else {
+      return false;
+    }
     final max = metrics.maxScrollExtent;
     final leading = max <= 0
         ? 0.0
@@ -77,18 +89,29 @@ class _NuvoFadeScrollState extends State<NuvoFadeScroll> {
     if (leading != _leading ||
         trailing != _trailing ||
         metrics.axis != _axis) {
-      setState(() {
-        _leading = leading;
-        _trailing = trailing;
-        _axis = metrics.axis;
-      });
+      void apply() {
+        if (!mounted) return;
+        setState(() {
+          _leading = leading;
+          _trailing = trailing;
+          _axis = metrics.axis;
+        });
+      }
+
+      // Metrics can be reported while the tree is mid-layout; defer then.
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        SchedulerBinding.instance.addPostFrameCallback((_) => apply());
+      } else {
+        apply();
+      }
     }
     return false;
   }
 
   @override
   Widget build(BuildContext context) {
-    return NotificationListener<ScrollNotification>(
+    return NotificationListener<Notification>(
       onNotification: _onScroll,
       child: ShaderMask(
         blendMode: BlendMode.dstIn,

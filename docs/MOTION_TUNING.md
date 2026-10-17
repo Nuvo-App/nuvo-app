@@ -1,0 +1,152 @@
+# Tuning motions over the air
+
+Goal: improve how any motion counts without an App Store release.
+
+## The loop (about 10 minutes per motion)
+
+1. **Record.** Do the motion 10 times in the app. Every verification session
+   uploads its pose log automatically.
+2. **Pull it.** From `server/worker` with `NUVO_INTERNAL_KEY` set:
+   `node scripts/nuvo-motion.mjs session-latest <activityId> --out s.json`
+   (or `sessions-failed` to find sessions that failed, then `session-get <id>`).
+3. **Replay + look at it.** From the repo root:
+   `tool/motion-replay.sh s.json --out replay.html` and open the page. It runs
+   the real validator code on the recorded frames: skeleton scrubber, the
+   signals the verifier reads, green lines where a rep was counted, and the
+   replay count next to what the app counted.
+   Under the viewer, mark the recording **Correct / Wrong / Unusable**, enter
+   the reps you actually did, and press Save: it downloads a `label_<session>.json`
+   (`useForTraining` is true only for Correct). Use those files to decide which
+   recordings the AI model should train on, and as ground truth for tuning.
+4. **Try a threshold.** `tool/motion-replay.sh s.json --set raiseLift=-0.5`
+   (for `native_tuned_v1` motions). For `rep_tree_v1` motions, copy the spec,
+   edit it and pass `--spec copy.json`.
+5. **Publish.** Edit `server/worker/motion_specs/<id>.json`, then draft →
+   promote internal → beta → stable (see `motion_specs/README.md`). Roll back
+   with one command.
+
+## What can change over the air
+
+Every compiled motion except two (listed in `test/motion_ota_coverage_test.dart`,
+with reasons) has a spec file. Squats family, jumping jacks, lunges and arm
+raises use `rep_tree_v1` (conditions and thresholds). Everything else uses
+`native_tuned_v1` (named thresholds on the existing logic).
+
+Over the air = thresholds, conditions, and which signals combine.
+Needs an app update = a brand new signal, new kind of logic, or a motion whose
+logic is structurally wrong. `test/motion_ota_coverage_test.dart` fails the
+build if a motion is added without an over-the-air path.
+
+## Before every app submission
+
+Replays only prove the verifier matches what was recorded. Whether a motion
+works on a real camera is only known from real recordings, so before you
+submit: run each motion in the build ~5 times on a phone, pull the sessions,
+replay them, and hide (`activity-visibility <id> --set hidden`) anything that
+does not count reliably. Races pin the release that was stable when created;
+new releases apply to new races.
+
+## Managing motions from Cloudflare
+
+Everything runs through `server/worker/scripts/nuvo-motion.mjs` (needs
+`NUVO_INTERNAL_KEY`). No app update for any of it, as long as the motion uses an
+engine the shipped app has (`state_machine_v1`, `alternating_rep_v1`,
+`hold_v1`, `sequence_match_v1`, `rep_tree_v1`).
+
+**Create a new motion**
+1. `node scripts/nuvo-motion.mjs activity-create new_motion.json` — creates it
+   hidden. File shape: `{ "id": "side_reaches", "displayName": "Side Reaches",
+   "category": "upper_body", "proofLabel": "side reaches",
+   "measurementType": "repetitions" | "duration", "suggestedTargets": [10, 20],
+   "supportedFormats": ["first_to_goal"], "iconKey": "fitness_center",
+   "instructions": ["..."], "aliases": ["..."], "cameraOrientation": "front" }`.
+   `measurementType` is fixed after this (races are stored against it).
+2. `draft spec.json --release-id side_reaches-2026.10.0 --semver 2026.10.0`
+   (no `--parent` for the first release; the spec needs an `activity` block).
+3. `promote ... --channel internal`, then beta, then stable.
+4. `activity-visibility side_reaches --set supported` — now it is in the app.
+
+**Edit a motion's details:** `activity-update <id> changes.json` with any of
+displayName, category, proofLabel, suggestedTargets, supportedFormats, iconKey,
+sortPriority, featured, instructions, aliases, cameraOrientation. Works for
+compiled motions too (name, targets, instructions, order); a compiled motion's
+type, reps-vs-seconds, and preview stay fixed in the app.
+
+**Update logic / roll back / retire:** `draft` + `promote` a new release,
+`rollback`, or `activity-visibility <id> --set hidden`.
+
+**Not possible without an app update:** a motion that needs a body measurement
+or engine the app doesn't have, or changing a motion's measurement type.
+
+## Benchmarking before you publish a tune
+
+Two offline tools score the verifiers against the real-video pose fixtures in
+`test/motion_qa/fixtures/real` (30 clips, 8 motions; expected rep counts are in
+each file):
+
+- `flutter test test/motion_real_scorecard_test.dart` — the production
+  validator's count vs expected for every clip, plus per-motion rep recall.
+- `flutter test test/motion_tuning_sweep_test.dart` — sweeps each over-the-air
+  motion's key thresholds and prints baseline vs best score. With
+  `WRITE_CANDIDATES=1` it writes the winning spec to
+  `server/worker/motion_specs/candidates/` (kept out of the shipped folder so the
+  parity tests still pin the shipped specs).
+
+Read the numbers with care: the clips are YouTube demos run through MediaPipe,
+not the phone camera + ML Kit the app uses, and a couple are unusable (e.g.
+`yt_squat_005` has degenerate landmarks; `yt_squat_002` shows no squat depth).
+Treat the sweep as a way to spot which motions are weak and which signal is the
+problem; publish a tune only when recordings pulled from the app (see "The
+loop") agree with it.
+
+## Teach Nuvo session telemetry
+
+Every Teach Nuvo attempt (consenting users) uploads a replayable artifact —
+the same `NuvoMotionDiagnosticSession` the `NUVO_DIAGNOSTICS` export writes —
+to `POST /teach-sessions`, indexed in `motion_teach_sessions` with the outcome
+(`used | learned | failed | abandoned`), the engine that ran
+(`v2 | v1 | v1_fallback`), the failure stage, and both spec halves (the V1
+spec the race verifies with AND the V2 learned spec). Triage and pull:
+
+```bash
+node scripts/nuvo-motion.mjs teach-list --outcome failed
+node scripts/nuvo-motion.mjs teach-list --movement "pull ups"
+node scripts/nuvo-motion.mjs teach-get MV2-20261014-ABCDEF --out s.json.gz
+tools/motion_v2/replay_session.py s.json.gz          # V2 deep-dive (Python)
+tool/teach-replay.sh s.json.gz                       # V1-vs-V2 scorecard (Dart)
+```
+
+`tool/teach-replay.sh` replays the recorded live-test frames through BOTH
+matchers — the V1 `CustomPoseSequenceRuntime` (the spec a created race actually
+verifies with) and the V2 `MotionV2NativeRuntime` — and prints what each
+decided next to what the phone recorded. `--demos` also replays the 3 teaching
+demos for same-motion recall; a directory of sessions prints the aggregate
+scorecard + disagreements + per-movement breakdown. V2 needs the ONNX shared
+lib on Linux:
+
+```bash
+LD_LIBRARY_PATH=$HOME/.pub-cache/hosted/pub.dev/onnxruntime-1.4.1/linux \
+  tool/teach-replay.sh sessions_dir/
+```
+
+(`replay_session.py` is unchanged — use it for the per-window V2 trace.)
+
+`teach-list` marks `v2-unavailable` (engine couldn't run on the device → V1
+fallback), `no-v1-spec`, `v1-learned`/`v2-learned`, `test:match`/`test:no-match`,
+and `failed@<stage>` so the failure lands in the right bucket before replay.
+
+## Teach Nuvo (Motion V2) on iOS — ONNX Runtime must be kept in the binary
+
+Teach Nuvo runs the MotionBERT encoder through the `onnxruntime` Dart package.
+On iOS the package finds `OrtGetApiBase` with `DynamicLibrary.process()`; a
+release build used to link the engine out or strip the symbol, so Teach failed
+with `Failed to lookup symbol 'OrtGetApiBase'`. `ios/Flutter/{Debug,Release,
+Profile}.xcconfig` now force-link it (`-Wl,-u,_OrtGetApiBase`, `STRIP_STYLE =
+non-global`, `DEAD_CODE_STRIPPING = NO`). If Teach ever fails again on a real
+build, check those three settings first. If the V2 engine can't run for any
+other reason, Teach falls back to the V1 matcher instead of showing an error.
+
+Check on a Mac after `git pull`: `flutter clean && cd ios && pod install`, build
+a **release** build to a phone, Teach a movement 3 times, confirm it learns.
+Offline proof of the rest of the pipeline (real encoder, learn, match):
+`LD_LIBRARY_PATH=<onnxruntime-1.15.1>/lib flutter test test/motion_v2_real_encoder_test.dart`.

@@ -7,12 +7,17 @@ import { SQLITE_NOW_ISO } from '../lib/time';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked, resolveRaceMemberVisibility } from '../lib/privacy';
 import { transitionCrew } from '../domain/crewLifecycle';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import {
   ensureMember,
   ensureProgress,
   getProfileName,
   getRace,
+  raceIsOpenToJoin,
+  recomputeRanks,
+  REMOVED_FROM_RACE_ERROR,
 } from '../domain/raceMembership';
+import { scoreDirectionFor } from '../domain/raceFinalize';
 import { deliverNotificationPushes } from '../domain/notifications';
 import { notifyEvent } from '../domain/notificationPolicy';
 import { recordRaceEvent } from '../domain/raceEvents';
@@ -69,7 +74,7 @@ async function personCard(
 ): Promise<PublicPerson | null> {
   const row = await db
     .prepare(
-      `SELECT u.id, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
+      `SELECT u.id, p.full_name, p.username, p.avatar_url, mp.member_id
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        LEFT JOIN member_passes mp ON mp.user_id = u.id
@@ -81,7 +86,6 @@ async function personCard(
       full_name: string | null;
       username: string | null;
       avatar_url: string | null;
-      private_profile: number | null;
       member_id: string | null;
     }>();
   if (!row) return null;
@@ -93,7 +97,6 @@ async function personCard(
       displayName: row.full_name,
       username: row.username,
       profilePhotoUrl: row.avatar_url,
-      privateProfile: Boolean(row.private_profile),
     },
     { crewIds: new Set(), blockedEitherWay: new Set(), coRacerIds: new Set() },
   );
@@ -102,7 +105,7 @@ async function personCard(
     displayName: vis.anonymized ? (row.username ? `@${row.username}` : 'Nuvo member') : vis.displayName,
     username: row.username,
     profilePhotoUrl: vis.profilePhotoUrl,
-    isPrivate: Boolean(row.private_profile),
+    isPrivate: false, // legacy key for older app builds; there are no private profiles
   };
 }
 
@@ -129,10 +132,11 @@ async function raceCard(db: D1Database, viewerUserId: string | undefined, raceId
     id: race.id,
     title: race.title,
     activityId: race.activity_id ?? race.movement_type ?? null,
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(race.format ?? race.race_type, race.target_value),
     targetUnit: race.target_unit,
     goalType: race.race_type,
     status: race.status,
+    open: raceIsOpenToJoin(race),
     visibility: race.visibility,
     participantCount,
     creator: creator
@@ -288,8 +292,11 @@ invitesRouter.get('/:token', optionalAuth, async (c) => {
   }
 
   if (row.kind === 'race_join') {
-    const race = await raceCard(c.env.DB, viewerUserId, row.target_id);
-    if (!race) return c.json({ ok: false, status: 'not_found' }, 404);
+    const card = await raceCard(c.env.DB, viewerUserId, row.target_id);
+    if (!card) return c.json({ ok: false, status: 'not_found' }, 404);
+    // A finished / cancelled / past-end race is not open: the link is dead.
+    if (!card.open) return c.json({ ok: false, status: 'closed' }, 410);
+    const { open: _open, ...race } = card;
     return c.json({
       ok: true,
       status: 'active',
@@ -320,17 +327,19 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
   const userId = c.get('userId');
   const token = c.req.param('token');
   const invite = await loadInvite(c.env.DB, token);
-  const availability = inviteAvailability(invite);
+  let availability = inviteAvailability(invite);
+  // A capped invite is 'used' for newcomers, but someone who already spent a
+  // seat on it keeps access (accepting again is an idempotent no-op).
+  if (availability === 'used' && invite) {
+    const spent = await c.env.DB.prepare('SELECT id FROM invite_uses WHERE invite_id = ? AND user_id = ?')
+      .bind(invite.id, userId)
+      .first<{ id: string }>();
+    if (spent) availability = 'active';
+  }
   if (availability !== 'active') {
     return c.json({ ok: false, status: availability }, statusForAvailability(availability));
   }
   const row = invite!;
-
-  const alreadyUsed = Boolean(
-    await c.env.DB.prepare('SELECT id FROM invite_uses WHERE invite_id = ? AND user_id = ?')
-      .bind(row.id, userId)
-      .first<{ id: string }>(),
-  );
 
   // ── race_join ──────────────────────────────────────────────────────────────
   if (row.kind === 'race_join') {
@@ -339,7 +348,7 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     }
     const race = await getRace(c.env.DB, row.target_id);
     if (!race) return c.json({ ok: false, status: 'not_found' }, 404);
-    if (race.status !== 'active') {
+    if (!raceIsOpenToJoin(race)) {
       return c.json({ ok: false, status: 'closed', error: 'This race is not open' }, 409);
     }
     // Blocking: if the race creator blocked this user (or vice versa), refuse.
@@ -350,10 +359,25 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     ) {
       return c.json({ ok: false, status: 'revoked' }, 410);
     }
-    const { created } = await ensureMember(c.env.DB, race.id, userId);
+    // A member the creator removed cannot come back through a link. Checked
+    // before the use is spent so a refused accept never burns a capped seat.
+    const removed = await c.env.DB.prepare(
+      "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'removed'",
+    )
+      .bind(race.id, userId)
+      .first<{ id: string }>();
+    if (removed) return c.json({ ok: false, error: REMOVED_FROM_RACE_ERROR }, 403);
+
+    const use = await claimInviteUse(c.env.DB, row, userId);
+    if (use === 'exhausted') {
+      return c.json({ ok: false, status: 'used' }, statusForAvailability('used'));
+    }
+    const joined = await ensureMember(c.env.DB, race.id, userId);
+    if (joined.blocked) return c.json({ ok: false, error: REMOVED_FROM_RACE_ERROR }, 403);
     await ensureProgress(c.env.DB, race.id, userId);
-    await recordUse(c.env.DB, row, userId, alreadyUsed);
-    if (created) {
+    const isNewJoin = joined.created || joined.reactivated;
+    if (isNewJoin) {
+      await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
       await recordRaceEvent(c.env.DB, race.id, {
         type: 'race_joined',
         actorUserId: userId,
@@ -361,7 +385,7 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
         payload: { title: race.title, via: 'invite' },
       });
     }
-    if (created && race.creator_id !== userId) {
+    if (isNewJoin && race.creator_id !== userId) {
       const joiner = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
       await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
         type: 'race_member_joined',
@@ -375,7 +399,7 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     return c.json({
       ok: true,
       kind: row.kind,
-      alreadyJoined: !created,
+      alreadyJoined: !isNewJoin,
       destination: { type: 'race', id: race.id },
     });
   }
@@ -397,12 +421,12 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
   if (!target) return c.json({ ok: false, status: 'not_found' }, 404);
 
   // Same lifecycle as /crew/add: resolves the previous pair, writes both
-  // directional rows, honours the target's private profile, heals a mutual
+  // directional rows (every add is a request), heals a mutual
   // request into 'active', resolves stale request notifications and emits
   // the connect notification — all inside one D1 batch.
   const transition = await transitionCrew(c.env.DB, userId, targetUserId, 'connect');
   const connectionStatus = transition?.status === 'active' ? 'active' : 'pending';
-  await recordUse(c.env.DB, row, userId, alreadyUsed);
+  await claimInviteUse(c.env.DB, row, userId);
   if (transition) {
     await deliverNotificationPushes(c, transition.notificationIds);
   }
@@ -415,24 +439,45 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
   });
 });
 
-async function recordUse(
+/**
+ * Spends one use of an invite for this user, atomically.
+ *  - The (invite, user) row is the idempotency key: INSERT OR IGNORE and read
+ *    meta.changes, so a repeat accept by the same person never counts twice
+ *    and is never refused as 'used' (they already hold a seat).
+ *  - Only a first-time user increments use_count, and the cap / revoke checks
+ *    live in the UPDATE's WHERE clause so two concurrent accepts can't both
+ *    squeeze past the last seat.
+ *  - If the seat was lost, the use row is removed again and 'exhausted' is
+ *    returned (nothing else has been written yet).
+ */
+async function claimInviteUse(
   db: D1Database,
   row: InviteRow,
   userId: string,
-  alreadyUsed: boolean,
-): Promise<void> {
-  if (alreadyUsed) return;
-  await db
+): Promise<'claimed' | 'already' | 'exhausted'> {
+  const ins = await db
     .prepare(
       `INSERT OR IGNORE INTO invite_uses (id, invite_id, user_id, created_at)
        VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
     )
     .bind(generateId(), row.id, userId)
     .run();
-  await db
-    .prepare('UPDATE invites SET use_count = use_count + 1 WHERE id = ?')
+  if ((ins.meta?.changes ?? 1) !== 1) return 'already';
+  const upd = await db
+    .prepare(
+      `UPDATE invites SET use_count = use_count + 1
+       WHERE id = ? AND revoked_at IS NULL AND (max_uses IS NULL OR use_count < max_uses)`,
+    )
     .bind(row.id)
     .run();
+  if ((upd.meta?.changes ?? 1) !== 1) {
+    await db
+      .prepare('DELETE FROM invite_uses WHERE invite_id = ? AND user_id = ?')
+      .bind(row.id, userId)
+      .run();
+    return 'exhausted';
+  }
+  return 'claimed';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -448,5 +493,12 @@ invitesRouter.delete('/:token', requireAuth, async (c) => {
   await c.env.DB.prepare('UPDATE invites SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(invite.id)
     .run();
+  // The human-typable short code (legacy race_invites) is the same door as the
+  // link: revoking one must close the other. A later mint creates a fresh code.
+  if (invite.kind === 'race_join') {
+    await c.env.DB.prepare("UPDATE race_invites SET status = 'revoked' WHERE race_id = ? AND status = 'active'")
+      .bind(invite.target_id)
+      .run();
+  }
   return c.json({ ok: true });
 });

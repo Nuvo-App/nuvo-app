@@ -171,6 +171,39 @@ FlexiRaceInterpretation interpretRaceName(
     core = next;
   }
 
+  // "study more" / "focus longer" / "the study battle" name a duration habit
+  // with no measure — total time or one long session. Ask once instead of
+  // defaulting a target.
+  final vagueHabit = RegExp(
+          r'^(study|studying|focus|focusing|work|working)\s+(more|longer)$|^(study|focus|work)\s+(battle|contest|challenge)$')
+      .firstMatch(core);
+  if (vagueHabit != null) {
+    final verb = vagueHabit.group(1) ?? vagueHabit.group(3)!;
+    final habit = verb.startsWith('stud')
+        ? 'study'
+        : verb.startsWith('foc')
+            ? 'focus'
+            : 'work';
+    final goalName = _canonSubjectDomain('$habit time');
+    return FlexiRaceInterpretation(
+      input: input.trim(),
+      goalKind: RaceGoalKind.manual,
+      metric: RaceMetric.reps,
+      format: RaceFormat.bestAttempt,
+      targetValue: 1,
+      proofNeed: ProofNeed.manual,
+      confidence: InterpretationConfidence.assumed,
+      scoreDirection: 'higher',
+      manualGoalName: _titleCase(goalName),
+      manualUnit: _unitFor(goalName) ?? 'minutes',
+      inferredFields: const {
+        RaceField.goalKind, RaceField.manualGoal, RaceField.manualUnit,
+      },
+      assumptions: assumptions,
+      question: 'How should we measure it — total hours or longest session?',
+    );
+  }
+
   // Proof instructions override every inferred default. Mined from the head
   // AND the modifier clauses, then stripped so they never pollute subjects.
   var proofOverride = _proofFromText(core) ?? _proofFromText(tails.join(' '));
@@ -605,8 +638,14 @@ FlexiRaceInterpretation interpretRaceName(
     if (activity == null && isTimeWord && (unit == null || unit == 'count')) {
       unit = word == 'longest' ? _durationUnit(subject) : 'seconds';
     }
-    var direction =
-        contradicts ? 'lower' : _directionFor(word, subject, unit);
+    // "best 5k time" / "top mile pace" is a stopwatch reading over a course,
+    // not an amount of distance — fewer seconds wins.
+    final courseTime =
+        activity == null && word != 'improve' && _isCourseTime(subject);
+    if (courseTime) unit = 'seconds';
+    var direction = contradicts || courseTime
+        ? 'lower'
+        : _directionFor(word, subject, unit);
     var question = contradicts ? _contradictionQuestion(input) : null;
     question ??= constraintQuestion;
     // Improvement races measure a delta — every delta needs a baseline,
@@ -821,7 +860,19 @@ FlexiRaceInterpretation interpretRaceName(
   var fbQuestion = _genericSubjectQuestion[stripped] ??
       constraintQuestion ??
       _fallbackQuestion(core, stripped, target);
-  final fbUnit = stripped.isEmpty ? null : _unitFor(stripped);
+  var fbUnit = stripped.isEmpty ? null : _unitFor(stripped);
+  // "lose 10 lbs" counts pounds lost — the verb is not the unit.
+  final loseMatch = RegExp(
+          r'^(?:lose|drop|shed|cut)\s+\d+\s+(lbs?|pounds?|kg|kilos?|kilograms?)$')
+      .firstMatch(core);
+  if (loseMatch != null) {
+    fbUnit = loseMatch.group(1)!.startsWith('k') ? 'kg' : 'lb';
+    stripped = 'weight lost';
+  }
+  // "no sugar for 30 days" counts days held, not the thing avoided.
+  final streakMatch =
+      RegExp(r'^no\s+.+\s+for\s+\d+\s+(day|week)s?$').firstMatch(core);
+  if (streakMatch != null) fbUnit = '${streakMatch.group(1)}s';
   // Score-domain races are one great attempt — "95 percent on test" is
   // not a tally to a finish line.
   final scoreLike =
@@ -1637,6 +1688,14 @@ String _directionFor(String word, String subject, String? unit) {
   if (lowerSubjects.contains(subject)) return 'lower';
   return 'higher';
 }
+
+/// A course-time subject: a course/distance token plus a clock word
+/// ("5k time", "mile pace", "100m sprint time"). Study/screen/focus "time" is
+/// a duration where more can win, so it never matches.
+bool _isCourseTime(String subject) =>
+    RegExp(r'\b(time|pace|split)\b').hasMatch(subject) &&
+    RegExp(r'(\b\d+\s*(k|km|m|mi|mile|miles|meter|meters)\b|\b(mile|marathon|sprint|dash|lap)\b)')
+        .hasMatch(subject);
 
 /// Score-valued subjects produce a value per attempt, not a running tally —
 /// "first to a 100 on a quiz" is best-attempt even under first-to grammar.

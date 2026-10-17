@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
 import '../../data/ai_motion_models.dart';
 import '../motion_model_release.dart';
+import 'engine/demo_clip.dart';
 import 'engine/motion_v2_background.dart';
 import 'engine/motion_v2_math.dart';
 import 'engine/motion_v2_onnx_encoder.dart';
@@ -31,12 +33,12 @@ class SelfValidationReport {
   final double worstTrajMargin;
 
   Map<String, dynamic> toJson() => {
-        'passed': passed,
-        'perDemo': perDemo,
-        'leaveOneOut': leaveOneOut,
-        'worstProtoMargin': double.parse(worstProtoMargin.toStringAsFixed(3)),
-        'worstTrajMargin': double.parse(worstTrajMargin.toStringAsFixed(3)),
-      };
+    'passed': passed,
+    'perDemo': perDemo,
+    'leaveOneOut': leaveOneOut,
+    'worstProtoMargin': double.parse(worstProtoMargin.toStringAsFixed(3)),
+    'worstTrajMargin': double.parse(worstTrajMargin.toStringAsFixed(3)),
+  };
 }
 
 class MotionV2LearnException implements Exception {
@@ -63,22 +65,24 @@ class LearnProfile {
   int get encoderPasses => encodeMs.length;
 
   Map<String, dynamic> toJson() => {
-        'warmStart': warmStart,
-        'modelLoadMs': modelLoadMs,
-        'sessionCreateMs': sessionCreateMs,
-        'preprocessMs': preprocessMs,
-        'encodeMs': encodeMs,
-        'totalEncodeMs': totalEncodeMs,
-        'encoderPasses': encoderPasses,
-        'buildRefsMs': buildRefsMs,
-        'selfValidateMs': selfValidateMs,
-        'looMs': looMs,
-        'totalMs': totalMs,
-      };
+    'warmStart': warmStart,
+    'modelLoadMs': modelLoadMs,
+    'sessionCreateMs': sessionCreateMs,
+    'preprocessMs': preprocessMs,
+    'encodeMs': encodeMs,
+    'totalEncodeMs': totalEncodeMs,
+    'encoderPasses': encoderPasses,
+    'buildRefsMs': buildRefsMs,
+    'selfValidateMs': selfValidateMs,
+    'looMs': looMs,
+    'totalMs': totalMs,
+  };
 
   String toText() {
-    final b = StringBuffer('Motion V2 Learn Profile'
-        ' (${warmStart ? "warm" : "cold"})\n');
+    final b = StringBuffer(
+      'Motion V2 Learn Profile'
+      ' (${warmStart ? "warm" : "cold"})\n',
+    );
     if (!warmStart) {
       b.writeln('  model load:        $modelLoadMs ms');
       b.writeln('  session create:    $sessionCreateMs ms');
@@ -90,8 +94,10 @@ class LearnProfile {
     b.writeln('  build references:  $buildRefsMs ms');
     b.writeln('  self-validation:   $selfValidateMs ms  (0 encoder passes)');
     b.writeln('  leave-one-out:     $looMs ms  (0 encoder passes)');
-    b.writeln('  TOTAL:             $totalMs ms  '
-        '($encoderPasses encoder passes)');
+    b.writeln(
+      '  TOTAL:             $totalMs ms  '
+      '($encoderPasses encoder passes)',
+    );
     return b.toString();
   }
 }
@@ -101,6 +107,13 @@ class LearnProfile {
 /// [MotionLearnerV2] contract the callers already use.
 class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   MotionV2NativeRuntime({MotionEncoderV2? encoder}) : _injected = encoder;
+
+  /// Catches only dead captures — real tracked demos measure ≥0.025 even for
+  /// slow/subtle motions; a pull-up hang and a wave overlap around ~0.035 so
+  /// the floor cannot gate "is this the right movement" — it gates "did the
+  /// tracker see anything at all". Real session data: stillness ~0.036 vs
+  /// wave ~0.05 (too close to separate); fixture motion 0.15.
+  static const double _minRegionActivity = 0.015;
 
   final MotionEncoderV2? _injected;
   MotionEncoderV2? _encoder;
@@ -117,6 +130,12 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   /// Load-time health signal for diagnostics.
   bool get encoderLoaded => _encoder != null;
   String get encoderId => _motion?.encoderId ?? 'release_action';
+
+  /// Test hook: set false to learn from the demos exactly as recorded.
+  static bool clipWalkInOut = true;
+
+  /// [start, end, total] per demo from the last [learn] (walk-in/out clip).
+  List<List<int>> lastClipRanges = const [];
 
   LearnProfile? _lastLearnProfile;
   LearnProfile? get lastLearnProfile => _lastLearnProfile;
@@ -139,8 +158,17 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
 
     // ── ONE MotionBERT pass per demo. Everything after runs on these. ──
     final encoded = <MotionEncodedDemo>[];
-    for (final frames in demos) {
+    final clipRanges = <List<int>>[];
+    final workingSizes = <double>[];
+    for (final raw in demos) {
       final sw = Stopwatch()..start();
+      // Drop the walk-in / walk-out (person at the phone) from each demo.
+      final clip = clipWalkInOut
+          ? clipDemoToWorkingSpot(raw)
+          : DemoClip(raw, 0, raw.length, null);
+      clipRanges.add([clip.start, clip.end, raw.length]);
+      if (clip.workingSize != null) workingSizes.add(clip.workingSize!);
+      final frames = clip.frames;
       final h36m = framesToH36m(frames);
       p.preprocessMs += sw.elapsedMilliseconds;
       sw.reset();
@@ -149,15 +177,35 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       encoded.add((rep: rep, emb: perFrameEmbedding(rep), h36m: h36m));
     }
 
+    lastClipRanges = clipRanges;
     final sw = Stopwatch()..start();
-    // Provenance: the spec records which model release produced its reference
-    // embeddings so a later incompatible model can't silently mix spaces.
     final encoderId = enc is MotionV2OnnxEncoder
         ? MotionV2OnnxEncoder.activeEncoderId
         : 'release_action';
     final motion = TaughtMotionV2.learnFromEncoded(
-      name: movementName, encoderId: encoderId, encoded: encoded);
+      name: movementName,
+      encoderId: encoderId,
+      encoded: encoded,
+    );
     p.buildRefsMs = sw.elapsedMilliseconds;
+
+    // Motion floor — demos that captured almost no pose-region motion produce
+    // a spec whose learned "movement" is standing still: it then counts the
+    // approach as a rep and rejects the real movement. (Real session
+    // MV2-20261014-84A985: max region activity 0.036 vs ~0.15 for a genuine
+    // motion.) Refuse before self-validation spins that spec into "learned".
+    final maxRegionActivity = motion.demoRegionActivity.values.fold<double>(
+      0,
+      math.max,
+    );
+    if (maxRegionActivity < _minRegionActivity) {
+      throw MotionV2LearnException(
+        'NOT_ENOUGH_MOTION: the demos captured almost no movement '
+        '(max region activity ${maxRegionActivity.toStringAsFixed(3)} < '
+        '$_minRegionActivity) — the camera could not see the motion.',
+        report: null,
+      );
+    }
 
     // Self-validation + leave-one-out — pure matcher math on the cached
     // embeddings. ZERO extra encoder passes.
@@ -176,18 +224,27 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       );
     }
 
-    final json = motion.toJson()
-      ..['metadata'] = {
-        'movementName': movementName,
-        'selfValidation': report.toJson(),
-        'learnProfile': p.toJson(),
-        'model': {
-          'release': MotionV2OnnxEncoder.activeModelVersion,
-          'checksum': MotionV2OnnxEncoder.activeModelChecksum,
-          'source': MotionV2OnnxEncoder.activeModelSource,
-          'embeddingSchema': kMotionV2EncoderEmbeddingSchema,
-        },
+    final json = motion.toJson();
+    // Shoulder width at the working spot, so the live counter can ignore the
+    // person walking up to the phone to stop the recording.
+    if (clipWalkInOut && workingSizes.length == encoded.length) {
+      final sorted = [...workingSizes]..sort();
+      json['tuning'] = {
+        ...?(json['tuning'] as Map?)?.cast<String, double>(),
+        'workingSize': sorted[sorted.length ~/ 2],
       };
+    }
+    json['metadata'] = {
+      'movementName': movementName,
+      'selfValidation': report.toJson(),
+      'learnProfile': p.toJson(),
+      'model': {
+        'release': MotionV2OnnxEncoder.activeModelVersion,
+        'checksum': MotionV2OnnxEncoder.activeModelChecksum,
+        'source': MotionV2OnnxEncoder.activeModelSource,
+        'embeddingSchema': kMotionV2EncoderEmbeddingSchema,
+      },
+    };
     return TaughtMotionV2Spec.fromJson(json);
   }
 
@@ -218,14 +275,19 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
     final loo = <bool>[];
     for (var i = 0; i < encoded.length; i++) {
       final two = motion.twoRefSubset(i); // cached refs, no encoder
-      final r = two.matchEncoded(encoded[i].rep, encoded[i].emb, background: bg);
+      final r = two.matchEncoded(
+        encoded[i].rep,
+        encoded[i].emb,
+        background: bg,
+      );
       loo.add(r.isSameFamily);
     }
     p.looMs = swLoo.elapsedMilliseconds;
 
     final need = encoded.length - (encoded.length ~/ 3); // majority
     return SelfValidationReport(
-      passed: perDemo.where((x) => x).length >= need &&
+      passed:
+          perDemo.where((x) => x).length >= need &&
           loo.where((x) => x).length >= need,
       perDemo: perDemo,
       leaveOneOut: loo,
@@ -256,7 +318,8 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   @override
   Future<MotionV2RuntimeResult> update(List<NuvoPoseFrame> frames) async {
     final s = _session;
-    if (s == null) throw const MotionV2Exception('No V2 session — call load() first.');
+    if (s == null)
+      throw const MotionV2Exception('No V2 session — call load() first.');
     return s.push(frames);
   }
 

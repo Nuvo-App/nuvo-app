@@ -1,0 +1,854 @@
+[
+  {
+    "results": [
+      {
+        "type": "index",
+        "name": "activity_reactions_entity_idx",
+        "sql": "CREATE INDEX activity_reactions_entity_idx\n  ON activity_reactions (entity_type, entity_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_admin_change_log_created",
+        "sql": "CREATE INDEX idx_admin_change_log_created ON admin_change_log(created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_admin_change_log_target",
+        "sql": "CREATE INDEX idx_admin_change_log_target ON admin_change_log(target_table, target_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_audit_events_created",
+        "sql": "CREATE INDEX idx_audit_events_created ON audit_events(created_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_audit_events_user_id",
+        "sql": "CREATE INDEX idx_audit_events_user_id ON audit_events(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_auth_identities_provider",
+        "sql": "CREATE INDEX idx_auth_identities_provider ON auth_identities(provider, provider_user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_auth_identities_user_id",
+        "sql": "CREATE INDEX idx_auth_identities_user_id ON auth_identities(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_blocked_users_blocked",
+        "sql": "CREATE INDEX idx_blocked_users_blocked ON blocked_users(blocked_user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_blocked_users_user",
+        "sql": "CREATE INDEX idx_blocked_users_user ON blocked_users(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_crew_connections_crew_person",
+        "sql": "CREATE INDEX idx_crew_connections_crew_person ON crew_connections(crew_person_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_crew_connections_crew_user",
+        "sql": "CREATE INDEX idx_crew_connections_crew_user ON crew_connections(crew_user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_crew_connections_person",
+        "sql": "CREATE INDEX idx_crew_connections_person ON crew_connections(person_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_crew_connections_user",
+        "sql": "CREATE INDEX idx_crew_connections_user ON crew_connections(user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_device_tokens_user",
+        "sql": "CREATE INDEX idx_device_tokens_user ON device_tokens(user_id, disabled_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_email_codes_email",
+        "sql": "CREATE INDEX idx_email_codes_email ON email_codes(email)"
+      },
+      {
+        "type": "index",
+        "name": "idx_email_codes_expires",
+        "sql": "CREATE INDEX idx_email_codes_expires ON email_codes(expires_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_invites_actor",
+        "sql": "CREATE INDEX idx_invites_actor ON invites(actor_user_id, created_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_invites_target",
+        "sql": "CREATE INDEX idx_invites_target ON invites(target_type, target_id, revoked_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_invites_token",
+        "sql": "CREATE UNIQUE INDEX idx_invites_token ON invites(token)"
+      },
+      {
+        "type": "index",
+        "name": "idx_media_assets_object_key",
+        "sql": "CREATE INDEX idx_media_assets_object_key ON media_assets(object_key)"
+      },
+      {
+        "type": "index",
+        "name": "idx_media_assets_owner",
+        "sql": "CREATE INDEX idx_media_assets_owner ON media_assets(owner_person_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_media_assets_type",
+        "sql": "CREATE INDEX idx_media_assets_type ON media_assets(asset_type)"
+      },
+      {
+        "type": "index",
+        "name": "idx_media_objects_object_key",
+        "sql": "CREATE INDEX idx_media_objects_object_key ON media_objects(object_key)"
+      },
+      {
+        "type": "index",
+        "name": "idx_media_objects_owner",
+        "sql": "CREATE INDEX idx_media_objects_owner ON media_objects(owner_user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_media_objects_purpose",
+        "sql": "CREATE INDEX idx_media_objects_purpose ON media_objects(purpose, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_member_passes_slug",
+        "sql": "CREATE INDEX idx_member_passes_slug ON member_passes(pass_slug)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_activities_availability",
+        "sql": "CREATE INDEX idx_motion_activities_availability ON motion_activities(availability, sort_priority)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_analysis_jobs_user_created",
+        "sql": "CREATE INDEX idx_motion_analysis_jobs_user_created\n  ON motion_analysis_jobs(user_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_feedback_session",
+        "sql": "CREATE INDEX idx_motion_feedback_session\n  ON motion_feedback_labels(motion_session_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_model_evaluations_release",
+        "sql": "CREATE INDEX idx_motion_model_evaluations_release\n  ON motion_model_evaluations(release_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_release_metrics_activity",
+        "sql": "CREATE INDEX idx_motion_release_metrics_activity\n  ON motion_release_metrics(activity_id, release_id, last_seen_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_sessions_activity_created",
+        "sql": "CREATE INDEX idx_motion_sessions_activity_created\n  ON motion_sessions(activity_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_sessions_outcome_created",
+        "sql": "CREATE INDEX idx_motion_sessions_outcome_created\n  ON motion_sessions(outcome, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_sessions_race",
+        "sql": "CREATE INDEX idx_motion_sessions_race\n  ON motion_sessions(race_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_sessions_user_activity_created",
+        "sql": "CREATE INDEX idx_motion_sessions_user_activity_created\n  ON motion_sessions(user_id, activity_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_motion_sessions_user_created",
+        "sql": "CREATE INDEX idx_motion_sessions_user_created\n  ON motion_sessions(user_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_move_logs_client_submission",
+        "sql": "CREATE UNIQUE INDEX idx_move_logs_client_submission\n  ON move_logs(race_id, user_id, client_submission_id)\n  WHERE client_submission_id IS NOT NULL"
+      },
+      {
+        "type": "index",
+        "name": "idx_move_logs_race",
+        "sql": "CREATE INDEX idx_move_logs_race ON move_logs(race_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_move_logs_status",
+        "sql": "CREATE INDEX idx_move_logs_status ON move_logs(status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_move_logs_user",
+        "sql": "CREATE INDEX idx_move_logs_user ON move_logs(user_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_moves_person_created",
+        "sql": "CREATE INDEX idx_moves_person_created ON moves(person_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_moves_race_created",
+        "sql": "CREATE INDEX idx_moves_race_created ON moves(race_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_moves_status",
+        "sql": "CREATE INDEX idx_moves_status ON moves(move_status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_notification_jobs_due",
+        "sql": "CREATE INDEX idx_notification_jobs_due\n  ON notification_jobs(status, run_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_notification_jobs_entity",
+        "sql": "CREATE INDEX idx_notification_jobs_entity\n  ON notification_jobs(entity_type, entity_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_notifications_dedupe",
+        "sql": "CREATE UNIQUE INDEX idx_notifications_dedupe\n  ON notifications(user_id, dedupe_key)"
+      },
+      {
+        "type": "index",
+        "name": "idx_notifications_recipient",
+        "sql": "CREATE INDEX idx_notifications_recipient ON notifications(user_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_notifications_unread",
+        "sql": "CREATE INDEX idx_notifications_unread ON notifications(user_id, read_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_people_demo",
+        "sql": "CREATE INDEX idx_people_demo ON people(is_demo)"
+      },
+      {
+        "type": "index",
+        "name": "idx_people_status",
+        "sql": "CREATE INDEX idx_people_status ON people(status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_people_user_id",
+        "sql": "CREATE INDEX idx_people_user_id ON people(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_personal_bests_user",
+        "sql": "CREATE INDEX idx_personal_bests_user ON personal_bests(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_profiles_username",
+        "sql": "CREATE INDEX idx_profiles_username ON profiles(username)"
+      },
+      {
+        "type": "index",
+        "name": "idx_proof_votes_move",
+        "sql": "CREATE INDEX idx_proof_votes_move ON proof_votes(move_log_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_proof_votes_race",
+        "sql": "CREATE INDEX idx_proof_votes_race ON proof_votes(race_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_proofs_race",
+        "sql": "CREATE INDEX idx_proofs_race ON proofs(race_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_proofs_reviewed_by",
+        "sql": "CREATE INDEX idx_proofs_reviewed_by ON proofs(reviewed_by)"
+      },
+      {
+        "type": "index",
+        "name": "idx_proofs_user",
+        "sql": "CREATE INDEX idx_proofs_user ON proofs(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_attempts_client",
+        "sql": "CREATE UNIQUE INDEX idx_race_attempts_client\n  ON race_attempts(race_id, user_id, client_attempt_id)\n  WHERE client_attempt_id IS NOT NULL"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_attempts_open",
+        "sql": "CREATE INDEX idx_race_attempts_open\n  ON race_attempts(race_id, user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_events_move",
+        "sql": "CREATE INDEX idx_race_events_move ON race_events(move_log_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_events_race",
+        "sql": "CREATE INDEX idx_race_events_race ON race_events(race_id, created_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_events_subject",
+        "sql": "CREATE INDEX idx_race_events_subject ON race_events(subject_user_id, created_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_events_type",
+        "sql": "CREATE INDEX idx_race_events_type ON race_events(event_type, created_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_final_standings_race",
+        "sql": "CREATE INDEX idx_race_final_standings_race\n  ON race_final_standings(race_id, rank_position)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_invites_code",
+        "sql": "CREATE INDEX idx_race_invites_code ON race_invites(invite_code)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_invites_created_by_person",
+        "sql": "CREATE INDEX idx_race_invites_created_by_person ON race_invites(created_by_person_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_invites_race",
+        "sql": "CREATE INDEX idx_race_invites_race ON race_invites(race_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_members_person",
+        "sql": "CREATE INDEX idx_race_members_person ON race_members(person_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_members_race",
+        "sql": "CREATE INDEX idx_race_members_race ON race_members(race_id, member_status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_members_race_compat",
+        "sql": "CREATE INDEX idx_race_members_race_compat ON race_members(race_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_members_score",
+        "sql": "CREATE INDEX idx_race_members_score ON race_members(race_id, score_percent DESC, score_value DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_members_user",
+        "sql": "CREATE INDEX idx_race_members_user ON race_members(user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_members_user_compat",
+        "sql": "CREATE INDEX idx_race_members_user_compat ON race_members(user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_participants_race",
+        "sql": "CREATE INDEX idx_race_participants_race ON race_participants(race_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_participants_user",
+        "sql": "CREATE INDEX idx_race_participants_user ON race_participants(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_progress_race",
+        "sql": "CREATE INDEX idx_race_progress_race ON race_progress(race_id, progress_percent DESC, progress_value DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_progress_user",
+        "sql": "CREATE INDEX idx_race_progress_user ON race_progress(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_race_verifier_assignments_activity",
+        "sql": "CREATE INDEX idx_race_verifier_assignments_activity ON race_verifier_assignments(activity_id, release_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_races_created_by_person",
+        "sql": "CREATE INDEX idx_races_created_by_person ON races(created_by_person_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_races_creator",
+        "sql": "CREATE INDEX idx_races_creator ON races(creator_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_races_deleted_at",
+        "sql": "CREATE INDEX idx_races_deleted_at ON races(deleted_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_races_demo_priority",
+        "sql": "CREATE INDEX idx_races_demo_priority ON races(demo_priority)"
+      },
+      {
+        "type": "index",
+        "name": "idx_races_race_key",
+        "sql": "CREATE INDEX idx_races_race_key ON races(race_key)"
+      },
+      {
+        "type": "index",
+        "name": "idx_sessions_expires",
+        "sql": "CREATE INDEX idx_sessions_expires ON sessions(expires_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_sessions_token_hash",
+        "sql": "CREATE INDEX idx_sessions_token_hash ON sessions(refresh_token_hash)"
+      },
+      {
+        "type": "index",
+        "name": "idx_sessions_user_id",
+        "sql": "CREATE INDEX idx_sessions_user_id ON sessions(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_squad_members_squad",
+        "sql": "CREATE INDEX idx_squad_members_squad ON squad_members(squad_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_squad_members_user",
+        "sql": "CREATE INDEX idx_squad_members_user ON squad_members(user_id, status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_squad_races_squad",
+        "sql": "CREATE INDEX idx_squad_races_squad ON squad_races(squad_id, created_at)"
+      },
+      {
+        "type": "index",
+        "name": "idx_squads_owner",
+        "sql": "CREATE INDEX idx_squads_owner ON squads(owner_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_teach_sessions_movement_created",
+        "sql": "CREATE INDEX idx_teach_sessions_movement_created\n  ON motion_teach_sessions(movement_name, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_teach_sessions_outcome_created",
+        "sql": "CREATE INDEX idx_teach_sessions_outcome_created\n  ON motion_teach_sessions(outcome, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_teach_sessions_user_created",
+        "sql": "CREATE INDEX idx_teach_sessions_user_created\n  ON motion_teach_sessions(user_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_unlock_defs_level",
+        "sql": "CREATE INDEX idx_unlock_defs_level\n  ON unlock_definitions(required_level) WHERE active = 1"
+      },
+      {
+        "type": "index",
+        "name": "idx_user_unlocks_user",
+        "sql": "CREATE INDEX idx_user_unlocks_user ON user_unlocks(user_id)"
+      },
+      {
+        "type": "index",
+        "name": "idx_users_email",
+        "sql": "CREATE INDEX idx_users_email ON users(primary_email)"
+      },
+      {
+        "type": "index",
+        "name": "idx_users_status",
+        "sql": "CREATE INDEX idx_users_status ON users(status)"
+      },
+      {
+        "type": "index",
+        "name": "idx_verification_sessions_race",
+        "sql": "CREATE INDEX idx_verification_sessions_race ON verification_sessions(race_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_verification_sessions_user",
+        "sql": "CREATE INDEX idx_verification_sessions_user ON verification_sessions(user_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_verifier_audit_release",
+        "sql": "CREATE INDEX idx_verifier_audit_release\n  ON verifier_audit_log(release_id, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_verifier_releases_activity_status",
+        "sql": "CREATE INDEX idx_verifier_releases_activity_status ON verifier_releases(activity_id, status, created_at DESC)"
+      },
+      {
+        "type": "index",
+        "name": "idx_xp_events_user",
+        "sql": "CREATE INDEX idx_xp_events_user ON xp_events(user_id, created_at)"
+      },
+      {
+        "type": "table",
+        "name": "activity_channel_releases",
+        "sql": "CREATE TABLE activity_channel_releases (activity_id TEXT NOT NULL, channel TEXT NOT NULL CHECK (channel IN ('internal', 'beta', 'stable')), release_id TEXT NOT NULL, rollout_percent INTEGER NOT NULL DEFAULT 0 CHECK (rollout_percent BETWEEN 0 AND 100), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (activity_id, channel), FOREIGN KEY(activity_id) REFERENCES motion_activities(id), FOREIGN KEY(release_id) REFERENCES verifier_releases(id))"
+      },
+      {
+        "type": "table",
+        "name": "activity_reactions",
+        "sql": "CREATE TABLE activity_reactions (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL REFERENCES users(id),\n  entity_type TEXT NOT NULL,\n  entity_id TEXT NOT NULL,\n  emoji TEXT NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE (user_id, entity_type, entity_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "admin_change_log",
+        "sql": "CREATE TABLE admin_change_log (\n  id TEXT PRIMARY KEY,\n  actor_label TEXT NOT NULL,\n  target_table TEXT NOT NULL,\n  target_id TEXT NOT NULL,\n  change_type TEXT NOT NULL,\n  before_json TEXT,\n  after_json TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "audit_events",
+        "sql": "CREATE TABLE audit_events (\n  id TEXT PRIMARY KEY,\n  user_id TEXT,\n  event_type TEXT NOT NULL,\n  metadata TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "auth_identities",
+        "sql": "CREATE TABLE auth_identities (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  provider TEXT NOT NULL,\n  provider_user_id TEXT,\n  email TEXT,\n  email_verified INTEGER NOT NULL DEFAULT 0,\n  display_name TEXT,\n  avatar_url TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, provider_refresh_token TEXT,\n  UNIQUE(provider, provider_user_id),\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "blocked_users",
+        "sql": "CREATE TABLE blocked_users (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  blocked_user_id TEXT NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(user_id) REFERENCES users(id),\n  FOREIGN KEY(blocked_user_id) REFERENCES users(id),\n  UNIQUE(user_id, blocked_user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "crew_connections",
+        "sql": "CREATE TABLE crew_connections (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  crew_user_id TEXT NOT NULL,\n  status TEXT NOT NULL DEFAULT 'active',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, person_id TEXT, crew_person_id TEXT, requested_by TEXT, updated_at TEXT,\n  FOREIGN KEY(user_id) REFERENCES users(id),\n  FOREIGN KEY(crew_user_id) REFERENCES users(id),\n  UNIQUE(user_id, crew_user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "d1_migrations",
+        "sql": "CREATE TABLE d1_migrations(\n\t\tid         INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\tname       TEXT UNIQUE,\n\t\tapplied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL\n)"
+      },
+      {
+        "type": "table",
+        "name": "device_tokens",
+        "sql": "CREATE TABLE device_tokens (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  token TEXT NOT NULL,\n  platform TEXT NOT NULL,                 \n  app_version TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  disabled_at TEXT,\n  UNIQUE(user_id, token),\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "email_codes",
+        "sql": "CREATE TABLE email_codes (\n  id TEXT PRIMARY KEY,\n  email TEXT NOT NULL,\n  code_hash TEXT NOT NULL,\n  attempts INTEGER NOT NULL DEFAULT 0,\n  expires_at TEXT NOT NULL,\n  used_at TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "invite_uses",
+        "sql": "CREATE TABLE invite_uses (\n  id TEXT PRIMARY KEY,\n  invite_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE(invite_id, user_id),\n  FOREIGN KEY(invite_id) REFERENCES invites(id),\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "invites",
+        "sql": "CREATE TABLE invites (\n  id TEXT PRIMARY KEY,\n  token TEXT NOT NULL UNIQUE,             \n  kind TEXT NOT NULL,                     \n  actor_user_id TEXT NOT NULL,            \n  target_type TEXT NOT NULL,              \n  target_id TEXT NOT NULL,\n  max_uses INTEGER,                       \n  use_count INTEGER NOT NULL DEFAULT 0,\n  expires_at TEXT,                        \n  revoked_at TEXT,\n  metadata TEXT,                          \n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(actor_user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "media_assets",
+        "sql": "CREATE TABLE media_assets (\n  id TEXT PRIMARY KEY,\n  owner_person_id TEXT,\n  asset_type TEXT NOT NULL,\n  bucket_name TEXT NOT NULL DEFAULT 'nuvor2',\n  object_key TEXT NOT NULL,\n  public_url TEXT NOT NULL,\n  mime_type TEXT,\n  file_size INTEGER,\n  width INTEGER,\n  height INTEGER,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(owner_person_id) REFERENCES people(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "media_objects",
+        "sql": "CREATE TABLE media_objects (\n  id TEXT PRIMARY KEY,\n  owner_user_id TEXT,\n  bucket TEXT NOT NULL,\n  object_key TEXT NOT NULL UNIQUE,\n  public_url TEXT,\n  media_type TEXT NOT NULL DEFAULT 'image',\n  purpose TEXT NOT NULL DEFAULT 'system_asset',\n  status TEXT NOT NULL DEFAULT 'active',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  deleted_at TEXT,\n  FOREIGN KEY(owner_user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "member_passes",
+        "sql": "CREATE TABLE member_passes (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL UNIQUE,\n  member_id TEXT NOT NULL UNIQUE,\n  pass_slug TEXT NOT NULL UNIQUE,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_account_keys",
+        "sql": "CREATE TABLE motion_account_keys (\n  account_ref TEXT PRIMARY KEY,\n  wrapped_key TEXT NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  revoked_at TEXT\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_activities",
+        "sql": "CREATE TABLE motion_activities (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, category TEXT NOT NULL, proof_label TEXT NOT NULL, measurement_type TEXT NOT NULL CHECK (measurement_type IN ('repetitions', 'duration', 'distance')), metric TEXT NOT NULL CHECK (metric IN ('reps', 'seconds')), suggested_targets_json TEXT NOT NULL, supported_formats_json TEXT NOT NULL, icon_key TEXT NOT NULL, sort_priority INTEGER NOT NULL DEFAULT 100, featured INTEGER NOT NULL DEFAULT 0, availability TEXT NOT NULL DEFAULT 'supported', metadata_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+      },
+      {
+        "type": "table",
+        "name": "motion_analysis_jobs",
+        "sql": "CREATE TABLE motion_analysis_jobs (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  motion_id TEXT NOT NULL,\n  status TEXT NOT NULL,\n  request_schema_version INTEGER NOT NULL,\n  model_version TEXT NOT NULL,\n  validator_version TEXT NOT NULL,\n  result_json TEXT,\n  frame_count INTEGER NOT NULL DEFAULT 0,\n  duration_ms INTEGER NOT NULL DEFAULT 0,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  completed_at TEXT\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_definitions",
+        "sql": "CREATE TABLE motion_definitions (\n  id TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  schema_version INTEGER NOT NULL DEFAULT 1,\n  definition_json TEXT NOT NULL,\n  status TEXT NOT NULL DEFAULT 'active',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_feedback_labels",
+        "sql": "CREATE TABLE motion_feedback_labels (\n  id TEXT PRIMARY KEY,\n  motion_session_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  label TEXT NOT NULL CHECK (label IN ('missed_count', 'false_count', 'camera_issue', 'worked')),\n  note TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE (motion_session_id, user_id, label)\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_model_channels",
+        "sql": "CREATE TABLE motion_model_channels (\n  model_family TEXT NOT NULL,\n  channel TEXT NOT NULL,\n  release_id TEXT NOT NULL REFERENCES motion_model_releases(id),\n  previous_release_id TEXT REFERENCES motion_model_releases(id),\n  rollout_percent INTEGER NOT NULL DEFAULT 100,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (model_family, channel)\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_model_evaluations",
+        "sql": "CREATE TABLE motion_model_evaluations (\n  id TEXT PRIMARY KEY,\n  release_id TEXT NOT NULL REFERENCES motion_model_releases(id),\n  corpus_id TEXT,\n  sample_count INTEGER NOT NULL,\n  passed INTEGER NOT NULL,\n  metrics_json TEXT NOT NULL DEFAULT '{}',\n  evaluator TEXT NOT NULL DEFAULT 'ops',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_model_releases",
+        "sql": "CREATE TABLE motion_model_releases (\n  id TEXT PRIMARY KEY,\n  model_version TEXT NOT NULL UNIQUE,\n  input_schema_version INTEGER NOT NULL,\n  artifact_key TEXT,\n  artifact_sha256 TEXT,\n  status TEXT NOT NULL DEFAULT 'candidate',\n  supported_motion_ids_json TEXT NOT NULL DEFAULT '[]',\n  metadata_json TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  promoted_at TEXT\n, model_family TEXT NOT NULL DEFAULT 'auxiliary_object', runtime_family TEXT NOT NULL DEFAULT '', output_schema_version INTEGER, preprocessing_version INTEGER, normalization_version INTEGER, embedding_schema_version INTEGER, minimum_app_build INTEGER, artifact_size_bytes INTEGER, evaluation_id TEXT, disabled_at TEXT)"
+      },
+      {
+        "type": "table",
+        "name": "motion_release_metrics",
+        "sql": "CREATE TABLE motion_release_metrics (\n  release_id TEXT NOT NULL,\n  activity_id TEXT NOT NULL,\n  outcome TEXT NOT NULL,\n  failure_reason TEXT NOT NULL DEFAULT '',\n  sample_count INTEGER NOT NULL DEFAULT 0,\n  total_detected INTEGER NOT NULL DEFAULT 0,\n  total_confidence REAL NOT NULL DEFAULT 0,\n  last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (release_id, activity_id, outcome, failure_reason),\n  FOREIGN KEY (release_id) REFERENCES verifier_releases(id),\n  FOREIGN KEY (activity_id) REFERENCES motion_activities(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_sessions",
+        "sql": "CREATE TABLE motion_sessions (\n  id TEXT PRIMARY KEY,                    \n  session_id TEXT NOT NULL UNIQUE,        \n  user_id TEXT NOT NULL,\n  race_id TEXT,\n  activity_id TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT 'preset',    \n  outcome TEXT NOT NULL DEFAULT 'incomplete', \n  detected_value INTEGER NOT NULL DEFAULT 0,\n  goal_value INTEGER,\n  confidence REAL NOT NULL DEFAULT 0,\n  failed_rule_reason TEXT NOT NULL DEFAULT '',\n  started_at TEXT,\n  ended_at TEXT,\n  duration_ms INTEGER NOT NULL DEFAULT 0,\n  frame_count INTEGER NOT NULL DEFAULT 0,\n  schema_version INTEGER NOT NULL DEFAULT 1,\n  app_version TEXT NOT NULL DEFAULT 'unknown',\n  git_commit TEXT NOT NULL DEFAULT 'unknown',\n  verifier_version TEXT NOT NULL DEFAULT 'unknown',\n  model_version TEXT NOT NULL DEFAULT 'unknown',\n  object_key TEXT NOT NULL,               \n  metadata_json TEXT,                     \n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n, verifier_release_id TEXT, verifier_release_checksum TEXT, engine_type TEXT, spec_schema_version INTEGER, assignment_policy TEXT)"
+      },
+      {
+        "type": "table",
+        "name": "motion_teach_sessions",
+        "sql": "CREATE TABLE motion_teach_sessions (\n  id TEXT PRIMARY KEY,                    \n  session_id TEXT NOT NULL UNIQUE,        \n  user_id TEXT NOT NULL,                  \n  movement_name TEXT NOT NULL DEFAULT '',\n  outcome TEXT NOT NULL DEFAULT 'abandoned', \n  engine TEXT NOT NULL DEFAULT 'v2',      \n  failure_stage TEXT,                     \n  failure_reason TEXT NOT NULL DEFAULT '',\n  demo_count INTEGER NOT NULL DEFAULT 0,\n  frame_count INTEGER NOT NULL DEFAULT 0,\n  duration_ms INTEGER NOT NULL DEFAULT 0,\n  learned INTEGER NOT NULL DEFAULT 0,     \n  v2_available INTEGER NOT NULL DEFAULT 1,\n  v2_learned INTEGER NOT NULL DEFAULT 0,\n  self_validation_passed INTEGER,         \n  live_test_matched INTEGER,              \n  used_for_race INTEGER NOT NULL DEFAULT 0,\n  schema_version INTEGER NOT NULL DEFAULT 1,\n  app_version TEXT NOT NULL DEFAULT 'unknown',\n  git_commit TEXT NOT NULL DEFAULT 'unknown',\n  model_version TEXT NOT NULL DEFAULT 'unknown',   \n  matcher_version TEXT NOT NULL DEFAULT 'unknown', \n  object_key TEXT NOT NULL,               \n  metadata_json TEXT,                     \n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "motion_training_examples",
+        "sql": "CREATE TABLE motion_training_examples (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  motion_id TEXT NOT NULL,\n  object_key TEXT,\n  label TEXT,\n  review_status TEXT NOT NULL DEFAULT 'unreviewed',\n  consent_version TEXT NOT NULL,\n  schema_version INTEGER NOT NULL,\n  metadata_json TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  reviewed_at TEXT\n)"
+      },
+      {
+        "type": "table",
+        "name": "move_logs",
+        "sql": "CREATE TABLE move_logs (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  source TEXT NOT NULL,\n  movement_type TEXT,\n  value INTEGER,\n  unit TEXT,\n  status TEXT NOT NULL DEFAULT 'pending',\n  summary TEXT,\n  media_object_key TEXT,\n  validator_version TEXT,\n  duration_ms INTEGER,\n  metadata_json TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  client_submission_id TEXT,\n  activity_id TEXT,\n  metric TEXT,\n  previous_score INTEGER,\n  new_score INTEGER,\n  previous_rank INTEGER,\n  new_rank INTEGER,\n  race_completed INTEGER NOT NULL DEFAULT 0, vetoed_at TEXT,\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(user_id) REFERENCES users(id),\n  FOREIGN KEY(media_object_key) REFERENCES media_objects(object_key)\n)"
+      },
+      {
+        "type": "table",
+        "name": "moves",
+        "sql": "CREATE TABLE moves (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL,\n  person_id TEXT NOT NULL,\n  amount_value INTEGER,\n  amount_unit TEXT,\n  move_status TEXT NOT NULL DEFAULT 'checked',\n  move_source TEXT NOT NULL DEFAULT 'manual',\n  note TEXT,\n  media_url TEXT,\n  media_r2_key TEXT,\n  checked_at TEXT,\n  checked_by TEXT,\n  ai_summary TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(person_id) REFERENCES people(id),\n  FOREIGN KEY(checked_by) REFERENCES people(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "notification_jobs",
+        "sql": "CREATE TABLE notification_jobs (\n  id TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,            \n  entity_type TEXT NOT NULL,     \n  entity_id TEXT NOT NULL,\n  user_id TEXT,                  \n  dedupe_key TEXT NOT NULL UNIQUE,\n  run_at TEXT NOT NULL,\n  payload_json TEXT,\n  status TEXT NOT NULL DEFAULT 'pending',  \n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "notification_preferences",
+        "sql": "CREATE TABLE notification_preferences (\n  user_id TEXT NOT NULL,\n  category TEXT NOT NULL,\n  in_app INTEGER NOT NULL DEFAULT 1,\n  push INTEGER NOT NULL DEFAULT 1,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY(user_id, category),\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "notifications",
+        "sql": "CREATE TABLE notifications (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,                  \n  category TEXT NOT NULL,                 \n  actor_user_id TEXT,                     \n  title TEXT NOT NULL,\n  body TEXT,\n  dest_type TEXT,                         \n  dest_id TEXT,\n  dest_context TEXT,                      \n  entity_type TEXT,                       \n  entity_id TEXT,\n  dedupe_key TEXT,                        \n  read_at TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, priority TEXT NOT NULL DEFAULT 'medium', aggregate_count INTEGER NOT NULL DEFAULT 1,\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "people",
+        "sql": "CREATE TABLE people (\n  id TEXT PRIMARY KEY,\n  person_key TEXT NOT NULL UNIQUE,\n  user_id TEXT UNIQUE,\n  display_name TEXT NOT NULL,\n  username TEXT UNIQUE,\n  avatar_url TEXT,\n  avatar_r2_key TEXT,\n  bio TEXT,\n  is_demo INTEGER NOT NULL DEFAULT 0,\n  status TEXT NOT NULL DEFAULT 'active',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "personal_bests",
+        "sql": "CREATE TABLE personal_bests (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  activity_id TEXT NOT NULL,           \n  metric TEXT NOT NULL,\n  best_value INTEGER NOT NULL,\n  score_direction TEXT NOT NULL DEFAULT 'higher',\n  race_id TEXT REFERENCES races(id),\n  move_log_id TEXT REFERENCES move_logs(id),\n  set_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE (user_id, activity_id, metric)\n)"
+      },
+      {
+        "type": "table",
+        "name": "profiles",
+        "sql": "CREATE TABLE profiles (\n  user_id TEXT PRIMARY KEY,\n  full_name TEXT,\n  username TEXT UNIQUE,\n  avatar_url TEXT,\n  private_profile INTEGER NOT NULL DEFAULT 0,\n  onboarding_complete INTEGER NOT NULL DEFAULT 0,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, avatar_object_key TEXT, is_demo INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "proof_votes",
+        "sql": "CREATE TABLE proof_votes (\n  id TEXT PRIMARY KEY,\n  move_log_id TEXT NOT NULL REFERENCES move_logs(id),\n  race_id TEXT NOT NULL REFERENCES races(id),\n  voter_user_id TEXT NOT NULL REFERENCES users(id),\n  reason TEXT NOT NULL,                          \n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE (move_log_id, voter_user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "proofs",
+        "sql": "CREATE TABLE proofs (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL REFERENCES races(id),\n  user_id TEXT NOT NULL REFERENCES users(id),\n  proof_type TEXT NOT NULL DEFAULT 'manual',\n  note TEXT,\n  value INTEGER,\n  media_url TEXT,\n  verification_status TEXT NOT NULL DEFAULT 'accepted',\n  verification_summary TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n, reviewed_by TEXT, reviewed_at TEXT, ai_activity_type TEXT, detected_value INTEGER, target_value INTEGER, confidence REAL, validator_version TEXT, frames_analyzed INTEGER, valid_pose_frames INTEGER, duration_ms INTEGER)"
+      },
+      {
+        "type": "table",
+        "name": "race_attempts",
+        "sql": "CREATE TABLE race_attempts (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL REFERENCES races(id),\n  user_id TEXT NOT NULL,\n  attempt_index INTEGER NOT NULL,            \n  client_attempt_id TEXT,                    \n  status TEXT NOT NULL DEFAULT 'open',       \n  started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,   \n  deadline_at TEXT,                          \n  submitted_at TEXT,\n  score INTEGER,                             \n  move_log_id TEXT REFERENCES move_logs(id),\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE (race_id, user_id, attempt_index)\n)"
+      },
+      {
+        "type": "table",
+        "name": "race_events",
+        "sql": "CREATE TABLE race_events (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL REFERENCES races(id),\n  event_type TEXT NOT NULL,\n  actor_user_id TEXT,        \n  subject_user_id TEXT,      \n  payload_json TEXT,         \n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n, move_log_id TEXT, voided_at TEXT)"
+      },
+      {
+        "type": "table",
+        "name": "race_final_standings",
+        "sql": "CREATE TABLE race_final_standings (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  rank_position INTEGER NOT NULL,\n  score_value INTEGER NOT NULL,\n  completed_at TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(user_id) REFERENCES users(id),\n  UNIQUE(race_id, user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "race_invites",
+        "sql": "CREATE TABLE race_invites (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL,\n  created_by TEXT NOT NULL,\n  invite_code TEXT NOT NULL UNIQUE,\n  status TEXT NOT NULL DEFAULT 'active',\n  expires_at TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, created_by_person_id TEXT,\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(created_by) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "race_members",
+        "sql": "CREATE TABLE race_members (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL,\n  person_id TEXT NOT NULL,\n  member_role TEXT NOT NULL DEFAULT 'member',\n  member_status TEXT NOT NULL DEFAULT 'active',\n  score_value INTEGER NOT NULL DEFAULT 0,\n  score_percent INTEGER NOT NULL DEFAULT 0,\n  rank_override INTEGER,\n  is_current_user_highlight INTEGER NOT NULL DEFAULT 0,\n  joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  last_move_at TEXT,\n  display_note TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, user_id TEXT, role TEXT NOT NULL DEFAULT 'racer', status TEXT NOT NULL DEFAULT 'active', cached_display_name TEXT, cached_avatar_url TEXT, ready_at TEXT, finished_at TEXT, finish_rank INTEGER,\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(person_id) REFERENCES people(id),\n  UNIQUE(race_id, person_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "race_participants",
+        "sql": "CREATE TABLE race_participants (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL REFERENCES races(id),\n  user_id TEXT NOT NULL REFERENCES users(id),\n  display_name TEXT,\n  progress_value INTEGER NOT NULL DEFAULT 0,\n  progress_percent INTEGER NOT NULL DEFAULT 0,\n  joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE(race_id, user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "race_progress",
+        "sql": "CREATE TABLE race_progress (\n  id TEXT PRIMARY KEY,\n  race_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  progress_value INTEGER NOT NULL DEFAULT 0,\n  progress_percent INTEGER NOT NULL DEFAULT 0,\n  completed_at TEXT,\n  rank_cache INTEGER,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(user_id) REFERENCES users(id),\n  UNIQUE(race_id, user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "race_verifier_assignments",
+        "sql": "CREATE TABLE race_verifier_assignments (race_id TEXT PRIMARY KEY, activity_id TEXT NOT NULL, release_id TEXT NOT NULL, release_checksum TEXT NOT NULL, assignment_policy TEXT NOT NULL CHECK (assignment_policy IN ('pinned', 'follow_compatible_patch')), compatibility_group TEXT NOT NULL, assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, assignment_reason TEXT NOT NULL, FOREIGN KEY(race_id) REFERENCES races(id), FOREIGN KEY(activity_id) REFERENCES motion_activities(id), FOREIGN KEY(release_id) REFERENCES verifier_releases(id))"
+      },
+      {
+        "type": "table",
+        "name": "races",
+        "sql": "CREATE TABLE races (\n  id TEXT PRIMARY KEY,\n  creator_id TEXT NOT NULL REFERENCES users(id),\n  title TEXT NOT NULL,\n  description TEXT,\n  category TEXT,\n  goal_type TEXT NOT NULL DEFAULT 'manual',\n  target_value INTEGER,\n  unit TEXT,\n  status TEXT NOT NULL DEFAULT 'active',\n  start_line_at TEXT,\n  finish_line_at TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n, rules TEXT, proof_requirement TEXT NOT NULL DEFAULT 'manual', proof_review_mode TEXT NOT NULL DEFAULT 'auto_accept', visibility TEXT NOT NULL DEFAULT 'private', deleted_at TEXT, ai_activity_type TEXT, target_unit TEXT, proof_mode TEXT, race_key TEXT, subtitle TEXT, race_type TEXT, created_by_person_id TEXT, cover_url TEXT, cover_r2_key TEXT, demo_priority INTEGER, movement_type TEXT, verification_type TEXT NOT NULL DEFAULT 'manual', start_at TEXT, end_at TEXT, activity_id TEXT, metric TEXT, format TEXT NOT NULL DEFAULT 'first_to_goal', scoring_rule TEXT NOT NULL DEFAULT 'cumulative_sum', attempt_duration_seconds INTEGER, attempt_limit INTEGER, verification_method TEXT NOT NULL DEFAULT 'camera_pose', timezone TEXT NOT NULL DEFAULT 'America/New_York', recurrence TEXT NOT NULL DEFAULT 'none', winner_user_id TEXT, completed_at TEXT, public_join_enabled INTEGER NOT NULL DEFAULT 1, verifier_type TEXT, verifier_version INTEGER, verifier_spec_json TEXT, custom_activity_name TEXT, verifier_release_id TEXT, score_direction TEXT NOT NULL DEFAULT 'higher', version INTEGER NOT NULL DEFAULT 0, is_live_session INTEGER NOT NULL DEFAULT 0, live_window_seconds INTEGER)"
+      },
+      {
+        "type": "table",
+        "name": "sessions",
+        "sql": "CREATE TABLE sessions (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  refresh_token_hash TEXT NOT NULL,\n  device_label TEXT,\n  expires_at TEXT NOT NULL,\n  revoked_at TEXT,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  last_seen_at TEXT,\n  FOREIGN KEY(user_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "squad_members",
+        "sql": "CREATE TABLE squad_members (\n  id TEXT PRIMARY KEY,\n  squad_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  role TEXT NOT NULL DEFAULT 'member',    -- owner | member\n  status TEXT NOT NULL DEFAULT 'active',  -- active | left\n  joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(squad_id) REFERENCES squads(id),\n  FOREIGN KEY(user_id) REFERENCES users(id),\n  UNIQUE(squad_id, user_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "squad_races",
+        "sql": "CREATE TABLE squad_races (\n  id TEXT PRIMARY KEY,\n  squad_id TEXT NOT NULL,\n  race_id TEXT NOT NULL UNIQUE,           -- a race belongs to at most one squad\n  created_by TEXT NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  FOREIGN KEY(squad_id) REFERENCES squads(id),\n  FOREIGN KEY(race_id) REFERENCES races(id),\n  FOREIGN KEY(created_by) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "squads",
+        "sql": "CREATE TABLE squads (\n  id TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  join_code TEXT NOT NULL UNIQUE,         -- short, human-typable (A-Z, 2-9)\n  owner_id TEXT NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  deleted_at TEXT,\n  FOREIGN KEY(owner_id) REFERENCES users(id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "unlock_definitions",
+        "sql": "CREATE TABLE unlock_definitions (\n  id TEXT PRIMARY KEY,\n  required_level INTEGER NOT NULL,\n  unlock_type TEXT NOT NULL,\n  unlock_key TEXT NOT NULL,\n  name TEXT NOT NULL,\n  description TEXT,\n  metadata_json TEXT,                 \n  active INTEGER NOT NULL DEFAULT 1,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, category TEXT, icon_key TEXT, requirement_kind TEXT NOT NULL DEFAULT 'level', stat_key TEXT, threshold INTEGER, sort_order INTEGER NOT NULL DEFAULT 0,\n  UNIQUE (unlock_type, unlock_key)\n)"
+      },
+      {
+        "type": "table",
+        "name": "user_featured_badges",
+        "sql": "CREATE TABLE user_featured_badges (\n  user_id TEXT NOT NULL,\n  unlock_id TEXT NOT NULL REFERENCES unlock_definitions(id),\n  position INTEGER NOT NULL,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (user_id, position),\n  UNIQUE (user_id, unlock_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "user_progression",
+        "sql": "CREATE TABLE user_progression (\n  user_id TEXT PRIMARY KEY,\n  total_xp INTEGER NOT NULL DEFAULT 0,\n  level INTEGER NOT NULL DEFAULT 1,\n  last_seen_level INTEGER NOT NULL DEFAULT 1,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n, stats_json TEXT)"
+      },
+      {
+        "type": "table",
+        "name": "user_unlocks",
+        "sql": "CREATE TABLE user_unlocks (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  unlock_id TEXT NOT NULL REFERENCES unlock_definitions(id),\n  unlocked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  source TEXT NOT NULL DEFAULT 'level',\n  UNIQUE (user_id, unlock_id)\n)"
+      },
+      {
+        "type": "table",
+        "name": "users",
+        "sql": "CREATE TABLE users (\n  id TEXT PRIMARY KEY,\n  primary_email TEXT UNIQUE,\n  status TEXT NOT NULL DEFAULT 'active',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  last_login_at TEXT\n, demo_world_enabled INTEGER NOT NULL DEFAULT 0, demo_world_seed    TEXT, demo_world_variant TEXT DEFAULT 'summer_v1', terms_accepted_at TEXT, last_active_at TEXT, terms_version TEXT, age_attested_at TEXT, motion_training_consent INTEGER NOT NULL DEFAULT 0, motion_consent_version TEXT, motion_consented_at TEXT, motion_consent_revoked_at TEXT)"
+      },
+      {
+        "type": "table",
+        "name": "verification_sessions",
+        "sql": "CREATE TABLE verification_sessions (id TEXT PRIMARY KEY, race_id TEXT NOT NULL, user_id TEXT NOT NULL, activity_id TEXT NOT NULL, release_id TEXT NOT NULL, release_checksum TEXT NOT NULL, spec_schema_version INTEGER NOT NULL, engine_type TEXT NOT NULL, app_version TEXT NOT NULL, app_build TEXT NOT NULL, runtime_capabilities_json TEXT NOT NULL, status TEXT NOT NULL, result_value INTEGER, confidence REAL, failure_reason TEXT, started_at TEXT, completed_at TEXT, motion_session_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(race_id) REFERENCES races(id), FOREIGN KEY(activity_id) REFERENCES motion_activities(id), FOREIGN KEY(release_id) REFERENCES verifier_releases(id))"
+      },
+      {
+        "type": "table",
+        "name": "verifier_audit_log",
+        "sql": "CREATE TABLE verifier_audit_log (\n  id TEXT PRIMARY KEY,\n  actor_id TEXT NOT NULL,\n  action TEXT NOT NULL,\n  activity_id TEXT,\n  release_id TEXT,\n  previous_release_id TEXT,\n  details_json TEXT NOT NULL DEFAULT '{}',\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+      },
+      {
+        "type": "table",
+        "name": "verifier_evaluation_runs",
+        "sql": "CREATE TABLE verifier_evaluation_runs (id TEXT PRIMARY KEY, release_id TEXT NOT NULL, dataset_snapshot_id TEXT NOT NULL, status TEXT NOT NULL, report_json TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT, FOREIGN KEY(release_id) REFERENCES verifier_releases(id))"
+      },
+      {
+        "type": "table",
+        "name": "verifier_releases",
+        "sql": "CREATE TABLE verifier_releases (id TEXT PRIMARY KEY, activity_id TEXT NOT NULL, semver TEXT NOT NULL, change_class TEXT NOT NULL, engine_type TEXT NOT NULL, spec_schema_version INTEGER NOT NULL, spec_json TEXT NOT NULL, object_key TEXT, checksum TEXT NOT NULL UNIQUE, required_capabilities_json TEXT NOT NULL, minimum_app_build TEXT NOT NULL, compatibility_group TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft', release_notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, published_at TEXT, parent_release_id TEXT, updated_at TEXT, FOREIGN KEY(activity_id) REFERENCES motion_activities(id), FOREIGN KEY(parent_release_id) REFERENCES verifier_releases(id))"
+      },
+      {
+        "type": "table",
+        "name": "xp_events",
+        "sql": "CREATE TABLE xp_events (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  source_type TEXT NOT NULL,          \n  source_id TEXT NOT NULL,            \n  race_id TEXT,\n  xp_amount INTEGER NOT NULL,\n  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE (user_id, source_type, source_id)\n)"
+      },
+      {
+        "type": "view",
+        "name": "v_admin_move_log",
+        "sql": "CREATE VIEW v_admin_move_log AS\nSELECT\n  r.race_key,\n  r.title AS race_title,\n  p.person_key,\n  p.display_name,\n  m.amount_value,\n  m.amount_unit,\n  m.move_status,\n  m.move_source,\n  m.note,\n  m.media_url,\n  m.created_at\nFROM moves m\nJOIN races r ON r.id = m.race_id\nJOIN people p ON p.id = m.person_id\nORDER BY m.created_at DESC"
+      },
+      {
+        "type": "view",
+        "name": "v_admin_people",
+        "sql": "CREATE VIEW v_admin_people AS\nSELECT\n  p.person_key,\n  p.display_name,\n  p.username,\n  p.avatar_url,\n  p.is_demo,\n  u.primary_email AS linked_email,\n  p.status\nFROM people p\nLEFT JOIN users u ON u.id = p.user_id\nORDER BY p.is_demo DESC, p.display_name COLLATE NOCASE ASC"
+      },
+      {
+        "type": "view",
+        "name": "v_admin_race_board",
+        "sql": "CREATE VIEW v_admin_race_board AS\nSELECT\n  r.race_key,\n  r.title AS race_title,\n  r.target_value,\n  COALESCE(r.target_unit, r.unit) AS target_unit,\n  p.person_key,\n  p.display_name,\n  p.username,\n  p.avatar_url,\n  rm.score_value,\n  rm.score_percent,\n  rank() OVER (\n    PARTITION BY rm.race_id\n    ORDER BY\n      COALESCE(rm.rank_override, 999999) ASC,\n      rm.score_percent DESC,\n      rm.score_value DESC,\n      rm.joined_at ASC\n  ) AS rank,\n  rm.last_move_at\nFROM race_members rm\nJOIN races r ON r.id = rm.race_id\nJOIN people p ON p.id = rm.person_id\nWHERE r.deleted_at IS NULL\n  AND rm.member_status = 'active'\nORDER BY r.demo_priority IS NULL, r.demo_priority ASC, r.created_at DESC, rank ASC"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "EEUR",
+      "served_by_colo": "ARN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 1.2437
+      },
+      "duration": 1.2437,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 11804672,
+      "rows_read": 431,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

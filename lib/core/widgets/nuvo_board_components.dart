@@ -158,7 +158,7 @@ class NuvoRaceHero extends StatelessWidget {
             decoration: BoxDecoration(
               color: isComplete
                   ? NuvoColors.success.withValues(alpha: 0.08)
-                  : c.panel,
+                  : c.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.sm),
               border: Border.all(
                 color: isComplete
@@ -307,7 +307,7 @@ class NuvoBoardLane extends StatelessWidget {
         : 48.0;
     final avatarOuterSize = avatarSize + 8;
     final minHeight = participant.isCurrentUser ? 128.0 : 108.0;
-    final activeColor = participant.isCurrentUser ? NuvoColors.blue : c.ink;
+    final activeColor = participant.isCurrentUser ? c.accent : c.ink;
     final ringColor = participant.isCurrentUser
         ? NuvoColors.blue
         : isLeader
@@ -317,7 +317,7 @@ class NuvoBoardLane extends StatelessWidget {
       constraints: BoxConstraints(minHeight: minHeight),
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       decoration: BoxDecoration(
-        color: participant.isCurrentUser ? c.panelLight : c.surface,
+        color: participant.isCurrentUser ? c.surface : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: participant.isCurrentUser ? NuvoColors.actionBlue : c.border,
@@ -337,7 +337,7 @@ class NuvoBoardLane extends StatelessWidget {
             decoration: BoxDecoration(
               color: participant.isCurrentUser
                   ? NuvoColors.blue.withValues(alpha: 0.12)
-                  : c.panel,
+                  : c.surface,
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -647,7 +647,7 @@ class NuvoRaceRow extends StatelessWidget {
               '$progressPercent%',
               style: AppTextStyles.labelMedium.copyWith(
                 color: progressPercent >= 100
-                    ? NuvoColors.success
+                    ? c.successText
                     : c.inkMuted,
               ),
             ),

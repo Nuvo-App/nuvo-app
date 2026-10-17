@@ -1,14 +1,16 @@
 // Release-hardening coverage for the AI Motion Proof routing contract:
 //
 //  - every camera-verifiable entry (Verify hero, Ready Next row, Race
-//    Detail, the proof chooser's Begin, board-moved retry) lands directly on
-//    /race/:id/proof/ai-motion — the boxed legacy scaffold is deleted, so no
-//    state can render the old white-shell verifier
+//    Detail) lands first on the pre-verify setup /race/:id/proof (motion
+//    preview + Begin); Begin opens /race/:id/proof/ai-motion. The boxed legacy
+//    scaffold is deleted, so no state can render the old white-shell verifier
 //  - non-camera races still route to the /race/:id/proof chooser
 //  - background/resume recovers onto the same surface, never a dead preview
 //  - the first-race guide stays armed through the verifier, advances to
 //    profileReward on a real submission, and Profile's 'Got it' is the only
 //    thing that completes it
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +20,6 @@ import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
@@ -162,7 +163,7 @@ class _ProfileMarker extends StatelessWidget {
   final router = GoRouter(
     initialLocation: '/home',
     routes: [
-      GoRoute(path: '/home', builder: (_, _) => home ?? const MoveScreen()),
+      GoRoute(path: '/home', builder: (_, _) => home ?? const SizedBox.shrink()),
       GoRoute(
         path: '/race/:id/proof',
         builder: (_, _) => const _ChooserMarker(),
@@ -189,80 +190,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('canonical verifier entry', () {
-    testWidgets(
-      'A: Verify hero CTA opens the fullscreen verifier directly — the '
-      'proof chooser never renders',
-      (tester) async {
-        final built = _app(races: [_movementRace()]);
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        expect(find.byKey(const Key('verify-hero-cta')), findsOneWidget);
-        expect(find.text('PROOF-CHOOSER'), findsNothing);
-
-        await tester.tap(find.byKey(const Key('verify-hero-cta')));
-        await tester.pumpAndSettle();
-
-        expect(_path(built.router), '/race/race-move/proof/ai-motion');
-        expect(find.text('CANONICAL-VERIFIER'), findsOneWidget);
-        expect(find.text('PROOF-CHOOSER'), findsNothing);
-      },
-    );
-
-    testWidgets('B: Ready Next row opens the verifier directly', (
-      tester,
-    ) async {
-      final built = _app(
-        races: [_movementRace(), _movementRace(id: 'race-two', title: 'Squats')],
-      );
-      addTearDown(built.container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: built.container,
-          child: MaterialApp.router(routerConfig: built.router),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // The second Ready race is a 'Ready next' row.
-      final row = find.text('Squats');
-      expect(row, findsWidgets);
-      await tester.tap(row.first);
-      await tester.pumpAndSettle();
-
-      expect(_path(built.router), '/race/race-two/proof/ai-motion');
-      expect(find.text('CANONICAL-VERIFIER'), findsOneWidget);
-      expect(find.text('PROOF-CHOOSER'), findsNothing);
-    });
-
-    testWidgets(
-      'non-camera race still goes to the proof chooser, not the verifier',
-      (tester) async {
-        final built = _app(races: [_manualRace()]);
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.byKey(const Key('verify-hero-cta')));
-        await tester.pumpAndSettle();
-
-        expect(_path(built.router), '/race/race-manual/proof');
-        expect(find.text('PROOF-CHOOSER'), findsOneWidget);
-        expect(find.text('CANONICAL-VERIFIER'), findsNothing);
-      },
-    );
-
     testWidgets(
       'G: cancel returns to origin; restarting re-enters the verifier directly',
       (tester) async {
@@ -374,43 +301,42 @@ void main() {
       },
     );
 
-    testWidgets(
-      'I: normal post-proof route is unchanged outside the guide',
-      (tester) async {
-        final built = _app(
-          races: [_movementRace()],
-          home: const BoardMovedScreen(
+    testWidgets('I: normal post-proof route is unchanged outside the guide', (
+      tester,
+    ) async {
+      final built = _app(
+        races: [_movementRace()],
+        home: const BoardMovedScreen(
+          raceId: 'race-move',
+          args: BoardMovedArgs(
             raceId: 'race-move',
-            args: BoardMovedArgs(
-              raceId: 'race-move',
-              raceName: 'Pushup Race',
-              value: 15,
-              unit: 'reps',
-              status: 'verified',
-              rankBefore: 2,
-              rankAfter: 1,
-              aiMotionProof: true,
-            ),
+            raceName: 'Pushup Race',
+            value: 15,
+            unit: 'reps',
+            status: 'verified',
+            rankBefore: 2,
+            rankAfter: 1,
+            aiMotionProof: true,
           ),
-        );
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 800));
+        ),
+      );
+      addTearDown(built.container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: built.container,
+          child: MaterialApp.router(routerConfig: built.router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
 
-        // No guided CTA — the normal race return stays.
-        expect(find.text('View race'), findsOneWidget);
-        expect(find.text('See your progress'), findsNothing);
-        await tester.tap(find.text('View race'));
-        await tester.pumpAndSettle();
-        expect(_path(built.router), '/race/race-move');
-      },
-    );
+      // No guided CTA — the normal race return stays.
+      expect(find.text('View race'), findsOneWidget);
+      expect(find.text('See your progress'), findsNothing);
+      await tester.tap(find.text('View race'));
+      await tester.pumpAndSettle();
+      expect(_path(built.router), '/race/race-move');
+    });
 
     testWidgets(
       'board-moved retry re-enters the verifier directly for camera proofs',
@@ -516,7 +442,9 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('verify-hero-cta')));
+        // Begin on the pre-verify setup is what opens the verifier (G covers
+        // that tap); here we go straight to it to check the surface itself.
+        unawaited(built.router.push('/race/race-move/proof/ai-motion'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
 
@@ -538,9 +466,7 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 300));
 
-        final resumed = tester.widget<Scaffold>(
-          find.byType(Scaffold).last,
-        );
+        final resumed = tester.widget<Scaffold>(find.byType(Scaffold).last);
         expect(resumed.bottomNavigationBar, isNull);
         expect(_path(built.router), '/race/race-move/proof/ai-motion');
       },

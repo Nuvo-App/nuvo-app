@@ -9,6 +9,9 @@ export type AppEnv = {
     APPLE_TEAM_ID?: string;
     APPLE_KEY_ID?: string;
     APPLE_PRIVATE_KEY?: string;
+    // Comma-separated emails / user ids that see custom AI movements even while
+    // CUSTOM_MOTION_ENABLED is off. Set in the Cloudflare dashboard.
+    CUSTOM_MOTION_USERS?: string;
     RESEND_API_KEY: string;
     RESEND_FROM_EMAIL: string;
     JWT_SECRET: string;
@@ -52,7 +55,6 @@ export interface ProfileRow {
   username: string | null;
   avatar_url: string | null;
   avatar_object_key: string | null;
-  private_profile: number;
   onboarding_complete: number;
   is_demo: number;
   created_at: string;

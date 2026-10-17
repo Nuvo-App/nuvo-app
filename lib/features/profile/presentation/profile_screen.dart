@@ -1,3 +1,4 @@
+import 'widgets/activity_heatmap.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,20 +9,21 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_entrance.dart';
 import '../../../core/theme/nuvo_theme_mode.dart';
 import '../../../core/widgets/bottom_nav.dart';
+import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
+import '../../../core/widgets/nuvo_back_header.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
+import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
-import '../../../core/widgets/nuvo_empty_state.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
-import '../../../core/widgets/nuvo_progress_bar.dart';
-import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_toggle.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../arena/presentation/arena_controller.dart';
@@ -29,22 +31,25 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
-import '../../races/data/race_models.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../application/progression_controller.dart';
 import '../data/progression_models.dart';
 import 'widgets/nuvo_badges.dart';
 
+part 'settings_screen.dart';
+
 const _kPrivacyUrl = 'https://getnuvo.net/privacy';
 const _kTermsUrl = 'https://getnuvo.net/terms';
 
+/// Height of the soft fade that ends at the floating nav's top edge.
+const double _kBottomFadeHeight = 28;
+
 /// Profile — "who am I on Nuvo, and what have I done?"
 ///
-/// Information order is the product order: identity → competitive snapshot →
-/// racing now → recent results → utilities. Race rows reuse the canonical
-/// [RaceRow]/[RaceResultRow] components shared with Compete, and every race
-/// tap lands on `/race/:id` like everywhere else in the app.
+/// Information order: identity → level → achievements → record → Your Nuvo.
+/// Racing now and recent results live on Compete and Crew; account, privacy
+/// and legal live in [SettingsScreen].
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -53,69 +58,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  static const _demoAccountEmails = {
-    'sideswifter2010@gmai.com',
-    'sideswifter2010@gmail.com',
-  };
-
-  // Sections summarize; a capped list expands inline instead of growing the
-  // main profile linearly with the user's history.
-  static const _sectionCap = 3;
-  bool _racingExpanded = false;
-  bool _resultsExpanded = false;
-  bool _otherExpanded = false;
   bool _progressionRetryScheduled = false;
-
-  Future<void> _replayDemo() async {
-    ref.read(firstRaceGuideProvider.notifier).state =
-        FirstRaceGuideStep.competeStart;
-    ref.read(demoReplayProvider.notifier).state = true;
-    if (mounted) context.go('/splash');
-  }
-
-  Future<void> _setPresentationMode(bool enabled) async {
-    if (!canTogglePresentationMode(ref.read(authControllerProvider).user))
-      return;
-    final persistence = setPresentationModeEnabled(enabled);
-    // Clear generations before loading so an older request cannot restore the
-    // previous mode. Crew and notifications observe the preference directly.
-    final races = ref.read(raceControllerProvider.notifier)..clearRaces();
-    final arena = ref.read(arenaControllerProvider.notifier)..clearSnapshot();
-    await Future.wait([
-      persistence,
-      races.loadRaces(force: true),
-      arena.loadSnapshot(force: true),
-    ]);
-  }
-
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  Future<void> _confirmDeleteAccount() async {
-    final confirmed = await showNuvoConfirmDialog(
-      context,
-      title: 'Delete account?',
-      message:
-          'This will permanently delete your Nuvo account and log you out on all devices. '
-          'This action cannot be undone from the app.',
-      confirmLabel: 'Delete',
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await ref.read(authControllerProvider.notifier).deleteAccount();
-      if (mounted) context.go('/welcome');
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete account. Try again.')),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,146 +83,221 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final authUser = ref.watch(authControllerProvider).user;
     final user = authUser == null ? null : presentedUser(authUser);
     final uid = user?.id;
-    final canReplayDemo =
-        user != null &&
-        _demoAccountEmails.contains(user.email.trim().toLowerCase());
-    final canTogglePresentation =
-        user != null && canTogglePresentationMode(user);
 
-    final raceState = ref.watch(raceControllerProvider);
     final guide = ref.watch(firstRaceGuideProvider);
-    final activeCount = raceState.races.where(raceIsActive).length;
-    final finishedRaces = raceState.races.where(raceIsCompleted).toList();
-    // Wins come only from server-owned truth: the recorded winner, or a
-    // #1 entry in final standings (covers tied-for-first, where the server
-    // leaves winnerUserId null). A cancelled race's positional rank never
-    // counts as a win.
-    final wins = uid == null
-        ? 0
-        : finishedRaces
-              .where(
-                (r) =>
-                    r.winnerUserId == uid ||
-                    r.finalStandings.any((s) => s.userId == uid && s.rank == 1),
-              )
-              .length;
-    final winRate = finishedRaces.isEmpty
-        ? null
-        : (wins / finishedRaces.length * 100).round();
+    // The record comes from the server (progression.record). Only older
+    // servers / a not-yet-loaded read fall back to the races list.
+    final serverRecord = progression?.record;
+    final int activeCount;
+    final int wins;
+    final int? winRate;
+    if (serverRecord != null) {
+      activeCount = serverRecord.active;
+      wins = serverRecord.wins;
+      winRate = serverRecord.winRatePercent;
+    } else {
+      final raceState = ref.watch(raceControllerProvider);
+      activeCount = raceState.races.where(raceIsActive).length;
+      final finishedRaces = raceState.races.where(raceIsCompleted).toList();
+      // Wins come only from server-owned truth: the recorded winner, or a
+      // #1 entry in final standings (covers tied-for-first, where the server
+      // leaves winnerUserId null). A cancelled race's positional rank never
+      // counts as a win.
+      wins = uid == null
+          ? 0
+          : finishedRaces
+                .where(
+                  (r) =>
+                      r.winnerUserId == uid ||
+                      r.finalStandings.any(
+                        (s) => s.userId == uid && s.rank == 1,
+                      ),
+                )
+                .length;
+      winRate = finishedRaces.isEmpty
+          ? null
+          : (wins / finishedRaces.length * 100).round();
+    }
 
     final screen = Scaffold(
       backgroundColor: c.page,
-      body: RefreshIndicator(
-        color: NuvoColors.blue,
-        backgroundColor: c.surface,
-        onRefresh: () => Future.wait([
-          ref.read(raceControllerProvider.notifier).loadRaces(),
-          ref.read(progressionControllerProvider.notifier).load(),
-        ]),
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
-          ),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  NuvoSpacing.pageHorizontal,
-                  32,
-                  NuvoSpacing.pageHorizontal,
-                  0,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: RefreshIndicator(
+              color: context.themeColors.accent,
+              backgroundColor: c.surface,
+              onRefresh: () => Future.wait([
+                // Races reload only when the record is derived from the list.
+                if (serverRecord == null)
+                  ref.read(raceControllerProvider.notifier).loadRaces(),
+                ref.read(progressionControllerProvider.notifier).load(),
+              ]),
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Screen label — the edit action lives with the identity
-                    // row below, where it belongs to the person, not the
-                    // word "Profile".
-                    Text(
-                      'Profile',
-                      style: AppTextStyles.screenTitle.copyWith(color: c.ink),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                slivers: [
+                  // Top block: title → identity → level → achievements → record,
+                  // then the heat map, which absorbs whatever room is left so the
+                  // first viewport (above the dock) ends on its Less/More key.
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        NuvoSpacing.pageHorizontal,
+                        32,
+                        NuvoSpacing.pageHorizontal,
+                        0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Profile',
+                            style: AppTextStyles.screenTitle.copyWith(
+                              color: c.ink,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: NuvoSpacing.lg),
+
+                          // Identity — the person, not the account. Settings and
+                          // everything administrative live one tap away.
+                          _IdentityCard(user: user).nuvoEnter(),
+                          const SizedBox(height: NuvoSpacing.lg),
+
+                          // Level — the progression that belongs to the person,
+                          // not any one race. Tap it for what the level means.
+                          _LevelTrack(
+                            key: FirstRaceGuideKeys.profileProgress,
+                            state: progressionAsync,
+                          ).nuvoEnter(),
+                          const SizedBox(height: NuvoSpacing.lg),
+
+                          // Achievements are one row — the collection, the next
+                          // goal and the next unlock live behind it.
+                          _AchievementsRow(progression: progression),
+
+                          // The record — racing now, wins, win rate.
+                          const SizedBox(height: NuvoSpacing.xl),
+                          _StatsStrip(
+                            activeCount: activeCount,
+                            wins: wins,
+                            winRate: winRate,
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: NuvoSpacing.lg),
-
-                    // Identity — the person, not the account. Avatar uses the
-                    // same deterministic palette color other racers see on
-                    // leaderboards; Edit stays in the header so this card is
-                    // about who I am, not settings.
-                    _IdentityCard(
-                      user: user,
-                      level: progression?.level,
-                    ).nuvoEnter(),
-                    const SizedBox(height: NuvoSpacing.lg),
-
-                    // Level — the progression that belongs to the person,
-                    // not any one race. A TRACK on the white canvas, not a
-                    // card: level markers at the ends, the climb between
-                    // them, the next unlock docked under the finish.
-                    // Always present: data fills it, a quiet skeleton
-                    // holds its place while the server answers, and a
-                    // failure reads as "syncing" — never a missing piece
-                    // of identity.
-                    _LevelTrack(
-                      key: FirstRaceGuideKeys.profileProgress,
-                      state: progressionAsync,
-                      activeCount: activeCount,
-                      wins: wins,
-                      winRate: winRate,
-                    ).nuvoEnter(),
-
-                    const SizedBox(height: NuvoSpacing.xl),
-
-                    // The collectible shelf — header is the collection's
-                    // navigation, artifacts + fused names are the objects.
-                    _AchievementsSection(progression: progression),
-
-                    // One goal in reach — the reason to race again. Stays
-                    // unboxed; a hairline separates it from the shelf above
-                    // — the NEXT badge is the next object in the set, not a
-                    // detached block.
-                    if (progression?.nextAchievement != null) ...[
-                      const SizedBox(height: NuvoSpacing.sm + 4),
-                      Divider(height: 1, thickness: 1, color: c.divider),
-                      const SizedBox(height: NuvoSpacing.md + 4),
-                      _NextUpCard(progression: progression),
-                    ],
-                  ],
-                ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, sc) {
+                        // Room left between the end of the record strip and the
+                        // top of the dock, measured at rest. Short screens get
+                        // 0 and the section keeps its natural height (scroll).
+                        final room =
+                            sc.viewportMainAxisExtent -
+                            sc.precedingScrollExtent -
+                            MediaQuery.paddingOf(context).bottom -
+                            NuvoBottomNav.navTopBreath -
+                            _kBottomFadeHeight;
+                        return SliverToBoxAdapter(
+                          child: ActivityHeatmapSection(
+                            minHeight: math.max(0.0, room),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SliverLayoutBuilder(
+                    builder: (context, sc) {
+                      // Calm space so Your Nuvo always starts below the fold: when
+                      // the heat map ends inside the viewport, push the section to
+                      // the viewport's bottom edge so none of it shows half-cut.
+                      // The section starts behind the floating nav (its top edge
+                      // is the page's bottom padding up), so it is out of sight
+                      // at rest but only a short scroll away.
+                      final remaining =
+                          sc.viewportMainAxisExtent -
+                          sc.precedingScrollExtent -
+                          MediaQuery.paddingOf(context).bottom;
+                      final gap = remaining > 0
+                          ? math.max(NuvoSpacing.xl, remaining + 4)
+                          : NuvoSpacing.xl;
+                      return SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            NuvoSpacing.pageHorizontal,
+                            gap,
+                            NuvoSpacing.pageHorizontal,
+                            NuvoBottomNav.bottomPadding(context),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Your Nuvo — the things that are mine and how the app
+                              // feels. Account, privacy and legal live in Settings.
+                              const _SectionLabel(label: 'Your Nuvo'),
+                              const SizedBox(height: NuvoSpacing.md),
+                              _ProfileActionGroup(
+                                children: [
+                                  _AccountRow(
+                                    icon: Icons.qr_code_2_rounded,
+                                    label: 'My code',
+                                    subtitle: 'Your code and pass link',
+                                    onTap: () => context.push('/my-nuvo'),
+                                  ),
+                                  _AccountRow(
+                                    icon: Icons.notifications_outlined,
+                                    label: 'Notifications',
+                                    subtitle: 'Race and friend updates',
+                                    onTap: () =>
+                                        context.push('/settings/notifications'),
+                                  ),
+                                  const _AppearanceRow(),
+                                  _AccountRow(
+                                    icon: Icons.settings_outlined,
+                                    label: 'Settings',
+                                    subtitle: 'Account, privacy and legal',
+                                    onTap: () => context.push('/settings'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
-
-            // ── Profile body — page-colored background ──────────────────────
-            // Content flows at normal section rhythm — no fold seam. A row
-            // that lands under the dock is hidden by the shell's occlusion
-            // band and scrolls clear, same contract as Compete
-            // (docs/ui/MAIN_SCREEN_LAYOUT_CONTRACT.md).
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                18,
-                20,
-                NuvoBottomNav.bottomPadding(context),
-              ),
-              sliver: SliverToBoxAdapter(
-                child: Container(
-                  color: c.page,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _profileBody(
-                      raceState,
-                      uid,
-                      context,
-                      canReplayDemo: canReplayDemo,
-                      canTogglePresentation: canTogglePresentation,
-                    ),
+          ),
+          // Soft fade ending at the nav's top edge: anything scrolling
+          // under the floating nav eases out instead of being sliced.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: MediaQuery.paddingOf(context).bottom,
+            height: _kBottomFadeHeight,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                key: const ValueKey('nuvo-bottom-fade'),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [c.page.withValues(alpha: 0), c.page],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
 
@@ -302,263 +320,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
     return screen;
   }
-
-  List<Widget> _profileBody(
-    RaceState raceState,
-    String? uid,
-    BuildContext context, {
-    required bool canReplayDemo,
-    required bool canTogglePresentation,
-  }) {
-    final activeRaces = raceState.races.where(raceIsActive).toList()
-      // The race nearest its finish line is the one that matters right now.
-      ..sort((a, b) {
-        final ap = raceProgressPercent(
-          a,
-          uid == null ? null : a.participantFor(uid),
-        );
-        final bp = raceProgressPercent(
-          b,
-          uid == null ? null : b.participantFor(uid),
-        );
-        return bp.compareTo(ap);
-      });
-    final finishedRaces = raceState.races.where(raceIsCompleted).toList();
-    final otherRaces = raceState.races
-        .where((race) => !raceIsActive(race) && !raceIsCompleted(race))
-        .toList();
-
-    // Best finish — the lowest placement across completed races, read from
-    // canonical standings/participants. Null when there's nothing earned.
-    Race? bestFinish;
-    var bestFinishRank = 0;
-    for (final race in finishedRaces) {
-      final rank = rankForUser(race, uid);
-      if (rank != null && (bestFinish == null || rank < bestFinishRank)) {
-        bestFinish = race;
-        bestFinishRank = rank;
-      }
-    }
-
-    // Race sections in order — Racing now, Recent results, Other — at
-    // normal section rhythm. Content flows naturally; a row that lands
-    // under the dock at rest is hidden by the shell's occlusion band and
-    // scrolls clear, same contract as Compete (docs §15). No fold seam —
-    // short pages are never vertically distributed to fill the viewport.
-    final raceSections = <Widget>[
-      if (activeRaces.isNotEmpty)
-        // Racing now is a horizontal shelf — live races are objects in
-        // motion, each on its own ice tile, the next one peeking off the
-        // right edge. See all still drops into the vertical list.
-        _RaceShelf(
-          label: 'Racing now',
-          races: activeRaces,
-          userId: uid,
-          expanded: _racingExpanded,
-          onToggleExpand: () =>
-              setState(() => _racingExpanded = !_racingExpanded),
-        ),
-      if (finishedRaces.isNotEmpty) ...[
-        if (activeRaces.isNotEmpty) const SizedBox(height: NuvoSpacing.xl),
-        _RaceSection(
-          label: 'Recent results',
-          races: finishedRaces,
-          userId: uid,
-          expanded: _resultsExpanded,
-          cap: _sectionCap,
-          onToggleExpand: () =>
-              setState(() => _resultsExpanded = !_resultsExpanded),
-        ),
-      ],
-      if (otherRaces.isNotEmpty) ...[
-        if (activeRaces.isNotEmpty || finishedRaces.isNotEmpty)
-          const SizedBox(height: NuvoSpacing.xl),
-        _RaceSection(
-          label: 'Other',
-          races: otherRaces,
-          userId: uid,
-          expanded: _otherExpanded,
-          cap: _sectionCap,
-          onToggleExpand: () =>
-              setState(() => _otherExpanded = !_otherExpanded),
-        ),
-      ],
-    ];
-
-    return [
-      // Racing now / recent results / history
-      if (raceState.loading && raceState.races.isEmpty)
-        const Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: NuvoColors.blue,
-            ),
-          ),
-        )
-      else if (raceState.races.isEmpty && raceState.error != null)
-        // Load failed with nothing cached — say so, don't imply "no races".
-        NuvoErrorState(
-          message: "Couldn't load your race history.",
-          onRetry: () => ref.read(raceControllerProvider.notifier).loadRaces(),
-        )
-      else if (raceState.races.isEmpty)
-        NuvoEmptyState(
-          icon: Icons.flag_rounded,
-          title: 'Your first race starts here',
-          body: 'Start or join a race to build your Nuvo history.',
-          ctaLabel: 'Find a race',
-          onCta: () => context.go('/compete'),
-          compact: true,
-        )
-      else
-        ...raceSections,
-
-      // One earned personal mark — best placement across finished races,
-      // read straight from canonical standings. Hidden when nothing has
-      // been earned yet; never invented.
-      if (bestFinish != null) ...[
-        const SizedBox(height: NuvoSpacing.xxl),
-        _BestFinishRow(
-          race: bestFinish,
-          rank: bestFinishRank,
-          scoreLabel: bestFinish.finalStandings
-              .where((s) => s.userId == uid)
-              .map((s) => raceScoreLabel(bestFinish!, s.scoreValue))
-              .firstOrNull,
-        ),
-      ],
-
-      const SizedBox(height: NuvoSpacing.xxl),
-
-      // Your Nuvo — the things that are mine and how the app feels.
-      const _SectionLabel(label: 'Your Nuvo'),
-      const SizedBox(height: NuvoSpacing.md),
-      _ProfileActionGroup(
-        children: [
-          _AccountRow(
-            icon: Icons.qr_code_2_rounded,
-            label: 'My Nuvo',
-            subtitle: 'Your code and pass link',
-            onTap: () => context.push('/my-nuvo'),
-          ),
-          _AccountRow(
-            icon: Icons.badge_rounded,
-            label: 'Member pass',
-            subtitle: 'The card other racers see',
-            onTap: () => context.go('/pass'),
-          ),
-          _AccountRow(
-            icon: Icons.notifications_outlined,
-            label: 'Notifications',
-            subtitle: 'Race and crew updates',
-            onTap: () => context.push('/settings/notifications'),
-          ),
-          const _AppearanceRow(),
-        ],
-      ),
-      const SizedBox(height: NuvoSpacing.xl),
-
-      // Gated tools only — this group doesn't exist for normal accounts.
-      // Presentation/demo controls stay behind the existing account gates.
-      if (canReplayDemo || canTogglePresentation || kDebugMode) ...[
-        const _SectionLabel(label: 'App'),
-        const SizedBox(height: NuvoSpacing.md),
-        _ProfileActionGroup(
-          children: [
-            if (canReplayDemo)
-              _AccountRow(
-                icon: Icons.replay_rounded,
-                label: 'Replay the guide',
-                onTap: _replayDemo,
-              ),
-            if (canTogglePresentation)
-              _PresentationModeRow(
-                enabled: presentationModeToggleEnabled,
-                onChanged: _setPresentationMode,
-              ),
-            if (kDebugMode)
-              _AccountRow(
-                icon: Icons.tune_rounded,
-                label: 'Rive Calibration',
-                onTap: () => context.push('/dev/rive-calibration'),
-              ),
-          ],
-        ),
-        const SizedBox(height: NuvoSpacing.xl),
-      ],
-
-      // Privacy & Data — the server-backed training-consent control. Same
-      // choice as onboarding; toggling writes through to the account.
-      const _SectionLabel(label: 'Privacy & Data'),
-      const SizedBox(height: NuvoSpacing.md),
-      const _ProfileActionGroup(children: [_MotionConsentRow()]),
-      const SizedBox(height: NuvoSpacing.xl),
-
-      // Account — session actions. Destructive red belongs to Delete alone;
-      // Sign out is a normal action, not a danger.
-      const _SectionLabel(label: 'Account'),
-      const SizedBox(height: NuvoSpacing.md),
-      _ProfileActionGroup(
-        children: [
-          _AccountRow(
-            icon: Icons.person_outline_rounded,
-            label: 'Edit profile',
-            subtitle: 'Photo, name, username',
-            onTap: () => context.push('/profile/edit'),
-          ),
-          _AccountRow(
-            icon: Icons.logout_rounded,
-            label: 'Sign out',
-            isAction: true,
-            onTap: () => ref.read(authControllerProvider.notifier).logout(),
-          ),
-          _AccountRow(
-            icon: Icons.delete_outline_rounded,
-            label: 'Delete account',
-            isDanger: true,
-            onTap: _confirmDeleteAccount,
-          ),
-        ],
-      ),
-      const SizedBox(height: NuvoSpacing.xxl),
-
-      // Legal
-      const _SectionLabel(label: 'Legal'),
-      const SizedBox(height: NuvoSpacing.md),
-      _ProfileActionGroup(
-        children: [
-          _AccountRow(
-            icon: Icons.policy_rounded,
-            label: 'Privacy Policy',
-            onTap: () => _openUrl(_kPrivacyUrl),
-          ),
-          _AccountRow(
-            icon: Icons.description_rounded,
-            label: 'Terms of Service',
-            onTap: () => _openUrl(_kTermsUrl),
-          ),
-        ],
-      ),
-    ];
-  }
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 
-/// Who I am on Nuvo: avatar, name, handle, member status, and the "My Nuvo"
-/// path to share that identity. The user is the hero — this lives directly on
-/// the page, no card around it.
+/// Who I am on Nuvo: avatar, name and handle. The user is the hero —
+/// this lives directly on the page, no card around it. Sharing the identity
+/// is the "My code" row under Your Nuvo.
 class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.user, this.level});
+  const _IdentityCard({required this.user});
 
   final AuthUser? user;
-
-  /// The person's Nuvo level — identity metadata, shown as a quiet blue
-  /// line under the handle. Null while progression is still loading; the
-  /// line simply isn't claimed until the server answers.
-  final int? level;
 
   @override
   Widget build(BuildContext context) {
@@ -567,7 +339,6 @@ class _IdentityCard extends StatelessWidget {
     final username = user?.username != null ? '@${user!.username}' : null;
     final initials = user?.avatarInitials ?? '?';
     final photoUrl = user?.profilePhotoUrl;
-    final hasPass = user?.hasMemberPass ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,107 +435,12 @@ class _IdentityCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  if (level != null) ...[
-                    const SizedBox(height: 6),
-                    // The level is status, not helper text — an ice badge
-                    // under the name, the same figure the leaderboard sees.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.panelLight,
-                        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                      ),
-                      child: Text(
-                        'LEVEL $level',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.blue,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: NuvoSpacing.md),
-        Wrap(
-          spacing: NuvoSpacing.sm,
-          runSpacing: NuvoSpacing.sm,
-          children: [
-            if (hasPass)
-              _IdentityChip(
-                icon: Icons.check_circle_rounded,
-                iconColor: NuvoColors.blue,
-                label: 'Member pass',
-                onTap: () => context.go('/pass'),
-              ),
-            _IdentityChip(
-              icon: Icons.qr_code_2_rounded,
-              iconColor: c.ink,
-              label: 'My Nuvo',
-              trailing: true,
-              onTap: () => context.push('/my-nuvo'),
-            ),
-          ],
-        ),
       ],
-    );
-  }
-}
-
-class _IdentityChip extends StatelessWidget {
-  const _IdentityChip({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.onTap,
-    this.trailing = false,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final VoidCallback onTap;
-  final bool trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return PressableScale(
-      onTap: onTap,
-      scale: 0.96,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: c.panelLight,
-          borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: iconColor),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: c.ink,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            if (trailing) ...[
-              const SizedBox(width: 4),
-              NuvoIcon(NuvoIconType.arrow, color: c.inkSubtle, size: 12),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }
@@ -810,149 +486,383 @@ class _NextUnlockArtifact extends StatelessWidget {
 }
 
 /// Persistent progression — the Nuvo Level that belongs to the person,
-/// not any single race — composed on the page's center axis: the level
-/// header, the beam to the next level with the unlock milestone docked
-/// under its finish ring, and the record directly beneath on the open
-/// canvas. Always present: real data fills it, a quiet skeleton holds
-/// its place while the server answers, and an outage reads as a sync
-/// note — never a missing piece of identity.
+/// not any single race: the level header, the beam to the next level and the
+/// XP still owed. The whole plate is tappable — it opens what the level
+/// means and what the next one unlocks. Always present: real data fills it,
+/// a quiet skeleton holds its place while the server answers, and an outage
+/// reads as a sync note — never a missing piece of identity.
 class _LevelTrack extends ConsumerWidget {
-  const _LevelTrack({
-    super.key,
-    required this.state,
-    required this.activeCount,
-    required this.wins,
-    required this.winRate,
-  });
+  const _LevelTrack({super.key, required this.state});
 
   final AsyncValue<NuvoProgression> state;
-  final int activeCount;
-  final int wins;
-  final int? winRate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.themeColors;
     final p = state.valueOrNull;
-    final next = p?.nextUnlock;
+    if (p == null) {
+      return state.hasError
+          ? _ProgressionUnavailable(c: c, ref: ref)
+          : _ProgressionSkeleton(c: c);
+    }
     // Near the threshold the payoff turns gold — level-up is the one gold
     // moment in the progression loop, so the last stretch previews it.
-    final nearNext = (p?.progress ?? 0) >= 0.9;
-    final xpColor = nearNext ? NuvoColors.gold : NuvoColors.blue;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (p == null)
-          state.hasError
-              ? _ProgressionUnavailable(c: c, ref: ref)
-              : _ProgressionSkeleton(c: c)
-        else
-          // A soft ice plate stages the progression system — the header,
-          // beam, caption, and unlock row sit on one quiet support plane,
-          // not a card: no navy edge, no hard offset.
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: c.panelLight,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: c.border.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-          // LEVEL header row — the level figure on the left, the XP
-          // fraction on the right, sharing one baseline.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+    final nearNext = p.progress >= 0.9;
+    final xpColor = nearNext
+        ? context.themeColors.goldText
+        : context.themeColors.accent;
+    return Semantics(
+      button: true,
+      label:
+          'Level ${p.level}. ${p.xpToNext} XP to level ${p.level + 1}. '
+          'Tap to see what each level earns.',
+      child: NuvoPressable(
+        onTap: () => _showLevelExplainer(context, p),
+        scale: 0.99,
+        haptic: false,
+        // The main progression element wears the app's signature physical
+        // edge: ink outline + hard-offset plate, like buttons and cards.
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: c.border, width: 2),
+            boxShadow: AppShadows.hardOffset(c.inkShadow),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'LEVEL ',
+              // LEVEL header row — the level figure on the left, the XP
+              // fraction on the right, sharing one baseline.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'LEVEL ',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: c.ink,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          // The level number is the anchor — the same figure
+                          // the leaderboard sees.
+                          TextSpan(
+                            text: '${p.level}',
+                            style: AppTextStyles.statLarge(
+                              24,
+                              color: context.themeColors.accent,
+                              weight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '${p.currentLevelXp} / ${p.nextLevelXp} XP',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: c.ink,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
+                        color: c.inkSubtle,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    // The level number is the anchor — the same figure
-                    // the leaderboard sees.
-                    TextSpan(
-                      text: '${p.level}',
-                      style: AppTextStyles.statLarge(
-                        24,
-                        color: NuvoColors.blue,
-                        weight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-              const Spacer(),
-              Text(
-                '${p.currentLevelXp} / ${p.nextLevelXp} XP',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: c.inkSubtle,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(height: 8),
+              // The beam — one straight run to the next level.
+              _LevelRoute(level: p.level, progress: p.progress, color: xpColor),
+              const SizedBox(height: 6),
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '${p.xpToNext} XP to Level ${p.level + 1}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: xpColor,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    // The one hint that this plate answers a question.
+                    Icon(Icons.info_outline_rounded, size: 14, color: xpColor),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          // The beam — one straight run to the next level.
-          _LevelRoute(level: p.level, progress: p.progress, color: xpColor),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              '${p.xpToNext} XP to Level ${p.level + 1}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: xpColor,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-              ),
+        ),
+      ),
+    );
+  }
+}
+
+// Mild, readable tints for the XP-source pills: (fill base, text on light,
+// text on dark). One hue per amount; never saturated.
+const _kXpSources = <(String, String, Color, Color, Color)>[
+  (
+    '+10',
+    'Accepted proof',
+    Color(0xFF3B82F6),
+    Color(0xFF1D4ED8),
+    Color(0xFF93C5FD),
+  ),
+  (
+    '+25',
+    'Finish a race',
+    Color(0xFF22C55E),
+    Color(0xFF15803D),
+    Color(0xFF86EFAC),
+  ),
+  (
+    '+15',
+    'Win a race',
+    Color(0xFFF59E0B),
+    Color(0xFF92400E),
+    Color(0xFFFCD34D),
+  ),
+  (
+    '+5',
+    'Personal best',
+    Color(0xFF8B5CF6),
+    Color(0xFF6D28D9),
+    Color(0xFFC4B5FD),
+  ),
+];
+
+class _XpSourceRow extends StatelessWidget {
+  const _XpSourceRow({
+    required this.amount,
+    required this.label,
+    required this.base,
+    required this.textLight,
+    required this.textDark,
+  });
+
+  final String amount;
+  final String label;
+  final Color base;
+  final Color textLight;
+  final Color textDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Container(
+          constraints: const BoxConstraints(minWidth: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: base.withValues(alpha: dark ? 0.22 : 0.16),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            amount,
+            maxLines: 1,
+            style: AppTextStyles.labelLarge.copyWith(
+              color: dark ? textDark : textLight,
+              fontWeight: FontWeight.w900,
             ),
           ),
-          if (next != null) ...[
-            const SizedBox(height: 10),
-            // The next collectible — a compact inline row, not a diagram.
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: c.ink,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// What the level means — XP progress, how XP is earned and what the next
+/// level unlocks. Numbers mirror the server's XP economy (worker
+/// `XP_AWARDS`): +10 accepted proof, +25 finish, +15 win, +5 personal best.
+void _showLevelExplainer(BuildContext context, NuvoProgression p) {
+  final c = context.themeColors;
+  final next = p.nextUnlock;
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: c.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header — level and the XP still owed, with a slim bar.
             Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
               children: [
-                _NextUnlockArtifact(unlock: next),
-                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Level ${p.level}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      color: c.ink,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    next.name,
+                    '${p.xpToNext} XP to Level ${p.level + 1}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: c.ink,
+                      color: context.themeColors.accent,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
               ],
             ),
-          ],
-              ],
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: p.progress.clamp(0.0, 1.0).toDouble(),
+                minHeight: 6,
+                backgroundColor: c.inkMuted.withValues(alpha: 0.16),
+                valueColor: AlwaysStoppedAnimation(context.themeColors.accent),
+              ),
             ),
-          ),
-        const SizedBox(height: 14),
-        // The record — three equal centered columns directly beneath the
-        // progression block.
-        _StatsStrip(activeCount: activeCount, wins: wins, winRate: winRate),
-      ],
-    );
-  }
+            const SizedBox(height: 14),
+            Text(
+              'Earn XP by racing — every level earns something new.',
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+            ),
+            const SizedBox(height: NuvoSpacing.lg),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: c.border.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < _kXpSources.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    _XpSourceRow(
+                      amount: _kXpSources[i].$1,
+                      label: _kXpSources[i].$2,
+                      base: _kXpSources[i].$3,
+                      textLight: _kXpSources[i].$4,
+                      textDark: _kXpSources[i].$5,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: NuvoSpacing.lg),
+            Text(
+              next == null ? 'Everything earned so far' : 'Next reward',
+              style: AppTextStyles.labelLarge.copyWith(
+                color: c.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (next != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: c.border.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    _NextUnlockArtifact(unlock: next),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            next.name,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: c.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if ((next.description ?? '').isNotEmpty)
+                            Text(
+                              next.description!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: c.inkMuted,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Level ${next.level}',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: context.themeColors.accent,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: NuvoSpacing.xl),
+            SizedBox(
+              width: double.infinity,
+              child: NuvoPrimaryButton(
+                label: 'See achievements',
+                expand: true,
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  context.push('/profile/badges');
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// The route itself — a drawn path, not a bar. The climb runs the upper
@@ -1156,25 +1066,19 @@ class _ProgressionSkeleton extends StatelessWidget {
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: c.panelLight,
+        color: c.surface,
         borderRadius: BorderRadius.circular(999),
       ),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            bar(90, 22),
-            const Spacer(),
-            bar(70, 12),
-          ],
-        ),
+        Row(children: [bar(90, 22), const Spacer(), bar(70, 12)]),
         const SizedBox(height: 10),
         Container(
           height: 12,
           decoration: BoxDecoration(
-            color: c.panelLight,
+            color: c.surface,
             borderRadius: BorderRadius.circular(999),
           ),
         ),
@@ -1223,14 +1127,11 @@ class _ProgressionUnavailable extends StatelessWidget {
 
 // ── Achievements section ────────────────────────────────────────────────────
 
-/// The collectible shelf — the collection is part of identity. The count
-/// row is the shelf's navigation FIRST, then each featured artifact sits
-/// on the white canvas with its name fused underneath — icon → label is
-/// one collectible unit. When nothing is earned yet the locked target in
-/// reach fills the slot. Never an empty section — the next goal is the
-/// point.
-class _AchievementsSection extends StatelessWidget {
-  const _AchievementsSection({required this.progression});
+/// The collection as one row: how many are earned, up to three featured
+/// ones, and a chevron — the whole row opens the Achievements screen, where
+/// the next goal, the next unlock and every achievement live.
+class _AchievementsRow extends StatelessWidget {
+  const _AchievementsRow({required this.progression});
 
   final NuvoProgression? progression;
 
@@ -1238,333 +1139,61 @@ class _AchievementsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final p = progression;
-    if (p == null) return const SizedBox.shrink();
-
-    final featured = p.featuredBadges;
-    final next = p.nextAchievement;
-    // The shelf always reads as a trio — empty seats stay as quiet
-    // outlines waiting for their object.
-    final slots = math.max(3, p.featuredSlots);
-    if (featured.isEmpty && next == null && p.achievementsTotal == 0) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // The shelf's header — the count and the path to the full set.
-        NuvoPressable(
-          onTap: () => context.push('/profile/badges'),
-          scale: 0.98,
-          haptic: false,
+    if (p == null || p.achievementsTotal == 0) return const SizedBox.shrink();
+    final featured = p.featuredBadges.take(3).toList();
+    return Semantics(
+      button: true,
+      label:
+          'Achievements, ${p.achievementsEarned} of '
+          '${p.achievementsTotal} earned. Tap to see all.',
+      child: NuvoPressable(
+        onTap: () => context.push('/profile/badges'),
+        scale: 0.99,
+        haptic: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.card),
+          ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
             children: [
-              Flexible(
-                child: Text(
-                  'Achievements',
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: c.ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${p.achievementsEarned} / ${p.achievementsTotal}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: c.inkSubtle,
-                  fontWeight: FontWeight.w800,
-                ),
-                maxLines: 1,
-              ),
-              const SizedBox(width: 4),
-              const NuvoIcon(
-                NuvoIconType.arrow,
-                color: NuvoColors.blue,
-                size: 12,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        // The shelf holds fixed positions: earned artifacts take seats
-        // first, the next target fills the first empty seat locked, and
-        // seats beyond it stay as quiet outlines — a shelf with space
-        // left to fill, never one item stretched across the page. A soft
-        // ice rail runs behind the badge row so the slots read as mounts,
-        // while the names stay on the white canvas beneath.
-        Stack(
-          children: [
-            Positioned(
-              top: -4,
-              left: -4,
-              right: -4,
-              height: 66,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: c.panelLight,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-            ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var i = 0; i < slots; i++) ...[
               Expanded(
-                child: PressableScale(
-                  scale: 0.94,
-                  onTap: () => context.push('/profile/badges'),
-                  child: _ShelfSlot(
-                    badge: i < featured.length
-                        ? featured[i]
-                        : i == featured.length
-                        ? next
-                        : null,
-                    // A 4px drop on the center trophy keeps a full trio
-                    // reading as collectibles, not a tab bar.
-                    dropped: featured.length >= 3 && i == 1,
-                  ),
-                ),
-              ),
-              if (i < slots - 1)
-                const SizedBox(width: NuvoSpacing.sm),
-            ],
-          ],
-        ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// One seat on the collectible shelf — an earned artifact with its name
-/// fused beneath, the locked next target in the first open seat, or a
-/// quiet outlined seat still waiting for its object.
-class _ShelfSlot extends StatelessWidget {
-  const _ShelfSlot({required this.badge, this.dropped = false});
-
-  /// Null renders an empty seat — the shelf keeps its rhythm even before
-  /// anything is earned.
-  final NuvoBadge? badge;
-  final bool dropped;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final b = badge;
-    final earned = b != null && b.unlocked;
-    return Column(
-      children: [
-        Transform.translate(
-          offset: Offset(0, dropped ? 4 : 0),
-          child: b != null
-              ? NuvoAchievementBadge(badge: b, size: 56)
-              : Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: c.page.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(17),
-                    border: Border.all(
-                      color: c.border.withValues(alpha: 0.35),
-                      width: 1.5,
-                    ),
-                  ),
-                ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          b?.name ?? ' ',
-          style: AppTextStyles.labelSmall.copyWith(
-            // Earned names carry the badge's family accent — gold for a
-            // win, blue for depth, teal for a PB, violet for creation.
-            // A locked seat stays muted.
-            color: earned ? nuvoBadgeAccent(b) : c.inkMuted,
-            fontWeight: FontWeight.w700,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
-// ── Next up ───────────────────────────────────────────────────────────────────
-
-/// The one goal in reach — an active challenge, not metadata: a locked
-/// achievement with live canonical progress that taps straight back into
-/// racing. No card — the goal rows live on the page like the rest of the
-/// identity.
-class _NextUpCard extends StatelessWidget {
-  const _NextUpCard({required this.progression});
-
-  final NuvoProgression? progression;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final next = progression?.nextAchievement;
-    if (next == null) return const SizedBox.shrink();
-    final accent = nuvoBadgeAccent(next);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              'NEXT UP',
-              style: AppTextStyles.labelUppercase(
-                10,
-                color: c.inkSubtle,
-              ).copyWith(color: c.inkSubtle),
-            ),
-            const Spacer(),
-            NuvoPressable(
-              onTap: () => context.go('/compete'),
-              haptic: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Race toward it',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.blue,
+                      'Achievements',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.sectionTitle.copyWith(
+                        color: c.ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 2),
-                    const Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 13,
-                      color: NuvoColors.blue,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: NuvoSpacing.sm),
-        // The whole strip is the mission — tap it and you're back in a race
-        // earning toward the goal. No badge here: the count and the progress
-        // line are the anchors, the artifact only exists once it's earned.
-        NuvoPressable(
-          onTap: () => context.go('/compete'),
-          scale: 0.99,
-          haptic: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // A short mission rail in the goal's own accent —
-                    // bounded to the mission block (name → progress bar),
-                    // never a full-height divider.
-                    Container(
-                      width: 3,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(1.5),
-                      ),
-                    ),
-                    const SizedBox(width: NuvoSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  next.name,
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: c.ink,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (next.threshold != null) ...[
-                                const SizedBox(width: NuvoSpacing.sm),
-                                Text(
-                                  '${next.progressValue} / ${next.threshold}',
-                                  style: AppTextStyles.statLarge(
-                                    15,
-                                    color: accent,
-                                    weight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          if (next.description != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              next.description!,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: c.inkMuted,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                          if (next.threshold != null) ...[
-                            const SizedBox(height: NuvoSpacing.sm),
-                            NuvoProgressBar(
-                              value: next.goalProgress,
-                              height: 10,
-                              color: NuvoColors.blue,
-                              trackColor: c.track,
-                            ),
-                          ],
-                        ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '${p.achievementsEarned} of ${p.achievementsTotal} '
+                      'earned · see all',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: c.inkMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (next.threshold != null &&
-                  next.threshold! - next.progressValue == 1) ...[
-                const SizedBox(height: 6),
-                // One-to-go rides below the rail — indented to the
-                // mission column, not bounded by it.
-                Padding(
-                  padding: const EdgeInsets.only(left: NuvoSpacing.md + 3),
-                  child: Text(
-                    switch (next.statKey) {
-                      'wins' => 'ONE MORE WIN',
-                      'races' => 'ONE MORE RACE',
-                      'proofs' => 'ONE MORE PROOF',
-                      _ => 'ONE TO GO',
-                    },
-                    style: AppTextStyles.labelUppercase(
-                      10,
-                    ).copyWith(color: accent),
-                  ),
-                ),
+              for (final badge in featured) ...[
+                const SizedBox(width: 6),
+                NuvoAchievementBadge(badge: badge, size: 34),
               ],
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1595,10 +1224,14 @@ class _StatsStrip extends StatelessWidget {
         _HeaderStat(
           value: activeCount,
           label: 'RACING',
-          color: NuvoColors.blue,
+          color: context.themeColors.accent,
         ),
         _HeaderDivider(),
-        _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
+        _HeaderStat(
+          value: wins,
+          label: 'WINS',
+          color: context.themeColors.goldText,
+        ),
         _HeaderDivider(),
         _HeaderStat(
           value: winRate,
@@ -1682,610 +1315,11 @@ class _HeaderDivider extends StatelessWidget {
 
 // ── Racing-now shelf — horizontal race tiles ─────────────────────────────────
 
-/// Racing now as a horizontal SHELF — live races are objects in motion,
-/// each on its own soft ice tile ~78% of the content width so the next
-/// one always peeks off the right edge. See all drops into the vertical
-/// inset list for the full set; the section header and count stay put.
-class _RaceShelf extends StatelessWidget {
-  const _RaceShelf({
-    required this.label,
-    required this.races,
-    required this.userId,
-    required this.expanded,
-    required this.onToggleExpand,
-  });
-
-  final String label;
-  final List<Race> races;
-  final String? userId;
-  final bool expanded;
-  final VoidCallback onToggleExpand;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final hasMore = races.length > 1;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Flexible(
-              child: Text(
-                '$label · ${races.length}',
-                style: AppTextStyles.sectionTitle.copyWith(color: c.ink),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const Spacer(),
-            if (hasMore)
-              NuvoPressable(
-                onTap: onToggleExpand,
-                haptic: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    expanded ? 'Show less' : 'See all',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: c.ink,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: NuvoSpacing.sm),
-        if (expanded)
-          _ProfileRaceGroup(races: races, userId: userId, inset: true)
-        else
-          // The shelf — tiles sized so one is never alone: ~78% leaves
-          // the next race visibly peeking off the right edge.
-          LayoutBuilder(
-            builder: (context, cons) {
-              final tileW = cons.maxWidth * 0.78;
-              return SizedBox(
-                height: 152,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.only(right: cons.maxWidth - tileW),
-                  itemCount: races.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(width: NuvoSpacing.sm),
-                  itemBuilder: (context, i) => Container(
-                    width: tileW,
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: c.border, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: c.inkShadow,
-                          offset: const Offset(2.5, 2.5),
-                          blurRadius: 0,
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.md,
-                    ),
-                    child: _buildProfileRaceRow(
-                      context,
-                      races[i],
-                      userId: userId,
-                      onInset: true,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-}
-
-class _RaceSection extends StatelessWidget {
-  const _RaceSection({
-    required this.label,
-    required this.races,
-    required this.userId,
-    required this.expanded,
-    required this.cap,
-    required this.onToggleExpand,
-  });
-
-  final String label;
-  final List<Race> races;
-  final String? userId;
-  final bool expanded;
-  final int cap;
-  final VoidCallback onToggleExpand;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final visible = expanded ? races : races.take(cap).toList();
-    final hasMore = races.length > cap;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Flexible(
-              child: Text(
-                '$label · ${races.length}',
-                style: AppTextStyles.sectionTitle.copyWith(color: c.ink),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const Spacer(),
-            if (hasMore)
-              NuvoPressable(
-                onTap: onToggleExpand,
-                haptic: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    expanded ? 'Show less' : 'See all',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: c.ink,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: NuvoSpacing.sm),
-        _ProfileRaceGroup(races: visible, userId: userId),
-      ],
-    );
-  }
-}
-
-class _ProfileRaceGroup extends StatelessWidget {
-  const _ProfileRaceGroup({
-    required this.races,
-    this.userId,
-    this.inset = false,
-  });
-
-  final List<Race> races;
-  final String? userId;
-
-  /// Live races get a local surface — each row is an object in motion on a
-  /// soft ice inset. History stays flat on the page with hairlines.
-  final bool inset;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    if (inset) {
-      return Column(
-        children: [
-          for (var i = 0; i < races.length; i++)
-            Padding(
-              padding: EdgeInsets.only(bottom: i < races.length - 1 ? 10 : 0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: c.panelLight,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.md),
-                child: _buildRow(context, races[i]),
-              ),
-            ),
-        ],
-      );
-    }
-    // Structured-compact level: rows sit on the page under the section
-    // title — no enclosing sheet. The only separator is a hairline aligned
-    // to the shared text column, past the 44px placement/icon column.
-    return Column(
-      children: [
-        for (var i = 0; i < races.length; i++) ...[
-          _buildRow(context, races[i]),
-          if (i < races.length - 1)
-            Divider(height: 1, thickness: 1, indent: 52, color: c.divider),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildRow(BuildContext context, Race race) =>
-      _buildProfileRaceRow(context, race, userId: userId, onInset: inset);
-}
-
-/// One race row — active or finished — derived identically for the flat
-/// history list and the Racing-now shelf tiles. Placement, progress lane,
-/// and remaining context all come from the canonical helpers; nothing
-/// here changes what a race means.
-Widget _buildProfileRaceRow(
-  BuildContext context,
-  Race race, {
-  String? userId,
-  bool onInset = false,
-}) {
-  final uid = userId;
-  final myPart = uid != null ? race.participantFor(uid) : null;
-  final pct = raceProgressPercent(race, myPart);
-  final rank = rankForUser(race, userId);
-  final activity = raceActivityTitle(race);
-  final progressLabel = raceProgressLabel(race, myPart);
-  final isComplete = raceIsCompleted(race);
-
-  final avatars = race.participants.where((p) => p.userId != userId).map((p) {
-    final name = p.displayName.trim();
-    final initials = name.isEmpty
-        ? '?'
-        : name
-              .split(RegExp(r'\s+'))
-              .where((w) => w.isNotEmpty)
-              .take(2)
-              .map((w) => w[0].toUpperCase())
-              .join();
-    return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
-  }).toList();
-
-  if (isComplete) {
-    return _ResultTile(
-      raceTitle: race.displayTitle,
-      movementLabel: activity,
-      scoreLabel: myPart != null
-          ? raceScoreLabel(race, myPart.progressValue)
-          : null,
-      rank: rank,
-      participantCount: race.participantCount,
-      avatars: avatars,
-      onTap: () => context.push('/race/${race.id}'),
-    );
-  }
-
-  // Derived context for an in-flight race: how far I still have to go,
-  // formatted through the canonical metric formatter ("11 reps", "0:45").
-  // Falls back to the activity name when the goal isn't a fixed target
-  // or I'm already at the line.
-  final target = race.targetValue;
-  final remaining =
-      target != null && myPart != null && target > myPart.progressValue
-      ? raceScoreLabel(race, target - myPart.progressValue)
-      : null;
-
-  // Quick lane — the viewer's mark plus the racer directly ahead. Lower-
-  // wins and best-attempt races get the relative-competition lane (no
-  // finish ring) from the shared geometry helper.
-  final geo = raceLaneGeometry(race, userId);
-  final rival = raceNearestRival(race, userId);
-  final rivalMark = rival == null
-      ? null
-      : geo.rivals.where((r) => r.racer.userId == rival.userId).firstOrNull;
-  final leading = rank == 1;
-  final c = context.themeColors;
-
-  return _ActiveRaceTile(
-    raceTitle: race.displayTitle,
-    movementLabel: activity,
-    icon: raceActivityDefinition(race)?.icon ?? Icons.fitness_center_rounded,
-    progressLabel: progressLabel,
-    progressPercent: pct,
-    remainingLabel: remaining,
-    rank: rank,
-    participantCount: race.participantCount,
-    avatars: avatars,
-    trackMarkers: geo.viewer == null
-        ? null
-        : [
-            if (rivalMark != null)
-              RaceTrackMarker(
-                fraction: rivalMark.fraction,
-                label: rival!.displayName.split(' ').first,
-                color: c.ink,
-              ),
-            RaceTrackMarker(
-              fraction: geo.viewer!,
-              label: 'You',
-              color: leading ? NuvoColors.success : NuvoColors.actionBlue,
-              isViewer: true,
-              haloColor: leading ? NuvoColors.success : null,
-            ),
-          ],
-    hasGoal: geo.hasGoal,
-    onInset: onInset,
-    onTap: () => context.push('/race/${race.id}'),
-  );
-}
-
 // ── Active race tile — progress is the headline ─────────────────────────────
-
-/// "Racing now" row — the shared QUICK view ([RaceRow]) with Profile's
-/// movement-icon leading column, matching _ResultTile's 44px gutter.
-class _ActiveRaceTile extends StatelessWidget {
-  const _ActiveRaceTile({
-    required this.raceTitle,
-    required this.movementLabel,
-    required this.icon,
-    required this.progressLabel,
-    required this.progressPercent,
-    required this.rank,
-    required this.participantCount,
-    required this.avatars,
-    required this.onTap,
-    this.remainingLabel,
-    this.trackMarkers,
-    this.hasGoal = true,
-    this.onInset = false,
-  });
-
-  final String raceTitle;
-  final String movementLabel;
-  final IconData icon;
-  final String progressLabel;
-  final int progressPercent;
-  final int? rank;
-  final int participantCount;
-  final List<({String initials, String? photoUrl, String id})> avatars;
-  final VoidCallback onTap;
-
-  /// "11 reps" remaining to the finish line — derived from the canonical
-  /// target, shown instead of the activity label when it exists.
-  final String? remainingLabel;
-
-  /// Viewer + nearest-rival marks for the quick lane.
-  final List<RaceTrackMarker>? trackMarkers;
-
-  /// Whether the lane ends in a finish ring — false for best-attempt and
-  /// lower-wins races.
-  final bool hasGoal;
-
-  /// True when the row sits on a tinted inset — the icon well lifts to the
-  /// page surface so it stays visible against the ice field.
-  final bool onInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return RaceRow(
-      raceTitle: raceTitle,
-      movementLabel: movementLabel,
-      progressLabel: progressLabel,
-      progressPercent: progressPercent,
-      rank: rank,
-      participantCount: participantCount,
-      avatars: avatars,
-      onTap: onTap,
-      trackMarkers: trackMarkers,
-      hasGoal: hasGoal,
-      remainingLabel: remainingLabel == null
-          ? null
-          : '$remainingLabel to finish',
-      // The racing-now section already owns the horizontal gutter.
-      padding: const EdgeInsets.symmetric(vertical: NuvoSpacing.md),
-      // The 44px leading column matches _ResultTile's placement column —
-      // every text column in the list shares one gutter.
-      leading: SizedBox(
-        width: 44,
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: onInset ? c.surface : c.panelLight,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: c.ink, size: 18),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Result tile — placement earned ───────────────────────────────────────────
 
-/// Finished race row. A win reads as achievement — gold placement block,
-/// trophy mark — while every other placement stays neutral. No progress
-/// track: the absence of movement says the race is over.
-class _ResultTile extends StatelessWidget {
-  const _ResultTile({
-    required this.raceTitle,
-    required this.movementLabel,
-    required this.scoreLabel,
-    required this.rank,
-    required this.participantCount,
-    required this.avatars,
-    required this.onTap,
-  });
-
-  final String raceTitle;
-  final String movementLabel;
-  final String? scoreLabel;
-  final int? rank;
-  final int participantCount;
-  final List<({String initials, String? photoUrl, String id})> avatars;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final won = rank == 1;
-    final meta = scoreLabel != null
-        ? '$scoreLabel · $participantCount '
-              '${participantCount == 1 ? 'racer' : 'racers'}'
-        : '$movementLabel · $participantCount '
-              '${participantCount == 1 ? 'racer' : 'racers'}';
-
-    return Semantics(
-      button: true,
-      label: raceTitle,
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(vertical: NuvoSpacing.md),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 44,
-                child: Column(
-                  children: [
-                    if (won) ...[
-                      const Icon(
-                        Icons.emoji_events_rounded,
-                        size: 15,
-                        color: NuvoColors.gold,
-                      ),
-                      const SizedBox(height: 1),
-                    ],
-                    Text(
-                      rank != null ? _ordinalLabel(rank!) : '--',
-                      style: AppTextStyles.placementLabel(
-                        color: won ? NuvoColors.gold : c.inkSubtle,
-                        size: won ? 14 : 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      raceTitle,
-                      style: AppTextStyles.raceRowTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      meta,
-                      style: AppTextStyles.raceRowMeta.copyWith(
-                        color: context.themeColors.inkSubtle,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (avatars.isNotEmpty) ...[
-                const SizedBox(width: NuvoSpacing.sm),
-                RacePeople(
-                  avatars: avatars,
-                  total: participantCount,
-                  size: 22,
-                  max: 3,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _ordinalLabel(int n) {
-  if (n % 100 >= 11 && n % 100 <= 13) return '${n}TH';
-  return switch (n % 10) {
-    1 => '${n}ST',
-    2 => '${n}ND',
-    3 => '${n}RD',
-    _ => '${n}TH',
-  };
-}
-
 // ── Best finish — one earned mark, compact ────────────────────────────────────
-
-/// The strongest placement I've ever reached — gold when it's a win,
-/// neutral otherwise. A slim module, not a card competing with the result
-/// rows above it. Only renders when canonical standings say something.
-class _BestFinishRow extends StatelessWidget {
-  const _BestFinishRow({
-    required this.race,
-    required this.rank,
-    this.scoreLabel,
-  });
-
-  final Race race;
-  final int rank;
-  final String? scoreLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final won = rank == 1;
-
-    return Semantics(
-      button: true,
-      label: 'Best finish — ${_ordinalLabel(rank)} in ${race.displayTitle}',
-      child: PressableScale(
-        onTap: () => context.push('/race/${race.id}'),
-        scale: 0.985,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              Icon(
-                won ? Icons.emoji_events_rounded : Icons.military_tech_rounded,
-                size: 17,
-                color: won ? NuvoColors.gold : c.inkMuted,
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              Text(
-                'BEST FINISH',
-                style: AppTextStyles.labelUppercase(
-                  10,
-                  color: won ? NuvoColors.gold : c.inkSubtle,
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              Expanded(
-                child: Text(
-                  '${_ordinalLabel(rank)} · ${race.displayTitle}',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: c.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (scoreLabel != null) ...[
-                const SizedBox(width: NuvoSpacing.sm),
-                Text(
-                  scoreLabel!,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: c.ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _ProfileActionGroup extends StatelessWidget {
   const _ProfileActionGroup({required this.children});
@@ -2335,7 +1369,7 @@ class _PresentationModeRow extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: c.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.slideshow_rounded, color: c.ink, size: 17),
@@ -2387,7 +1421,7 @@ class _AppearanceRow extends ConsumerWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: c.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -2518,7 +1552,7 @@ class _MotionConsentRowState extends ConsumerState<_MotionConsentRow> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: c.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.motion_photos_on_rounded, color: c.ink, size: 17),
@@ -2565,7 +1599,7 @@ class _AccountRow extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  /// Quiet context under the label ("Race and crew updates").
+  /// Quiet context under the label ("Race and friend updates").
   final String? subtitle;
 
   /// The one destructive treatment — red, reserved for Delete account.
@@ -2578,10 +1612,10 @@ class _AccountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final color = isDanger ? NuvoColors.danger : c.ink;
+    final color = isDanger ? context.themeColors.dangerText : c.ink;
     final bg = isDanger
         ? NuvoColors.danger.withValues(alpha: 0.10)
-        : c.panelLight;
+        : c.surface;
     final navigates = !isDanger && !isAction;
 
     return PressableScale(

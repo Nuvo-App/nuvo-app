@@ -34,13 +34,13 @@ const Map<BodyRegion, List<String>> kRegionJoints = {
 };
 
 String bodyRegionLabel(BodyRegion r) => switch (r) {
-      BodyRegion.head => 'head',
-      BodyRegion.leftArm => 'left arm',
-      BodyRegion.rightArm => 'right arm',
-      BodyRegion.torso => 'torso',
-      BodyRegion.leftLeg => 'left leg',
-      BodyRegion.rightLeg => 'right leg',
-    };
+  BodyRegion.head => 'head',
+  BodyRegion.leftArm => 'left arm',
+  BodyRegion.rightArm => 'right arm',
+  BodyRegion.torso => 'torso',
+  BodyRegion.leftLeg => 'left leg',
+  BodyRegion.rightLeg => 'right leg',
+};
 
 class PoseQuality {
   const PoseQuality({
@@ -93,23 +93,29 @@ class PoseQuality {
   );
 
   Map<String, dynamic> toJson() => {
-        'readiness': readiness.name,
-        'guidance': guidance,
-        'trackable': trackable,
-        'visibleFraction': double.parse(visibleFraction.toStringAsFixed(3)),
-        'bodyFillFraction': double.parse(bodyFillFraction.toStringAsFixed(3)),
-        'missingRegions': [for (final r in missingRegions) bodyRegionLabel(r)],
-      };
+    'readiness': readiness.name,
+    'guidance': guidance,
+    'trackable': trackable,
+    'visibleFraction': double.parse(visibleFraction.toStringAsFixed(3)),
+    'bodyFillFraction': double.parse(bodyFillFraction.toStringAsFixed(3)),
+    'missingRegions': [for (final r in missingRegions) bodyRegionLabel(r)],
+  };
 }
 
 const List<String> _coreJoints = [
   'nose',
-  'leftShoulder', 'rightShoulder',
-  'leftElbow', 'rightElbow',
-  'leftWrist', 'rightWrist',
-  'leftHip', 'rightHip',
-  'leftKnee', 'rightKnee',
-  'leftAnkle', 'rightAnkle',
+  'leftShoulder',
+  'rightShoulder',
+  'leftElbow',
+  'rightElbow',
+  'leftWrist',
+  'rightWrist',
+  'leftHip',
+  'rightHip',
+  'leftKnee',
+  'rightKnee',
+  'leftAnkle',
+  'rightAnkle',
 ];
 
 const double _minLikelihood = 0.35;
@@ -119,7 +125,8 @@ const double _torsoTooFar = 0.14; // person is tiny / unreliable
 const double _torsoTooClose = 0.62; // person fills the frame
 const double _fillTooClose = 0.95;
 const double _edge = 0.02;
-const double _rootJitterUnstable = 0.05; // per-frame root move over recent window
+const double _rootJitterUnstable =
+    0.05; // per-frame root move over recent window
 
 ({double x, double y})? _p(NuvoPoseFrame f, String name) {
   final pt = f.points[name];
@@ -180,8 +187,10 @@ PoseQuality evaluatePoseQuality(
   final hipCenter = _mid(frame, 'leftHip', 'rightHip');
   final shoulderCenter = _mid(frame, 'leftShoulder', 'rightShoulder');
   if (hipCenter == null || shoulderCenter == null) {
-    return build(PoseReadiness.lowVisibility,
-        'Make sure your head, shoulders and hips are visible');
+    return build(
+      PoseReadiness.lowVisibility,
+      'Make sure your head, shoulders and hips are visible',
+    );
   }
 
   final torso = math.sqrt(
@@ -230,7 +239,11 @@ PoseQuality evaluatePoseQuality(
       prev = r;
     }
     if (maxJump > _rootJitterUnstable) {
-      return build(PoseReadiness.unstable, 'Hold still for a moment', trackable: true);
+      return build(
+        PoseReadiness.unstable,
+        'Hold still for a moment',
+        trackable: true,
+      );
     }
   }
 

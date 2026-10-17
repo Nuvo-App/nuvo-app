@@ -50,25 +50,85 @@ class NuvoIconBadge extends StatelessWidget {
 
 // ── NuvoPill ──────────────────────────────────────────────────────────────────
 
-/// Inline status / label pill.
+/// Semantic meaning of a [NuvoPill]. See docs/COLOR_SYSTEM.md.
+enum NuvoPillRole {
+  /// Blue: selected, info, admin, AI.
+  info,
+
+  /// Green: live, active, verified, accepted, leading.
+  success,
+
+  /// Orange: pending, waiting, needs attention.
+  warning,
+
+  /// Gold: 1st place, levels, streaks, owner, you.
+  gold,
+
+  /// Red: destructive, rejected, blocked, cancelled.
+  danger,
+}
+
+/// Inline status / label pill. Pass [role] for a solid semantic fill with
+/// readable text; otherwise the legacy tinted [color] style is used.
 class NuvoPill extends StatelessWidget {
   const NuvoPill({
     super.key,
     required this.label,
     this.color = NuvoColors.blue,
     this.onDark = false,
+    this.role,
   });
 
   final String label;
   final Color color;
   final bool onDark;
+  final NuvoPillRole? role;
 
   @override
   Widget build(BuildContext context) {
+    final r = role;
+    if (r != null) {
+      final (Color fill, Color fg) = switch (r) {
+        NuvoPillRole.info => (NuvoColors.actionBlue, NuvoColors.white),
+        NuvoPillRole.success => (NuvoColors.success, NuvoColors.inkNavy),
+        NuvoPillRole.warning => (NuvoColors.warning, NuvoColors.inkNavy),
+        NuvoPillRole.gold => (NuvoColors.gold, NuvoColors.inkNavy),
+        NuvoPillRole.danger => (NuvoColors.danger, NuvoColors.white),
+      };
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: fg,
+            fontWeight: FontWeight.w800,
+            fontSize: 10,
+          ),
+        ),
+      );
+    }
     final bg = onDark
         ? color.withValues(alpha: 0.18)
         : color.withValues(alpha: 0.09);
-    final text = onDark ? NuvoColors.white : color;
+    final tc = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final text = onDark
+        ? NuvoColors.white
+        : !dark
+        ? color
+        : color == NuvoColors.blue
+        ? tc.accent
+        : color == NuvoColors.success
+        ? tc.successText
+        : color == NuvoColors.danger
+        ? tc.dangerText
+        : color == NuvoColors.warning
+        ? tc.warningText
+        : color;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -86,50 +146,6 @@ class NuvoPill extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ── NuvoBackplateCard ─────────────────────────────────────────────────────────
-
-/// Hero / premium surface with controlled Nuvo elevation.
-class NuvoBackplateCard extends StatelessWidget {
-  const NuvoBackplateCard({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(20),
-    this.color,
-    this.radius = 24.0,
-    this.onTap,
-    this.shadowOpacity = 0.70,
-  });
-
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final Color? color;
-  final double radius;
-  final VoidCallback? onTap;
-  final double shadowOpacity;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final card = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? c.surface,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: c.border, width: 1.25),
-        boxShadow: shadowOpacity == 0
-            ? null
-            : AppShadows.hardOffset(c.inkShadow, offset: const Offset(5, 5)),
-      ),
-      child: child,
-    );
-
-    if (onTap != null) {
-      return PressableScale(onTap: onTap, child: card);
-    }
-    return card;
   }
 }
 
@@ -305,7 +321,7 @@ class NuvoActionTile extends StatelessWidget {
             width: iconBadgeSize,
             height: iconBadgeSize,
             decoration: BoxDecoration(
-              color: iconBg ?? c.panelLight,
+              color: iconBg ?? c.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: c.border, width: 1),
             ),
@@ -477,7 +493,7 @@ class NuvoStatTile extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.headlineMedium.copyWith(
-              color: NuvoColors.blue,
+              color: context.themeColors.accent,
             ),
           ),
           const SizedBox(height: 3),
@@ -487,51 +503,6 @@ class NuvoStatTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ── NuvoPageHeader ────────────────────────────────────────────────────────────
-
-/// Tab-screen page header: large bold title, optional subtitle, optional trailing.
-/// A single blue accent line at the top instead of multi-colored dots.
-class NuvoPageHeader extends StatelessWidget {
-  const NuvoPageHeader({
-    super.key,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppTextStyles.displaySmall),
-              if (subtitle != null) ...[
-                const SizedBox(height: 5),
-                Text(
-                  subtitle!,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: c.inkMuted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
-      ],
     );
   }
 }
@@ -695,7 +666,7 @@ class NuvoTextInput extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
+              borderSide: BorderSide(color: c.accent, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
@@ -711,7 +682,7 @@ class NuvoTextInput extends StatelessWidget {
               color: c.inkMuted,
             ),
             errorStyle: AppTextStyles.bodySmall.copyWith(
-              color: NuvoColors.danger,
+              color: c.dangerText,
             ),
           ),
         ),
@@ -785,7 +756,7 @@ class NuvoSearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
+          borderSide: BorderSide(color: c.accent, width: 2),
         ),
       ),
     );

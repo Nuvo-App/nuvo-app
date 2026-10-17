@@ -159,7 +159,7 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-      expect(find.text('Waiting for crew'), findsOneWidget);
+      expect(find.text('Waiting for friends'), findsOneWidget);
       expect(find.textContaining('3 races'), findsOneWidget);
     });
 

@@ -136,34 +136,30 @@ Widget _buildApp(RaceRepository repo) {
 void main() {
   group('Compete IA (Variant B)', () {
     testWidgets(
-      '1 active race: Continue competing shows, no Your races section',
+      '1 active race: shown under Your races, no hero card',
       (tester) async {
         await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
         await tester.pumpAndSettle();
 
-        // Continue competing card should show the race title.
         expect(find.text('Pushup Race'), findsOneWidget);
-        // No "Your races" section label (only 1 race, it's in Continue competing).
-        expect(find.textContaining('Your races'), findsNothing);
+        expect(find.text('Continue competing'), findsNothing);
+        expect(find.textContaining('Your races'), findsOneWidget);
       },
     );
 
     testWidgets(
-      '5 active races: Continue competing + 3 capped rows + See all',
+      '5 active races: 3 capped rows + See all',
       (tester) async {
         await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
         await tester.pumpAndSettle();
 
-        // Continue competing shows first race.
-        expect(find.textContaining('Race 1'), findsOneWidget);
-        // "Your races" section with 4 remaining (5 - 1 featured).
         expect(find.textContaining('Your races'), findsOneWidget);
-        // 3 capped rows visible (Race 2, Race 3, Race 4).
+        // 3 capped rows visible (Race 1, Race 2, Race 3).
+        expect(find.textContaining('Race 1'), findsOneWidget);
         expect(find.textContaining('Race 2'), findsOneWidget);
         expect(find.textContaining('Race 3'), findsOneWidget);
-        expect(find.textContaining('Race 4'), findsOneWidget);
-        // Race 5 should NOT be visible (capped at 3).
-        expect(find.textContaining('Race 5'), findsNothing);
+        // Race 4 should NOT be visible (capped at 3).
+        expect(find.textContaining('Race 4'), findsNothing);
         // "See all" should be visible.
         expect(find.text('See all'), findsOneWidget);
       },
@@ -173,14 +169,12 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(40))));
       await tester.pumpAndSettle();
 
-      // Continue competing shows first race.
-      expect(find.textContaining('Race 1'), findsOneWidget);
       // 3 capped rows visible.
+      expect(find.textContaining('Race 1'), findsOneWidget);
       expect(find.textContaining('Race 2'), findsOneWidget);
       expect(find.textContaining('Race 3'), findsOneWidget);
-      expect(find.textContaining('Race 4'), findsOneWidget);
-      // Race 5 should NOT be visible.
-      expect(find.textContaining('Race 5'), findsNothing);
+      // Race 4 should NOT be visible.
+      expect(find.textContaining('Race 4'), findsNothing);
       // "See all" should be visible.
       expect(find.text('See all'), findsOneWidget);
     });
@@ -189,15 +183,15 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
 
-      // Initially Race 5 is hidden.
-      expect(find.textContaining('Race 5'), findsNothing);
+      // Initially Race 4 is hidden.
+      expect(find.textContaining('Race 4'), findsNothing);
 
       // Tap "See all".
       await tester.tap(find.text('See all'));
       await tester.pumpAndSettle();
 
-      // Now Race 5 should be visible.
-      expect(find.textContaining('Race 5'), findsOneWidget);
+      // Now Race 4 should be visible.
+      expect(find.textContaining('Race 4'), findsOneWidget);
       // "Show less" should be visible.
       expect(find.text('Show less'), findsOneWidget);
     });
@@ -271,7 +265,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Waiting for crew summary row shows count', (tester) async {
+    testWidgets('Waiting for friends summary row shows count', (tester) async {
       // Races with 1 participant (waiting for crew).
       final waiting = [
         _cameraRace(id: 'w1', title: 'Pushup Waiting 1', participantCount: 1),
@@ -285,8 +279,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Waiting for crew'), findsOneWidget);
-      expect(find.textContaining('2 races need crew'), findsOneWidget);
+      expect(find.text('Waiting for friends'), findsOneWidget);
+      expect(find.textContaining('2 races need friends'), findsOneWidget);
     });
 
     testWidgets('Finished summary row shows count', (tester) async {

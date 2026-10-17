@@ -10,8 +10,8 @@ class NotificationRepository {
   final SecureTokenStore _store;
   final AuthApi _authApi;
 
-  Future<NotificationPage> list({String? cursor}) =>
-      _withRefresh((t) => _api.list(t, cursor: cursor));
+  Future<NotificationPage> list({String? cursor, String? etag}) =>
+      _withRefresh((t) => _api.list(t, cursor: cursor, etag: etag));
   Future<void> markRead(String id) => _withRefresh((t) => _api.markRead(t, id));
   Future<void> markAllRead() => _withRefresh(_api.markAllRead);
 

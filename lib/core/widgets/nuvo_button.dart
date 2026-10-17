@@ -337,18 +337,6 @@ class NuvoPrimaryButton extends StatelessWidget {
   }
 }
 
-class NuvoBlueButton extends NuvoPrimaryButton {
-  const NuvoBlueButton({
-    super.key,
-    required super.label,
-    super.onPressed,
-    super.icon,
-    super.expand,
-    super.loading,
-    super.small,
-  });
-}
-
 typedef NuvoBackplateButton = NuvoPrimaryButton;
 
 // ── Secondary (outline) ──────────────────────────────────────────────────────
@@ -557,7 +545,7 @@ class NuvoTertiaryButton extends StatelessWidget {
       context: context,
       height: height ?? (small ? 44 : 52),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: c.panel,
+      color: c.surface,
       borderColor: c.divider,
       // 2d: outline only, no drop shadow (kept for API compatibility — the
       // shell's 3px default still applies).

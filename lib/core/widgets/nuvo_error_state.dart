@@ -37,9 +37,9 @@ class NuvoErrorState extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: Border.all(color: NuvoColors.danger, width: 2),
+                border: Border.all(color: c.dangerText, width: 2),
               ),
-              child: Icon(icon, size: 22, color: NuvoColors.danger),
+              child: Icon(icon, size: 22, color: c.dangerText),
             ),
             const SizedBox(height: 16),
             Text(title, style: AppTextStyles.titleLarge, textAlign: TextAlign.center),
@@ -78,7 +78,7 @@ class NuvoOfflineBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: c.panel,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
         border: Border.all(color: c.border, width: 1.25),
       ),

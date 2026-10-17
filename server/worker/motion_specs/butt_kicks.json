@@ -1,0 +1,28 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "butt_kicks-tuned-2026.10.0",
+  "activityId": "butt_kicks",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "kneeUpFraction": 0.55,
+    "ankleGapFraction": 0.2,
+    "stableFrames": 2.0
+  }
+}

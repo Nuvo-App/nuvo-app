@@ -84,12 +84,21 @@ class MotionModelRelease {
       normalizationVersion: _optionalInt(json, 'normalizationVersion'),
       embeddingSchemaVersion: _optionalInt(json, 'embeddingSchemaVersion'),
       minimumAppBuild: _optionalInt(json, 'minimumAppBuild'),
-      artifactKey: json['artifactKey'] is String ? json['artifactKey'] as String : null,
+      artifactKey: json['artifactKey'] is String
+          ? json['artifactKey'] as String
+          : null,
       artifactSizeBytes: _optionalInt(json, 'artifactSizeBytes'),
-      status: json['status'] is String ? json['status'] as String : 'production',
-      evaluationId: json['evaluationId'] is String ? json['evaluationId'] as String : null,
+      status: json['status'] is String
+          ? json['status'] as String
+          : 'production',
+      evaluationId: json['evaluationId'] is String
+          ? json['evaluationId'] as String
+          : null,
       supportedMotionIds: json['supportedMotionIds'] is List
-          ? [for (final m in json['supportedMotionIds'] as List) if (m is String) m]
+          ? [
+              for (final m in json['supportedMotionIds'] as List)
+                if (m is String) m,
+            ]
           : const [],
       metadata: json['metadata'] is Map<String, dynamic>
           ? json['metadata'] as Map<String, dynamic>
@@ -98,24 +107,24 @@ class MotionModelRelease {
   }
 
   Map<String, dynamic> toJson() => {
-        'modelReleaseId': modelReleaseId,
-        'modelVersion': modelVersion,
-        'modelFamily': modelFamily,
-        'runtimeFamily': runtimeFamily,
-        'inputSchemaVersion': inputSchemaVersion,
-        'outputSchemaVersion': outputSchemaVersion,
-        'preprocessingVersion': preprocessingVersion,
-        'normalizationVersion': normalizationVersion,
-        'embeddingSchemaVersion': embeddingSchemaVersion,
-        'minimumAppBuild': minimumAppBuild,
-        'artifactKey': artifactKey,
-        'artifactSha256': artifactSha256,
-        'artifactSizeBytes': artifactSizeBytes,
-        'status': status,
-        'evaluationId': evaluationId,
-        'supportedMotionIds': supportedMotionIds,
-        'metadata': metadata,
-      };
+    'modelReleaseId': modelReleaseId,
+    'modelVersion': modelVersion,
+    'modelFamily': modelFamily,
+    'runtimeFamily': runtimeFamily,
+    'inputSchemaVersion': inputSchemaVersion,
+    'outputSchemaVersion': outputSchemaVersion,
+    'preprocessingVersion': preprocessingVersion,
+    'normalizationVersion': normalizationVersion,
+    'embeddingSchemaVersion': embeddingSchemaVersion,
+    'minimumAppBuild': minimumAppBuild,
+    'artifactKey': artifactKey,
+    'artifactSha256': artifactSha256,
+    'artifactSizeBytes': artifactSizeBytes,
+    'status': status,
+    'evaluationId': evaluationId,
+    'supportedMotionIds': supportedMotionIds,
+    'metadata': metadata,
+  };
 
   /// The contract the installed binary was reviewed with. A release can only
   /// be adopted when every declared contract field is one this build knows
@@ -148,4 +157,5 @@ const int kMotionV2EncoderEmbeddingSchema = 1;
 /// Identity of the model bundled in the app asset — the launch baseline the
 /// remote plane can improve on. Reported in diagnostics when no remote
 /// release is installed.
-const String kBundledMotionEncoderVersion = 'motion_v2_encoder_release_action_fp16_bundled';
+const String kBundledMotionEncoderVersion =
+    'motion_v2_encoder_release_action_fp16_bundled';

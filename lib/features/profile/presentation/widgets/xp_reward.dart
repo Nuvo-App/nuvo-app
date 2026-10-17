@@ -111,7 +111,7 @@ class NuvoXpEarnedBlock extends ConsumerWidget {
                     Text(
                       '+${xp.totalXp} XP',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.blue,
+                        color: context.themeColors.accent,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -131,8 +131,8 @@ class NuvoXpEarnedBlock extends ConsumerWidget {
                         : 'ACHIEVEMENTS EARNED',
                     style: AppTextStyles.labelUppercase(
                       10,
-                      color: NuvoColors.blue,
-                    ).copyWith(color: NuvoColors.blue),
+                      color: context.themeColors.accent,
+                    ).copyWith(color: context.themeColors.accent),
                   ),
                 ),
                 const SizedBox(height: NuvoSpacing.sm),

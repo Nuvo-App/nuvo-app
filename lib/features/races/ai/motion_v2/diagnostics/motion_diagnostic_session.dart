@@ -7,7 +7,13 @@ import '../../../data/ai_motion_models.dart';
 /// Schema version of [NuvoMotionDiagnosticSession]. Bump on any breaking change
 /// to the payload shape. Offline tools (`tools/motion_v2/replay_session.py`)
 /// pin to this.
-const int kMotionDiagSchema = 1;
+///
+/// v2 adds the fields the Cloudflare teach-session index needs: `outcome`,
+/// `engine`, `movementName`, `failure`, and the `v1` section (the spec race
+/// verification actually runs, its build diagnostics, and its test result).
+/// Purely additive — v1 readers still find `teaching`, `spec` (V2),
+/// `selfValidation`, `liveTest`, and `meta` untouched.
+const int kMotionDiagSchema = 2;
 
 /// One frame of pose data for offline replay. Compact: joint-major arrays.
 class MotionDiagFrame {
@@ -33,14 +39,14 @@ class MotionDiagFrame {
   final double? articulationEnergy;
 
   static Map<String, List<double>> _pts(NuvoPoseFrame f) => {
-        for (final e in f.points.entries)
-          e.key: [
-            _r(e.value.x),
-            _r(e.value.y),
-            _r(e.value.z),
-            _r(e.value.likelihood),
-          ],
-      };
+    for (final e in f.points.entries)
+      e.key: [
+        _r(e.value.x),
+        _r(e.value.y),
+        _r(e.value.z),
+        _r(e.value.likelihood),
+      ],
+  };
 
   factory MotionDiagFrame.fromFrames({
     required int tMs,
@@ -50,26 +56,25 @@ class MotionDiagFrame {
     List<String> missing = const [],
     String? readiness,
     double? articulationEnergy,
-  }) =>
-      MotionDiagFrame(
-        tMs: tMs,
-        raw: _pts(raw),
-        smoothed: smoothed == null ? null : _pts(smoothed),
-        interpolated: interpolated,
-        missing: missing,
-        readiness: readiness,
-        articulationEnergy: articulationEnergy,
-      );
+  }) => MotionDiagFrame(
+    tMs: tMs,
+    raw: _pts(raw),
+    smoothed: smoothed == null ? null : _pts(smoothed),
+    interpolated: interpolated,
+    missing: missing,
+    readiness: readiness,
+    articulationEnergy: articulationEnergy,
+  );
 
   Map<String, dynamic> toJson() => {
-        't': tMs,
-        'raw': raw,
-        if (smoothed != null) 'smoothed': smoothed,
-        if (interpolated.isNotEmpty) 'interp': interpolated,
-        if (missing.isNotEmpty) 'missing': missing,
-        if (readiness != null) 'readiness': readiness,
-        if (articulationEnergy != null) 'energy': _r(articulationEnergy!),
-      };
+    't': tMs,
+    'raw': raw,
+    if (smoothed != null) 'smoothed': smoothed,
+    if (interpolated.isNotEmpty) 'interp': interpolated,
+    if (missing.isNotEmpty) 'missing': missing,
+    if (readiness != null) 'readiness': readiness,
+    if (articulationEnergy != null) 'energy': _r(articulationEnergy!),
+  };
 }
 
 double _r(num v) => double.parse(v.toStringAsFixed(5));
@@ -98,17 +103,17 @@ class MotionDiagDemo {
   final Map<String, dynamic> segmentation;
 
   Map<String, dynamic> toJson() => {
-        'index': index,
-        'startMs': startMs,
-        'endMs': endMs,
-        'rawDurationMs': endMs - startMs,
-        'rawFrameCount': rawFrameCount,
-        'trimmedFrameCount': trimmedFrameCount,
-        'estFps': _r(estFps),
-        'tracking': tracking,
-        'segmentation': segmentation,
-        'frames': [for (final f in frames) f.toJson()],
-      };
+    'index': index,
+    'startMs': startMs,
+    'endMs': endMs,
+    'rawDurationMs': endMs - startMs,
+    'rawFrameCount': rawFrameCount,
+    'trimmedFrameCount': trimmedFrameCount,
+    'estFps': _r(estFps),
+    'tracking': tracking,
+    'segmentation': segmentation,
+    'frames': [for (final f in frames) f.toJson()],
+  };
 }
 
 class MotionDiagMatchWindow {
@@ -145,21 +150,21 @@ class MotionDiagMatchWindow {
   int get votes => votesList.where((v) => v).length;
 
   Map<String, dynamic> toJson() => {
-        't': tMs,
-        'buffer': bufferFrames,
-        'proto': [for (final d in protoDist) _r(d)],
-        'traj': [for (final d in trajDist) _r(d)],
-        'votes': votes,
-        'voteList': votesList,
-        if (separation != null) 'separation': _r(separation!),
-        'progress': _r(motionProgress),
-        'decision': decision,
-        'confidence': _r(confidence),
-        'state': state,
-        if (newRep) 'newRep': true,
-        'count': count,
-        'inferenceMs': inferenceMs,
-      };
+    't': tMs,
+    'buffer': bufferFrames,
+    'proto': [for (final d in protoDist) _r(d)],
+    'traj': [for (final d in trajDist) _r(d)],
+    'votes': votes,
+    'voteList': votesList,
+    if (separation != null) 'separation': _r(separation!),
+    'progress': _r(motionProgress),
+    'decision': decision,
+    'confidence': _r(confidence),
+    'state': state,
+    if (newRep) 'newRep': true,
+    'count': count,
+    'inferenceMs': inferenceMs,
+  };
 }
 
 class MotionDiagLiveTest {
@@ -180,19 +185,21 @@ class MotionDiagLiveTest {
   final int finalCount;
 
   Map<String, dynamic> toJson() => {
-        'startMs': startMs,
-        'endMs': endMs,
-        'durationMs': endMs - startMs,
-        'frameCount': frames.length,
-        'finalCount': finalCount,
-        if (finalAttempt != null) 'finalAttempt': finalAttempt,
-        'matchTrace': [for (final w in matchTrace) w.toJson()],
-        'frames': [for (final f in frames) f.toJson()],
-      };
+    'startMs': startMs,
+    'endMs': endMs,
+    'durationMs': endMs - startMs,
+    'frameCount': frames.length,
+    'finalCount': finalCount,
+    if (finalAttempt != null) 'finalAttempt': finalAttempt,
+    'matchTrace': [for (final w in matchTrace) w.toJson()],
+    'frames': [for (final f in frames) f.toJson()],
+  };
 }
 
 /// A complete, versioned, offline-replayable record of one Teach Nuvo session
-/// (3 demos -> learn -> test). Behind `NUVO_DIAGNOSTICS`.
+/// (3 demos -> learn -> test). Recorded on every teach attempt so the session
+/// can be uploaded (consent-gated) and replayed offline — the same object the
+/// `NUVO_DIAGNOSTICS` manual export writes.
 class NuvoMotionDiagnosticSession {
   NuvoMotionDiagnosticSession({
     required this.sessionId,
@@ -201,8 +208,15 @@ class NuvoMotionDiagnosticSession {
     required this.teaching,
     this.selfValidation,
     this.spec,
+    this.v1,
     this.liveTest,
     this.performance = const {},
+    this.movementName = '',
+    this.outcome = 'abandoned',
+    this.engine = 'v2',
+    this.failureStage,
+    this.failureReason = '',
+    this.durationMs = 0,
   });
 
   final String sessionId;
@@ -215,10 +229,28 @@ class NuvoMotionDiagnosticSession {
   final Map<String, dynamic>? selfValidation;
 
   /// The full learned `TaughtMotionV2Spec` JSON (references, spreads,
-  /// thresholds, region activity).
+  /// thresholds, region activity). Null when the V2 engine never produced a
+  /// spec (unavailable, still learning, or self-validation failed).
   final Map<String, dynamic>? spec;
+
+  /// The V1 side of the session: `spec` is the `CustomPoseVerifierSpec` JSON
+  /// the race verifier actually runs, `build` carries the builder's feature /
+  /// threshold diagnostics, `testResult` the live-test verdict. This is the
+  /// half that decides what a created race can verify — without it a replay
+  /// can only judge V2, never the system the race uses.
+  final Map<String, dynamic>? v1;
   final MotionDiagLiveTest? liveTest;
   final Map<String, dynamic> performance;
+
+  /// How the flow ended: `used` (spec handed to race creation), `learned`
+  /// (reached a usable spec but the user left), `failed` (a terminal learning
+  /// failure), `abandoned` (left before learning).
+  final String movementName;
+  final String outcome;
+  final String engine;
+  final String? failureStage;
+  final String failureReason;
+  final int durationMs;
 
   /// `MV2-YYYYMMDD-XXXXXX` from a timestamp + short random token.
   static String newId(DateTime now, String token) {
@@ -228,17 +260,52 @@ class NuvoMotionDiagnosticSession {
         '${token.toUpperCase().padRight(6, '0').substring(0, 6)}';
   }
 
+  /// The searchable metadata sent alongside the blob so the Worker can index
+  /// the session without unpacking it — mirrors the teach-session table's
+  /// columns in `motion_teach_sessions`.
+  Map<String, dynamic> metadata() => {
+    'sessionId': sessionId,
+    'movementName': movementName,
+    'outcome': outcome,
+    'engine': engine,
+    if (failureStage != null) 'failureStage': failureStage,
+    'failureReason': failureReason,
+    'demoCount': teaching.length,
+    'frameCount':
+        teaching.fold<int>(0, (n, d) => n + d.frames.length) +
+        (liveTest?.frames.length ?? 0),
+    'durationMs': durationMs,
+    'learned': v1?['spec'] != null,
+    'v2Available': meta['v2Unavailable'] != true,
+    'v2Learned': spec != null,
+    'selfValidationPassed': selfValidation?['passed'],
+    'liveTestMatched': meta['liveTestMatched'],
+    'usedForRace': outcome == 'used',
+    'schemaVersion': kMotionDiagSchema,
+    'appVersion': meta['appVersion'] ?? 'unknown',
+    'gitCommit': meta['gitCommit'] ?? 'unknown',
+    'modelVersion': meta['modelRelease'] ?? 'unknown',
+    'matcherVersion': meta['matcher'] ?? 'unknown',
+  };
+
   Map<String, dynamic> toJson() => {
-        'schema': kMotionDiagSchema,
-        'sessionId': sessionId,
-        'timestamp': timestamp.toUtc().toIso8601String(),
-        'meta': meta,
-        'teaching': [for (final d in teaching) d.toJson()],
-        if (selfValidation != null) 'selfValidation': selfValidation,
-        if (spec != null) 'spec': spec,
-        if (liveTest != null) 'liveTest': liveTest!.toJson(),
-        'performance': performance,
-      };
+    'schema': kMotionDiagSchema,
+    'sessionId': sessionId,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'meta': meta,
+    'movementName': movementName,
+    'outcome': outcome,
+    'engine': engine,
+    if (failureStage != null) 'failureStage': failureStage,
+    if (failureReason.isNotEmpty) 'failureReason': failureReason,
+    'durationMs': durationMs,
+    'teaching': [for (final d in teaching) d.toJson()],
+    if (selfValidation != null) 'selfValidation': selfValidation,
+    if (spec != null) 'spec': spec,
+    if (v1 != null) 'v1': v1,
+    if (liveTest != null) 'liveTest': liveTest!.toJson(),
+    'performance': performance,
+  };
 
   /// gzip'd JSON — raw pose data compresses heavily. This is the FULL session
   /// artifact (the one you hand back for offline replay).
@@ -262,8 +329,11 @@ class NuvoMotionDiagnosticSession {
 
     for (final demo in teaching) {
       h('TEACHING DEMO ${demo.index}');
-      kv('duration', '${demo.endMs - demo.startMs} ms  (${demo.rawFrameCount} raw '
-          '-> ${demo.trimmedFrameCount} trimmed frames)');
+      kv(
+        'duration',
+        '${demo.endMs - demo.startMs} ms  (${demo.rawFrameCount} raw '
+            '-> ${demo.trimmedFrameCount} trimmed frames)',
+      );
       kv('est fps', demo.estFps.toStringAsFixed(1));
       demo.tracking.forEach((k, v) => kv('track.$k', v));
       demo.segmentation.forEach((k, v) => kv('seg.$k', v));
@@ -287,8 +357,10 @@ class NuvoMotionDiagnosticSession {
         kv('session create', '${lp['sessionCreateMs']} ms');
       }
       kv('preprocess', '${lp['preprocessMs']} ms');
-      kv('encode (${lp['encoderPasses']} passes)',
-          '${lp['encodeMs']}  = ${lp['totalEncodeMs']} ms');
+      kv(
+        'encode (${lp['encoderPasses']} passes)',
+        '${lp['encodeMs']}  = ${lp['totalEncodeMs']} ms',
+      );
       kv('build references', '${lp['buildRefsMs']} ms');
       kv('self-validation', '${lp['selfValidateMs']} ms  (0 encoder passes)');
       kv('leave-one-out', '${lp['looMs']} ms  (0 encoder passes)');
@@ -311,18 +383,23 @@ class NuvoMotionDiagnosticSession {
     final lt = liveTest;
     if (lt != null) {
       h('LIVE TEST');
-      kv('duration', '${lt.endMs - lt.startMs} ms  (${lt.frames.length} frames)');
+      kv(
+        'duration',
+        '${lt.endMs - lt.startMs} ms  (${lt.frames.length} frames)',
+      );
       kv('final count', lt.finalCount);
 
       h('MATCH TRACE');
       for (final w in lt.matchTrace) {
-        b.writeln('  t=${(w.tMs / 1000).toStringAsFixed(2)}s  '
-            'votes=${w.votes}/${w.protoDist.length}  '
-            'progress=${w.motionProgress.toStringAsFixed(2)}  '
-            'sep=${w.separation?.toStringAsFixed(2) ?? "-"}  '
-            'proto=[${w.protoDist.map((d) => d.toStringAsFixed(3)).join(",")}]  '
-            'traj=[${w.trajDist.map((d) => d.toStringAsFixed(3)).join(",")}]  '
-            '${w.decision}${w.newRep ? "  +1" : ""}');
+        b.writeln(
+          '  t=${(w.tMs / 1000).toStringAsFixed(2)}s  '
+          'votes=${w.votes}/${w.protoDist.length}  '
+          'progress=${w.motionProgress.toStringAsFixed(2)}  '
+          'sep=${w.separation?.toStringAsFixed(2) ?? "-"}  '
+          'proto=[${w.protoDist.map((d) => d.toStringAsFixed(3)).join(",")}]  '
+          'traj=[${w.trajDist.map((d) => d.toStringAsFixed(3)).join(",")}]  '
+          '${w.decision}${w.newRep ? "  +1" : ""}',
+        );
       }
 
       final fa = lt.finalAttempt;

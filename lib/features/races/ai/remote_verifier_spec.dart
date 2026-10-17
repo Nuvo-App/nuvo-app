@@ -1,12 +1,16 @@
 import '../data/ai_motion_models.dart';
 import '../data/motion_package.dart';
 import 'remote_pose_features.dart';
+import 'motion_validators.dart' show MotionTuning, kNativeTunables;
+import 'rep_tree.dart';
 
 enum RemoteEngineType {
   stateMachineV1('state_machine_v1'),
   alternatingRepV1('alternating_rep_v1'),
   holdV1('hold_v1'),
-  sequenceMatchV1('sequence_match_v1');
+  sequenceMatchV1('sequence_match_v1'),
+  repTreeV1('rep_tree_v1'),
+  nativeTunedV1('native_tuned_v1');
 
   const RemoteEngineType(this.backendValue);
 
@@ -65,7 +69,26 @@ class RemotePoseRule {
 /// no expressions, no formulas, no scripting. Each predicate resolves a single
 /// scalar from a pose frame via [RemotePoseFeatures] and compares it against
 /// a bounded threshold. Any degenerate input evaluates to false.
-enum SequencePredicateKind { landmarkAxis, angle, axisDelta, segmentRatio }
+enum SequencePredicateKind {
+  landmarkAxis,
+  angle,
+  axisDelta,
+  segmentRatio,
+  axisRatio,
+}
+
+/// Virtual landmarks a predicate may name in addition to the real ones: the
+/// midpoint of a left/right pair (`midHip` = leftHip + rightHip). They are
+/// derived from real landmarks only, so the spec's `requiredLandmarks` must
+/// still list the underlying pair.
+const Map<String, (String, String)> kVirtualLandmarks = {
+  'midShoulder': ('leftShoulder', 'rightShoulder'),
+  'midElbow': ('leftElbow', 'rightElbow'),
+  'midWrist': ('leftWrist', 'rightWrist'),
+  'midHip': ('leftHip', 'rightHip'),
+  'midKnee': ('leftKnee', 'rightKnee'),
+  'midAnkle': ('leftAnkle', 'rightAnkle'),
+};
 
 /// One declarative predicate inside a [SequencePhase]. The stored fields are
 /// the wire format verbatim (bounded strings/numbers); interpretation is
@@ -83,6 +106,7 @@ class SequencePredicate {
     this.c,
     this.refA,
     this.refB,
+    this.refAxis,
   });
 
   final SequencePredicateKind kind;
@@ -104,26 +128,49 @@ class SequencePredicate {
   final String? refA;
   final String? refB;
 
+  /// axisRatio only: when set, the reference length is measured on this axis
+  /// alone instead of Euclidean.
+  final RemoteAxis? refAxis;
+
+  NuvoPosePoint? _pt(NuvoPoseFrame frame, String name) {
+    final pair = kVirtualLandmarks[name];
+    if (pair == null) return frame.point(name);
+    return RemotePoseFeatures.midpoint(
+      frame.point(pair.$1),
+      frame.point(pair.$2),
+      minLikelihood: minLikelihood,
+    );
+  }
+
   bool matches(NuvoPoseFrame frame) {
     final value = switch (kind) {
       SequencePredicateKind.landmarkAxis => _axisValue(frame),
       SequencePredicateKind.angle => RemotePoseFeatures.angle(
-        a: frame.point(a!),
-        b: frame.point(b!),
-        c: frame.point(c!),
+        a: _pt(frame, a!),
+        b: _pt(frame, b!),
+        c: _pt(frame, c!),
         minLikelihood: minLikelihood,
       ),
       SequencePredicateKind.axisDelta => RemotePoseFeatures.axisDelta(
-        a: frame.point(a!),
-        b: frame.point(b!),
+        a: _pt(frame, a!),
+        b: _pt(frame, b!),
         isX: axis == RemoteAxis.x,
         minLikelihood: minLikelihood,
       ),
       SequencePredicateKind.segmentRatio => RemotePoseFeatures.segmentRatio(
-        a: frame.point(a!),
-        b: frame.point(b!),
-        refA: frame.point(refA!),
-        refB: frame.point(refB!),
+        a: _pt(frame, a!),
+        b: _pt(frame, b!),
+        refA: _pt(frame, refA!),
+        refB: _pt(frame, refB!),
+        minLikelihood: minLikelihood,
+      ),
+      SequencePredicateKind.axisRatio => RemotePoseFeatures.axisRatio(
+        a: _pt(frame, a!),
+        b: _pt(frame, b!),
+        refA: _pt(frame, refA!),
+        refB: _pt(frame, refB!),
+        isX: axis == RemoteAxis.x,
+        refIsX: refAxis == null ? null : refAxis == RemoteAxis.x,
         minLikelihood: minLikelihood,
       ),
     };
@@ -137,7 +184,7 @@ class SequencePredicate {
   }
 
   double? _axisValue(NuvoPoseFrame frame) {
-    final pose = frame.point(point!);
+    final pose = _pt(frame, point!);
     if (pose == null || pose.likelihood < minLikelihood) return null;
     final value = axis == RemoteAxis.x ? pose.x : pose.y;
     return value.isFinite ? value : null;
@@ -197,11 +244,20 @@ class RemoteVerifierSpec {
     this.maxHoldMs = 60 * 60 * 1000,
     this.measurementType = 'repetitions',
     this.phases = const [],
+    this.repTree,
+    this.tuning = MotionTuning.empty,
     this.repTimeoutMs = 8000,
     this.lostPoseMs = 1500,
     this.activity,
     this.package,
   });
+
+  /// `native_tuned_v1` only: threshold overrides for the compiled validator
+  /// of [activityId], already checked against [kNativeTunables].
+  final MotionTuning tuning;
+
+  /// `rep_tree_v1` only: the START/ACTIVE condition trees.
+  final RepTreeSpec? repTree;
 
   final String releaseId;
   final String activityId;
@@ -260,6 +316,8 @@ class RemoteVerifierSpec {
       'minHoldMs',
       'maxHoldMs',
       'phases',
+      'repTree',
+      'params',
       'repTimeoutMs',
       'lostPoseMs',
       'activity',
@@ -280,6 +338,8 @@ class RemoteVerifierSpec {
       'alternating_rep_v1' => RemoteEngineType.alternatingRepV1,
       'hold_v1' => RemoteEngineType.holdV1,
       'sequence_match_v1' => RemoteEngineType.sequenceMatchV1,
+      'rep_tree_v1' => RemoteEngineType.repTreeV1,
+      'native_tuned_v1' => RemoteEngineType.nativeTunedV1,
       _ => throw RemoteVerifierSpecException('Unknown verifier engine.'),
     };
     final measurementType = _string(
@@ -347,6 +407,57 @@ class RemoteVerifierSpec {
         'alternating_rep_v1 requires leftRules and rightRules.',
       );
     }
+    final isRepTree = engine == RemoteEngineType.repTreeV1;
+    if (isRepTree != json.containsKey('repTree')) {
+      throw RemoteVerifierSpecException(
+        'repTree is required by, and only valid for, rep_tree_v1.',
+      );
+    }
+    if (isRepTree && measurementType != 'repetitions') {
+      throw RemoteVerifierSpecException(
+        'rep_tree_v1 supports repetitions only.',
+      );
+    }
+    RepTreeSpec? repTree;
+    if (isRepTree) {
+      try {
+        repTree = RepTreeSpec.fromJson(json['repTree'], requiredLandmarks);
+      } on RepTreeSpecException catch (e) {
+        throw RemoteVerifierSpecException(e.message);
+      }
+    }
+    final isTuned = engine == RemoteEngineType.nativeTunedV1;
+    if (isTuned != json.containsKey('params')) {
+      throw RemoteVerifierSpecException(
+        'params is required by, and only valid for, native_tuned_v1.',
+      );
+    }
+    var tuning = MotionTuning.empty;
+    if (isTuned) {
+      final allowed = kNativeTunables[activityId];
+      final params = json['params'];
+      if (allowed == null || params is! Map<String, dynamic>) {
+        throw RemoteVerifierSpecException(
+          'This motion has no tunable parameters.',
+        );
+      }
+      final values = <String, double>{};
+      for (final entry in params.entries) {
+        final bounds = allowed[entry.key];
+        final value = entry.value;
+        if (bounds == null ||
+            value is! num ||
+            !value.isFinite ||
+            value < bounds.$2 ||
+            value > bounds.$3) {
+          throw RemoteVerifierSpecException(
+            'Parameter ${entry.key} is unknown or out of range.',
+          );
+        }
+        values[entry.key] = value.toDouble();
+      }
+      tuning = MotionTuning(values);
+    }
     if (engine == RemoteEngineType.holdV1 && holdRules.isEmpty) {
       throw RemoteVerifierSpecException('hold_v1 requires holdRules.');
     }
@@ -410,6 +521,8 @@ class RemoteVerifierSpec {
       maxHoldMs: maxHoldMs,
       measurementType: measurementType,
       phases: phases,
+      repTree: repTree,
+      tuning: tuning,
       repTimeoutMs: repTimeoutMs,
       lostPoseMs: lostPoseMs,
       activity: activity,
@@ -579,8 +692,13 @@ class RemoteVerifierSpec {
       );
       final maxDwellMs = entry['maxDwellMs'] == null
           ? null
-          : _boundedInt(entry['maxDwellMs'], 'maxDwellMs', 50, 60 * 1000,
-              fallback: 0);
+          : _boundedInt(
+              entry['maxDwellMs'],
+              'maxDwellMs',
+              50,
+              60 * 1000,
+              fallback: 0,
+            );
       final next = _string(entry['next'], 'phase.next');
       parsed.add(
         SequencePhase(
@@ -625,22 +743,59 @@ class RemoteVerifierSpec {
       'angle' => SequencePredicateKind.angle,
       'axis_delta' => SequencePredicateKind.axisDelta,
       'segment_ratio' => SequencePredicateKind.segmentRatio,
+      'axis_ratio' => SequencePredicateKind.axisRatio,
       _ => throw RemoteVerifierSpecException(
         'Unknown sequence predicate kind.',
       ),
     };
     const kindKeys = {
       SequencePredicateKind.landmarkAxis: {
-        'kind', 'point', 'axis', 'operator', 'threshold', 'minLikelihood',
+        'kind',
+        'point',
+        'axis',
+        'operator',
+        'threshold',
+        'minLikelihood',
       },
       SequencePredicateKind.angle: {
-        'kind', 'a', 'b', 'c', 'operator', 'degrees', 'minLikelihood',
+        'kind',
+        'a',
+        'b',
+        'c',
+        'operator',
+        'degrees',
+        'minLikelihood',
       },
       SequencePredicateKind.axisDelta: {
-        'kind', 'a', 'b', 'axis', 'operator', 'delta', 'minLikelihood',
+        'kind',
+        'a',
+        'b',
+        'axis',
+        'operator',
+        'delta',
+        'minLikelihood',
       },
       SequencePredicateKind.segmentRatio: {
-        'kind', 'a', 'b', 'refA', 'refB', 'operator', 'ratio', 'minLikelihood',
+        'kind',
+        'a',
+        'b',
+        'refA',
+        'refB',
+        'operator',
+        'ratio',
+        'minLikelihood',
+      },
+      SequencePredicateKind.axisRatio: {
+        'kind',
+        'a',
+        'b',
+        'axis',
+        'refA',
+        'refB',
+        'refAxis',
+        'operator',
+        'ratio',
+        'minLikelihood',
       },
     };
     if (entry.keys.any((key) => !kindKeys[kind]!.contains(key))) {
@@ -656,8 +811,12 @@ class RemoteVerifierSpec {
       throw RemoteVerifierSpecException('minLikelihood is outside 0.2..1.');
     }
     final minLikelihood = likelihood is num ? likelihood.toDouble() : 0.35;
-    String landmark(String field) =>
-        _strings([entry[field]], field, max: 1).single;
+    String landmark(String field) {
+      final raw = entry[field];
+      if (raw is String && kVirtualLandmarks.containsKey(raw)) return raw;
+      return _strings([raw], field, max: 1).single;
+    }
+
     RemoteAxis axis() => switch (_string(entry['axis'], 'axis')) {
       'x' => RemoteAxis.x,
       'y' => RemoteAxis.y,
@@ -665,10 +824,7 @@ class RemoteVerifierSpec {
     };
     double bounded(String field, double min, double max) {
       final value = entry[field];
-      if (value is! num ||
-          !value.isFinite ||
-          value < min ||
-          value > max) {
+      if (value is! num || !value.isFinite || value < min || value > max) {
         throw RemoteVerifierSpecException('$field is outside its range.');
       }
       return value.toDouble();
@@ -710,6 +866,26 @@ class RemoteVerifierSpec {
         b: landmark('b'),
         refA: landmark('refA'),
         refB: landmark('refB'),
+      ),
+      SequencePredicateKind.axisRatio => SequencePredicate._(
+        kind: kind,
+        operator: operator,
+        threshold: bounded('ratio', -4, 4),
+        minLikelihood: minLikelihood,
+        a: landmark('a'),
+        b: landmark('b'),
+        axis: axis(),
+        refA: landmark('refA'),
+        refB: landmark('refB'),
+        refAxis: entry['refAxis'] == null
+            ? null
+            : switch (_string(entry['refAxis'], 'refAxis')) {
+                'x' => RemoteAxis.x,
+                'y' => RemoteAxis.y,
+                _ => throw RemoteVerifierSpecException(
+                  'refAxis must be x or y.',
+                ),
+              },
       ),
     };
   }

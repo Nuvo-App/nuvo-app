@@ -328,8 +328,8 @@ final _inboxItems = [
   NuvoNotification(
     id: 'n2',
     category: 'crew_request',
-    title: 'Crew request',
-    body: 'wants to pull you into their crew',
+    title: 'Friend request',
+    body: 'wants to be your friend',
     createdAt: DateTime(2026, 1, 2, 8),
     read: false,
     actorName: 'Alexandria Montgomery-Santiago',
@@ -350,7 +350,7 @@ final _inboxItems = [
 
 class _FakeNotifRepo implements NotificationRepository {
   @override
-  Future<NotificationPage> list({String? cursor}) async =>
+  Future<NotificationPage> list({String? cursor, String? etag}) async =>
       const NotificationPage(items: [], unreadCount: 0);
   @override
   Future<void> markRead(String id) async {}

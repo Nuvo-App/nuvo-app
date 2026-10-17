@@ -106,7 +106,7 @@ class _NotificationPermissionScreenState
                                       height: 56,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: c.panel,
+                                        color: c.surface,
                                         border: Border.all(
                                           color: c.ink,
                                           width: 1.6,

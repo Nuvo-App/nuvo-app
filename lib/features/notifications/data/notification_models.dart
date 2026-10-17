@@ -62,13 +62,34 @@ class NotificationPage {
     required this.items,
     required this.unreadCount,
     this.nextCursor,
+    this.etag,
+    this.notModified = false,
+    this.raw,
   });
+
+  /// 304 reply to a conditional first-page fetch: nothing changed.
+  const NotificationPage.notModified({this.etag})
+      : items = const [],
+        unreadCount = 0,
+        nextCursor = null,
+        notModified = true,
+        raw = null;
 
   final List<NuvoNotification> items;
   final int unreadCount;
   final String? nextCursor;
 
-  factory NotificationPage.fromJson(Map<String, dynamic> j) => NotificationPage(
+  /// Response `ETag` (null from older servers).
+  final String? etag;
+  final bool notModified;
+
+  /// The decoded 200 body, for the disk snapshot.
+  final Map<String, dynamic>? raw;
+
+  factory NotificationPage.fromJson(Map<String, dynamic> j, {String? etag}) =>
+      NotificationPage(
+        etag: etag,
+        raw: j,
         items: (j['notifications'] as List<dynamic>? ?? [])
             .map((e) => NuvoNotification.fromJson(e as Map<String, dynamic>))
             .toList(),

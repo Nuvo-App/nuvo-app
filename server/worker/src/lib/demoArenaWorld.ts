@@ -184,7 +184,7 @@ export function generateDemoSnapshot(
       title: race.title,
       progressLabel: subtitle,
       boardContext: isSolo
-        ? 'Add crew to make it a race'
+        ? 'Add friends to make it a race'
         : `${personA} and ${racer2} racing`,
       primaryActionLabel: 'Submit proof',
       primaryActionType: 'submit_proof' as const,

@@ -134,12 +134,19 @@ class NuvoAchievementBadge extends StatelessWidget {
     final c = context.themeColors;
     final radius = size * 0.30;
     final numeral = nuvoBadgeNumeralFor(badge.iconKey);
+    // White glyphs on the light gold fill are low contrast on dark chrome —
+    // use the page ink there. Light mode keeps white.
+    final glyph =
+        Theme.of(context).brightness == Brightness.dark &&
+            nuvoBadgeAccent(badge).computeLuminance() > 0.35
+        ? c.page
+        : NuvoColors.white;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        color: badge.unlocked ? nuvoBadgeAccent(badge) : c.panelLight,
+        color: badge.unlocked ? nuvoBadgeAccent(badge) : c.surface,
         border: Border.all(
           color: badge.unlocked ? c.inkShadow : c.border,
           width: 2.5,
@@ -160,7 +167,7 @@ class NuvoAchievementBadge extends StatelessWidget {
                 ? Text(
                     numeral,
                     style: AppTextStyles.displaySmall.copyWith(
-                      color: NuvoColors.white,
+                      color: glyph,
                       fontSize: size * 0.34,
                       height: 1,
                     ),
@@ -168,7 +175,7 @@ class NuvoAchievementBadge extends StatelessWidget {
                 : Icon(
                     nuvoBadgeIconFor(badge.iconKey),
                     size: size * 0.44,
-                    color: NuvoColors.white,
+                    color: glyph,
                   ))
             : Icon(
                 Icons.lock_outline_rounded,
@@ -294,18 +301,42 @@ class NuvoBadgeGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: NuvoSpacing.lg,
-        crossAxisSpacing: NuvoSpacing.sm,
-        childAspectRatio: 0.72,
-      ),
-      itemCount: badges.length,
-      itemBuilder: (context, i) {
-        final badge = badges[i];
+    // Tiles size to their content (badge + name + status line) and a Wrap
+    // lays them three across. The previous fixed-ratio grid (0.72) made each
+    // cell ~155px tall around ~95px of content, so the dead space inside the
+    // cell stacked on top of the row spacing.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const columns = 3;
+        const colGap = NuvoSpacing.sm;
+        final tileWidth =
+            ((constraints.maxWidth - colGap * (columns - 1)) / columns)
+                .floorToDouble();
+        final statusHeight = MediaQuery.textScalerOf(context).scale(12);
+        return Wrap(
+          spacing: colGap,
+          runSpacing: _rowGap,
+          children: [
+            for (final badge in badges)
+              SizedBox(
+                width: tileWidth,
+                child: _tile(context, c, badge, statusHeight),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Visible gap between one row's status line and the next row's badge.
+  static const double _rowGap = 34;
+
+  Widget _tile(
+    BuildContext context,
+    NuvoThemeColors c,
+    NuvoBadge badge,
+    double statusHeight,
+  ) {
         return PressableScale(
           onTap: onTap == null ? null : () => onTap!(badge),
           scale: 0.95,
@@ -352,18 +383,20 @@ class NuvoBadgeGrid extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 3),
-              if (!badge.unlocked && badge.goalProgress > 0)
-                SizedBox(
+              SizedBox(
+                height: statusHeight,
+                child: Center(
+                  child: !badge.unlocked && badge.goalProgress > 0
+                ? SizedBox(
                   width: 52,
                   child: NuvoProgressBar(
                     value: badge.goalProgress,
                     height: 4,
-                    color: NuvoColors.blue,
+                    color: context.themeColors.accent,
                     trackColor: c.track,
                   ),
                 )
-              else
-                Text(
+                : Text(
                   badge.unlocked ? 'Earned' : 'Locked',
                   style: AppTextStyles.labelUppercase(
                     9,
@@ -372,11 +405,11 @@ class NuvoBadgeGrid extends StatelessWidget {
                     color: badge.unlocked ? c.inkSubtle : c.inkDim,
                   ),
                 ),
+                ),
+              ),
             ],
           ),
         );
-      },
-    );
   }
 }
 
@@ -435,7 +468,7 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
                   ? 'Earned ${badge.unlockedAt!.split('T').first}'
                   : 'Earned',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
+                color: context.themeColors.accent,
                 fontWeight: FontWeight.w800,
               ),
             )
@@ -448,7 +481,7 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
                       child: NuvoProgressBar(
                         value: badge.goalProgress,
                         height: 8,
-                        color: NuvoColors.blue,
+                        color: context.themeColors.accent,
                         trackColor: c.track,
                       ),
                     ),
@@ -468,7 +501,7 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
                     child: Text(
                       'One to go.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.blue,
+                        color: context.themeColors.accent,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -483,7 +516,7 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  color: badge.featured ? c.panelLight : NuvoColors.blue,
+                  color: badge.featured ? c.surface : NuvoColors.blue,
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
                   border: Border.all(color: c.inkShadow, width: 2),
                   boxShadow: [

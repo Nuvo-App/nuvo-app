@@ -2,7 +2,8 @@ import 'dart:typed_data';
 
 import 'motion_model_release.dart';
 import 'motion_model_store_io.dart'
-    if (dart.library.html) 'motion_model_store_web.dart' as platform;
+    if (dart.library.html) 'motion_model_store_web.dart'
+    as platform;
 
 /// A verified remote model artifact persisted for last-known-good use.
 ///
@@ -22,11 +23,17 @@ class CachedMotionModel {
 /// All failures (read, parse, missing file, checksum drift) degrade silently
 /// to the next tier — a corrupt store can never take Motion down.
 class MotionModelStore {
-  Future<void> persist(String family, MotionModelRelease release, Uint8List bytes) =>
-      platform.persistMotionModel(family, release, bytes);
+  Future<void> persist(
+    String family,
+    MotionModelRelease release,
+    Uint8List bytes,
+  ) => platform.persistMotionModel(family, release, bytes);
 
   Future<CachedMotionModel?> read(
-      String family, String modelVersion, String sha256) async {
+    String family,
+    String modelVersion,
+    String sha256,
+  ) async {
     final hit = await platform.readMotionModel(family, modelVersion, sha256);
     if (hit == null) return null;
     return CachedMotionModel(release: hit.release, bytes: hit.bytes);

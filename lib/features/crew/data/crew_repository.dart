@@ -1,7 +1,25 @@
+import '../../../core/network/conditional.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
 import '../../races/data/race_models.dart' show PublicUser;
 import 'crew_api.dart';
+
+/// Optional capability: validator-aware crew reads. Kept off [CrewRepository]'s
+/// own surface so test doubles that implement the base class keep compiling;
+/// the controller uses it only when the repository provides it.
+abstract interface class CrewConditionalSource {
+  Future<Conditional<List<PublicUser>>> getCrewConditional({String? etag});
+}
+
+/// Real repository: [CrewRepository] plus conditional GET /crew.
+class CrewSyncRepository extends CrewRepository
+    implements CrewConditionalSource {
+  CrewSyncRepository(super.api, super.store, super.authApi);
+
+  @override
+  Future<Conditional<List<PublicUser>>> getCrewConditional({String? etag}) =>
+      _withRefresh((t) => _api.getCrew(t, etag: etag));
+}
 
 /// Token injection + 401 refresh for the crew endpoints (mirrors RaceRepository).
 class CrewRepository {
@@ -11,7 +29,8 @@ class CrewRepository {
   final SecureTokenStore _store;
   final AuthApi _authApi;
 
-  Future<List<PublicUser>> getCrew() => _withRefresh(_api.getCrew);
+  Future<List<PublicUser>> getCrew() async =>
+      (await _withRefresh((t) => _api.getCrew(t))).data ?? const [];
   Future<CrewRequestPage> getRequestPage() => _withRefresh(_api.getRequestPage);
   Future<List<CrewSearchResult>> search(String query) =>
       _withRefresh((token) => _api.search(token, query));

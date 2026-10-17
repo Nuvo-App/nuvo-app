@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/nuvo_flags.dart';
+import '../../auth/presentation/auth_controller.dart'
+    show secureTokenStoreProvider;
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -16,21 +19,26 @@ import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_edge_back_swipe.dart';
+import '../../../core/widgets/nuvo_focused_stage.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
 import '../domain/race_mode_semantics.dart';
 import '../domain/race_intent.dart';
+import '../domain/teachable_movements.dart';
 import '../domain/race_name_interpreter.dart';
 import '../domain/race_safety.dart';
 import 'motion_catalog_provider.dart';
+import 'custom_pose/learned_custom_movement_provider.dart';
 import 'custom_pose/recent_movements_provider.dart';
 import 'custom_pose/teach_movement_screen.dart';
 import 'race_controller.dart';
@@ -52,9 +60,15 @@ String _secondsDisplay(int s) {
 typedef ComposerCustomRaceCreator =
     Future<Race> Function({
       required String title,
-      required int targetValue,
+      int? targetValue,
       required String customActivityName,
-      required CustomPoseVerifierSpec verifierSpec,
+      CustomPoseVerifierSpec? verifierSpec,
+      TaughtMotionV2Spec? motionV2Spec,
+      String format,
+      String? finishLineAt,
+      int? attemptDurationSeconds,
+      int? attemptLimit,
+      String? scoreDirection,
     });
 
 typedef ComposerPresetRaceCreator =
@@ -84,11 +98,22 @@ Future<Race> createRaceForComposerDraft({
   required ComposerPresetRaceCreator createRace,
 }) {
   if (draft.isCustom) {
+    // Only a race to a target carries one; a window / attempt race is sent its
+    // own win condition and timing instead (never "X / 60 reps").
+    final racesToTarget = draft.format.usesScoreTarget;
     return createCustomRace(
       title: draft.resolvedTitle,
-      targetValue: draft.targetValue,
+      targetValue: racesToTarget ? draft.targetValue : null,
       customActivityName: draft.customActivityName!,
-      verifierSpec: draft.verifierSpec!,
+      verifierSpec: draft.verifierSpec,
+      motionV2Spec: draft.motionV2Spec,
+      format: draft.format.backendValue,
+      finishLineAt: racesToTarget ? null : draft.finishLineAt,
+      attemptDurationSeconds: racesToTarget
+          ? null
+          : draft.attemptDurationSeconds,
+      attemptLimit: racesToTarget ? null : draft.attemptLimit,
+      scoreDirection: draft.scoreDirection,
     );
   }
   final payload = draft.toCreatePayload();
@@ -159,6 +184,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    // Re-ask the server (with this login) whether custom AI movements are on
+    // for this account; rebuild when the answer changes.
+    NuvoFlags.customMotion.addListener(_onFlagChanged);
+    unawaited(_refreshFlags());
     // A learned movement in session state is DATA, not a navigation trigger.
     // Never let it jump the composer to a later step.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -183,8 +212,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
 
   @override
   void dispose() {
+    NuvoFlags.customMotion.removeListener(_onFlagChanged);
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _onFlagChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _refreshFlags() async {
+    String? token;
+    try {
+      token = await ref.read(secureTokenStoreProvider).getAccessToken();
+    } catch (_) {}
+    await NuvoFlags.load(token: token);
   }
 
   /// The stages this race actually visits. `train` only exists once the draft
@@ -213,13 +255,26 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
 
   /// The ONLY place `_step` changes. Every call passes an explicit [reason];
   /// nothing navigates from a provider value, a listener, or a post-frame peek.
-  void _goToStep(_Step target, {required String reason}) {
+  void _goToStep(
+    _Step target, {
+    required String reason,
+    bool keepError = false,
+  }) {
     _dismissKeyboard();
     _logTransition(_step, target, reason);
     final idx = _steps.indexOf(
       target,
     ); // PageView keeps all pages; index by enum
-    setState(() => _step = target);
+    setState(() {
+      _step = target;
+      // An error belongs to the screen state that produced it. Without this,
+      // "Plank cannot use that metric" followed the user onto a marching race.
+      if (!keepError) {
+        _error = null;
+        _lastApiError = null;
+        _lastApiStatusCode = null;
+      }
+    });
     _pageController.animateToPage(
       idx,
       duration: const Duration(milliseconds: 320),
@@ -280,6 +335,18 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       !draft.userEditedFields.contains(RaceField.goalKind) &&
       _nameResolution(draft).resolvesSubject;
 
+  /// A camera-countable movement the typed name resolved to, offered as ONE
+  /// centred question — unless the user already made their own choice.
+  TeachableMovement? _teachSuggestionFor(RaceDraft draft) {
+    if (!NuvoFlags.customMotionOn) return null;
+    if (draft.isCustom ||
+        draft.userEditedFields.contains(RaceField.activity) ||
+        draft.userEditedFields.contains(RaceField.goalKind)) {
+      return null;
+    }
+    return _nameResolution(draft).teachable;
+  }
+
   /// Advance to the next visible stage in response to a step's CTA.
   ///
   /// Custom movement: `activity` → `train` opens Teach Nuvo immediately and the
@@ -312,7 +379,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       _syncGuide(_Step.activity);
       next = v[i + 2];
     }
-    if (next == _Step.train && draft.verifierSpec == null) {
+    if (next == _Step.train && !draft.hasVerifierSpec) {
       _openTraining(reason: r);
       return;
     }
@@ -327,18 +394,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final name = (draft.customActivityName ?? '').trim();
     if (name.isEmpty) return;
     _goToStep(_Step.train, reason: reason);
-    final spec = await context.push<CustomPoseVerifierSpec>(
+    final learned = await context.push<LearnedCustomMovement>(
       '/races/teach',
       extra: TeachMovementArgs(movementName: name, unit: draft.customUnit),
     );
     if (!mounted) return;
-    if (spec != null) {
+    if (learned != null) {
       ref.read(_composerDraftProvider.notifier).state = ref
           .read(_composerDraftProvider)
-          .copyWith(verifierSpec: spec);
+          .copyWith(
+            verifierSpec: learned.verifierSpec,
+            motionV2Spec: learned.motionV2Spec,
+          );
       _goToStep(_Step.goal, reason: 'teach nuvo returned verifier spec');
     }
-    // spec == null → user backed out; stay on `train` (retry button visible).
+    // null → user backed out; stay on `train` (retry button visible).
   }
 
   /// Backing all the way out to Compete re-arms the guide's first step so
@@ -389,11 +459,8 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     _Step.activity =>
       _inputDone.contains(step) ||
           draft.isCustom ||
-          (draft.isManual &&
-              (draft.manualGoalName ?? '').trim().isNotEmpty),
-    _Step.goal ||
-    _Step.racers =>
-      _inputDone.contains(step),
+          (draft.isManual && (draft.manualGoalName ?? '').trim().isNotEmpty),
+    _Step.goal || _Step.racers => _inputDone.contains(step),
     _Step.train || _Step.review => false,
   };
 
@@ -424,7 +491,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final draft = ref.read(_composerDraftProvider);
     _lastCreatePathUsed = draft.isCustom ? 'custom' : 'preset';
     if (draft.isCustom) {
-      if (draft.verifierSpec == null || draft.customActivityName == null) {
+      if (!draft.hasVerifierSpec || draft.customActivityName == null) {
         // Invariant broken before we ever hit the backend — send the user back
         // to the training stage instead of showing a server "couldn't create".
         assert(() {
@@ -438,7 +505,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           _error = 'Teach Nuvo this movement first — record it 3 times.';
           _lastApiError = null;
         });
-        _goToStep(_Step.train, reason: 'create guard: no verifier spec');
+        _goToStep(
+          _Step.train,
+          reason: 'create guard: no verifier spec',
+          keepError: true,
+        );
         return;
       }
       if (draft.resolvedTitle.trim().isEmpty) {
@@ -472,7 +543,8 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       final controller = ref.read(raceControllerProvider.notifier);
       // Captured before create — this is the first-race payoff, not an
       // every-create toast. When the guide is coaching it owns the moment.
-      final isFirstRace = ref.read(raceControllerProvider).races.isEmpty &&
+      final isFirstRace =
+          ref.read(raceControllerProvider).races.isEmpty &&
           ref.read(firstRaceGuideProvider) != FirstRaceGuideStep.composerReview;
       final race = await createRaceForComposerDraft(
         draft: draft,
@@ -482,9 +554,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       // Recency belongs to real use: the movement becomes "recent" once the
       // race exists — never because a tile was tapped mid-compose.
       if (!draft.isCustom) {
-        unawaited(ref
-            .read(recentMovementIdsProvider.notifier)
-            .record(draft.activity.activityId));
+        unawaited(
+          ref
+              .read(recentMovementIdsProvider.notifier)
+              .record(draft.activity.activityId),
+        );
       }
       if (!mounted) return;
       final wantsInvite = draft.inviteCrew;
@@ -503,7 +577,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         // Best-effort: on failure land on the invite screen where the same
         // action is one tap away rather than losing them silently.
         try {
-          await controller.addRaceParticipant(race.id, withUser.id, user: withUser);
+          await controller.addRaceParticipant(
+            race.id,
+            withUser.id,
+            user: withUser,
+          );
           if (!mounted) return;
           context.go('/race/${race.id}');
         } catch (_) {
@@ -577,7 +655,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           draft.customActivityName!.isEmpty) {
         return 'missing_custom_activity_name';
       }
-      if (draft.verifierSpec == null) return 'missing_verifier_spec';
+      if (!draft.hasVerifierSpec) return 'missing_verifier_spec';
       return null;
     }
     if (!draft.isValidToCreate) return 'unsupported_activity';
@@ -603,8 +681,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       'draft': {
         'isCustom': draft.isCustom,
         'customActivityName': draft.customActivityName,
-        'verifierSpecPresent': draft.verifierSpec != null,
-        'verifierType': spec?.verifierType,
+        'verifierSpecPresent': draft.hasVerifierSpec,
+        'verifierType': draft.motionV2Spec != null
+            ? motionV2VerifierType
+            : spec?.verifierType,
         'verifierVersion': spec?.schemaVersion,
         'verifierSpecJsonBytes': specJsonBytes,
         'isValidToCreate': draft.isValidToCreate,
@@ -656,106 +736,113 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       child: Stack(
         children: [
           Scaffold(
-      backgroundColor: context.themeColors.page,
-      // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _ComposerTopBar(
-              stepIndex: stepIndex,
-              totalSteps: visible.length,
-              onBack: _loading ? null : _retreat,
-            ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
+            backgroundColor: context.themeColors.page,
+            // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
+            resizeToAvoidBottomInset: true,
+            body: SafeArea(
+              child: Column(
                 children: [
-                  _NamePage(
-                    draft: draft,
-                    catalog: availableMotionActivities(
-                      ref.watch(motionCatalogProvider).valueOrNull,
-                      ref.watch(motionCapabilitiesProvider),
+                  _ComposerTopBar(
+                    stepIndex: stepIndex,
+                    totalSteps: visible.length,
+                    onBack: _loading ? null : _retreat,
+                  ),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        _NamePage(
+                          draft: draft,
+                          catalog: availableMotionActivities(
+                            ref.watch(motionCatalogProvider).valueOrNull,
+                            ref.watch(motionCapabilitiesProvider),
+                          ),
+                          onDraftChanged: (d) =>
+                              ref.read(_composerDraftProvider.notifier).state =
+                                  d,
+                          onNext: _advance,
+                          onInput: () => _markInput(_Step.name),
+                          onFocusChange: (f) {
+                            // Focus only suppresses the CTA while editing an
+                            // UNSATISFIED name. The field autofocuses when you come
+                            // back to a completed Name page — that must not drag
+                            // the coach off the continue button.
+                            final satisfied =
+                                _inputDone.contains(_Step.name) ||
+                                ref.read(_composerDraftProvider).hasCustomName;
+                            final editing = f && !satisfied;
+                            if (editing != _nameFocused) {
+                              setState(() => _nameFocused = editing);
+                            }
+                          },
+                        ),
+                        _ActivityPage(
+                          draft: draft,
+                          preferManual: _preferManualSubject,
+                          teachSuggestion: _teachSuggestionFor(draft),
+                          onDraftChanged: (d) =>
+                              ref.read(_composerDraftProvider.notifier).state =
+                                  d,
+                          onNext: _advance,
+                          onInput: () => _markInput(_Step.activity),
+                        ),
+                        _TrainPage(
+                          draft: draft,
+                          onTrain: () =>
+                              _openTraining(reason: 'train page retry'),
+                          onContinue: () => _advance(
+                            reason: 'train page continue (already trained)',
+                          ),
+                        ),
+                        _GoalPage(
+                          draft: draft,
+                          onDraftChanged: (d) =>
+                              ref.read(_composerDraftProvider.notifier).state =
+                                  d,
+                          onNext: _advance,
+                          onInput: () => _markInput(_Step.goal),
+                          onEditSubject: () {
+                            // A resolved custom goal reopens the manual form, not
+                            // the movement picker — the chip says "edit Math Grade"
+                            // so that's the surface it must land on.
+                            final d = ref.read(_composerDraftProvider);
+                            if (d.isManual && !_preferManualSubject) {
+                              setState(() => _preferManualSubject = true);
+                            }
+                            _goToStep(
+                              _Step.activity,
+                              reason: 'edit resolved subject',
+                            );
+                          },
+                        ),
+                        _RacersPage(
+                          draft: draft,
+                          withUser: widget.prefill?.withUser,
+                          onDraftChanged: (d) =>
+                              ref.read(_composerDraftProvider.notifier).state =
+                                  d,
+                          onNext: _advance,
+                          onInput: () => _markInput(_Step.racers),
+                        ),
+                        _ReviewPage(
+                          draft: draft,
+                          loading: _loading,
+                          error: _error,
+                          onStart: _startRace,
+                          onEditStep: (s) =>
+                              _goToStep(s, reason: 'review: edit step'),
+                          showDiagnostics:
+                              kDebugMode || kNuvoDiagnosticsEnabled,
+                          onCopyDiagnostics: () =>
+                              _copyRaceComposerDebugReport(draft),
+                        ),
+                      ],
                     ),
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                    onInput: () => _markInput(_Step.name),
-                    onFocusChange: (f) {
-                      // Focus only suppresses the CTA while editing an
-                      // UNSATISFIED name. The field autofocuses when you come
-                      // back to a completed Name page — that must not drag
-                      // the coach off the continue button.
-                      final satisfied =
-                          _inputDone.contains(_Step.name) ||
-                          ref.read(_composerDraftProvider).hasCustomName;
-                      final editing = f && !satisfied;
-                      if (editing != _nameFocused) {
-                        setState(() => _nameFocused = editing);
-                      }
-                    },
-                  ),
-                  _ActivityPage(
-                    draft: draft,
-                    preferManual: _preferManualSubject,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                    onInput: () => _markInput(_Step.activity),
-                  ),
-                  _TrainPage(
-                    draft: draft,
-                    onTrain: () => _openTraining(reason: 'train page retry'),
-                    onContinue: () => _advance(
-                      reason: 'train page continue (already trained)',
-                    ),
-                  ),
-                  _GoalPage(
-                    draft: draft,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                    onInput: () => _markInput(_Step.goal),
-                    onEditSubject: () {
-                      // A resolved custom goal reopens the manual form, not
-                      // the movement picker — the chip says "edit Math Grade"
-                      // so that's the surface it must land on.
-                      final d = ref.read(_composerDraftProvider);
-                      if (d.isManual && !_preferManualSubject) {
-                        setState(() => _preferManualSubject = true);
-                      }
-                      _goToStep(
-                        _Step.activity,
-                        reason: 'edit resolved subject',
-                      );
-                    },
-                  ),
-                  _RacersPage(
-                    draft: draft,
-                    withUser: widget.prefill?.withUser,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                    onInput: () => _markInput(_Step.racers),
-                  ),
-                  _ReviewPage(
-                    draft: draft,
-                    loading: _loading,
-                    error: _error,
-                    onStart: _startRace,
-                    onEditStep: (s) =>
-                        _goToStep(s, reason: 'review: edit step'),
-                    showDiagnostics: kDebugMode || kNuvoDiagnosticsEnabled,
-                    onCopyDiagnostics: () =>
-                        _copyRaceComposerDebugReport(draft),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
           ),
           // iOS edge swipe: canPop=false disables the route's native pop
           // gesture, so a left-edge rightward drag performs the same
@@ -802,6 +889,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           eyebrow: spec.eyebrow,
           title: spec.title,
           body: spec.body,
+          dim: spec.dim,
         ),
       ],
     );
@@ -919,41 +1007,44 @@ class _PageShell extends StatelessWidget {
         Expanded(
           child: NuvoFadeScroll(
             child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            // Density-aware chrome: a short phone gets a tighter question
-            // block so the decision surface fits the first viewport; the
-            // composition below is identical at every density.
-            padding: EdgeInsets.fromLTRB(
-              24,
-              context.nuvoDensity.pick(compact: 10, regular: 18, large: 18),
-              24,
-              16,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  question,
-                  style: AppTextStyles.headlineLarge.copyWith(
-                    color: context.themeColors.ink,
-                    height: 1.1,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              // Density-aware chrome: a short phone gets a tighter question
+              // block so the decision surface fits the first viewport; the
+              // composition below is identical at every density.
+              padding: EdgeInsets.fromLTRB(
+                24,
+                context.nuvoDensity.pick(compact: 10, regular: 18, large: 18),
+                24,
+                16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    question,
+                    style: AppTextStyles.headlineLarge.copyWith(
+                      color: context.themeColors.ink,
+                      height: 1.1,
+                    ),
+                  ).animate().fadeIn(duration: 220.ms),
+                  const SizedBox(height: 6),
+                  Text(
+                    support,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.themeColors.inkMuted,
+                    ),
                   ),
-                ).animate().fadeIn(duration: 220.ms),
-                const SizedBox(height: 6),
-                Text(
-                  support,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.themeColors.inkMuted,
+                  SizedBox(
+                    height: context.nuvoDensity.pick(
+                      compact: 12,
+                      regular: 16,
+                      large: 16,
+                    ),
                   ),
-                ),
-                SizedBox(
-                  height: context.nuvoDensity
-                      .pick(compact: 12, regular: 16, large: 16),
-                ),
-                body.animate(delay: 60.ms).fadeIn(duration: 220.ms),
-              ],
+                  body.animate(delay: 60.ms).fadeIn(duration: 220.ms),
+                ],
+              ),
             ),
-          ),
           ),
         ),
         Padding(
@@ -1074,7 +1165,9 @@ class _NamePageState extends State<_NamePage> {
     final safety = evaluateRaceSafety(text);
     if (!safety.isAllowed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(safety.reason ?? 'That race isn\u2019t allowed.')),
+        SnackBar(
+          content: Text(safety.reason ?? 'That race isn\u2019t allowed.'),
+        ),
       );
       return;
     }
@@ -1098,7 +1191,7 @@ class _NamePageState extends State<_NamePage> {
   Widget build(BuildContext context) {
     return _PageShell(
       question: 'Name your race.',
-      support: 'Your crew will see this name.',
+      support: 'Your friends will see this name.',
       ctaLabel: 'Choose activity',
       onCta: _commit,
       ctaEnabled: _ctrl.text.trim().isNotEmpty,
@@ -1182,7 +1275,9 @@ class _LargeTextFieldState extends State<_LargeTextField> {
         ),
         boxShadow: [
           BoxShadow(
-            color: context.themeColors.ink.withValues(alpha: _focused ? 0.12 : 0.18),
+            color: context.themeColors.ink.withValues(
+              alpha: _focused ? 0.12 : 0.18,
+            ),
             blurRadius: 0,
             offset: const Offset(3, 3),
           ),
@@ -1263,10 +1358,16 @@ class _ActivityPage extends ConsumerStatefulWidget {
     required this.onNext,
     this.onInput,
     this.preferManual = false,
+    this.teachSuggestion,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// The camera-countable movement the typed name resolved to ("pull ups"),
+  /// when there is positive evidence for one. Replaces the busy picker with a
+  /// single centred question: teach it, or count it by hand.
+  final TeachableMovement? teachSuggestion;
 
   /// The goal step's subject chip routed here to edit a resolved custom
   /// goal — the manual form leads instead of the movement picker.
@@ -1292,6 +1393,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   /// The user chose "Teach Nuvo a new movement" — collect its name + unit here,
   /// then Continue advances to the required training stage.
   bool _teachMode = false;
+
+  /// The user declined the one-question teach suggestion ("Pick a different
+  /// movement") — show the normal picker.
+  bool _suggestionDismissed = false;
 
   /// Progressive disclosure — the primary view is just four movements. The
   /// full browser (search, categories, catalog) opens behind
@@ -1329,9 +1434,11 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     // The primary tiles are the user's real recents — load them now so the
     // first paint isn't waiting on keychain storage. When they resolve, the
     // starter composition freezes into the personalized one — once.
-    unawaited(ref.read(recentMovementIdsProvider.notifier).load().then((_) {
-      if (mounted) setState(() => _freezeRequested = true);
-    }));
+    unawaited(
+      ref.read(recentMovementIdsProvider.notifier).load().then((_) {
+        if (mounted) setState(() => _freezeRequested = true);
+      }),
+    );
   }
 
   @override
@@ -1363,10 +1470,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   void _setKind(RaceGoalKind kind) {
     if (widget.draft.goalKind == kind) return;
     widget.onDraftChanged(
-      widget.draft.copyWith(
-        goalKind: kind,
-        markEdited: {RaceField.goalKind},
-      ),
+      widget.draft.copyWith(goalKind: kind, markEdited: {RaceField.goalKind}),
     );
     setState(() {});
   }
@@ -1438,12 +1542,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   List<MotionActivityDefinition> _primaryPicks(
     List<MotionActivityDefinition> available,
   ) {
-    const preferred = [
-      'push_ups',
-      'squats',
-      'jumping_jacks',
-      'plank_hold',
-    ];
+    const preferred = ['push_ups', 'squats', 'jumping_jacks', 'plank_hold'];
     final picks = <MotionActivityDefinition>[];
     final seen = <String>{};
     for (final id in preferred) {
@@ -1468,7 +1567,8 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     // fallback, not a choice — the movement picker still owns the screen
     // (suggested tiles, See all, Teach Nuvo, custom goal). The custom-goal
     // form only leads when the user actually chose that path.
-    final showManual = isManual &&
+    final showManual =
+        isManual &&
         (_manualMode ||
             widget.preferManual ||
             widget.draft.userEditedFields.contains(RaceField.goalKind));
@@ -1481,39 +1581,80 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       remoteSnapshot,
       capabilities,
     );
-    final categories = availableActivities.map((activity) => activity.category).toSet().toList()
-      ..sort((a, b) => a.index.compareTo(b.index));
+    final categories =
+        availableActivities
+            .map((activity) => activity.category)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.index.compareTo(b.index));
     final sorted = [...availableActivities]
       ..sort((a, b) {
         final category = a.category.index.compareTo(b.category.index);
-        return category == 0 ? a.sortPriority.compareTo(b.sortPriority) : category;
+        return category == 0
+            ? a.sortPriority.compareTo(b.sortPriority)
+            : category;
       });
     // A draft can arrive pre-filled (initial state or name interpretation) —
     // the picker only treats a movement as SELECTED once the user picks one
     // here. Everything else stays a suggestion: tile unselected, CTA quiet.
-    final userPicked =
-        widget.draft.userEditedFields.contains(RaceField.activity);
-    final selectedActivityId =
-        userPicked ? widget.draft.activity.activityId : '';
+    final userPicked = widget.draft.userEditedFields.contains(
+      RaceField.activity,
+    );
+    final selectedActivityId = userPicked
+        ? widget.draft.activity.activityId
+        : '';
+
+    final suggestion = widget.teachSuggestion;
+    if (suggestion != null &&
+        !_suggestionDismissed &&
+        !_teachMode &&
+        !showManual) {
+      return NuvoFocusedStage(
+        icon: Icons.videocam_rounded,
+        title: 'Count ${suggestion.name} with the camera?',
+        body:
+            'Nuvo can learn it. You show it 3 times, then it counts every '
+            '${suggestion.isHold ? 'second you hold it' : 'rep'}.',
+        primaryLabel: 'Teach Nuvo',
+        primaryKey: FirstRaceGuideKeys.composerActivityCta,
+        onPrimary: () {
+          _moveNameController.text = suggestion.name;
+          _moveUnitController.text = suggestion.unit;
+          _syncCustomMovement();
+          widget.onNext();
+        },
+        links: [
+          (
+            'Count it by hand',
+            () {
+              // An explicit choice: remember it so the suggestion never returns.
+              widget.onDraftChanged(
+                widget.draft.copyWith(
+                  goalKind: RaceGoalKind.manual,
+                  markEdited: {RaceField.goalKind},
+                ),
+              );
+              setState(() => _manualMode = true);
+            },
+          ),
+          (
+            'Pick a different movement',
+            () => setState(() => _suggestionDismissed = true),
+          ),
+        ],
+      );
+    }
 
     // Entering Teach Nuvo is an explicit path choice — a manual-goalKind
     // draft must not dead-end the card's tap on this guard.
     if (_teachMode) {
       final canContinue = _moveNameController.text.trim().isNotEmpty;
-      return _PageShell(
-        question: 'Your custom movement',
-        support:
-            'Name it and pick how it is counted. Next you\'ll teach it to '
-            'Nuvo.',
-        ctaLabel: 'Continue to training',
-        ctaEnabled: canContinue,
-        ctaKey: FirstRaceGuideKeys.composerActivityCta,
-        onCta: () {
-          _syncCustomMovement();
-          widget.onNext();
-        },
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      return NuvoFocusedStage(
+        icon: Icons.videocam_rounded,
+        title: 'Your custom movement',
+        body:
+            'Name it and pick how it is counted. Next you\'ll teach it to Nuvo.',
+        content: Column(
           children: [
             _ComposerField(
               controller: _moveNameController,
@@ -1531,32 +1672,28 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               hint: 'reps',
               onChanged: (_) => _syncCustomMovement(),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Nuvo watches you do it 3 times, learns the shape of the motion, '
-              'then counts every rep live.',
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
-            ),
-            const SizedBox(height: 16),
-            NuvoTertiaryButton(
-              label: 'Pick a preset movement instead',
-              small: true,
-              onPressed: () => setState(() => _teachMode = false),
-            ),
-            const SizedBox(height: 8),
-            NuvoTertiaryButton(
-              label: 'Use a custom goal instead',
-              small: true,
-              onPressed: () => _setKind(RaceGoalKind.manual),
-            ),
           ],
         ),
+        primaryLabel: 'Continue to training',
+        primaryKey: FirstRaceGuideKeys.composerActivityCta,
+        onPrimary: canContinue
+            ? () {
+                _syncCustomMovement();
+                widget.onNext();
+              }
+            : null,
+        links: [
+          (
+            'Pick a preset movement instead',
+            () => setState(() => _teachMode = false),
+          ),
+          ('Use a custom goal instead', () => _setKind(RaceGoalKind.manual)),
+        ],
       );
     }
 
     // The CTA stays quiet until the user has actually picked a movement.
-    final hasActivity =
-        !widget.draft.isCustom && selectedActivityId.isNotEmpty;
+    final hasActivity = !widget.draft.isCustom && selectedActivityId.isNotEmpty;
 
     // The primary slots belong to the user's real recent movements when any
     // exist — padded from the canonical starters under their own label so a
@@ -1609,17 +1746,20 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       question: 'What are you competing in?',
       // A clarification from the title interpretation is the support copy —
       // answering it IS filling in the fields below.
-      support: widget.draft.clarification ??
-          (showManual ? 'Name the goal and how it is measured.' : 'Pick a movement.'),
+      support:
+          widget.draft.clarification ??
+          (showManual
+              ? 'Name the goal and how it is measured.'
+              : 'Pick a movement.'),
       // Long movement names fall back to "Continue" — the selected tile
       // carries the name; a FittedBox-shrunk 48-char label is unreadable.
       ctaLabel: showManual
           ? 'Set the finish line'
           : hasActivity
-              ? (widget.draft.activity.title.length <= 18
-                  ? 'Continue with ${widget.draft.activity.title}'
-                  : 'Continue')
-              : 'Pick a movement',
+          ? (widget.draft.activity.title.length <= 18
+                ? 'Continue with ${widget.draft.activity.title}'
+                : 'Continue')
+          : 'Pick a movement',
       ctaEnabled: showManual || hasActivity,
       ctaKey: FirstRaceGuideKeys.composerActivityCta,
       onCta: () {
@@ -1653,7 +1793,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                     const SizedBox(height: 12),
                     Text(
                       'Racers log their own progress. Nuvo keeps the leaderboard; '
-                      'your crew keeps each other honest.',
+                      'your friends keep each other honest.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: context.themeColors.inkMuted,
                       ),
@@ -1670,99 +1810,95 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                   ],
                 )
               : _browseAll
-                  ? _MovementBrowser(
-                      key: const ValueKey('browse'),
-                      searchController: _searchController,
-                      searchQuery: _searchQuery,
-                      onSearchChanged: (v) => setState(() => _searchQuery = v),
-                      onCollapse: () => setState(() {
-                        _browseAll = false;
-                        _searchQuery = '';
-                        _searchController.clear();
-                        _selectedCategory = null;
-                      }),
-                      activities: browserActivities,
-                      sorted: browserActivities,
-                      categories: browserCategories,
-                      recentActivities: browserRecents,
-                      selectedCategory: _selectedCategory,
-                      onCategoryChanged: (cat) =>
-                          setState(() => _selectedCategory = cat),
-                      selectedActivityId: selectedActivityId,
-                      onSelect: _select,
-                      onTeachNuvo: () => setState(() => _teachMode = true),
-                      onCustomGoal: () {
-                        _setKind(RaceGoalKind.manual);
-                        setState(() => _manualMode = true);
-                      },
-                    )
-                  : Column(
-                      key: const ValueKey('primary'),
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Recents resolve async — when they land, the
-                        // starter set crossfades into the personalized
-                        // groups instead of snapping under the user's
-                        // finger. A user's selection always survives the
-                        // swap (injected into the picks above).
-                        AnimatedSwitcher(
-                          duration: MediaQuery.disableAnimationsOf(context)
-                              ? Duration.zero
-                              : const Duration(milliseconds: 220),
-                          child: Column(
-                            key: ValueKey(
-                              pickerRecents.isEmpty
-                                  ? 'starters'
-                                  : 'recent-${pickerRecents.length}',
-                            ),
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // One header row carries the group label AND
-                              // the catalog escape — the standalone "See
-                              // all" row was what pushed the secondary
-                              // paths below the fold.
-                              _PickHeader(
-                                label: pickerRecents.isEmpty
-                                    ? 'Quick picks'
-                                    : pickerRecents.length == 1
-                                        ? 'Recent activity'
-                                        : 'Recent activities',
-                                actionLabel: 'See all movements',
-                                onAction: () =>
-                                    setState(() => _browseAll = true),
-                              ),
-                              // Four choices max — recents first, starters
-                              // pad to fill. The grid is bounded: it does
-                              // not grow with recent count.
-                              _PickRows(
-                                activities: [
-                                  ...pickerRecents,
-                                  ...pickerPads,
-                                ],
-                                selectedActivityId: selectedActivityId,
-                                onSelect: _select,
-                              ),
-                            ],
+              ? _MovementBrowser(
+                  key: const ValueKey('browse'),
+                  searchController: _searchController,
+                  searchQuery: _searchQuery,
+                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  onCollapse: () => setState(() {
+                    _browseAll = false;
+                    _searchQuery = '';
+                    _searchController.clear();
+                    _selectedCategory = null;
+                  }),
+                  activities: browserActivities,
+                  sorted: browserActivities,
+                  categories: browserCategories,
+                  recentActivities: browserRecents,
+                  selectedCategory: _selectedCategory,
+                  onCategoryChanged: (cat) =>
+                      setState(() => _selectedCategory = cat),
+                  selectedActivityId: selectedActivityId,
+                  onSelect: _select,
+                  onTeachNuvo: () => setState(() => _teachMode = true),
+                  onCustomGoal: () {
+                    _setKind(RaceGoalKind.manual);
+                    setState(() => _manualMode = true);
+                  },
+                )
+              : Column(
+                  key: const ValueKey('primary'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Recents resolve async — when they land, the
+                    // starter set crossfades into the personalized
+                    // groups instead of snapping under the user's
+                    // finger. A user's selection always survives the
+                    // swap (injected into the picks above).
+                    AnimatedSwitcher(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      child: Column(
+                        key: ValueKey(
+                          pickerRecents.isEmpty
+                              ? 'starters'
+                              : 'recent-${pickerRecents.length}',
+                        ),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // One header row carries the group label AND
+                          // the catalog escape — the standalone "See
+                          // all" row was what pushed the secondary
+                          // paths below the fold.
+                          _PickHeader(
+                            label: pickerRecents.isEmpty
+                                ? 'Quick picks'
+                                : pickerRecents.length == 1
+                                ? 'Recent activity'
+                                : 'Recent activities',
+                            actionLabel: 'See all movements',
+                            onAction: () => setState(() => _browseAll = true),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        _TeachNuvoCard(
-                          onTap: () => setState(() => _teachMode = true),
-                        ),
-                        const SizedBox(height: 4),
-                        Center(
-                          child: _TextPath(
-                            label: 'Not a movement? Create a custom goal',
-                            icon: Icons.arrow_forward_rounded,
-                            quiet: true,
-                            onTap: () {
-                              _setKind(RaceGoalKind.manual);
-                              setState(() => _manualMode = true);
-                            },
+                          // Four choices max — recents first, starters
+                          // pad to fill. The grid is bounded: it does
+                          // not grow with recent count.
+                          _PickRows(
+                            activities: [...pickerRecents, ...pickerPads],
+                            selectedActivityId: selectedActivityId,
+                            onSelect: _select,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 6),
+                    _TeachNuvoCard(
+                      onTap: () => setState(() => _teachMode = true),
+                    ),
+                    const SizedBox(height: 4),
+                    Center(
+                      child: _TextPath(
+                        label: 'Not a movement? Create a custom goal',
+                        icon: Icons.arrow_forward_rounded,
+                        quiet: true,
+                        onTap: () {
+                          _setKind(RaceGoalKind.manual);
+                          setState(() => _manualMode = true);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -1807,10 +1943,7 @@ class _PickHeader extends StatelessWidget {
               onTap: onAction,
               scale: 0.96,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minHeight: 40,
-                  minWidth: 44,
-                ),
+                constraints: const BoxConstraints(minHeight: 40, minWidth: 44),
                 child: Padding(
                   padding: const EdgeInsets.only(left: 10),
                   child: Row(
@@ -1860,17 +1993,15 @@ class _PickRows extends StatelessWidget {
   /// Compact tiles — the primary picker is a fast decision, not a catalog.
   /// Density-aware (short phones get shorter tiles) and text-scaled so the
   /// name + metric still fit at accessibility sizes.
-  static double tileHeight(BuildContext context) =>
-      MediaQuery.textScalerOf(context).scale(
-        context.nuvoDensity.pick(compact: 80, regular: 90, large: 92),
-      );
+  static double tileHeight(BuildContext context) => MediaQuery.textScalerOf(
+    context,
+  ).scale(context.nuvoDensity.pick(compact: 80, regular: 90, large: 92));
 
   /// Full-width strips are WIDER, not taller — an odd trailing pick or a
   /// single suggested tile reads as the same weight as the pair above.
-  static double flatTileHeight(BuildContext context) =>
-      MediaQuery.textScalerOf(context).scale(
-        context.nuvoDensity.pick(compact: 54, regular: 58, large: 60),
-      );
+  static double flatTileHeight(BuildContext context) => MediaQuery.textScalerOf(
+    context,
+  ).scale(context.nuvoDensity.pick(compact: 54, regular: 58, large: 60));
 
   static const double gap = 8;
 
@@ -1943,9 +2074,7 @@ class _TextPath extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = quiet
-        ? context.themeColors.inkMuted
-        : NuvoColors.actionBlue;
+    final color = quiet ? context.themeColors.inkMuted : NuvoColors.actionBlue;
     return Semantics(
       button: true,
       label: label,
@@ -1967,8 +2096,7 @@ class _TextPath extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelMedium.copyWith(
                       color: color,
-                      fontWeight:
-                          quiet ? FontWeight.w600 : FontWeight.w800,
+                      fontWeight: quiet ? FontWeight.w600 : FontWeight.w800,
                     ),
                   ),
                 ),
@@ -2093,6 +2221,7 @@ class _TeachNuvoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!NuvoFlags.customMotionOn) return const SizedBox.shrink();
     final c = context.themeColors;
     const accent = NuvoColors.avatarPlum;
     return PressableScale(
@@ -2102,7 +2231,9 @@ class _TeachNuvoCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: accent.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.09,
+            alpha: Theme.of(context).brightness == Brightness.dark
+                ? 0.16
+                : 0.09,
           ),
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           border: Border.all(color: accent.withValues(alpha: 0.35), width: 1.5),
@@ -2125,9 +2256,7 @@ class _TeachNuvoCard extends StatelessWidget {
                   const SizedBox(height: 1),
                   Text(
                     'Make your own movement',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: c.inkMuted,
-                    ),
+                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
                   ),
                 ],
               ),
@@ -2207,61 +2336,18 @@ class _TrainPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trained = draft.verifierSpec != null;
+    final trained = draft.hasVerifierSpec;
     final name = (draft.customActivityName ?? 'your movement').trim();
-    return _PageShell(
-      question: trained ? '"$name" is ready' : 'Teach Nuvo "$name"',
-      support: trained
-          ? 'Nuvo learned the motion. Continue to set the target.'
-          : 'Record it 3 times so Nuvo can recognise every rep. This step '
-                'is required before you can race on it.',
-      ctaLabel: trained ? 'Continue' : 'Start training',
-      onCta: trained ? onContinue : onTrain,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: trained
-                  ? NuvoColors.success.withValues(alpha: 0.08)
-                  : context.semanticColors.neutral.surface,
-              borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: Border.all(
-                color: trained ? NuvoColors.success : context.semanticColors.neutral.border,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  trained ? Icons.check_circle_rounded : Icons.videocam_rounded,
-                  color: trained ? NuvoColors.success : NuvoColors.blue,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    trained
-                        ? 'Movement trained — Nuvo learned "$name".'
-                        : 'Not trained yet. Tap Start training to record your '
-                              '3 examples, then test it.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.themeColors.ink,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (trained) ...[
-            const SizedBox(height: 12),
-            NuvoTertiaryButton(
-              label: 'Retrain this movement',
-              small: true,
-              onPressed: onTrain,
-            ),
-          ],
-        ],
-      ),
+    return NuvoFocusedStage(
+      icon: trained ? Icons.check_circle_rounded : Icons.videocam_rounded,
+      accent: trained ? NuvoColors.success : NuvoColors.blue,
+      title: trained ? 'Nuvo can count $name' : 'Teach Nuvo $name',
+      body: trained
+          ? 'It learned the motion. Next, set the finish line.'
+          : 'Show it 3 times so Nuvo can count every rep.',
+      primaryLabel: trained ? 'Continue' : 'Start',
+      onPrimary: trained ? onContinue : onTrain,
+      links: [if (trained) ('Teach it again', onTrain)],
     );
   }
 }
@@ -2299,7 +2385,7 @@ class _ComposerField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
+          borderSide: BorderSide(color: context.themeColors.accent, width: 2),
         ),
       ),
     );
@@ -2331,7 +2417,7 @@ class _SearchBar extends StatelessWidget {
         hintStyle: AppTextStyles.bodyMedium.copyWith(color: c.inkSubtle),
         prefixIcon: Icon(Icons.search_rounded, color: c.inkSubtle, size: 20),
         filled: true,
-        fillColor: c.panel,
+        fillColor: c.surface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,
@@ -2339,7 +2425,7 @@ class _SearchBar extends StatelessWidget {
         border: quiet,
         enabledBorder: quiet,
         focusedBorder: quiet.copyWith(
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.5),
+          borderSide: BorderSide(color: context.themeColors.accent, width: 1.5),
         ),
         errorBorder: quiet,
       ),
@@ -2419,7 +2505,9 @@ class _CategoryTab extends StatelessWidget {
         child: Text(
           label,
           style: AppTextStyles.bodySmall.copyWith(
-            color: selected ? NuvoColors.actionBlue : context.themeColors.inkMuted,
+            color: selected
+                ? NuvoColors.actionBlue
+                : context.themeColors.inkMuted,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
@@ -2462,10 +2550,7 @@ class _RecentMovements extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'RECENT',
-          style: AppTextStyles.eyebrow.copyWith(color: c.inkDim),
-        ),
+        Text('RECENT', style: AppTextStyles.eyebrow.copyWith(color: c.inkDim)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -2505,12 +2590,10 @@ class _RecentChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.14)
-              : c.panelLight,
+          color: selected ? NuvoColors.actionBlue : c.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
           border: Border.all(
-            color: selected ? NuvoColors.actionBlue : Colors.transparent,
+            color: selected ? NuvoColors.actionBlue : c.border,
             width: 1.5,
           ),
         ),
@@ -2520,14 +2603,14 @@ class _RecentChip extends StatelessWidget {
             Icon(
               activity.icon,
               size: 14,
-              color: selected ? NuvoColors.actionBlue : c.inkMuted,
+              color: selected ? NuvoColors.white : c.inkMuted,
             ),
             const SizedBox(width: 6),
             Text(
               activity.title,
               style: AppTextStyles.labelMedium.copyWith(
                 fontSize: 12.5,
-                color: selected ? NuvoColors.actionBlue : c.ink,
+                color: selected ? NuvoColors.white : c.ink,
               ),
             ),
           ],
@@ -2640,126 +2723,129 @@ class _MovementTile extends StatelessWidget {
   }
 
   Widget _iconBox(Color accent, [double size = 30]) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.white.withValues(alpha: 0.22)
-              : accent.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(NuvoRadii.md - 2),
-        ),
-        child: Icon(
-          activity.icon,
-          size: size - 13,
-          color: selected ? NuvoColors.white : accent,
-        ),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: selected
+          ? NuvoColors.white.withValues(alpha: 0.22)
+          : accent.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(NuvoRadii.md - 2),
+    ),
+    child: Icon(
+      activity.icon,
+      size: size - 13,
+      color: selected ? NuvoColors.white : accent,
+    ),
+  );
 
   Widget _check() => SizedBox(
-        width: 20,
-        height: 20,
-        child: selected
-            ? Container(
-                decoration: const BoxDecoration(
-                  color: NuvoColors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  size: 13,
-                  color: NuvoColors.actionBlue,
-                ),
-              )
-            : null,
-      );
+    width: 20,
+    height: 20,
+    child: selected
+        ? Container(
+            decoration: const BoxDecoration(
+              color: NuvoColors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              size: 13,
+              color: NuvoColors.actionBlue,
+            ),
+          )
+        : null,
+  );
 
   /// Compact stack: icon row, short gap, name, hair gap, unit — no dead
   /// middle space. One-line name: the tile is a fast pick, not a card.
-  Widget _stackedContent(BuildContext context, NuvoThemeColors c, Color accent) {
+  Widget _stackedContent(
+    BuildContext context,
+    NuvoThemeColors c,
+    Color accent,
+  ) {
     // Compact phones get a tighter stack — the same content in less air so
     // the fixed tile height is real, not aspirational.
     final compact = context.nuvoDensity == NuvoDensity.compact;
     return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconBox(accent, compact ? 26 : 30),
-              const Spacer(),
-              _check(),
-            ],
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _iconBox(accent, compact ? 26 : 30),
+            const Spacer(),
+            _check(),
+          ],
+        ),
+        SizedBox(height: compact ? 4 : 6),
+        Text(
+          activity.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: selected ? NuvoColors.white : c.ink,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            height: 1.12,
           ),
-          SizedBox(height: compact ? 4 : 6),
-          Text(
-            activity.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? NuvoColors.white : c.ink,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              height: 1.12,
-            ),
+        ),
+        SizedBox(height: compact ? 1 : 2),
+        // The canonical unit stays visible in every state — a selected
+        // tile must still tell you what you're logging.
+        Text(
+          activity.unit,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: selected
+                ? NuvoColors.white.withValues(alpha: 0.82)
+                : c.inkSubtle,
+            fontSize: 11.5,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
-          SizedBox(height: compact ? 1 : 2),
-          // The canonical unit stays visible in every state — a selected
-          // tile must still tell you what you're logging.
-          Text(
-            activity.unit,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: selected
-                  ? NuvoColors.white.withValues(alpha: 0.82)
-                  : c.inkSubtle,
-              fontSize: 11.5,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ],
+        ),
+      ],
     );
   }
 
   /// The odd-trailing strip: icon · name · unit · check on one line —
   /// same affordance, a fraction of the height.
   Widget _flatContent(NuvoThemeColors c, Color accent) => Row(
-        children: [
-          _iconBox(accent),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text.rich(
+    children: [
+      _iconBox(accent),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text.rich(
+          TextSpan(
+            children: [
               TextSpan(
-                children: [
-                  TextSpan(
-                    text: activity.title,
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: selected ? NuvoColors.white : c.ink,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.12,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '  ·  ${activity.unit}',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: selected
-                          ? NuvoColors.white.withValues(alpha: 0.82)
-                          : c.inkSubtle,
-                      fontSize: 11.5,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ],
+                text: activity.title,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: selected ? NuvoColors.white : c.ink,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+              TextSpan(
+                text: '  ·  ${activity.unit}',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: selected
+                      ? NuvoColors.white.withValues(alpha: 0.82)
+                      : c.inkSubtle,
+                  fontSize: 11.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          _check(),
-        ],
-      );
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      const SizedBox(width: 8),
+      _check(),
+    ],
+  );
 }
 
 /// One transient lift when a tile becomes selected — a quick 1→1.045→1 pulse
@@ -2843,7 +2929,9 @@ class _SearchResults extends StatelessWidget {
     final results = activities.where((activity) {
       if (normalized.isEmpty) return true;
       return activity.title.toLowerCase().contains(normalized) ||
-          activity.aliases.any((alias) => alias.toLowerCase().contains(normalized));
+          activity.aliases.any(
+            (alias) => alias.toLowerCase().contains(normalized),
+          );
     }).toList();
     if (results.isEmpty) {
       return Padding(
@@ -2855,22 +2943,23 @@ class _SearchResults extends StatelessWidget {
                 'No movement found.',
                 style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
               ),
-              const SizedBox(height: 8),
-              NuvoPressable(
-                onTap: onTeachNuvo,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    'Create it with Teach Nuvo →',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.avatarPlum,
+              if (NuvoFlags.customMotionOn) const SizedBox(height: 8),
+              if (NuvoFlags.customMotionOn)
+                NuvoPressable(
+                  onTap: onTeachNuvo,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      'Create it with Teach Nuvo →',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: NuvoColors.avatarPlum,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -2938,8 +3027,9 @@ class _SearchResultRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: c.ink,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
                       ),
                     ),
                     Text(
@@ -3183,7 +3273,8 @@ class _GoalPageState extends State<_GoalPage> {
             ? widget.draft.attemptDurationSeconds ?? 60
             : widget.draft.attemptDurationSeconds,
         markEdited: {RaceField.format, RaceField.timing},
-        clearAttemptFields: !f.isAttemptBased &&
+        clearAttemptFields:
+            !f.isAttemptBased &&
             (widget.draft.attemptDurationSeconds != null ||
                 widget.draft.attemptLimit != null),
       ),
@@ -3312,10 +3403,7 @@ class _GoalPageState extends State<_GoalPage> {
           children: [
             // ── Resolved subject — quiet confirmation + override path ─────
             if (widget.onEditSubject != null) ...[
-              _SubjectChip(
-                label: _subjectLabel,
-                onTap: widget.onEditSubject!,
-              ),
+              _SubjectChip(label: _subjectLabel, onTap: widget.onEditSubject!),
               const SizedBox(height: 16),
             ],
 
@@ -3464,8 +3552,7 @@ class _GoalPageState extends State<_GoalPage> {
                   for (final (label, seconds) in _attemptDurations)
                     _SuggestedTarget(
                       value: label,
-                      selected:
-                          widget.draft.attemptDurationSeconds == seconds,
+                      selected: widget.draft.attemptDurationSeconds == seconds,
                       onTap: () => _setAttemptDuration(seconds),
                     ),
                 ],
@@ -3543,11 +3630,11 @@ class _GoalDisplay extends StatelessWidget {
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
         border: Border.all(color: context.themeColors.border, width: 2),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: NuvoColors.inkNavy,
+            color: context.themeColors.inkShadow,
             blurRadius: 0,
-            offset: Offset(4, 4),
+            offset: const Offset(4, 4),
           ),
         ],
       ),
@@ -3612,7 +3699,9 @@ class _GoalDisplay extends StatelessWidget {
                   editing ? 'tap done to confirm' : unitLabel,
                   style: AppTextStyles.labelUppercase(
                     12,
-                    color: editing ? NuvoColors.actionBlue : context.themeColors.inkMuted,
+                    color: editing
+                        ? NuvoColors.actionBlue
+                        : context.themeColors.inkMuted,
                   ),
                 ),
               ],
@@ -3645,8 +3734,7 @@ class _StepButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onLongPressStart:
-          onHoldStart == null ? null : (_) => onHoldStart!(),
+      onLongPressStart: onHoldStart == null ? null : (_) => onHoldStart!(),
       onLongPressEnd: onHoldEnd == null ? null : (_) => onHoldEnd!(),
       onLongPressCancel: onHoldEnd,
       child: PressableScale(
@@ -3806,7 +3894,7 @@ class _RacersPageState extends State<_RacersPage> {
   Widget build(BuildContext context) {
     return _PageShell(
       question: 'Who are you racing with?',
-      support: 'Race solo or with crew.',
+      support: 'Race solo or with friends.',
       ctaLabel: 'Review race',
       onCta: widget.onNext,
       ctaKey: FirstRaceGuideKeys.composerRacersCta,
@@ -3823,7 +3911,7 @@ class _RacersPageState extends State<_RacersPage> {
             : Column(
                 children: [
                   _RacerOption(
-                    title: 'Pull in your crew',
+                    title: 'Invite your friends',
                     subtitle: 'Invite link opens right after race starts.',
                     icon: Icons.group_add_rounded,
                     selected: _inviteCrew,
@@ -3867,8 +3955,8 @@ class _RacerOption extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
-              : NuvoColors.white,
+              ? context.themeColors.surface
+              : context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           border: Border.all(
             color: selected ? NuvoColors.actionBlue : context.themeColors.ink,
@@ -3883,14 +3971,16 @@ class _RacerOption extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: selected
-                    ? NuvoColors.actionBlue.withValues(alpha: 0.12)
-                    : context.themeColors.panel,
+                    ? NuvoColors.actionBlue
+                    : context.themeColors.surface,
                 borderRadius: BorderRadius.circular(14),
               ),
               alignment: Alignment.center,
               child: Icon(
                 icon,
-                color: selected ? NuvoColors.actionBlue : context.themeColors.ink,
+                color: selected
+                    ? NuvoColors.white
+                    : context.themeColors.ink,
                 size: 22,
               ),
             ),
@@ -3902,7 +3992,9 @@ class _RacerOption extends StatelessWidget {
                   Text(
                     title,
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: selected ? NuvoColors.actionBlue : context.themeColors.ink,
+                      color: selected
+                          ? NuvoColors.actionBlue
+                          : context.themeColors.ink,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -4029,7 +4121,7 @@ class _ReviewPage extends StatelessWidget {
                   'Review your race',
                   style: AppTextStyles.labelUppercase(
                     12,
-                  ).copyWith(color: NuvoColors.blue),
+                  ).copyWith(color: context.themeColors.accent),
                 ).animate().fadeIn(duration: 180.ms),
                 const SizedBox(height: 8),
                 NuvoPressable(
@@ -4057,8 +4149,8 @@ class _ReviewPage extends StatelessWidget {
                   proofLabel: draft.isCustom
                       ? 'Custom movement · camera verified'
                       : draft.isManual
-                          ? 'Score + photo proof'
-                          : 'AI Motion verified',
+                      ? 'Score + photo proof'
+                      : 'AI Motion verified',
                   goalValue: _goalParts.$1,
                   goalUnit: _goalParts.$2,
                 ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
@@ -4070,7 +4162,7 @@ class _ReviewPage extends StatelessWidget {
                       : 'Camera verified',
                   finishLineLabel: _finishLineLabel,
                   finishLineSub: _finishLineSub,
-                  raceModeLabel: isInvite ? 'Invite crew' : 'Start solo',
+                  raceModeLabel: isInvite ? 'Invite friends' : 'Start solo',
                   raceModeSub: isInvite
                       ? 'Invite link opens after race starts'
                       : 'Race yourself first',
@@ -4085,7 +4177,11 @@ class _ReviewPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: NuvoColors.danger.withValues(alpha: 0.08),
+                      color: NuvoColors.danger.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark
+                            ? 0.18
+                            : 0.08,
+                      ),
                       borderRadius: BorderRadius.circular(NuvoRadii.md),
                       border: Border.all(
                         color: NuvoColors.danger.withValues(alpha: 0.28),
@@ -4094,7 +4190,7 @@ class _ReviewPage extends StatelessWidget {
                     child: Text(
                       error!,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.danger,
+                        color: context.themeColors.dangerText,
                       ),
                     ),
                   ),
@@ -4210,7 +4306,7 @@ class _RaceSummaryCard extends StatelessWidget {
                     maxLines: 1,
                     style: AppTextStyles.statLarge(
                       30,
-                      color: NuvoColors.blue,
+                      color: context.themeColors.accent,
                       weight: FontWeight.w900,
                     ),
                   ),
@@ -4235,10 +4331,7 @@ class _RaceSummaryCard extends StatelessWidget {
               Container(
                 width: 12,
                 height: 12,
-                decoration: BoxDecoration(
-                  color: c.ink,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: c.ink, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -4257,15 +4350,11 @@ class _RaceSummaryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: c.surface,
                   shape: BoxShape.circle,
-                  border: Border.all(color: NuvoColors.blue, width: 3),
+                  border: Border.all(color: context.themeColors.accent, width: 3),
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.flag_rounded,
-                color: NuvoColors.blue,
-                size: 18,
-              ),
+              Icon(Icons.flag_rounded, color: context.themeColors.accent, size: 18),
             ],
           ),
           const SizedBox(height: 6),
@@ -4375,10 +4464,10 @@ class _ReviewDetailRow extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: context.themeColors.panelLight,
+              color: context.themeColors.surface,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: NuvoColors.blue, size: 17),
+            child: Icon(icon, color: context.themeColors.accent, size: 17),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -4464,26 +4553,26 @@ class _RaceLiveMoment extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: NuvoColors.blue,
-                border: Border.all(color: c.ink, width: 2.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: c.inkShadow,
-                    offset: const Offset(4, 4),
-                    blurRadius: 0,
+                  width: 84,
+                  height: 84,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: NuvoColors.blue,
+                    border: Border.all(color: c.ink, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: c.inkShadow,
+                        offset: const Offset(4, 4),
+                        blurRadius: 0,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.flag_rounded,
-                color: NuvoColors.white,
-                size: 40,
-              ),
-            )
+                  child: const Icon(
+                    Icons.flag_rounded,
+                    color: NuvoColors.white,
+                    size: 40,
+                  ),
+                )
                 .animate()
                 .fadeIn(duration: 200.ms)
                 .scale(

@@ -8,6 +8,21 @@ import '../../../core/network/api_base.dart';
 import '../../auth/data/auth_api.dart';
 import 'progression_models.dart';
 
+/// Result of a conditional GET /progression. [notModified] => 304, [data] and
+/// [raw] are null. [raw] is the decoded 200 body for the disk snapshot.
+class ProgressionFetch {
+  const ProgressionFetch({
+    this.data,
+    this.raw,
+    this.etag,
+    this.notModified = false,
+  });
+  final NuvoProgression? data;
+  final Map<String, dynamic>? raw;
+  final String? etag;
+  final bool notModified;
+}
+
 /// Thin client for /progression — XP, levels, unlocks, badges. All truth is
 /// server-side; this client only transports payloads.
 class ProgressionApi {
@@ -99,10 +114,29 @@ class ProgressionApi {
     return _decode(res);
   }
 
-  Future<NuvoProgression> getProgression(String token) async {
-    final json = await _get('/progression', token);
-    return NuvoProgression.fromJson(
-      (json['progression'] as Map<String, dynamic>?) ?? const {},
+  Future<NuvoProgression> getProgression(String token) async =>
+      (await getProgressionConditional(token)).data!;
+
+  /// GET /progression with optional `If-None-Match`. Older servers send no
+  /// ETag; a null [etag] is a plain GET.
+  Future<ProgressionFetch> getProgressionConditional(
+    String token, {
+    String? etag,
+  }) async {
+    final headers = _headers(token);
+    if (etag != null) headers['If-None-Match'] = etag;
+    final res = await _guard(
+      () => _client.get(Uri.parse('$kNuvoApiBase/progression'), headers: headers),
+    );
+    final responseEtag = res.headers['etag'];
+    if (res.statusCode == 304) {
+      return ProgressionFetch(notModified: true, etag: responseEtag ?? etag);
+    }
+    final json = _decode(res);
+    return ProgressionFetch(
+      data: NuvoProgression.fromBody(json),
+      raw: json,
+      etag: responseEtag,
     );
   }
 

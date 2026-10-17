@@ -1,0 +1,30 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "arm_raises-tree-2026.10.0",
+  "activityId": "arm_raises",
+  "engineType": "rep_tree_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "rep_tree_v1"
+  ],
+  "requiredLandmarks": [
+    "leftWrist",
+    "rightWrist",
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip"
+  ],
+  "stableFrames": 2,
+  "repTree": {
+    "start": {
+      "all": [
+        { "signal": "wristsBelowShoulderTorso", "gt": 0.12 },
+        { "signal": "leftWristBelowHipTorso", "lt": 0.64 }
+      ]
+    },
+    "active": { "signal": "wristsAboveShoulderTorso", "gt": 0.16 }
+  }
+}

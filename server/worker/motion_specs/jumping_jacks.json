@@ -1,0 +1,47 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "jumping_jacks-tree-2026.10.0",
+  "activityId": "jumping_jacks",
+  "engineType": "rep_tree_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "rep_tree_v1"
+  ],
+  "requiredLandmarks": [
+    "leftWrist",
+    "rightWrist",
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTree": {
+    "start": {
+      "all": [
+        {
+          "flag": "wristsNearBody"
+        },
+        {
+          "signal": "ankleWidthToBodyWidth",
+          "lt": 1.18
+        }
+      ]
+    },
+    "active": {
+      "all": [
+        {
+          "flag": "wristsAboveShoulders"
+        },
+        {
+          "signal": "ankleWidthToBodyWidth",
+          "gt": 1.38
+        }
+      ]
+    }
+  }
+}

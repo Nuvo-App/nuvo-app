@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
@@ -14,6 +15,22 @@ import '../features/onboarding/presentation/first_use_guide.dart';
 import '../features/social/application/deep_link_controller.dart';
 import 'router.dart';
 
+/// Whether the stashed link destination should be drained now. It drains when
+/// the user becomes authenticated with onboarding done, and also when an
+/// already-authenticated account finishes onboarding (a sign-up from an
+/// invite link stays deferred until the mandatory setup is complete).
+@visibleForTesting
+bool shouldDrainPendingDestination(AuthState? prev, AuthState next) {
+  if (next.status != AuthStatus.authenticated) return false;
+  final user = next.user;
+  if (user == null || !user.onboardingComplete) return false;
+  final becameAuthed = prev?.status != AuthStatus.authenticated;
+  final finishedOnboarding = prev?.status == AuthStatus.authenticated &&
+      prev?.user != null &&
+      !prev!.user!.onboardingComplete;
+  return becameAuthed || finishedOnboarding;
+}
+
 class NuvoApp extends ConsumerStatefulWidget {
   const NuvoApp({super.key});
 
@@ -23,6 +40,43 @@ class NuvoApp extends ConsumerStatefulWidget {
 
 class _NuvoAppState extends ConsumerState<NuvoApp> {
   bool _deepLinksStarted = false;
+  VoidCallback? _cancelDeferredGo;
+
+  @override
+  void dispose() {
+    _cancelDeferredGo?.call();
+    super.dispose();
+  }
+
+  /// Navigate to [location] now, unless the router is still inside the
+  /// post-signup onboarding flow (story -> notification education), which
+  /// finishes with its own navigation and would overwrite ours. In that case
+  /// wait until the user has left /onboarding/ and then go.
+  void _goWhenOutOfOnboarding(GoRouter router, String location) {
+    String path() => router.routerDelegate.currentConfiguration.uri.path;
+    _cancelDeferredGo?.call();
+    _cancelDeferredGo = null;
+    if (!path().startsWith('/onboarding/')) {
+      router.go(location);
+      return;
+    }
+    late VoidCallback listener;
+    void cancel() {
+      router.routerDelegate.removeListener(listener);
+      _cancelDeferredGo = null;
+    }
+
+    listener = () {
+      if (path().startsWith('/onboarding/')) return;
+      cancel();
+      // Let the redirect that landed us here settle before overriding it.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) router.go(location);
+      });
+    };
+    router.routerDelegate.addListener(listener);
+    _cancelDeferredGo = cancel;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,16 +111,11 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
       }
       final becameAuthed = prev?.status != AuthStatus.authenticated &&
           next.status == AuthStatus.authenticated;
-      if (!becameAuthed) return;
-      ref.read(pushServiceProvider).onSignedIn();
-      final user = next.user;
-      if (user == null) return;
-      // Defer the stashed destination only while the account still owes
-      // mandatory setup (name, username, member pass) — every account owes
-      // it now, not just internal test accounts.
-      if (!user.onboardingComplete) return;
+      if (becameAuthed) ref.read(pushServiceProvider).onSignedIn();
+      if (!shouldDrainPendingDestination(prev, next)) return;
       final location = await ref.read(pendingDestinationStoreProvider).consume();
-      if (location != null && location.isNotEmpty) router.go(location);
+      if (location == null || location.isEmpty) return;
+      _goWhenOutOfOnboarding(router, location);
     });
 
     // Persist first-race-guide completion per account so a finished (or

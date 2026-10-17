@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -84,21 +85,26 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       _accepting = true;
       _acceptError = null;
     });
+    String? error;
     try {
       final result = await ref.read(inviteRepositoryProvider).accept(widget.token);
       if (!result.ok) {
-        setState(() {
-          _acceptError = _messageForStatus(result.status);
-          _accepting = false;
-        });
-        return;
+        error = _messageForStatus(result.status);
+      } else {
+        // Navigates away; the screen is gone once this completes.
+        await _afterAccept(result);
       }
-      await _afterAccept(result);
     } on ApiException catch (e) {
+      error = e.message;
+    } catch (_) {
+      // Non-JSON bodies (429 / HTML error pages) surface as FormatException
+      // or TypeError — never leave the button spinning.
+      error = "Couldn't accept this invite. Try again.";
+    } finally {
       if (mounted) {
         setState(() {
-          _acceptError = e.message;
           _accepting = false;
+          if (error != null) _acceptError = error;
         });
       }
     }
@@ -114,7 +120,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
             .read(raceControllerProvider.notifier)
             .refreshJoinedRace(dest.raceId);
       } catch (_) {
-        /* navigation still proceeds; the detail screen will refetch */
+        // Navigation still proceeds; mark the list stale so the next
+        // revalidate refetches instead of trusting a pre-join cache.
+        if (mounted) ref.read(raceControllerProvider.notifier).markStale();
       }
     } else if (result.kind == 'crew_connect') {
       // The connection is canonical in CrewController — mark both it and the
@@ -143,6 +151,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         InviteStatus.used => 'This invite has already been used.',
         InviteStatus.notFound => 'This invite is no longer available.',
         InviteStatus.blocked => 'This invite is no longer available.',
+        InviteStatus.closed => 'This race has ended.',
         _ => 'This invite could not be used.',
       };
 
@@ -264,7 +273,7 @@ class _RacePreview extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text('You’re invited to a race',
                           style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)
-                              .copyWith(color: NuvoColors.blue)),
+                              .copyWith(color: context.blueInk)),
                       const SizedBox(height: 8),
                       Text(c.title, style: AppTextStyles.displaySmall),
                       const SizedBox(height: 16),
@@ -296,7 +305,7 @@ class _RacePreview extends StatelessWidget {
                   ).nuvoEnter(),
                   const Spacer(),
                   if (error != null) ...[
-                    Text(error!, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
+                    Text(error!, style: AppTextStyles.bodySmall.copyWith(color: context.dangerInk)),
                     const SizedBox(height: 12),
                   ],
                   NuvoPrimaryButton(
@@ -376,9 +385,7 @@ class _PersonPreview extends StatelessWidget {
                       ],
                       const SizedBox(height: 10),
                       Text(
-                        c.isPrivate
-                            ? 'Send a connect request to add them to your crew.'
-                            : 'Add them to your crew to race together.',
+                        'Add them as a friend to race together.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
                       ),
@@ -388,15 +395,13 @@ class _PersonPreview extends StatelessWidget {
                   if (error != null) ...[
                     Text(error!,
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
+                        style: AppTextStyles.bodySmall.copyWith(color: context.dangerInk)),
                     const SizedBox(height: 12),
                   ],
                   NuvoPrimaryButton(
                     label: !authed
                         ? 'Sign in to connect'
-                        : c.isPrivate
-                            ? 'Send request'
-                            : 'Add to crew',
+                        : 'Add friend',
                     loading: accepting,
                     expand: true,
                     onPressed: accepting ? null : onAccept,
@@ -420,7 +425,7 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: context.themeColors.panel,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [

@@ -34,7 +34,6 @@ import 'package:nuvo/features/crew/application/crew_controller.dart';
 import 'package:nuvo/features/crew/data/crew_api.dart';
 import 'package:nuvo/features/crew/data/crew_repository.dart';
 import 'package:nuvo/features/crew/presentation/public_profile_screen.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/profile/application/progression_controller.dart';
 import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/data/progression_models.dart';
@@ -197,18 +196,6 @@ final _manyRaces = [
     ],
   ),
 ];
-
-final _soloRace = _race(
-  participants: [_p('user-1', 'Akshay Sanjai', 39, rank: 1)],
-  viewerContext: const RaceViewerContext(
-    raceId: 'race-1',
-    status: 'active',
-    rank: 1,
-    viewerScore: 39,
-    isLeading: true,
-    isMember: true,
-  ),
-);
 
 // ── Progression fixtures ─────────────────────────────────────────────────────
 
@@ -476,11 +463,6 @@ Future<void> _capture(WidgetTester tester, String name) async {
   });
 }
 
-_SeededRaces _races(WidgetTester tester) =>
-    ProviderScope.containerOf(tester.element(find.byType(MoveScreen)))
-            .read(raceControllerProvider.notifier)
-        as _SeededRaces;
-
 Future<void> _pump(
   WidgetTester tester,
   Widget app,
@@ -567,22 +549,26 @@ void main() {
   });
 
   group('Compete restyle', () {
-    testWidgets('hero race dominates — anchor, named marks, stakes', (
+    testWidgets('no second hero — the race lives in Your races', (
       tester,
     ) async {
       _useViewport(tester, 390, 844);
+      final duel = _race(
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 39, rank: 2),
+          _p('u-noah', 'Noah Reyes', 42, rank: 1),
+        ],
+      );
       await _pump(
         tester,
-        _app(races: [_heroRace], home: const CompeteScreen()),
+        _app(races: [duel], home: const CompeteScreen()),
         'compete-hero-390',
       );
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
-      // The named lane — viewer mark, rival mark, goal ring label.
-      expect(find.text('You 39'), findsOneWidget);
-      expect(find.text('Noah 42'), findsOneWidget);
-      expect(find.text('Goal 50'), findsOneWidget);
-      // Stakes line from canonical viewerContext.
-      expect(find.text('3 reps to take 1st'), findsOneWidget);
+      // Arena owns "the one race that needs me now"; Compete is a list.
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
+      expect(find.text('Continue competing'), findsNothing);
+      expect(find.textContaining('Your races'), findsOneWidget);
+      expect(find.text('Pushup Race'), findsOneWidget);
       // Primary/secondary actions in the header.
       expect(
         find.descendant(
@@ -592,36 +578,6 @@ void main() {
         findsWidgets,
       );
       expect(find.byType(NuvoOutlineButton), findsOneWidget);
-    });
-
-    testWidgets('leading reads as a lead, not a chase', (tester) async {
-      _useViewport(tester, 390, 844);
-      final leading = _race(
-        viewerContext: const RaceViewerContext(
-          raceId: 'race-1',
-          status: 'active',
-          rank: 1,
-          leaderUserId: 'user-1',
-          leaderScore: 45,
-          viewerScore: 45,
-          gapToNextRank: 5,
-          isLeading: true,
-          isMember: true,
-        ),
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 45, rank: 1),
-          _p('u-noah', 'Noah Reyes', 40, rank: 2),
-        ],
-      );
-      await _pump(
-        tester,
-        _app(races: [leading], home: const CompeteScreen()),
-        'compete-leading-390',
-      );
-      // Both flip faces stay mounted for sizing, so stakes text may
-      // appear twice — presence is what matters.
-      expect(find.text('You lead by 5 reps'), findsWidgets);
-      expect(find.text('1st'), findsWidgets);
     });
 
     for (final (name, w, h) in _sizes) {
@@ -645,8 +601,8 @@ void main() {
           _app(races: [_heroRace], home: const CompeteScreen()),
           'compete-one-$name',
         );
-        expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
-        expect(find.textContaining('Your races'), findsNothing);
+        expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
+        expect(find.textContaining('Your races'), findsOneWidget);
       });
 
       testWidgets('many races $name', (tester) async {
@@ -656,13 +612,13 @@ void main() {
           _app(races: _manyRaces, home: const CompeteScreen()),
           'compete-many-$name',
         );
-        expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+        expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
         expect(find.textContaining('Your races'), findsOneWidget);
         // Sections below the fold exist in the sliver's element tree but
         // stay unlaid-out until scrolled to — assert presence with
         // skipOffstage off, then drag to the bottom to exercise the whole
         // scroll path (throws if content overflows the list).
-        for (final label in ['Waiting for crew', 'Finished', 'Quick starts']) {
+        for (final label in ['Waiting for friends', 'Finished', 'Quick starts']) {
           expect(
             find.text(label, skipOffstage: false),
             findsOneWidget,
@@ -682,20 +638,6 @@ void main() {
       });
     }
 
-    testWidgets('flip still works — front/back faces', (tester) async {
-      _useViewport(tester, 390, 844);
-      await _pump(
-        tester,
-        _app(races: [_heroRace], home: const CompeteScreen()),
-        'compete-flip-front-390',
-      );
-      await tester.tap(find.text('Updates ↻'));
-      await _settle(tester);
-      expect(tester.takeException(), isNull);
-      expect(find.text('RACE STATUS'), findsWidgets);
-      await _capture(tester, 'compete-flip-back-390');
-    });
-
     testWidgets('dark mode 390', (tester) async {
       _useViewport(tester, 390, 844);
       await _pump(
@@ -703,7 +645,7 @@ void main() {
         _app(dark: true, races: _manyRaces, home: const CompeteScreen()),
         'compete-dark-390',
       );
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
     });
 
     for (final scale in [1.2, 1.4]) {
@@ -720,18 +662,6 @@ void main() {
         );
       });
     }
-
-    testWidgets('solo race — no fabricated rival mark', (tester) async {
-      _useViewport(tester, 390, 844);
-      await _pump(
-        tester,
-        _app(races: [_soloRace], home: const CompeteScreen()),
-        'compete-solo-390',
-      );
-      expect(find.text('You 39'), findsOneWidget);
-      expect(find.text('Noah 42'), findsNothing);
-      expect(find.text('Goal 50'), findsOneWidget);
-    });
   });
 
   group('Profile restyle', () {
@@ -744,17 +674,22 @@ void main() {
           'profile-$name',
         );
         expect(find.text('Profile'), findsOneWidget);
+        // The level lives on the plate only — no pill under the name.
+        expect(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) => w.runtimeType.toString() == '_IdentityCard',
+            ),
+            matching: find.textContaining('LEVEL', findRichText: true),
+          ),
+          findsNothing,
+        );
         // Level is the hero — big number beside the LEVEL label.
         expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
-        // The remaining climb is the lane's caption; the next collectible
-        // docks under the track with its name fused beneath it.
+        // The remaining climb is the plate's caption.
         expect(
           find.textContaining('140 XP to Level 9', findRichText: true),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining('Clap reaction', findRichText: true),
           findsOneWidget,
         );
         // Edit anchored to the identity row.
@@ -762,10 +697,57 @@ void main() {
           find.bySemanticsLabel('Edit profile'),
           findsOneWidget,
         );
+        // Achievements are one row; the next goal and the next unlock live
+        // behind it, not on Profile.
         expect(find.text('Achievements'), findsOneWidget);
-        expect(find.text('NEXT UP'), findsOneWidget);
-        expect(find.text('Hat Trick'), findsOneWidget);
-        expect(find.text('ONE MORE WIN'), findsOneWidget);
+        expect(find.text('NEXT UP'), findsNothing);
+        expect(find.text('Hat Trick'), findsNothing);
+        expect(
+          find.textContaining('Clap reaction', findRichText: true),
+          findsNothing,
+        );
+
+        // Tapping the level plate explains what the level means and what
+        // the next one unlocks.
+        await tester.tap(
+          find.textContaining('140 XP to Level 9', findRichText: true),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Earn XP by racing — every level earns something new.'), findsOneWidget);
+        // Four tinted pills carry the four server XP amounts.
+        for (final amount in ['+10', '+25', '+15', '+5']) {
+          expect(find.text(amount), findsOneWidget);
+        }
+        expect(find.text('Next reward'), findsOneWidget);
+        expect(find.text('Level 8'), findsOneWidget);
+        expect(
+          find.textContaining('Clap reaction', findRichText: true),
+          findsOneWidget,
+        );
+        expect(find.text('See achievements'), findsOneWidget);
+      });
+    }
+
+    for (final dark in [false, true]) {
+      testWidgets('level sheet at 320x568 text 1.4 dark=$dark', (tester) async {
+        _useViewport(tester, 320, 568);
+        await _pump(
+          tester,
+          _app(
+            dark: dark,
+            textScale: 1.4,
+            races: _manyRaces,
+            home: const ProfileScreen(),
+          ),
+          'profile-sheet-$dark',
+        );
+        await tester.tap(
+          find.textContaining('140 XP to Level 9', findRichText: true),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.text('+10'), findsOneWidget);
+        expect(find.text('+5'), findsOneWidget);
       });
     }
 
@@ -903,339 +885,6 @@ void main() {
       );
       expect(find.textContaining('LEVEL 14', findRichText: true), findsWidgets);
       expect(find.textContaining('XP'), findsNothing);
-    });
-  });
-
-  group('Verify restyle', () {
-    for (final (name, w, h) in _sizes) {
-      testWidgets('hero chasing $name', (tester) async {
-        _useViewport(tester, w, h);
-        await _pump(
-          tester,
-          _app(races: [_heroRace], home: const MoveScreen()),
-          'verify-chasing-$name',
-        );
-        expect(find.text('Pushup Race'), findsOneWidget);
-        // The race itself is the hero — named marks on the lane.
-        expect(find.text('You 39'), findsOneWidget);
-        expect(find.text('Noah 42'), findsOneWidget);
-        expect(find.text('Goal 50'), findsOneWidget);
-        // Stakes live under the track, not in a tinted card.
-        expect(find.textContaining('TAKE 1ST'), findsOneWidget);
-        // One merged primary CTA — proof method + action together.
-        expect(find.text('Start AI Motion Proof'), findsOneWidget);
-      });
-    }
-
-    testWidgets('leading reads green, tied stays blue', (tester) async {
-      _useViewport(tester, 390, 844);
-      final leading = _race(
-        viewerContext: const RaceViewerContext(
-          raceId: 'race-1',
-          status: 'active',
-          rank: 1,
-          leaderUserId: 'user-1',
-          leaderScore: 45,
-          viewerScore: 45,
-          gapToNextRank: 5,
-          isLeading: true,
-          isMember: true,
-        ),
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 45, rank: 1),
-          _p('u-noah', 'Noah Reyes', 40, rank: 2),
-        ],
-      );
-      await _pump(
-        tester,
-        _app(races: [leading], home: const MoveScreen()),
-        'verify-leading-390',
-      );
-      expect(find.textContaining('LEAD'), findsWidgets);
-
-      final tied = _race(
-        viewerContext: const RaceViewerContext(
-          raceId: 'race-1',
-          status: 'active',
-          rank: 1,
-          viewerScore: 40,
-          leaderScore: 40,
-          isTied: true,
-          isMember: true,
-        ),
-        participants: [
-          _p(
-            'user-1',
-            'Akshay Sanjai',
-            40,
-            rank: 1,
-            joinedAt: '2025-12-30T00:00:00Z',
-          ),
-          _p('u-noah', 'Noah Reyes', 40, rank: 1),
-        ],
-      );
-      // A standings update lands mid-session — the same race id, new
-      // canonical scores. Pushed through the live controller so the hero's
-      // update path (didUpdateWidget → animated marks) is what runs.
-      _races(tester).push([tied]);
-      await _settle(tester);
-      await _capture(tester, 'verify-tied-390');
-      expect(find.textContaining('TIED'), findsWidgets);
-    });
-
-    testWidgets('taking first fires the payoff moment', (tester) async {
-      _useViewport(tester, 390, 844);
-      await _pump(
-        tester,
-        _app(races: [_heroRace], home: const MoveScreen()),
-        'verify-takefirst-before',
-      );
-      final tookFirst = _race(
-        viewerContext: const RaceViewerContext(
-          raceId: 'race-1',
-          status: 'active',
-          rank: 1,
-          leaderUserId: 'user-1',
-          leaderScore: 45,
-          viewerScore: 45,
-          gapToNextRank: 3,
-          isLeading: true,
-          isMember: true,
-        ),
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 45, rank: 1),
-          _p('u-noah', 'Noah Reyes', 42, rank: 2),
-        ],
-      );
-      _races(tester).push([tookFirst]);
-      // Frame 1 rebuilds the hero (didUpdateWidget arms the flash);
-      // frame 2+ runs the opacity in. Capture inside the ~1s window.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('YOU TOOK THE LEAD'), findsOneWidget);
-      await _capture(tester, 'verify-takefirst-390');
-      // Let the flash timer expire before teardown.
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('completed segment — green payoff rows', (tester) async {
-      _useViewport(tester, 390, 844);
-      await _pump(
-        tester,
-        _app(races: _manyRaces, home: const MoveScreen()),
-        'verify-ready-390',
-      );
-      await tester.tap(find.text('Completed'));
-      await _settle(tester);
-      expect(find.text('First To 10 Jumping Jacks'), findsOneWidget);
-      expect(find.text('Weekend Golf'), findsOneWidget);
-      await _capture(tester, 'verify-completed-390');
-    });
-
-    testWidgets('goal reached — green hero, no chase copy', (tester) async {
-      _useViewport(tester, 390, 844);
-      final done = _race(
-        viewerContext: const RaceViewerContext(
-          raceId: 'race-1',
-          status: 'active',
-          rank: 1,
-          leaderUserId: 'user-1',
-          leaderScore: 50,
-          viewerScore: 50,
-          isMember: true,
-        ),
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 50, rank: 1, percent: 100),
-          _p('u-noah', 'Noah Reyes', 42, rank: 2, percent: 84),
-        ],
-      );
-      await _pump(
-        tester,
-        _app(races: [done], home: const MoveScreen()),
-        'verify-finished-390',
-      );
-      // Goal reached while the race is still live — green finish state,
-      // completion action, zero chase copy.
-      expect(find.text('GOAL REACHED — your proof is in'), findsOneWidget);
-      expect(find.text('View race'), findsOneWidget);
-      expect(find.textContaining('take 1st'), findsNothing);
-      expect(find.text('Start AI Motion Proof'), findsNothing);
-    });
-
-    testWidgets('dark mode 390', (tester) async {
-      _useViewport(tester, 390, 844);
-      await _pump(
-        tester,
-        _app(dark: true, races: _manyRaces, home: const MoveScreen()),
-        'verify-dark-390',
-      );
-      expect(find.text('Pushup Race'), findsOneWidget);
-    });
-
-    for (final scale in [1.2, 1.4]) {
-      testWidgets('text scale $scale at 320x568', (tester) async {
-        _useViewport(tester, 320, 568);
-        await _pump(
-          tester,
-          _app(
-            textScale: scale,
-            races: _manyRaces,
-            home: const MoveScreen(),
-          ),
-          'verify-ts${scale.toStringAsFixed(1).replaceAll('.', '')}-320',
-        );
-      });
-    }
-
-    // Queue depth: 2 queued races exercise the NEXT row + one board row;
-    // 12 exercise the cap, See all expansion, and the board's tail.
-    testWidgets('queue depth — 2 ready and 12 ready', (tester) async {
-      _useViewport(tester, 390, 844);
-      await _pump(
-        tester,
-        _app(
-          races: [_heroRace, _manyRaces[1], _manyRaces[3]],
-          home: const MoveScreen(),
-        ),
-        'verify-queue2-390',
-      );
-      _races(tester).push([
-        _heroRace,
-        for (var i = 0; i < 11; i++)
-          _race(
-            id: 'race-q$i',
-            title: 'Queue Race ${i + 1}',
-            participants: [
-              _p('user-1', 'Akshay Sanjai', i * 2 + 1, rank: i.isEven ? 1 : 2),
-              _p('u-noah', 'Noah Reyes', i * 2 + 3, rank: i.isEven ? 2 : 1),
-            ],
-          ),
-      ]);
-      await _settle(tester);
-      await _capture(tester, 'verify-queue12-390');
-      await tester.tap(find.textContaining('See all'));
-      await _settle(tester);
-      await tester.drag(find.byType(ListView), const Offset(0, -2400));
-      await _settle(tester);
-      await _capture(tester, 'verify-queue12-tail-390');
-      expect(tester.takeException(), isNull);
-    });
-
-    // Scoring-semantics variants — the lane is canonical
-    // (raceLaneGeometry): lower-wins and best-attempt draw a relative
-    // competition lane with NO goal ring; a finish target draws one.
-    testWidgets('lower-wins golf — relative lane, no goal ring', (
-      tester,
-    ) async {
-      _useViewport(tester, 390, 844);
-      final golf = _race(
-        title: 'Weekend Golf',
-        movement: 'Golf',
-        format: 'best_attempt',
-        scoreDirection: 'lower',
-        targetValue: null,
-        unit: 'strokes',
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 78, rank: 1),
-          _p('u-noah', 'Noah Reyes', 82, rank: 2),
-        ],
-        viewerContext: const RaceViewerContext(
-          raceId: 'race-1',
-          status: 'active',
-          rank: 1,
-          viewerScore: 78,
-          isLeading: true,
-          isMember: true,
-        ),
-      );
-      await _pump(
-        tester,
-        _app(races: [golf], home: const MoveScreen()),
-        'verify-golf-390',
-      );
-      expect(find.text('Lowest score wins'), findsOneWidget);
-      // No denominator — a goal ring would lie about the race.
-      expect(find.textContaining('Goal'), findsNothing);
-    });
-
-    testWidgets('best-attempt — bare result, relative lane', (tester) async {
-      _useViewport(tester, 390, 844);
-      final best = _race(
-        title: 'Max Pushups',
-        format: 'best_attempt',
-        targetValue: null,
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 39, rank: 2),
-          _p('u-noah', 'Noah Reyes', 42, rank: 1),
-        ],
-      );
-      await _pump(
-        tester,
-        _app(races: [best], home: const MoveScreen()),
-        'verify-bestattempt-390',
-      );
-      expect(find.text('Highest score wins'), findsOneWidget);
-      expect(find.textContaining('Goal'), findsNothing);
-    });
-
-    testWidgets('timed — clock anchor on the hero lane', (tester) async {
-      _useViewport(tester, 390, 844);
-      final timed = _race(
-        title: 'Two Minute Plank',
-        movement: 'Plank',
-        format: 'timed_attempt',
-        metric: 'seconds',
-        unit: 'seconds',
-        targetValue: 120,
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 82, rank: 2),
-          _p('u-noah', 'Noah Reyes', 97, rank: 1),
-        ],
-      );
-      await _pump(
-        tester,
-        _app(races: [timed], home: const MoveScreen()),
-        'verify-timed-390',
-      );
-      expect(find.textContaining('1:22'), findsWidgets);
-      expect(find.textContaining('Goal 2:00'), findsOneWidget);
-    });
-
-    testWidgets('solo — goal lane, no invented rivalry', (tester) async {
-      _useViewport(tester, 390, 844);
-      final solo = _race(
-        title: 'Solo Plank Race',
-        participants: [_p('user-1', 'Akshay Sanjai', 0)],
-      );
-      await _pump(
-        tester,
-        _app(races: [solo], home: const MoveScreen()),
-        'verify-solo-390',
-      );
-      expect(find.text('Solo Plank Race'), findsOneWidget);
-      expect(find.textContaining('SET THE PACE'), findsOneWidget);
-    });
-
-    testWidgets('many racers — adjacent rival only', (tester) async {
-      _useViewport(tester, 390, 844);
-      final crowded = _race(
-        participants: [
-          _p('user-1', 'Akshay Sanjai', 39, rank: 3),
-          _p('u-noah', 'Noah Reyes', 44, rank: 1),
-          _p('u-maya', 'Maya Chen', 42, rank: 2),
-          _p('u-jay', 'Jay Park', 30, rank: 4),
-          _p('u-kim', 'Kim Lee', 12, rank: 5),
-        ],
-      );
-      await _pump(
-        tester,
-        _app(races: [crowded], home: const MoveScreen()),
-        'verify-many-390',
-      );
-      // The mark that matters is the racer directly ahead — Maya at 2nd.
-      expect(find.text('Maya 42'), findsOneWidget);
     });
   });
 }

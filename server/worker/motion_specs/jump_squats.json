@@ -1,0 +1,29 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "jump_squats-tuned-2026.10.0",
+  "activityId": "jump_squats",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "standingRatio": 0.6,
+    "squatRatio": 0.58,
+    "flightThresholdRatio": 0.18,
+    "groundedToleranceRatio": 0.1,
+    "minFlightThreshold": 0.025,
+    "jitterTolerance": 0.03
+  }
+}

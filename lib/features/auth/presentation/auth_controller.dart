@@ -218,12 +218,10 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> saveProfile({
     String? fullName,
     String? username,
-    bool? privateProfile,
   }) async {
     await _repo.saveProfile(
       fullName: fullName,
       username: username,
-      privateProfile: privateProfile,
     );
     final user = await _repo.getMe();
     debugPrint('REFRESHED_USER_PHOTO_URL: ${user.profilePhotoUrl}');

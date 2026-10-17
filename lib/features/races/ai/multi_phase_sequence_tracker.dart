@@ -267,8 +267,7 @@ class MultiPhaseSequenceTracker {
       // Backward match (earlier phase) — could be noise during a transient
       // phase like AIRBORNE where ankle dropout causes a false match on an
       // earlier phase (e.g., STANDING). Use grace if available.
-      if (matchedPhaseIndex < _currentPhaseIndex &&
-          _noiseGraceRemaining > 0) {
+      if (matchedPhaseIndex < _currentPhaseIndex && _noiseGraceRemaining > 0) {
         _noiseGraceRemaining--;
         return false;
       }

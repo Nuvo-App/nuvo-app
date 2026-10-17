@@ -118,6 +118,31 @@ class NuvoBadge {
       );
 }
 
+/// Server-computed race record shown on Profile. Sibling of `progression`
+/// in the GET /progression body; absent on older servers.
+class ProfileRecord {
+  const ProfileRecord({
+    required this.active,
+    required this.finished,
+    required this.wins,
+    this.winRatePercent,
+  });
+
+  final int active;
+  final int finished;
+  final int wins;
+
+  /// Integer percent; null when [finished] is 0.
+  final int? winRatePercent;
+
+  factory ProfileRecord.fromJson(Map<String, dynamic> json) => ProfileRecord(
+        active: (json['active'] as num?)?.toInt() ?? 0,
+        finished: (json['finished'] as num?)?.toInt() ?? 0,
+        wins: (json['wins'] as num?)?.toInt() ?? 0,
+        winRatePercent: (json['winRatePercent'] as num?)?.round(),
+      );
+}
+
 class NuvoProgression {
   const NuvoProgression({
     required this.level,
@@ -135,6 +160,7 @@ class NuvoProgression {
     this.nextAchievement,
     this.featuredBadges = const [],
     this.newlyEarned = const [],
+    this.record,
   });
 
   final int level;
@@ -162,6 +188,38 @@ class NuvoProgression {
   /// Achievements granted by this read's reconcile — non-empty exactly
   /// once per grant, so the earned moment can never replay.
   final List<NuvoBadge> newlyEarned;
+
+  /// Server-computed race record; null on older servers.
+  final ProfileRecord? record;
+
+  /// Parses a full GET /progression body (`progression` + sibling `record`).
+  factory NuvoProgression.fromBody(Map<String, dynamic> body) {
+    final p = NuvoProgression.fromJson(
+      (body['progression'] as Map<String, dynamic>?) ?? const {},
+    );
+    final r = body['record'];
+    if (r is! Map<String, dynamic>) return p;
+    return p.withRecord(ProfileRecord.fromJson(r));
+  }
+
+  NuvoProgression withRecord(ProfileRecord? record) => NuvoProgression(
+        level: level,
+        totalXp: totalXp,
+        currentLevelXp: currentLevelXp,
+        nextLevelXp: nextLevelXp,
+        progress: progress,
+        xpToNext: xpToNext,
+        lastSeenLevel: lastSeenLevel,
+        featuredSlots: featuredSlots,
+        achievementsEarned: achievementsEarned,
+        achievementsTotal: achievementsTotal,
+        nextUnlock: nextUnlock,
+        levelUnlock: levelUnlock,
+        nextAchievement: nextAchievement,
+        featuredBadges: featuredBadges,
+        newlyEarned: newlyEarned,
+        record: record,
+      );
 
   /// The server has a level the client has not yet acknowledged — the
   /// level-up moment should present exactly once.

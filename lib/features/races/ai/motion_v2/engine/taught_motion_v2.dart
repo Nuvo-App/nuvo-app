@@ -29,10 +29,13 @@ typedef MotionEncodedDemo = ({
 // ── matcher constants — measured in tools/motion_v2/experiments/exp_matcher.py,
 //    then locked. NOT ad-hoc tuning. 1:1 with engine/taught_motion.py. ──────────
 const double kDtwBand = 0.33; // tolerate a slower / faster performance
-const double kVoteK = 3.0; // a reference "matches" if pd/spread<=K and td/spread<=K
+const double kVoteK =
+    3.0; // a reference "matches" if pd/spread<=K and td/spread<=K
 const double kRescueK = 6.0; // 2*kVoteK — how close a lone reference must be
-const double kSepAccept = 0.15; // separation needed for the single-reference rescue
-const double kBgGate = 1.15; // a vote also needs pd_ref <= gate * nearest background
+const double kSepAccept =
+    0.15; // separation needed for the single-reference rescue
+const double kBgGate =
+    1.15; // a vote also needs pd_ref <= gate * nearest background
 const double kProtoFloor = 0.04;
 const double kTrajFloor = 0.06;
 
@@ -40,26 +43,33 @@ double _clip(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
 
 /// One demonstration kept whole — never averaged into a blur.
 class MotionReference {
-  MotionReference({required this.proto, required this.traj, required this.length});
+  MotionReference({
+    required this.proto,
+    required this.traj,
+    required this.length,
+  });
   final Float32List proto; // (D,)
   final List<Float32List> traj; // (kCanonLen, D) L2n
   final int length;
 
   Map<String, dynamic> toJson() => {
-        'proto': proto.toList(),
-        'traj': [for (final r in traj) r.toList()],
-        'length': length,
-      };
+    'proto': proto.toList(),
+    'traj': [for (final r in traj) r.toList()],
+    'length': length,
+  };
 
   factory MotionReference.fromJson(Map<String, dynamic> d) => MotionReference(
-        proto: Float32List.fromList(
-            [for (final x in d['proto'] as List) (x as num).toDouble()]),
-        traj: [
-          for (final r in d['traj'] as List)
-            Float32List.fromList([for (final x in r as List) (x as num).toDouble()])
-        ],
-        length: (d['length'] as num).toInt(),
-      );
+    proto: Float32List.fromList([
+      for (final x in d['proto'] as List) (x as num).toDouble(),
+    ]),
+    traj: [
+      for (final r in d['traj'] as List)
+        Float32List.fromList([
+          for (final x in r as List) (x as num).toDouble(),
+        ]),
+    ],
+    length: (d['length'] as num).toInt(),
+  );
 }
 
 /// DTW distance of an ordered embedding path to a reference path. Band 0.33.
@@ -70,20 +80,25 @@ double trajDistance(List<Float32List> embSeg, List<Float32List> canonical) {
 }
 
 class RefScore {
-  const RefScore(this.protoDist, this.trajDist, this.protoMargin, this.trajMargin,
-      this.matches);
+  const RefScore(
+    this.protoDist,
+    this.trajDist,
+    this.protoMargin,
+    this.trajMargin,
+    this.matches,
+  );
   final double protoDist;
   final double trajDist;
   final double protoMargin;
   final double trajMargin;
   final bool matches;
   Map<String, dynamic> toJson() => {
-        'proto': double.parse(protoDist.toStringAsFixed(4)),
-        'traj': double.parse(trajDist.toStringAsFixed(4)),
-        'proto_margin': double.parse(protoMargin.toStringAsFixed(3)),
-        'traj_margin': double.parse(trajMargin.toStringAsFixed(3)),
-        'matches': matches,
-      };
+    'proto': double.parse(protoDist.toStringAsFixed(4)),
+    'traj': double.parse(trajDist.toStringAsFixed(4)),
+    'proto_margin': double.parse(protoMargin.toStringAsFixed(3)),
+    'traj_margin': double.parse(trajMargin.toStringAsFixed(3)),
+    'matches': matches,
+  };
 }
 
 class MatchResultV2 {
@@ -117,14 +132,14 @@ class MatchResultV2 {
   final List<RefScore> perRef;
 
   Map<String, dynamic> toJson() => {
-        'is_same_family': isSameFamily,
-        'score': double.parse(score.toStringAsFixed(3)),
-        'votes': votes,
-        if (separation != null)
-          'separation': double.parse(separation!.toStringAsFixed(3)),
-        'decision': decision,
-        'per_ref': [for (final r in perRef) r.toJson()],
-      };
+    'is_same_family': isSameFamily,
+    'score': double.parse(score.toStringAsFixed(3)),
+    'votes': votes,
+    if (separation != null)
+      'separation': double.parse(separation!.toStringAsFixed(3)),
+    'decision': decision,
+    'per_ref': [for (final r in perRef) r.toJson()],
+  };
 }
 
 /// Three-shot matcher. Keeps all 3 demonstrations as first-class references; the
@@ -145,6 +160,7 @@ class TaughtMotionV2 {
     required this.demoActiveVel,
     required this.demoLengths,
     this.demoRegionActivity = const {},
+    this.tuning = const {},
     this.schema = kSchema,
   });
 
@@ -161,6 +177,12 @@ class TaughtMotionV2 {
 
   /// Per-body-region motion magnitude of the demonstrations. Diagnostics only.
   final Map<String, double> demoRegionActivity;
+
+  /// Server-patchable verifier knobs carried inside the spec (matchScore,
+  /// neutralDrop, repMinProgress...). StreamingMotionV2 falls back to its
+  /// compiled defaults when a key is absent, so an operator can retune a
+  /// live race's strictness with a spec patch — no app update.
+  final Map<String, double> tuning;
 
   final int schema;
 
@@ -221,15 +243,20 @@ class TaughtMotionV2 {
         s = 0;
         e = emb.length;
       }
-      refs.add(MotionReference(
-        proto: meanPool(sliceRep(rep, s, e)),
-        traj: resampleSeq(l2normSeq(sliceSeq(emb, s, e)), kCanonLen),
-        length: e - s,
-      ));
+      refs.add(
+        MotionReference(
+          proto: meanPool(sliceRep(rep, s, e)),
+          traj: resampleSeq(l2normSeq(sliceSeq(emb, s, e)), kCanonLen),
+          length: e - s,
+        ),
+      );
       final v = embeddingVelocity(emb);
       final mv = [for (var i = s; i < e; i++) v[i]];
       final mvMed = median(mv);
-      final movers = [for (final x in mv) if (x > mvMed * 0.3) x];
+      final movers = [
+        for (final x in mv)
+          if (x > mvMed * 0.3) x,
+      ];
       vels.add(movers.isEmpty ? 0.0 : median(movers));
       final order = List<int>.generate(v.length, (i) => i)
         ..sort((a, b) => v[a].compareTo(v[b]));
@@ -286,7 +313,7 @@ class TaughtMotionV2 {
   TaughtMotionV2 twoRefSubset(int excludeIndex) {
     final others = [
       for (var i = 0; i < references.length; i++)
-        if (i != excludeIndex) references[i]
+        if (i != excludeIndex) references[i],
     ];
     return _fromReferences(
       name: '_loo',
@@ -300,8 +327,12 @@ class TaughtMotionV2 {
 
   // ---- match ----
   ({double pd, double td, Float32List desc}) _distOneOrientation(
-      MotionReference ref, List<List<Float32List>> rep, List<Float32List> emb) {
-    var seg = segmentAction(emb);
+    MotionReference ref,
+    List<List<Float32List>> rep,
+    List<Float32List> emb, {
+    ({int start, int end})? window,
+  }) {
+    var seg = window ?? segmentAction(emb);
     var s = seg.start, e = seg.end;
     if (e - s < 4) {
       s = 0;
@@ -319,6 +350,9 @@ class TaughtMotionV2 {
     List<List<Float32List>>? repM,
     List<Float32List>? embM,
     List<Float32List>? background,
+    // Score exactly this slice of the window instead of segmenting it — used
+    // to search for a rep INSIDE a longer window (several reps, mount, walk-off).
+    ({int start, int end})? window,
   }) {
     final oris = <({List<List<Float32List>> rep, List<Float32List> emb})>[
       (rep: rep, emb: emb),
@@ -334,7 +368,7 @@ class TaughtMotionV2 {
       var bpd = double.infinity, btd = double.infinity;
       Float32List? bdesc;
       for (final o in oris) {
-        final d = _distOneOrientation(ref, o.rep, o.emb);
+        final d = _distOneOrientation(ref, o.rep, o.emb, window: window);
         if (d.pd / ps + d.td / ts < bpd / ps + btd / ts) {
           bpd = d.pd;
           btd = d.td;
@@ -432,26 +466,28 @@ class TaughtMotionV2 {
 
   // ---- serialize (matches Python to_json, schema 4) ----
   Map<String, dynamic> toJson() => {
-        'schema': schema,
-        'name': name,
-        'verifier': 'motion_v2',
-        'version': 1,
-        'encoder_id': encoderId,
-        'encoder': encoderId,
-        'references': [for (final r in references) r.toJson()],
-        'proto_spread': protoSpread,
-        'traj_spread': trajSpread,
-        'proto_spread_max': protoSpreadMax,
-        'traj_spread_max': trajSpreadMax,
-        'rest_emb': restEmb.toList(),
-        'demo_active_vel': demoActiveVel,
-        'demo_lengths': demoLengths,
-        'region_activity': demoRegionActivity,
-      };
+    'schema': schema,
+    'name': name,
+    'verifier': 'motion_v2',
+    'version': 1,
+    'encoder_id': encoderId,
+    'encoder': encoderId,
+    'references': [for (final r in references) r.toJson()],
+    'proto_spread': protoSpread,
+    'traj_spread': trajSpread,
+    'proto_spread_max': protoSpreadMax,
+    'traj_spread_max': trajSpreadMax,
+    'rest_emb': restEmb.toList(),
+    'demo_active_vel': demoActiveVel,
+    'demo_lengths': demoLengths,
+    'region_activity': demoRegionActivity,
+    if (tuning.isNotEmpty) 'tuning': tuning,
+  };
 
   factory TaughtMotionV2.fromJson(Map<String, dynamic> d) {
-    Float32List vec(dynamic l) =>
-        Float32List.fromList([for (final x in l as List) (x as num).toDouble()]);
+    Float32List vec(dynamic l) => Float32List.fromList([
+      for (final x in l as List) (x as num).toDouble(),
+    ]);
     final ps = (d['proto_spread'] as num?)?.toDouble() ?? 0.02;
     final tsr = (d['traj_spread'] as num?)?.toDouble() ?? 0.01;
     return TaughtMotionV2(
@@ -459,7 +495,7 @@ class TaughtMotionV2 {
       encoderId: (d['encoder_id'] ?? d['encoder'] ?? 'onnx') as String,
       references: [
         for (final r in (d['references'] as List? ?? const []))
-          MotionReference.fromJson(r as Map<String, dynamic>)
+          MotionReference.fromJson(r as Map<String, dynamic>),
       ],
       protoSpread: ps,
       trajSpread: tsr,
@@ -468,10 +504,15 @@ class TaughtMotionV2 {
       restEmb: vec(d['rest_emb']),
       demoActiveVel: (d['demo_active_vel'] as num?)?.toDouble() ?? 0.0,
       demoLengths: [
-        for (final x in (d['demo_lengths'] as List? ?? const [])) (x as num).toInt()
+        for (final x in (d['demo_lengths'] as List? ?? const []))
+          (x as num).toInt(),
       ],
       demoRegionActivity: {
         for (final e in ((d['region_activity'] as Map?) ?? const {}).entries)
+          e.key as String: (e.value as num).toDouble(),
+      },
+      tuning: {
+        for (final e in ((d['tuning'] as Map?) ?? const {}).entries)
           e.key as String: (e.value as num).toDouble(),
       },
       schema: (d['schema'] as num?)?.toInt() ?? kSchema,

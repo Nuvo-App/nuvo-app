@@ -1,0 +1,30 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "lunge_jumps-tuned-2026.10.0",
+  "activityId": "lunge_jumps",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "lungeKneeAngle": 120.0,
+    "trailingKneeAngle": 160.0,
+    "standingRatio": 0.86,
+    "flightThresholdRatio": 0.18,
+    "groundedToleranceRatio": 0.1,
+    "minFlightThreshold": 0.025,
+    "jitterTolerance": 0.03
+  }
+}

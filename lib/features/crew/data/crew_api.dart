@@ -8,6 +8,7 @@ import '../../auth/data/auth_api.dart' show ApiException;
 import '../../races/data/race_models.dart' show PublicUser;
 import '../../profile/data/progression_models.dart' show NuvoBadge;
 import '../../../core/network/api_base.dart';
+import '../../../core/network/conditional.dart';
 
 const _timeout = Duration(seconds: 20);
 
@@ -51,7 +52,6 @@ class PublicProfileCard {
     this.username,
     this.memberId,
     this.profilePhotoUrl,
-    this.isPrivate = false,
     this.lastActiveAt,
     this.level,
     this.levelProgress,
@@ -71,7 +71,6 @@ class PublicProfileCard {
   final String? username;
   final String? memberId;
   final String? profilePhotoUrl;
-  final bool isPrivate;
 
   /// Real presence timestamp — only populated for connected people.
   final DateTime? lastActiveAt;
@@ -112,7 +111,6 @@ class PublicProfileCard {
         username: j['username'] as String?,
         memberId: j['memberId'] as String?,
         profilePhotoUrl: j['profilePhotoUrl'] as String?,
-        isPrivate: j['isPrivate'] as bool? ?? false,
         lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
         level: j['level'] as int?,
         levelProgress: (j['levelProgress'] as num?)?.toDouble(),
@@ -235,14 +233,24 @@ class CrewApi {
     return map;
   }
 
-  Future<List<PublicUser>> getCrew(String token) async {
+  /// Conditional GET /crew. A 304 returns [Conditional.notModified]; older
+  /// servers send no ETag, in which case [Conditional.etag] is null.
+  Future<Conditional<List<PublicUser>>> getCrew(
+    String token, {
+    String? etag,
+  }) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$kNuvoApiBase/crew'), headers: _headers(token)),
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase/crew'),
+        headers: {..._headers(token), 'If-None-Match': ?etag},
+      ),
     );
+    if (res.statusCode == 304) return Conditional.notModified(etag: etag);
     final json = _decode(res);
-    return (json['crew'] as List<dynamic>? ?? [])
+    final members = (json['crew'] as List<dynamic>? ?? [])
         .map((e) => PublicUser.fromJson(e as Map<String, dynamic>))
         .toList();
+    return Conditional(data: members, etag: res.headers['etag'], raw: json);
   }
 
   Future<CrewRequestPage> getRequestPage(String token) async {

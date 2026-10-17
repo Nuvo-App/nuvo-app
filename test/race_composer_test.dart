@@ -102,8 +102,7 @@ void main() {
     const fontAssets = {
       'test/fonts/Manrope-Regular.ttf':
           'tmp/social-qa/fonts/Manrope_regular.ttf',
-      'test/fonts/Manrope-Medium.ttf':
-          'tmp/social-qa/fonts/Manrope_medium.ttf',
+      'test/fonts/Manrope-Medium.ttf': 'tmp/social-qa/fonts/Manrope_medium.ttf',
       'test/fonts/Manrope-SemiBold.ttf':
           'tmp/social-qa/fonts/Manrope_semiBold.ttf',
       'test/fonts/Manrope-Bold.ttf': 'tmp/social-qa/fonts/Manrope_bold.ttf',
@@ -117,19 +116,20 @@ void main() {
       'Manrope_700': 'tmp/social-qa/fonts/Manrope_bold.ttf',
       'Manrope_800': 'tmp/social-qa/fonts/Manrope_extraBold.ttf',
     };
-    final manifest = const StandardMessageCodec().decodeMessage(
-            await rootBundle.load('AssetManifest.bin'))
-        as Map<Object?, Object?>;
+    final manifest =
+        const StandardMessageCodec().decodeMessage(
+              await rootBundle.load('AssetManifest.bin'),
+            )
+            as Map<Object?, Object?>;
     for (final key in fontAssets.keys) {
       manifest[key] = [
-        {'asset': key}
+        {'asset': key},
       ];
     }
-    final manifestBytes =
-        const StandardMessageCodec().encodeMessage(manifest);
+    final manifestBytes = const StandardMessageCodec().encodeMessage(manifest);
     final fontBytes = {
       for (final e in fontAssets.entries)
-        e.key: ByteData.sublistView(await File(e.value).readAsBytes())
+        e.key: ByteData.sublistView(await File(e.value).readAsBytes()),
     };
     final messenger = binding.defaultBinaryMessenger;
     messenger.setMockMessageHandler('flutter/assets', (message) async {
@@ -139,10 +139,11 @@ void main() {
           await messenger.delegate.send('flutter/assets', message);
     });
     for (final e in families.entries) {
-      await (FontLoader(e.key)
-            ..addFont(Future.value(
-                ByteData.sublistView(
-                    await File(e.value).readAsBytes()))))
+      await (FontLoader(e.key)..addFont(
+            Future.value(
+              ByteData.sublistView(await File(e.value).readAsBytes()),
+            ),
+          ))
           .load();
     }
   });
@@ -274,10 +275,9 @@ void main() {
     });
 
     test('manual goal without name or unit is not valid to create', () {
-      final draft = draftForActivity(_jacks).copyWith(
-        goalKind: RaceGoalKind.manual,
-        targetValue: 10,
-      );
+      final draft = draftForActivity(
+        _jacks,
+      ).copyWith(goalKind: RaceGoalKind.manual, targetValue: 10);
       expect(draft.isValidToCreate, isFalse);
     });
 
@@ -556,9 +556,15 @@ void main() {
         createCustomRace:
             ({
               required title,
-              required targetValue,
+              targetValue,
               required customActivityName,
-              required verifierSpec,
+              verifierSpec,
+              motionV2Spec,
+              format = 'first_to_goal',
+              finishLineAt,
+              attemptDurationSeconds,
+              attemptLimit,
+              scoreDirection,
             }) async {
               customCalled = true;
               expect(title, 'First to 12 Overhead Wave');
@@ -596,6 +602,85 @@ void main() {
       expect(presetCalled, isFalse);
     });
 
+    test('custom timed race sends its window and no fake target', () async {
+      final draft = RaceDraft(
+        title: '',
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.timedAttempt,
+        targetValue: 60, // the stale default that used to leak as "/60 reps"
+        attemptDurationSeconds: 3600,
+        customActivityName: 'Overhead Wave',
+        verifierSpec: _anySpec(),
+      );
+      expect(draft.isValidToCreate, isTrue);
+      expect(draft.generatedTitleText, '60 min Overhead Wave battle');
+      Map<String, Object?>? sent;
+      await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace:
+            ({
+              required title,
+              targetValue,
+              required customActivityName,
+              verifierSpec,
+              motionV2Spec,
+              format = 'first_to_goal',
+              finishLineAt,
+              attemptDurationSeconds,
+              attemptLimit,
+              scoreDirection,
+            }) async {
+              sent = {
+                'target': targetValue,
+                'format': format,
+                'duration': attemptDurationSeconds,
+              };
+              return _race(title: title);
+            },
+        createRace:
+            ({
+              required title,
+              description,
+              category,
+              goalType = 'manual',
+              targetValue,
+              unit,
+              proofRequirement,
+              proofReviewMode,
+              aiActivityType,
+              activityId,
+              metric,
+              format,
+              recurrence,
+              targetUnit,
+              proofMode,
+              scoreDirection,
+            }) async => _race(title: title),
+      );
+      expect(sent, {
+        'target': null,
+        'format': 'timed_attempt',
+        'duration': 3600,
+      });
+    });
+
+    test('custom most-in-window needs a finish line, not a target', () async {
+      final base = RaceDraft(
+        title: '',
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.mostInWindow,
+        targetValue: 0,
+        customActivityName: 'Overhead Wave',
+        verifierSpec: _anySpec(),
+      );
+      expect(base.isValidToCreate, isFalse); // no finish line yet
+      final withLine = base.copyWith(finishLineAt: '2026-10-16T05:00:00Z');
+      expect(withLine.isValidToCreate, isTrue);
+      expect(withLine.generatedTitleText, 'Most Overhead Wave');
+    });
+
     test('composer preset draft calls createRace', () async {
       final draft = draftForActivity(_jacks).copyWith(targetValue: 30);
       var customCalled = false;
@@ -606,9 +691,15 @@ void main() {
         createCustomRace:
             ({
               required title,
-              required targetValue,
+              targetValue,
               required customActivityName,
-              required verifierSpec,
+              verifierSpec,
+              motionV2Spec,
+              format = 'first_to_goal',
+              finishLineAt,
+              attemptDurationSeconds,
+              attemptLimit,
+              scoreDirection,
             }) async {
               customCalled = true;
               return _race(title: title);
@@ -671,9 +762,15 @@ void main() {
             createCustomRace:
                 ({
                   required title,
-                  required targetValue,
+                  targetValue,
                   required customActivityName,
-                  required verifierSpec,
+                  verifierSpec,
+                  motionV2Spec,
+                  format = 'first_to_goal',
+                  finishLineAt,
+                  attemptDurationSeconds,
+                  attemptLimit,
+                  scoreDirection,
                 }) async {
                   throw Exception('HTTP 500: Internal server error');
                 },
@@ -723,10 +820,8 @@ void main() {
     setSize(WidgetTester tester, Size size) {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
-      tester.view.padding =
-          const FakeViewPadding(top: 47, bottom: 34);
-      tester.view.viewPadding =
-          const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPadding);
@@ -744,8 +839,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recentMovementsStoreProvider
-                .overrideWithValue(_PickerStore(recents)),
+            recentMovementsStoreProvider.overrideWithValue(
+              _PickerStore(recents),
+            ),
           ],
           child: MaterialApp(
             theme: theme ?? AppTheme.light(),
@@ -760,7 +856,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose activity'));
       await tester.pumpAndSettle();
@@ -776,8 +873,11 @@ void main() {
     Finder tile(String title) => find.widgetWithText(PressableScale, title);
 
     int tileCount(WidgetTester tester) => tester
-        .widgetList(find.byWidgetPredicate(
-            (w) => w.runtimeType.toString() == '_MovementTile'))
+        .widgetList(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == '_MovementTile',
+          ),
+        )
         .length;
 
     testWidgets('0 recents → Quick picks, no Recent heading', (tester) async {
@@ -796,45 +896,53 @@ void main() {
       expect(tileCount(tester), 4);
     });
 
-    testWidgets('2 recents → one full row + padded second row',
-        (tester) async {
+    testWidgets('2 recents → one full row + padded second row', (tester) async {
       await pumpPicker(tester, recents: const ['plank_hold', 'squats']);
       expect(find.text('Recent activities'), findsOneWidget);
       expect(tileCount(tester), 4);
     });
 
-    testWidgets('3 recents → balanced rows, suggested slot filled',
-        (tester) async {
+    testWidgets('3 recents → balanced rows, suggested slot filled', (
+      tester,
+    ) async {
       await pumpPicker(
-          tester, recents: const ['plank_hold', 'squats', 'jumping_jacks']);
+        tester,
+        recents: const ['plank_hold', 'squats', 'jumping_jacks'],
+      );
       expect(find.text('Recent activities'), findsOneWidget);
       // 3 recents + 1 suggested = 4 options in one grid, no holes.
       expect(tileCount(tester), 4);
     });
 
-    testWidgets('4+ recents → capped at 4, no suggested padding',
-        (tester) async {
-      await pumpPicker(tester,
-          recents: const [
-            'plank_hold',
-            'squats',
-            'jumping_jacks',
-            'push_ups',
-            'lunges',
-          ]);
+    testWidgets('4+ recents → capped at 4, no suggested padding', (
+      tester,
+    ) async {
+      await pumpPicker(
+        tester,
+        recents: const [
+          'plank_hold',
+          'squats',
+          'jumping_jacks',
+          'push_ups',
+          'lunges',
+        ],
+      );
       expect(tileCount(tester), 4);
       expect(find.text('Suggested'), findsNothing);
     });
 
-    testWidgets('recents dedupe starters — Pushups renders once',
-        (tester) async {
+    testWidgets('recents dedupe starters — Pushups renders once', (
+      tester,
+    ) async {
       await pumpPicker(tester, recents: const ['push_ups']);
       expect(find.text('Pushups'), findsOneWidget);
     });
 
     testWidgets('recents keep provider order, newest first', (tester) async {
-      await pumpPicker(tester,
-          recents: const ['plank_hold', 'squats', 'push_ups']);
+      await pumpPicker(
+        tester,
+        recents: const ['plank_hold', 'squats', 'push_ups'],
+      );
       // Rows fill in provider order: [Plank, Squats] then [Pushups] wide.
       final plank = tester.getTopLeft(find.text('Plank'));
       final squats = tester.getTopLeft(find.text('Squats'));
@@ -844,8 +952,9 @@ void main() {
       expect(pushups.dy, greaterThan(plank.dy)); // next row
     });
 
-    testWidgets('selected tile keeps identical settled geometry',
-        (tester) async {
+    testWidgets('selected tile keeps identical settled geometry', (
+      tester,
+    ) async {
       await pumpPicker(tester);
       final before = tester.getSize(tile('Pushups'));
       await tester.tap(find.text('Pushups'));
@@ -880,12 +989,14 @@ void main() {
     // Selection is surface state — every tile must keep its exact position
     // across repeated selection changes.
     testWidgets('selection never reorders the grid', (tester) async {
-      await pumpPicker(tester,
-          recents: const ['plank_hold', 'jumping_jacks', 'push_ups']);
+      await pumpPicker(
+        tester,
+        recents: const ['plank_hold', 'jumping_jacks', 'push_ups'],
+      );
       Map<String, Offset> positions() => {
-            for (final t in ['Plank', 'Jumping Jacks', 'Pushups', 'Squats'])
-              t: tester.getTopLeft(tile(t)),
-          };
+        for (final t in ['Plank', 'Jumping Jacks', 'Pushups', 'Squats'])
+          t: tester.getTopLeft(tile(t)),
+      };
       final initial = positions();
       // Recents + one suggested tile in the merged grid — the exact
       // composition from the report.
@@ -912,9 +1023,7 @@ void main() {
       final store = _RecordingPickerStore(const ['plank_hold', 'squats']);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            recentMovementsStoreProvider.overrideWithValue(store),
-          ],
+          overrides: [recentMovementsStoreProvider.overrideWithValue(store)],
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
@@ -925,7 +1034,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose activity'));
       await tester.pumpAndSettle();
@@ -939,16 +1049,17 @@ void main() {
 
     // Recents resolving AFTER the user has selected must not reshuffle the
     // screen they are looking at — the visible order is frozen.
-    testWidgets('late recents after selection cannot reorder',
-        (tester) async {
+    testWidgets('late recents after selection cannot reorder', (tester) async {
       setSize(tester, const Size(390, 844));
-      final gate = _PickerStoreGate(
-          const ['squats', 'lunges', 'mountain_climbers', 'high_knees']);
+      final gate = _PickerStoreGate(const [
+        'squats',
+        'lunges',
+        'mountain_climbers',
+        'high_knees',
+      ]);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            recentMovementsStoreProvider.overrideWithValue(gate),
-          ],
+          overrides: [recentMovementsStoreProvider.overrideWithValue(gate)],
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
@@ -962,16 +1073,17 @@ void main() {
       await tester.pumpAndSettle();
 
       Map<String, Offset> positions() => {
-            for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
-              t: tester.getTopLeft(tile(t)),
-          };
+        for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
+          t: tester.getTopLeft(tile(t)),
+      };
       final initial = positions();
 
       await tester.tap(find.text('Pushups'));
       await tester.pumpAndSettle();
       gate.complete();
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
 
       // The late personalization lands silently — no reorder, no new heading
@@ -985,15 +1097,17 @@ void main() {
     });
 
     // Same guarantee for the remote catalog snapshot.
-    testWidgets('late remote catalog after selection cannot reorder',
-        (tester) async {
+    testWidgets('late remote catalog after selection cannot reorder', (
+      tester,
+    ) async {
       setSize(tester, const Size(390, 844));
       final catalogGate = Completer<MotionCatalogSnapshot>();
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recentMovementsStoreProvider
-                .overrideWithValue(_PickerStore(const [])),
+            recentMovementsStoreProvider.overrideWithValue(
+              _PickerStore(const []),
+            ),
             motionCatalogProvider.overrideWith((ref) => catalogGate.future),
           ],
           child: MaterialApp(
@@ -1009,9 +1123,9 @@ void main() {
       await tester.pumpAndSettle();
 
       Map<String, Offset> positions() => {
-            for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
-              t: tester.getTopLeft(tile(t)),
-          };
+        for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
+          t: tester.getTopLeft(tile(t)),
+      };
       final initial = positions();
 
       await tester.tap(find.text('Squats'));
@@ -1038,13 +1152,14 @@ void main() {
       expect(find.text('Teach Nuvo'), findsOneWidget);
     });
 
-    testWidgets('back navigation preserves order and selection',
-        (tester) async {
+    testWidgets('back navigation preserves order and selection', (
+      tester,
+    ) async {
       await pumpPicker(tester);
       Map<String, Offset> positions() => {
-            for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
-              t: tester.getTopLeft(tile(t)),
-          };
+        for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
+          t: tester.getTopLeft(tile(t)),
+      };
       final initial = positions();
       await tester.tap(find.text('Plank'));
       await tester.pumpAndSettle();
@@ -1061,13 +1176,15 @@ void main() {
 
     testWidgets('selection survives late-arriving recents', (tester) async {
       setSize(tester, const Size(390, 844));
-      final gate =
-          _PickerStoreGate(['squats', 'lunges', 'mountain_climbers', 'high_knees']);
+      final gate = _PickerStoreGate([
+        'squats',
+        'lunges',
+        'mountain_climbers',
+        'high_knees',
+      ]);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            recentMovementsStoreProvider.overrideWithValue(gate),
-          ],
+          overrides: [recentMovementsStoreProvider.overrideWithValue(gate)],
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
@@ -1086,7 +1203,8 @@ void main() {
       // Recents land late — selection and its tile must survive.
       gate.complete();
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Continue with Pushups'), findsOneWidget);
       expect(find.text('Pushups'), findsOneWidget); // tile still present
@@ -1095,11 +1213,12 @@ void main() {
       }
     });
 
-    testWidgets('320×568 — teach + custom goal stay reachable',
-        (tester) async {
-      await pumpPicker(tester,
-          size: const Size(320, 568),
-          recents: const ['plank_hold', 'squats', 'jumping_jacks']);
+    testWidgets('320×568 — teach + custom goal stay reachable', (tester) async {
+      await pumpPicker(
+        tester,
+        size: const Size(320, 568),
+        recents: const ['plank_hold', 'squats', 'jumping_jacks'],
+      );
       await tester.scrollUntilVisible(
         find.text('Teach Nuvo'),
         200,
@@ -1120,8 +1239,9 @@ void main() {
       }
     });
 
-    testWidgets('long movement name does not overflow tile or CTA',
-        (tester) async {
+    testWidgets('long movement name does not overflow tile or CTA', (
+      tester,
+    ) async {
       await pumpPicker(tester, recents: const ['mountain_climbers']);
       await tester.tap(find.text('Mountain Climbers'));
       await tester.pumpAndSettle();
@@ -1190,8 +1310,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recentMovementsStoreProvider
-                .overrideWithValue(_PickerStore(const [])),
+            recentMovementsStoreProvider.overrideWithValue(
+              _PickerStore(const []),
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.light(),
@@ -1224,8 +1345,9 @@ void main() {
       ('Jumping Jacks', 'How many jumping jacks?'),
       ('Plank', 'How long?'),
     ]) {
-      testWidgets('"$name" skips the pick step straight to the goal',
-          (tester) async {
+      testWidgets('"$name" skips the pick step straight to the goal', (
+        tester,
+      ) async {
         await pumpComposer(tester);
         await nameAndAdvance(tester, name);
         // Goal step — the picker never rendered.
@@ -1236,8 +1358,9 @@ void main() {
       });
     }
 
-    testWidgets('substring alias is not a pick — "Burpee backflip challenge"',
-        (tester) async {
+    testWidgets('substring alias is not a pick — "Burpee backflip challenge"', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Burpee backflip challenge');
       // The picker shows, nothing pre-selected — "burpee" inside a longer
@@ -1248,12 +1371,12 @@ void main() {
       // All escape paths stay reachable.
       expect(find.text('See all movements'), findsOneWidget);
       expect(find.text('Teach Nuvo'), findsOneWidget);
-      expect(
-          find.text('Not a movement? Create a custom goal'), findsOneWidget);
+      expect(find.text('Not a movement? Create a custom goal'), findsOneWidget);
     });
 
-    testWidgets('unknown manual name lands on the picker, nothing armed',
-        (tester) async {
+    testWidgets('unknown manual name lands on the picker, nothing armed', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Neighborhood chess league');
       expect(find.text('Pick a movement'), findsOneWidget);
@@ -1308,8 +1431,9 @@ void main() {
     // composer skips only what the name already answered and never
     // re-asks it.
 
-    testWidgets('"100 pushups" skips the picker with the target stated',
-        (tester) async {
+    testWidgets('"100 pushups" skips the picker with the target stated', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, '100 pushups');
       expect(find.text('How many pushups?'), findsOneWidget);
@@ -1320,12 +1444,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Review race'));
       await tester.pumpAndSettle();
-      expect(find.text('First to 100 verified pushups wins.'),
-          findsOneWidget);
+      expect(find.text('First to 100 verified pushups wins.'), findsOneWidget);
     });
 
-    testWidgets('"First to 20 jumping jacks" carries the target through',
-        (tester) async {
+    testWidgets('"First to 20 jumping jacks" carries the target through', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'First to 20 jumping jacks');
       expect(find.text('How many jumping jacks?'), findsOneWidget);
@@ -1334,12 +1458,15 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Review race'));
       await tester.pumpAndSettle();
-      expect(find.text('First to 20 verified jumping jacks wins.'),
-          findsOneWidget);
+      expect(
+        find.text('First to 20 verified jumping jacks wins.'),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('"2 minute plank" resolves the duration target',
-        (tester) async {
+    testWidgets('"2 minute plank" resolves the duration target', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, '2 minute plank');
       expect(find.text('How long?'), findsOneWidget);
@@ -1349,12 +1476,12 @@ void main() {
       await tester.tap(find.text('Review race'));
       await tester.pumpAndSettle();
       // 120 seconds of hold — the duration IS the finish line.
-      expect(find.text('First to 2 min verified plank wins.'),
-          findsOneWidget);
+      expect(find.text('First to 2 min verified plank wins.'), findsOneWidget);
     });
 
-    testWidgets('"Highest math grade" routes straight to a custom goal',
-        (tester) async {
+    testWidgets('"Highest math grade" routes straight to a custom goal', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Highest math grade');
       // No picker — the name already chose the custom-goal path.
@@ -1368,8 +1495,9 @@ void main() {
       );
     });
 
-    testWidgets('"Lowest golf score" is a lower-wins custom goal',
-        (tester) async {
+    testWidgets('"Lowest golf score" is a lower-wins custom goal', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Lowest golf score');
       expect(find.text('Pick a movement'), findsNothing);
@@ -1394,8 +1522,9 @@ void main() {
       expect(find.text('Read 5 books'), findsWidgets);
     });
 
-    testWidgets('custom goal renamed to a movement clears custom state',
-        (tester) async {
+    testWidgets('custom goal renamed to a movement clears custom state', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Read 5 books');
       expect(find.text('What is the goal?'), findsOneWidget);
@@ -1409,8 +1538,9 @@ void main() {
       expect(find.text('Read · books'), findsNothing);
     });
 
-    testWidgets('explicit movement pick survives a rename to a movement',
-        (tester) async {
+    testWidgets('explicit movement pick survives a rename to a movement', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Neighborhood chess league');
       await tester.tap(find.text('Squats'));
@@ -1428,8 +1558,9 @@ void main() {
       expect(find.text('How many pushups?'), findsNothing);
     });
 
-    testWidgets('subject chip reopens the picker — automation keeps control',
-        (tester) async {
+    testWidgets('subject chip reopens the picker — automation keeps control', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Pushups');
       expect(find.text('How many pushups?'), findsOneWidget);
@@ -1440,8 +1571,7 @@ void main() {
       expect(find.text('Quick picks'), findsOneWidget);
       expect(find.text('See all movements'), findsOneWidget);
       expect(find.text('Teach Nuvo'), findsOneWidget);
-      expect(
-          find.text('Not a movement? Create a custom goal'), findsOneWidget);
+      expect(find.text('Not a movement? Create a custom goal'), findsOneWidget);
       // Switching is one tap.
       await tester.tap(find.text('Squats'));
       await tester.pumpAndSettle();
@@ -1450,8 +1580,9 @@ void main() {
       expect(find.text('How many squats?'), findsOneWidget);
     });
 
-    testWidgets('subject chip on a custom goal reopens the manual form',
-        (tester) async {
+    testWidgets('subject chip on a custom goal reopens the manual form', (
+      tester,
+    ) async {
       await pumpComposer(tester);
       await nameAndAdvance(tester, 'Highest math grade');
       expect(find.text('What is the goal?'), findsOneWidget);
@@ -1464,8 +1595,9 @@ void main() {
       expect(find.text('Pick a movement instead'), findsOneWidget);
     });
 
-    testWidgets('remote catalog alias resolves through the merged catalog',
-        (tester) async {
+    testWidgets('remote catalog alias resolves through the merged catalog', (
+      tester,
+    ) async {
       setViewportSize(tester, const Size(390, 844));
       const remote = MotionCatalogActivity(
         id: 'dragon_jump',
@@ -1490,8 +1622,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recentMovementsStoreProvider
-                .overrideWithValue(_PickerStore(const [])),
+            recentMovementsStoreProvider.overrideWithValue(
+              _PickerStore(const []),
+            ),
             motionCatalogProvider.overrideWith(
               (ref) async => const MotionCatalogSnapshot(
                 catalogVersion: 'test',
@@ -1523,10 +1656,8 @@ void main() {
     void setBackTestSize(WidgetTester tester) {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
-      tester.view.padding =
-          const FakeViewPadding(top: 47, bottom: 34);
-      tester.view.viewPadding =
-          const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPadding);
@@ -1538,8 +1669,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recentMovementsStoreProvider
-                .overrideWithValue(_PickerStore(const [])),
+            recentMovementsStoreProvider.overrideWithValue(
+              _PickerStore(const []),
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.light(),
@@ -1550,8 +1682,7 @@ void main() {
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const RaceComposerScreen(
-                          prefill:
-                              RaceCreatePrefill(idea: 'Weekend book club'),
+                          prefill: RaceCreatePrefill(idea: 'Weekend book club'),
                         ),
                       ),
                     ),
@@ -1566,12 +1697,14 @@ void main() {
       await tester.tap(find.text('open composer'));
       await tester.pumpAndSettle();
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
     }
 
-    testWidgets('system back unwinds internal steps before exiting',
-        (tester) async {
+    testWidgets('system back unwinds internal steps before exiting', (
+      tester,
+    ) async {
       await pumpPushedComposer(tester);
       expect(find.text('1 of 5'), findsOneWidget);
 
@@ -1594,8 +1727,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('iOS-style edge swipe steps back inside the flow',
-        (tester) async {
+    testWidgets('iOS-style edge swipe steps back inside the flow', (
+      tester,
+    ) async {
       await pumpPushedComposer(tester);
       await tester.tap(find.text('Choose activity'));
       await tester.pumpAndSettle();

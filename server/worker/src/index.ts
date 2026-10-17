@@ -16,17 +16,19 @@ import { readMotionCatalog, readMotionRelease } from './domain/motionRegistry';
 import { declaredPackageAssets, packageAssetContentType, packageAssetKey } from './domain/motionAssets';
 import { arenaRouter } from './routes/arena';
 import { motionRouter, motionSessionsRouter } from './routes/motion';
+import { teachSessionsRouter } from './routes/teachSessions';
 import { verificationSessionsRouter } from './routes/verificationSessions';
 import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
 import { progressionRouter } from './routes/progression';
 import { crewRouter } from './routes/crew';
+import { squadsRouter } from './routes/squads';
 import { reportsRouter } from './routes/reports';
 import { invitesRouter } from './routes/invites';
 import { notificationsRouter } from './routes/notifications';
 import { reactionsRouter } from './routes/reactions';
 import { devicesRouter } from './routes/devices';
-import { requireAuth } from './lib/jwt';
+import { requireAuth, verifyJwt } from './lib/jwt';
 import { ALLOWED_WEB_ORIGINS } from './lib/response';
 import {
   androidAssetLinks,
@@ -65,6 +67,46 @@ app.use(
     credentials: false,
   }),
 );
+
+// ── App config (public; flip in the Cloudflare dashboard, no deploy) ──────────
+// custom_motion: Teach Nuvo / custom camera movements visible in the app.
+// clip_settle_factor: optional walk-in/out clip tuning (1.0-2.0).
+// crews: crew groups (/squads) exist on this worker. Older workers omit it, so
+// the app keeps the Crews entry hidden until the backend actually has them.
+app.get('/config', async (c) => {
+  const env = c.env as unknown as Record<string, string | undefined>;
+  const settle = Number(env.CLIP_SETTLE_FACTOR);
+  let customMotion = env.CUSTOM_MOTION_ENABLED === 'true';
+  // Optional login: lets a short allowlist (CUSTOM_MOTION_USERS) see the
+  // feature while it is off for everyone else. Bad/expired token = anonymous.
+  const allow = (env.CUSTOM_MOTION_USERS ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  const auth = c.req.header('Authorization');
+  if (!customMotion && allow.length > 0 && auth?.startsWith('Bearer ')) {
+    try {
+      const { sub } = await verifyJwt(auth.slice(7), c.env.JWT_SECRET);
+      const row = await c.env.DB
+        .prepare('SELECT primary_email FROM users WHERE id = ?')
+        .bind(sub)
+        .first<{ primary_email: string | null }>();
+      const email = (row?.primary_email ?? '').toLowerCase();
+      customMotion = allow.includes(sub.toLowerCase()) || (email !== '' && allow.includes(email));
+    } catch {
+      // anonymous
+    }
+  }
+  c.header('Cache-Control', 'private, max-age=60');
+  c.header('Vary', 'Authorization');
+  return c.json({
+    custom_motion: customMotion,
+    crews: true,
+    ...(Number.isFinite(settle) && settle >= 1 && settle <= 2
+      ? { clip_settle_factor: settle }
+      : {}),
+  });
+});
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (c) => c.json({ ok: true, service: 'nuvo-api', ts: Date.now() }));
@@ -123,7 +165,7 @@ app.get('/j/:token', async (c) => {
           .bind(row.target_id)
           .first<{ full_name: string | null; username: string | null }>();
         const name = p?.full_name || (p?.username ? `@${p.username}` : 'a Nuvo member');
-        preview = { headline: `Connect with ${name} on Nuvo`, sub: 'Open the link on your phone to add them to your crew.' };
+        preview = { headline: `Connect with ${name} on Nuvo`, sub: 'Open the link on your phone to add them as a friend.' };
       }
     }
   }
@@ -208,6 +250,7 @@ app.get('/races/activities', async (c) => {
     }));
     const etag = `\"${catalog.catalogVersion}:${activities.length}\"`;
     c.header('ETag', etag);
+    c.header('Cache-Control', 'public, max-age=300');
     if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
     return c.json({
       ok: true,
@@ -308,6 +351,7 @@ app.route('/progression', progressionRouter);
 // ── Social routes ─────────────────────────────────────────────────────────────
 app.route('/users', usersRouter);
 app.route('/crew', crewRouter);
+app.route('/squads', squadsRouter);
 app.route('/invites', invitesRouter);
 app.route('/notifications', notificationsRouter);
 app.route('/reactions', reactionsRouter);
@@ -327,6 +371,9 @@ app.route('/motion', motionRouter);
 
 // ── Motion Session telemetry ingest (authed) + internal lookup (X-Internal-Key)
 app.route('/motion-sessions', motionSessionsRouter);
+
+// ── Teach Nuvo session telemetry ingest (authed, consent-gated)
+app.route('/teach-sessions', teachSessionsRouter);
 app.route('/', verificationSessionsRouter);
 app.route('/internal', internalRouter);
 

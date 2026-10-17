@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:nuvo/core/widgets/nuvo_bottom_fade.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -57,8 +59,9 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
     });
     _debounce = Timer(const Duration(milliseconds: 280), () async {
       try {
-        final results =
-            await ref.read(crewControllerProvider.notifier).search(query);
+        final results = await ref
+            .read(crewControllerProvider.notifier)
+            .search(query);
         if (mounted) {
           setState(() {
             _results = results;
@@ -78,8 +81,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
 
   Future<void> _add(PublicUser user) async {
     try {
-      final outcome =
-          await ref.read(crewControllerProvider.notifier).add(user);
+      final outcome = await ref.read(crewControllerProvider.notifier).add(user);
       if (mounted && outcome == ConnectOutcome.pending) {
         ScaffoldMessenger.of(
           context,
@@ -88,7 +90,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add this crew member.')),
+          const SnackBar(content: Text('Could not add this friend.')),
         );
       }
     }
@@ -124,118 +126,128 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: Row(children: [
-            NuvoBackButton(onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/pass');
-              }
-            }),
-          ]),
+          child: Row(
+            children: [
+              NuvoBackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/pass');
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
       child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+        child: Stack(
           children: [
-            Text('Add to crew', style: AppTextStyles.displaySmall),
-            const SizedBox(height: 4),
-            Text(
-              'Name, @username or member code.',
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
-                  .copyWith(color: context.themeColors.inkSubtle),
-            ),
-            const SizedBox(height: 16),
-            NuvoSearchField(
-              controller: _searchController,
-              hint: 'Search Nuvo members',
-              searching: _searching,
-              autofocus: true,
-              onChanged: _onSearchChanged,
-            ),
-            const SizedBox(height: 12),
-            // The other three ways in — scan theirs, show yours, share a link.
-            Row(
+            ListView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
               children: [
-                Expanded(
-                  child: _WayIn(
-                    icon: Icons.qr_code_scanner_rounded,
-                    label: 'Scan',
-                    onTap: () => context.push('/scan'),
-                  ),
+                Text('Add friend', style: AppTextStyles.displaySmall),
+                const SizedBox(height: 4),
+                Text(
+                  'Name, @username or member code.',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: context.themeColors.inkMuted)
+                      .copyWith(color: context.themeColors.inkSubtle),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _WayIn(
-                    icon: Icons.qr_code_rounded,
-                    label: 'My Nuvo',
-                    onTap: () => context.push('/my-nuvo'),
-                  ),
+                const SizedBox(height: 16),
+                NuvoSearchField(
+                  controller: _searchController,
+                  hint: 'Search Nuvo members',
+                  searching: _searching,
+                  autofocus: true,
+                  onChanged: _onSearchChanged,
                 ),
+                const SizedBox(height: 12),
+                // The other three ways in — scan theirs, show yours, share a link.
+                Row(
+                  children: [
+                    Expanded(
+                      child: _WayIn(
+                        icon: Icons.qr_code_scanner_rounded,
+                        label: 'Scan',
+                        onTap: () => context.push('/scan'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _WayIn(
+                        icon: Icons.qr_code_rounded,
+                        label: 'My Nuvo',
+                        onTap: () => context.push('/my-nuvo'),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ── Search results ─────────────────────────────────────────
+                if (searching) ...[
+                  const SizedBox(height: 16),
+                  if (_searchError != null && !_searching)
+                    NuvoPressable(
+                      onTap: () => _onSearchChanged(_searchController.text),
+                      haptic: false,
+                      child: _HubNote(text: _searchError!),
+                    )
+                  else if (_results.isEmpty && !_searching)
+                    const _HubNote(text: 'No matching Nuvo members found.')
+                  else
+                    _HubSurface(
+                      children: [
+                        for (var i = 0; i < _results.length; i++)
+                          _PersonRow(
+                            result: _results[i],
+                            busy: pending.contains(_results[i].user.id),
+                            isLast: i == _results.length - 1,
+                            onOpen: () =>
+                                context.push('/u/${_results[i].user.id}'),
+                            onAdd: () => _add(_results[i].user),
+                            onAccept: () => _accept(_results[i].user),
+                          ),
+                      ],
+                    ),
+                ] else ...[
+                  // ── Requests — people already knocking ────────────────────
+                  if (crewState.requests.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    const _HubLabel(label: 'Wants to be friends'),
+                    const SizedBox(height: 10),
+                    _HubSurface(
+                      children: [
+                        for (var i = 0; i < crewState.requests.length; i++)
+                          _RequestRow(
+                            user: crewState.requests[i],
+                            busy: pending.contains(crewState.requests[i].id),
+                            isLast: i == crewState.requests.length - 1,
+                            onAccept: () => _accept(crewState.requests[i]),
+                            onDecline: () => _decline(crewState.requests[i]),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (crewState.outgoing.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    const _HubLabel(label: 'Requests sent'),
+                    const SizedBox(height: 10),
+                    _HubSurface(
+                      children: [
+                        for (var i = 0; i < crewState.outgoing.length; i++)
+                          _SentRow(
+                            user: crewState.outgoing[i],
+                            isLast: i == crewState.outgoing.length - 1,
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
               ],
             ),
-
-            // ── Search results ─────────────────────────────────────────
-            if (searching) ...[
-              const SizedBox(height: 16),
-              if (_searchError != null && !_searching)
-                NuvoPressable(
-                  onTap: () => _onSearchChanged(_searchController.text),
-                  haptic: false,
-                  child: _HubNote(text: _searchError!),
-                )
-              else if (_results.isEmpty && !_searching)
-                const _HubNote(text: 'No matching Nuvo members found.')
-              else
-                _HubSurface(
-                  children: [
-                    for (var i = 0; i < _results.length; i++)
-                      _PersonRow(
-                        result: _results[i],
-                        busy: pending.contains(_results[i].user.id),
-                        isLast: i == _results.length - 1,
-                        onOpen: () =>
-                            context.push('/u/${_results[i].user.id}'),
-                        onAdd: () => _add(_results[i].user),
-                        onAccept: () => _accept(_results[i].user),
-                      ),
-                  ],
-                ),
-            ] else ...[
-              // ── Requests — people already knocking ────────────────────
-              if (crewState.requests.isNotEmpty) ...[
-                const SizedBox(height: 22),
-                const _HubLabel(label: 'Wants in your crew'),
-                const SizedBox(height: 10),
-                _HubSurface(
-                  children: [
-                    for (var i = 0; i < crewState.requests.length; i++)
-                      _RequestRow(
-                        user: crewState.requests[i],
-                        busy: pending.contains(crewState.requests[i].id),
-                        isLast: i == crewState.requests.length - 1,
-                        onAccept: () => _accept(crewState.requests[i]),
-                        onDecline: () => _decline(crewState.requests[i]),
-                      ),
-                  ],
-                ),
-              ],
-              if (crewState.outgoing.isNotEmpty) ...[
-                const SizedBox(height: 22),
-                const _HubLabel(label: 'Requests sent'),
-                const SizedBox(height: 10),
-                _HubSurface(
-                  children: [
-                    for (var i = 0; i < crewState.outgoing.length; i++)
-                      _SentRow(
-                        user: crewState.outgoing[i],
-                        isLast: i == crewState.outgoing.length - 1,
-                      ),
-                  ],
-                ),
-              ],
-            ],
+            const NuvoBottomFade(),
           ],
         ),
       ),
@@ -269,9 +281,12 @@ class _WayIn extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: context.themeColors.ink),
               const SizedBox(width: 8),
-              Text(label,
-                  style: AppTextStyles.labelLarge
-                      .copyWith(color: context.themeColors.ink)),
+              Text(
+                label,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: context.themeColors.ink,
+                ),
+              ),
             ],
           ),
         ),
@@ -311,14 +326,15 @@ class _HubNote extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style:
-              AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 18),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: AppTextStyles.bodySmall.copyWith(
+        color: context.themeColors.inkSubtle,
+      ),
+    ),
+  );
 }
 
 String _handleLine(PublicUser user) {
@@ -355,8 +371,7 @@ class _PersonRow extends StatelessWidget {
     final mutual = result.mutualCount;
     final subtitle = [
       if (_handleLine(user).isNotEmpty) _handleLine(user),
-      if (mutual > 0)
-        '$mutual mutual ${mutual == 1 ? 'crew' : 'crew'}',
+      if (mutual > 0) '$mutual mutual ${mutual == 1 ? 'friend' : 'friends'}',
     ].join(' · ');
     return Column(
       children: [
@@ -391,7 +406,8 @@ class _PersonRow extends StatelessWidget {
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: context.themeColors.inkMuted)
                               .copyWith(color: context.themeColors.inkSubtle),
                         ),
                     ],
@@ -412,20 +428,28 @@ class _PersonRow extends StatelessWidget {
     return NuvoStateMorph(
       stateKey: result.connectionStatus,
       child: switch (result.connectionStatus) {
-        CrewConnectionStatus.connected =>
-          const _StatusChip(label: 'In crew', color: NuvoColors.success),
-        CrewConnectionStatus.pendingOutgoing =>
-          const _StatusChip(label: 'Sent', color: NuvoColors.warning),
+        CrewConnectionStatus.connected => const _StatusChip(
+          label: 'Friends',
+          color: NuvoColors.success,
+        ),
+        CrewConnectionStatus.pendingOutgoing => const _StatusChip(
+          label: 'Sent',
+          color: NuvoColors.warning,
+        ),
         CrewConnectionStatus.pendingIncoming => NuvoPrimaryButton(
-            label: 'Accept',
-            loading: busy,
-            onPressed: busy ? null : onAccept,
-          ),
+          label: 'Accept',
+          small: true,
+          horizontalPadding: 14,
+          loading: busy,
+          onPressed: busy ? null : onAccept,
+        ),
         CrewConnectionStatus.none => NuvoPrimaryButton(
-            label: 'Add',
-            loading: busy,
-            onPressed: busy ? null : onAdd,
-          ),
+          label: 'Add',
+          small: true,
+          horizontalPadding: 14,
+          loading: busy,
+          onPressed: busy ? null : onAdd,
+        ),
       },
     );
   }
@@ -466,7 +490,7 @@ class _RequestRow extends StatelessWidget {
                   children: [
                     Text(
                       user.displayName,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: context.themeColors.ink,
@@ -476,9 +500,10 @@ class _RequestRow extends StatelessWidget {
                     if (_handleLine(user).isNotEmpty)
                       Text(
                         _handleLine(user),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: context.themeColors.inkMuted)
                             .copyWith(color: context.themeColors.inkSubtle),
                       ),
                   ],
@@ -487,15 +512,20 @@ class _RequestRow extends StatelessWidget {
               NuvoPrimaryButton(
                 label: 'Accept',
                 small: true,
-                horizontalPadding: 14,
+                horizontalPadding: 10,
                 loading: busy,
                 onPressed: busy ? null : onAccept,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 2),
               IconButton(
                 onPressed: busy ? null : onDecline,
-                icon: Icon(Icons.close_rounded,
-                    color: context.themeColors.inkMuted, size: 20),
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: context.themeColors.inkMuted,
+                  size: 20,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
                 visualDensity: VisualDensity.compact,
               ),
             ],
@@ -555,17 +585,17 @@ class _StatusChip extends StatelessWidget {
   final Color color;
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: color,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: context.tintOf(color),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      label,
+      style: AppTextStyles.labelMedium.copyWith(
+        color: context.onTintOf(color),
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 }

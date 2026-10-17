@@ -36,8 +36,9 @@ const _coreLandmarks = [
 /// body (which has standing-like hipToKneeRatio) from matching LANDING
 /// during the AIRBORNE phase.
 MultiPhaseSequenceDefinition buildJumpSquatDefinition(
-  AirborneStateTracker airborne,
-) {
+  AirborneStateTracker airborne, {
+  MotionTuning tuning = MotionTuning.empty,
+}) {
   // Lowered from 0.70 to 0.60 — controlled tolerance experiment B1.
   // Real-world jump squatters stay in an athletic stance between reps
   // (hipToKneeRatio ~0.60-0.85). At 0.70, only 1/29 reps detected.
@@ -46,9 +47,9 @@ MultiPhaseSequenceDefinition buildJumpSquatDefinition(
   // identity/regression tests pass.
   // Rejected 0.55: caused overcounting (4 vs 3 expected on one clip).
   // Rejected 0.50: introduced new squat_jacks confuser false accept.
-  final standingCondition = const ComparisonCondition(
+  final standingCondition = ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.60,
+    tuning.value('standingRatio', 0.60),
     greaterThan: true,
   );
 
@@ -59,9 +60,9 @@ MultiPhaseSequenceDefinition buildJumpSquatDefinition(
     GroundedCondition(airborne),
   ]);
 
-  final squatCondition = const ComparisonCondition(
+  final squatCondition = ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.58,
+    tuning.value('squatRatio', 0.58),
     greaterThan: false,
   );
 
@@ -131,23 +132,26 @@ MultiPhaseSequenceDefinition buildJumpSquatDefinition(
 /// - same-side return (right→air→right) = 0 (wrong-phase reset)
 /// - alternating reps (right→air→left→air→right) = 2 (one from each)
 List<MultiPhaseSequenceDefinition> buildLungeJumpDefinitions(
-  AirborneStateTracker airborne,
-) {
-  final rightLungeCondition = const AndCondition([
-    ComparisonCondition(PoseSignal.rightKneeAngle, 120, greaterThan: false),
-    ComparisonCondition(PoseSignal.leftKneeAngle, 160, greaterThan: true),
+  AirborneStateTracker airborne, {
+  MotionTuning tuning = MotionTuning.empty,
+}) {
+  final bent = tuning.value('lungeKneeAngle', 120);
+  final straight = tuning.value('trailingKneeAngle', 160);
+  final rightLungeCondition = AndCondition([
+    ComparisonCondition(PoseSignal.rightKneeAngle, bent, greaterThan: false),
+    ComparisonCondition(PoseSignal.leftKneeAngle, straight, greaterThan: true),
   ]);
 
-  final leftLungeCondition = const AndCondition([
-    ComparisonCondition(PoseSignal.leftKneeAngle, 120, greaterThan: false),
-    ComparisonCondition(PoseSignal.rightKneeAngle, 160, greaterThan: true),
+  final leftLungeCondition = AndCondition([
+    ComparisonCondition(PoseSignal.leftKneeAngle, bent, greaterThan: false),
+    ComparisonCondition(PoseSignal.rightKneeAngle, straight, greaterThan: true),
   ]);
 
   final airborneCondition = AirborneCondition(airborne);
 
-  final standingCondition = const ComparisonCondition(
+  final standingCondition = ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.86,
+    tuning.value('standingRatio', 0.86),
     greaterThan: true,
   );
 

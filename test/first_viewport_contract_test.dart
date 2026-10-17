@@ -17,7 +17,9 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
+import 'package:nuvo/features/profile/application/activity_controller.dart';
 import 'package:nuvo/features/profile/application/progression_controller.dart';
+import 'package:nuvo/features/profile/presentation/widgets/activity_heatmap.dart';
 import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/data/progression_models.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
@@ -59,6 +61,13 @@ class _FakeStore extends SecureTokenStore {
 }
 
 class _StubProgressionApi extends ProgressionApi {
+  @override
+  Future<ProgressionFetch> getProgressionConditional(
+    String token, {
+    String? etag,
+  }) async =>
+      ProgressionFetch(data: await getProgression(token));
+
   @override
   Future<NuvoProgression> getProgression(String token) async =>
       NuvoProgression.fromJson(const {
@@ -210,6 +219,9 @@ void main() {
             (ref) => AuthController(_FakeAuthRepo()),
           ),
           progressionApiProvider.overrideWithValue(_StubProgressionApi()),
+          profileActivityProvider.overrideWith(
+            (ref) async => const {'2026-01-05': 2, '2026-01-06': 1},
+          ),
           secureTokenStoreProvider.overrideWithValue(_FakeStore()),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -221,8 +233,15 @@ void main() {
   final quickStartTiles = find.byWidgetPredicate(
     (w) => w.runtimeType.toString() == '_QuickStartTile',
   );
-  final raceSections = find.byWidgetPredicate(
-    (w) => w.runtimeType.toString() == '_RaceSection',
+  // Profile's content blocks: the achievements row, the record strip and the
+  // Your Nuvo group. Each must clear the dock or sit below the fold.
+  const profileSectionTypes = {
+    '_AchievementsRow',
+    '_StatsStrip',
+    '_ProfileActionGroup',
+  };
+  final profileSections = find.byWidgetPredicate(
+    (w) => profileSectionTypes.contains(w.runtimeType.toString()),
   );
 
   for (final (name, width, height) in _sizes) {
@@ -300,6 +319,7 @@ void main() {
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
         await tester.pumpAndSettle();
         expect(
           tester.getRect(plank).bottom,
@@ -308,7 +328,7 @@ void main() {
         );
       });
 
-      testWidgets('Profile: every race section is whole above the dock or '
+      testWidgets('Profile: every section is whole above the dock or '
           'below the fold', (tester) async {
         await pumpInShell(
           tester,
@@ -326,14 +346,14 @@ void main() {
         // clear above the dock.
         final scrollable = find.byType(Scrollable).first;
         // Sections below the first viewport build lazily — the identity
-        // block can fill a small screen entirely, so scroll until the race
+        // block can fill a small screen entirely, so scroll until the
         // sections exist before checking each one clears the dock.
         var buildGuard = 0;
-        while (raceSections.evaluate().length < 2 && buildGuard++ < 12) {
+        while (profileSections.evaluate().length < 2 && buildGuard++ < 12) {
           await tester.drag(scrollable, const Offset(0, -300));
           await tester.pumpAndSettle();
         }
-        for (final element in raceSections.evaluate().toList()) {
+        for (final element in profileSections.evaluate().toList()) {
           var rect = tester.getRect(find.byWidget(element.widget));
           var guard = 0;
           while (rect.bottom > foldY + 0.5 &&
@@ -353,44 +373,77 @@ void main() {
         }
 
         // All sections still exist — scrollable, not lost.
-        expect(find.textContaining('Recent results'), findsWidgets);
-        expect(find.textContaining('Account'), findsWidgets);
-      });
-
-      testWidgets('Profile: a result row is never the half-visible edge',
-          (tester) async {
-        await pumpInShell(
-          tester,
-          Size(width, height),
-          '/profile',
-          const ProfileScreen(),
-        );
-        final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        // Race-row titles are leaf Texts inside _ProfileRaceGroup. A row
-        // resting fully inside the dock's opaque occlusion band is masked
-        // like below-fold content and scrolls clear (§17) — the failure
-        // case is a title BISECTED by the band's top edge: its top half
-        // visible, its bottom half painted over. That is the half-visible
-        // edge this contract forbids.
-        for (final title in [
-          'Pushup Race',
-          'Squat Race',
-          'Lunge Race',
-          'Plank Race',
-          'Burpee Race',
-          'Jack Race',
-        ]) {
-          for (final element in find.text(title).evaluate()) {
-            final rect = tester.getRect(find.byWidget(element.widget));
-            final bisected = rect.top < foldY - 0.5 && rect.bottom > foldY + 0.5;
-            expect(
-              bisected,
-              isFalse,
-              reason: '$name: "$title" text is bisected by the dock edge',
-            );
-          }
-        }
+        await tester.drag(scrollable, Offset(0, -height));
+        await tester.pumpAndSettle();
+        expect(find.text('Your Nuvo'), findsWidgets);
+        expect(find.text('Settings'), findsWidgets);
       });
     });
   }
+
+  // Profile's first viewport: title, identity, level, achievements, record and
+  // the whole heat map including its Less/More key — and nothing of Your Nuvo.
+  for (final (name, width, height) in const [
+    ('390x844', 390.0, 844.0),
+    ('393x852', 393.0, 852.0),
+    ('430x932', 430.0, 932.0),
+  ]) {
+    testWidgets('Profile first viewport $name: heat map key visible, Your Nuvo '
+        'below the fold, scroll reveals it', (tester) async {
+      await pumpInShell(
+        tester,
+        Size(width, height),
+        '/profile',
+        const ProfileScreen(),
+      );
+      expect(tester.takeException(), isNull);
+      final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
+
+      expect(find.text('Profile'), findsWidgets);
+      expect(find.byType(ActivityHeatmap), findsOneWidget);
+      expect(find.text('More'), findsOneWidget);
+      expect(tester.getRect(find.text('More')).bottom, lessThanOrEqualTo(foldY));
+      expect(tester.getRect(find.text('Less')).top, greaterThan(0));
+      // The heat map card ends close to the dock — it fills the viewport.
+      final card = tester.getRect(find.byType(ActivityHeatmap));
+      expect(card.bottom, lessThanOrEqualTo(foldY));
+      expect(card.bottom, greaterThan(foldY - 40));
+      // No level pill under the name.
+      expect(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == '_IdentityCard',
+          ),
+          matching: find.textContaining('LEVEL', findRichText: true),
+        ),
+        findsNothing,
+      );
+
+      // Your Nuvo is not visible at rest: absent or at/below the dock fold.
+      final label = find.text('Your Nuvo');
+      if (label.evaluate().isNotEmpty) {
+        expect(tester.getRect(label).top, greaterThanOrEqualTo(foldY));
+      }
+
+      await tester.drag(find.byType(CustomScrollView), Offset(0, -height));
+      await tester.pumpAndSettle();
+      expect(label, findsOneWidget);
+      expect(tester.getRect(label).bottom, lessThanOrEqualTo(foldY));
+    });
+  }
+
+  testWidgets('Profile first viewport 320x568: scrolls, no overflow, key '
+      'still whole', (tester) async {
+    await pumpInShell(
+      tester,
+      const Size(320, 568),
+      '/profile',
+      const ProfileScreen(),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('More'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

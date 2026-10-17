@@ -131,7 +131,8 @@ class MultiPhaseSequenceBehavior extends WorkOrderBehavior {
   /// movements (e.g., lunge jumps with both left-start and right-start).
   final List<MultiPhaseSequenceDefinition> Function(
     AirborneStateTracker airborne,
-  ) definitionBuilder;
+  )
+  definitionBuilder;
 
   /// Ordered phase names for this movement (e.g., ['STANDING', 'SQUAT',
   /// 'AIRBORNE', 'LANDING']). Used for demo phase name verification.

@@ -46,8 +46,8 @@ Future<void> showLevelUpMoment(
                 'LEVEL UP',
                 style: AppTextStyles.labelUppercase(
                   12,
-                  color: NuvoColors.blue,
-                ).copyWith(color: NuvoColors.blue),
+                  color: context.themeColors.accent,
+                ).copyWith(color: context.themeColors.accent),
               ),
               const SizedBox(height: NuvoSpacing.sm),
               NuvoPop(
@@ -137,8 +137,8 @@ Future<void> showAchievementMoment(
                 'ACHIEVEMENT EARNED',
                 style: AppTextStyles.labelUppercase(
                   12,
-                  color: NuvoColors.blue,
-                ).copyWith(color: NuvoColors.blue),
+                  color: context.themeColors.accent,
+                ).copyWith(color: context.themeColors.accent),
               ),
               const SizedBox(height: NuvoSpacing.md),
               NuvoPop(

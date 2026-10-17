@@ -17,6 +17,7 @@ const {
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  customRepRateImplausible,
 } = require('../.tmp-test-dist/domain/raceValidation.js');
 
 function feature(value = 0.5) {
@@ -328,6 +329,74 @@ test('custom verifier validation accepts bounded custom race config', () => {
   assert.equal(config.targetValue, 10);
 });
 
+function customBody(extra = {}) {
+  return {
+    title: 'Office ladder',
+    verifierType: 'custom_pose_sequence',
+    verifierVersion: 1,
+    customActivityName: 'Overhead knee touch',
+    verifierSpec: customVerifierSpec(),
+    ...extra,
+  };
+}
+
+test('custom race without a format is still first-to-goal with its target (old clients)', () => {
+  const config = customConfigFromBody(customBody({ targetValue: 10 }));
+  assert.equal('error' in config, false);
+  assert.equal(config.format, 'first_to_goal');
+  assert.equal(config.scoringRule, 'cumulative_sum');
+  assert.equal(config.targetValue, 10);
+  assert.equal(config.attemptDurationSeconds, null);
+});
+
+test('custom first-to-goal still requires a target', () => {
+  const config = customConfigFromBody(customBody({ format: 'first_to_goal' }));
+  assert.equal(config.error, 'Target is required.');
+});
+
+test('custom most-in-window race needs a finish line, not a target', () => {
+  const ok = customConfigFromBody(customBody({
+    format: 'most_in_window',
+    finishLineAt: '2026-10-16T05:00:00Z',
+    // A stray client target must never become a finish line.
+    targetValue: 60,
+  }));
+  assert.equal('error' in ok, false);
+  assert.equal(ok.format, 'most_in_window');
+  assert.equal(ok.scoringRule, 'cumulative_sum');
+  assert.equal(ok.targetValue, null);
+  assert.equal(ok.endsAt, '2026-10-16T05:00:00Z');
+
+  const missing = customConfigFromBody(customBody({ format: 'most_in_window' }));
+  assert.equal(missing.error, 'A finish line is required.');
+});
+
+test('custom timed attempt needs a duration and stores no target', () => {
+  const ok = customConfigFromBody(customBody({
+    format: 'timed_attempt',
+    attemptDurationSeconds: 3600,
+    attemptLimit: 3,
+  }));
+  assert.equal('error' in ok, false);
+  assert.equal(ok.format, 'timed_attempt');
+  assert.equal(ok.targetValue, null);
+  assert.equal(ok.attemptDurationSeconds, 3600);
+  assert.equal(ok.attemptLimit, 3);
+
+  const missing = customConfigFromBody(customBody({ format: 'timed_attempt' }));
+  assert.equal(missing.error, 'Attempt duration is required.');
+});
+
+test('custom best attempt honors score direction and rejects unknown formats', () => {
+  const ok = customConfigFromBody(customBody({ format: 'best_attempt', scoreDirection: 'lower' }));
+  assert.equal('error' in ok, false);
+  assert.equal(ok.format, 'best_attempt');
+  assert.equal(ok.scoringRule, scoringRuleForFormat('best_attempt', 'lower'));
+
+  const bad = customConfigFromBody(customBody({ format: 'sprint', targetValue: 5 }));
+  assert.equal(bad.error, 'Race format is not supported.');
+});
+
 test('custom verifier validation accepts feature-only learned completion pose', () => {
   const config = customConfigFromBody({
     title: 'Office ladder',
@@ -370,6 +439,79 @@ test('custom verifier validation rejects inactive sequence features', () => {
 
   assert.equal('error' in config, true);
   assert.equal(config.error, 'Custom verifier sequence uses inactive features.');
+});
+
+test('custom verifier validation accepts a motion_v2 learned spec', () => {
+  const v2Spec = {
+    schema: 2,
+    verifier: 'motion_v2',
+    version: 1,
+    name: 'Pull Ups',
+    encoder_id: 'test-encoder',
+    references: [
+      { proto: [0.1, 0.2, 0.3], traj: [[0.1, 0.2]], length: 90 },
+      { proto: [0.1, 0.3, 0.2], traj: [[0.2, 0.1]], length: 88 },
+      { proto: [0.2, 0.1, 0.3], traj: [[0.1, 0.1]], length: 92 },
+    ],
+  };
+  const config = customConfigFromBody({
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'Pull Ups',
+    verifierSpec: v2Spec,
+  });
+  assert.equal('error' in config, false, JSON.stringify(config));
+  assert.equal(config.verifierType, 'motion_v2');
+  assert.equal(config.verifierVersion, 1);
+  assert.equal(JSON.parse(config.verifierSpecJson).verifier, 'motion_v2');
+});
+
+test('motion_v2 spec rejects wrong verifier marker and missing refs', () => {
+  const base = {
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'Pull Ups',
+  };
+  const wrongMarker = customConfigFromBody({
+    ...base,
+    verifierSpec: { schema: 2, verifier: 'custom_pose_sequence', name: 'Pull Ups', references: [{ proto: [1], traj: [[1]], length: 1 }] },
+  });
+  assert.equal(wrongMarker.error, 'Custom verifier type is not supported.');
+  const noRefs = customConfigFromBody({
+    ...base,
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Pull Ups', references: [] },
+  });
+  assert.equal(noRefs.error, 'Custom verifier spec has no reference demos.');
+  const nameMismatch = customConfigFromBody({
+    ...base,
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Squats', references: [{ proto: [1], traj: [[1]], length: 1 }] },
+  });
+  assert.equal(nameMismatch.error, 'Custom movement name does not match the verifier spec.');
+});
+
+test('motion_v2 spec name match is case-insensitive, oversized rejected', () => {
+  const ok = customConfigFromBody({
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'pull ups',
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Pull Ups', references: [{ proto: [1], traj: [[1]], length: 1 }] },
+  });
+  assert.equal('error' in ok, false);
+  const huge = customConfigFromBody({
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'Pull Ups',
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Pull Ups', references: [{ proto: [1], traj: [[1]], length: 1 }], pad: 'x'.repeat(1600 * 1024) },
+  });
+  assert.equal(huge.error, 'Custom verifier spec is too large.');
 });
 
 test('custom verifier validation rejects preset activity impersonation', () => {
@@ -772,4 +914,13 @@ test('GET /races/activities exposes every catalog id (deployment-verifiable)', (
     assert.ok(supported.includes(id), `${id} not in supported activities`);
   }
   assert.equal(supported.length, 23);
+});
+
+test('rep-rate plausibility: only absurd counts are caught', () => {
+  assert.equal(customRepRateImplausible(50, null), false);
+  assert.equal(customRepRateImplausible(60, 3 * 3600 * 1000), false);
+  assert.equal(customRepRateImplausible(9, 30_000), false); // real set
+  assert.equal(customRepRateImplausible(150, 30_000), false); // 5/s edge ok
+  assert.equal(customRepRateImplausible(400, 30_000), true);
+  assert.equal(customRepRateImplausible(100, 0), true);
 });

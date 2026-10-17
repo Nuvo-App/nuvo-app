@@ -161,7 +161,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('no overflow at 320x568 — active row with icon column',
+    testWidgets('no overflow at 320x568 with a long race title',
         (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1.0;
@@ -176,63 +176,6 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(races)));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // The movement icon leads the active row even at the narrowest width.
-      expect(find.byIcon(Icons.fitness_center_rounded), findsOneWidget);
-    });
-
-    testWidgets('long race title wraps to 2 lines, does not overflow', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(375, 667);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      final races = [
-        _finishedRace(
-          'r1',
-          'Pushup Race With An Extremely Long Title That Must Wrap',
-        ),
-      ];
-      await tester.pumpWidget(_buildApp(_StubRaceRepo(races)));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('racing now tile shows the track and my placement',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _activeRace('r1', 'First To 50 Pushups'),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-
-      expect(find.textContaining('Racing now'), findsOneWidget);
-      // Me 18 vs opponent 41 — I'm #2, and the position is earned on
-      // the row, not buried in a subtitle.
-      expect(find.text('#2'), findsWidgets);
-      expect(find.textContaining('18'), findsWidgets);
-    });
-
-    testWidgets('race at the start line stays quiet — no empty bar',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _activeRace('r1', 'First To 50 Pushups', myProgress: 0),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.text('Start line'), findsOneWidget);
-    });
-
-    testWidgets('a win reads as achievement — gold 1ST + trophy',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _finishedRace('r1', 'First To 100 Pushups'),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-
-      expect(find.text('1ST'), findsOneWidget);
-      // Result row trophy + Best-finish trophy — both earned, both gold.
-      expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
     });
 
     testWidgets('win rate shows an em-dash with no finished races',
@@ -246,118 +189,44 @@ void main() {
       expect(find.textContaining('%'), findsNothing);
     });
 
-    testWidgets('Racing now is a horizontal shelf; See all lists all races',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _activeRace('r1', 'First To 50 Pushups'),
-        _activeRace('r2', 'First To 25 Squats',
-            myProgress: 5, opponentProgress: 10, target: 25),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-
-      // The shelf carries every live race as a scrollable tile — the
-      // closest-to-finish leads (18/50 before 5/25). See all drops into
-      // the vertical list.
-      expect(find.text('First To 50 Pushups'), findsOneWidget);
-      expect(find.text('First To 25 Squats'), findsOneWidget);
-      expect(find.text('See all'), findsOneWidget);
-
-      await tester.tap(find.text('See all'));
-      await tester.pumpAndSettle();
-      expect(find.text('First To 50 Pushups'), findsOneWidget);
-      expect(find.text('First To 25 Squats'), findsOneWidget);
-    });
-
-    testWidgets('featured race carries remaining-to-finish context',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _activeRace('r1', 'First To 50 Pushups'),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-
-      // 18/50 → "32 reps to finish" through the canonical score formatter.
-      expect(find.textContaining('to finish'), findsOneWidget);
-      expect(find.textContaining('32 reps'), findsOneWidget);
-    });
-
-    testWidgets('a non-win result stays neutral — plain placement, no trophy',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _finishedRace('r1', 'First To 20 Burpees',
-            myProgress: 19, opponentProgress: 20),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-
-      expect(find.text('2ND'), findsWidgets);
-      // The result row's trophy is reserved for wins.
-      expect(find.byIcon(Icons.emoji_events_rounded), findsNothing);
-    });
-
-    testWidgets('best finish surfaces the strongest canonical placement',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _finishedRace('r1', 'First To 100 Pushups'),
-        _finishedRace('r2', 'First To 20 Burpees',
-            myProgress: 19, opponentProgress: 20),
-      ])));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-
-      await tester.scrollUntilVisible(
-        find.text('BEST FINISH'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.textContaining('1ST · First To 100 Pushups'),
-          findsOneWidget);
-    });
-
-    testWidgets('best finish hides when nothing has been earned',
-        (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([
-        _activeRace('r1', 'First To 50 Pushups'),
-      ])));
-      await tester.pumpAndSettle();
-      expect(find.text('BEST FINISH'), findsNothing);
-    });
-
-    testWidgets('controls are organized — Your Nuvo, App, Account, Legal',
+    testWidgets('Profile keeps Your Nuvo; administration lives in Settings',
         (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
-      for (final label in ['Your Nuvo', 'App', 'Account', 'Legal']) {
+      for (final row in ['Your Nuvo', 'My code', 'Notifications', 'Settings']) {
+        // Lazily built below the fold — scroll until it exists.
         await tester.scrollUntilVisible(
-          find.text(label),
-          200,
-          scrollable: find.byType(Scrollable).first,
-        );
-        expect(find.text(label), findsOneWidget);
-      }
-      // Real destinations only — My Nuvo, Appearance (real theme store),
-      // Edit profile, sign out, legal links. 'My Nuvo'/'Member Pass' also
-      // appear as identity chips, so scroll on the last match.
-      for (final row in [
-        'My Nuvo',
-        'Member pass',
-        'Notifications',
-        'Appearance',
-        'Edit profile',
-        'Sign out',
-        'Privacy Policy',
-        'Terms of Service',
-      ]) {
-        await tester.scrollUntilVisible(
-          find.text(row).last,
+          find.text(row),
           200,
           scrollable: find.byType(Scrollable).first,
         );
         expect(find.text(row), findsWidgets);
       }
+      // Moved out: race history to Compete/Crew, administration to Settings,
+      // and the old Member pass row is gone.
+      for (final gone in [
+        'Racing now',
+        'Recent results',
+        'Member pass',
+        'Privacy & Data',
+        'Account',
+        'Legal',
+        'Sign out',
+      ]) {
+        expect(find.text(gone), findsNothing, reason: '$gone left Profile');
+      }
+    });
+
+    testWidgets('Profile does not list race history', (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([
+        _activeRace('r1', 'First To 50 Pushups'),
+        _finishedRace('r2', 'Squat Race'),
+      ])));
+      await tester.pumpAndSettle();
+      expect(find.text('First To 50 Pushups'), findsNothing);
+      expect(find.text('Squat Race'), findsNothing);
     });
 
     testWidgets('Appearance toggles the real theme store', (tester) async {
@@ -369,6 +238,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.byType(NuvoToggle).first);
+      await tester.pumpAndSettle();
       // Light by default; the whole app re-themes on toggle.
       expect(find.text('Light'), findsOneWidget);
       await tester.tap(find.byType(NuvoToggle).first);
@@ -390,6 +261,57 @@ void main() {
       );
       expect(sizedBox.width, greaterThanOrEqualTo(44));
       expect(sizedBox.height, greaterThanOrEqualTo(44));
+    });
+  });
+
+  group('Settings screen', () {
+    Widget settingsApp() => ProviderScope(
+          overrides: [
+            raceRepositoryProvider.overrideWithValue(_StubRaceRepo(const [])),
+            authControllerProvider.overrideWith(
+              (ref) => AuthController(_FakeAuthRepo()),
+            ),
+          ],
+          child: const MaterialApp(home: SettingsScreen()),
+        );
+
+    testWidgets('holds privacy, account and legal', (tester) async {
+      await tester.pumpWidget(settingsApp());
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Settings'), findsOneWidget);
+
+      for (final label in ['Privacy & Data', 'Account', 'Legal']) {
+        await tester.scrollUntilVisible(
+          find.text(label),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text(label), findsOneWidget);
+      }
+      for (final row in [
+        'Edit profile',
+        'Sign out',
+        'Delete account',
+        'Privacy Policy',
+        'Terms of Service',
+      ]) {
+        await tester.scrollUntilVisible(
+          find.text(row),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text(row), findsOneWidget);
+      }
+    });
+
+    testWidgets('no overflow at 320x568', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(settingsApp());
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     });
   });
 }

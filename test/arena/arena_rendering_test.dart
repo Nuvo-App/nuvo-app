@@ -16,26 +16,21 @@ ArenaBoard _board(
   String id,
   String title, {
   List<ArenaMiniLeaderboardRow> rows = const [
-    ArenaMiniLeaderboardRow(
-      label: 'You',
-      value: '0 / 8',
-      isCurrentUser: true,
-    ),
+    ArenaMiniLeaderboardRow(label: 'You', value: '0 / 8', isCurrentUser: true),
   ],
-}) =>
-    ArenaBoard(
-      id: id,
-      source: 'demo',
-      title: title,
-      progressLabel: '0 / 8 reps',
-      boardContext: '',
-      primaryActionLabel: 'Submit proof',
-      primaryActionType: 'submit_proof',
-      progressPercent: 0,
-      racerCount: rows.length,
-      isResult: false,
-      miniLeaderboard: rows,
-    );
+}) => ArenaBoard(
+  id: id,
+  source: 'demo',
+  title: title,
+  progressLabel: '0 / 8 reps',
+  boardContext: '',
+  primaryActionLabel: 'Submit proof',
+  primaryActionType: 'submit_proof',
+  progressPercent: 0,
+  racerCount: rows.length,
+  isResult: false,
+  miniLeaderboard: rows,
+);
 
 Future<void> _pump(
   WidgetTester tester,
@@ -91,16 +86,14 @@ void main() {
       const Size(390, 844),
       const Size(430, 932),
     ]) {
-      testWidgets('two-line title on the LAST page — ${size.width}w',
-          (tester) async {
+      testWidgets('two-line title on the LAST page — ${size.width}w', (
+        tester,
+      ) async {
         final snapshot = ArenaSnapshot(
           mode: 'real',
           headerPulse: '3 boards',
           focusBoard: _board('b0', 'Pushups'),
-          liveBoards: [
-            _board('b1', 'Daily Plank'),
-            _board('b2', longTitle),
-          ],
+          liveBoards: [_board('b1', 'Daily Plank'), _board('b2', longTitle)],
           activity: const [],
         );
         await _pump(tester, snapshot, size: size);
@@ -115,8 +108,9 @@ void main() {
       });
     }
 
-    testWidgets('short vs long title — first and last pages both fit',
-        (tester) async {
+    testWidgets('short vs long title — first and last pages both fit', (
+      tester,
+    ) async {
       final snapshot = ArenaSnapshot(
         mode: 'real',
         headerPulse: '2 boards',
@@ -134,8 +128,9 @@ void main() {
   });
 
   group('dock occlusion', () {
-    testWidgets('opaque page-colored mask covers the dock zone',
-        (tester) async {
+    testWidgets('opaque page-colored mask covers the dock zone', (
+      tester,
+    ) async {
       await _pump(
         tester,
         ArenaSnapshot(
@@ -198,15 +193,13 @@ void main() {
         ),
       );
       // Scroll the feed — content that was under the dock travels above it.
-      await tester.drag(
-        find.byType(CustomScrollView),
-        const Offset(0, -300),
-      );
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       // The mask still occludes the dock zone after scrolling.
-      final maskRect =
-          tester.getRect(find.byKey(const ValueKey('nuvo-dock-occlusion')));
+      final maskRect = tester.getRect(
+        find.byKey(const ValueKey('nuvo-dock-occlusion')),
+      );
       expect(
         maskRect.top,
         lessThanOrEqualTo(tester.getRect(find.byType(NuvoBottomNav)).top),

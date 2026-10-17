@@ -2,12 +2,16 @@
 // (docs/agents/08 provider graph, docs/agents/10 §A1): StateNotifierProvider is
 // not recreated on sign-out, so clearSnapshot() must null the cache timestamp
 // AND the in-flight future or a hung load wedges the tab until an app kill.
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
+import '../../../core/network/conditional.dart';
 import '../data/arena_api.dart';
 import '../data/arena_models.dart';
 import '../data/arena_repository.dart';
@@ -51,7 +55,59 @@ class ArenaController extends StateNotifier<ArenaState> {
     this.onSessionExpired,
     this.isPresentationDemo = _neverPresentationDemo,
     this.presentationUserId = _emptyPresentationUserId,
+    this.cache,
+    this.accountId = _noAccountId,
   }) : super(const ArenaState());
+
+  final CacheStore? cache;
+
+  /// Signed-in user id, or null. Used only as the disk-cache account key.
+  final String? Function() accountId;
+  static String? _noAccountId() => null;
+  static const _cacheDomain = 'arena';
+  static const _cacheMaxAge = Duration(days: 7);
+
+  /// ETag of the last 200 snapshot, sent as If-None-Match on revalidate.
+  String? _etag;
+
+  /// Account whose snapshot this controller last read/wrote on disk; wiped on
+  /// sign-out.
+  String? _activeAccount;
+
+  String? _cacheAccount() {
+    final id = accountId();
+    if (cache == null || id == null || !isValidCacheId(id)) return null;
+    if (isPresentationDemo()) return null;
+    return id;
+  }
+
+  /// Show the last on-disk snapshot immediately (as `refreshing`), restoring
+  /// its ETag. Never blocks the first frame: callers do not await it before
+  /// rendering. A result that lands after sign-out is discarded.
+  Future<void> hydrate() async {
+    final id = _cacheAccount();
+    if (id == null) return;
+    final generation = _generation;
+    final entry = await cache!.read(id, _cacheDomain, maxAge: _cacheMaxAge);
+    if (entry == null ||
+        !mounted ||
+        generation != _generation ||
+        state.hasData ||
+        accountId() != id) {
+      return;
+    }
+    final ArenaSnapshot snapshot;
+    try {
+      snapshot = ArenaSnapshot.fromJson(
+        Map<String, dynamic>.from(entry.data as Map),
+      );
+    } catch (_) {
+      return;
+    }
+    _activeAccount = id;
+    _etag = entry.etag;
+    state = ArenaState(snapshot: snapshot, refreshing: true);
+  }
 
   final ArenaRepository _repo;
   final VoidCallback? onSessionExpired;
@@ -83,11 +139,12 @@ class ArenaController extends StateNotifier<ArenaState> {
     loadSnapshot(force: true);
   }
 
-  /// A sibling cache (races) changed — the arena is derived from races, so
-  /// pull a fresh snapshot now rather than waiting for the user to open it.
+  /// A sibling cache (races) changed — the arena is derived from races.
+  /// Lazy: only marks the snapshot stale; it fetches immediately only when a
+  /// screen is watching, otherwise the next revalidate() picks it up.
   void markStale() {
     _snapshotLoadedAt = null;
-    if (mounted) loadSnapshot(force: true);
+    if (mounted && hasListeners) loadSnapshot(force: true);
   }
 
   Future<void> loadSnapshot({bool force = true}) {
@@ -115,21 +172,45 @@ class ArenaController extends StateNotifier<ArenaState> {
 
   Future<void> _fetchSnapshot() async {
     final generation = _generation;
+    final account = _cacheAccount();
     if (mounted) {
       final haveData = state.hasData;
-      state = ArenaState(
-        snapshot: state.snapshot,
-        loading: !haveData,
-        refreshing: haveData,
-      );
+      if (state.loading != !haveData || state.refreshing != haveData) {
+        state = ArenaState(
+          snapshot: state.snapshot,
+          loading: !haveData,
+          refreshing: haveData,
+        );
+      }
     }
     try {
-      final snapshot = isPresentationDemo()
-          ? PresentationDemoData.arenaSnapshot(presentationUserId())
-          : await _repo.getArenaSnapshot();
+      final ArenaSnapshot? snapshot;
+      Conditional<ArenaSnapshot>? fetched;
+      if (isPresentationDemo()) {
+        snapshot = PresentationDemoData.arenaSnapshot(presentationUserId());
+      } else {
+        fetched = await _repo.getArenaSnapshotConditional(
+          etag: state.hasData ? _etag : null,
+        );
+        snapshot = fetched.data;
+      }
       if (generation != _generation) return; // superseded by a sign-out
       _snapshotLoadedAt = DateTime.now();
+      if (snapshot == null) {
+        // 304: nothing changed — keep the snapshot, just settle the flags.
+        _etag = fetched?.etag ?? _etag;
+        if (mounted &&
+            (state.refreshing || state.loading || state.error != null)) {
+          state = ArenaState(snapshot: state.snapshot);
+        }
+        return;
+      }
+      _etag = fetched?.etag;
       if (mounted) state = ArenaState(snapshot: snapshot);
+      if (account != null && fetched?.raw != null) {
+        _activeAccount = account;
+        cache!.write(account, _cacheDomain, fetched!.raw, etag: _etag);
+      }
     } on ApiException catch (e) {
       if (generation != _generation) return;
       if (e.statusCode == 401) {
@@ -161,6 +242,10 @@ class ArenaController extends StateNotifier<ArenaState> {
 
   void clearSnapshot() {
     _snapshotLoadedAt = null;
+    _etag = null;
+    final account = _activeAccount ?? _cacheAccount();
+    _activeAccount = null;
+    if (account != null) cache?.clearAccount(account);
     // Drop any in-flight load so the next sign-in starts fresh rather than
     // awaiting a future from the previous session.
     _loadInFlight = null;
@@ -192,6 +277,8 @@ final arenaControllerProvider =
             isPresentationDemoUser(ref.read(authControllerProvider).user),
         presentationUserId: () =>
             ref.read(authControllerProvider).user?.id ?? '',
+        cache: ref.read(cacheStoreProvider),
+        accountId: () => ref.read(authControllerProvider).user?.id,
         onSessionExpired: () {
           debugPrint('[Arena] session expired — notifying AuthController');
           ref.read(authControllerProvider.notifier).sessionExpired();
@@ -201,14 +288,22 @@ final arenaControllerProvider =
       // other providers while this one is still initializing (Riverpod
       // asserts).
       if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
-        Future(() => controller.loadSnapshot(force: false));
+        Future(() async {
+          // Concurrent, never awaited: disk I/O must not delay the first fetch.
+          unawaited(controller.hydrate());
+          await controller.loadSnapshot(force: false);
+        });
       }
       ref.listen<AuthState>(authControllerProvider, (prev, next) {
         if (next.status == AuthStatus.unauthenticated) {
           controller.clearSnapshot();
         } else if (next.status == AuthStatus.authenticated &&
             prev?.status != AuthStatus.authenticated) {
-          controller.loadSnapshot(force: false);
+          () async {
+            // Concurrent, never awaited: disk I/O must not delay the first fetch.
+            unawaited(controller.hydrate());
+            await controller.loadSnapshot(force: false);
+          }();
         }
       });
       return controller;

@@ -32,7 +32,6 @@ class _FakeAuthRepo extends AuthRepository {
   Future<void> saveProfile({
     String? fullName,
     String? username,
-    bool? privateProfile,
     String? profilePhotoUrl,
     bool removePhoto = false,
   }) async {}

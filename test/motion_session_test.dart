@@ -182,4 +182,33 @@ void main() {
     await q.flush();
     expect(attempts, settled, reason: 'successful upload should be cleared');
   });
+
+  test('enqueueRaw stages under dirName and uploads its own metadata', () async {
+    final dir = await Directory.systemTemp.createTemp('teach_queue');
+    addTearDown(() => dir.delete(recursive: true));
+
+    Map<String, dynamic>? sentMeta;
+    final q = MotionSessionUploadQueue(
+      stagingDir: dir,
+      dirName: 'teach_sessions',
+      upload: ({required metadata, required gzipBytes}) async {
+        sentMeta = metadata;
+      },
+    );
+    await q.enqueueRaw(
+      sessionId: 'MV2-20261014-ABCDEF',
+      metadata: const {'sessionId': 'MV2-20261014-ABCDEF', 'outcome': 'used'},
+      gzipBytes: utf8.encode('gz-bytes'),
+    );
+    // The staged pair lands under teach_sessions/, not motion_sessions/.
+    final staged = Directory('${dir.path}/teach_sessions');
+    expect(staged.existsSync(), isTrue);
+    await q.flush();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await q.flush();
+    expect(sentMeta?['sessionId'], 'MV2-20261014-ABCDEF');
+    expect(sentMeta?['outcome'], 'used');
+    expect(staged.listSync().whereType<File>(), isEmpty,
+        reason: 'successful upload clears the staged teach session');
+  });
 }

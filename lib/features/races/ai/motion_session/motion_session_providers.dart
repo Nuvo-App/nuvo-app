@@ -15,3 +15,15 @@ final motionSessionUploadQueueProvider = Provider<MotionSessionUploadQueue>((
         repo.uploadMotionSession(metadata: metadata, gzipBytes: gzipBytes),
   );
 });
+
+/// Upload queue for Teach Nuvo diagnostic sessions — the same stage-then-
+/// flush mechanics, but staged under `teach_sessions/` and posted to
+/// `/teach-sessions` so the Worker indexes them in `motion_teach_sessions`.
+final teachSessionUploadQueueProvider = Provider<MotionSessionUploadQueue>((ref) {
+  final repo = ref.watch(raceRepositoryProvider);
+  return MotionSessionUploadQueue(
+    dirName: 'teach_sessions',
+    upload: ({required metadata, required gzipBytes}) =>
+        repo.uploadTeachSession(metadata: metadata, gzipBytes: gzipBytes),
+  );
+});

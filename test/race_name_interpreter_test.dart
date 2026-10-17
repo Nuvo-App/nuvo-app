@@ -339,4 +339,49 @@ void main() {
           isNot(ProofNeed.gpsActivity));
     });
   });
+
+  group('custom goal reading fixes', () {
+    for (final p in [
+      'best 5k time',
+      'top mile pace',
+      'best 100m sprint time',
+    ]) {
+      test('"$p" is a stopwatch reading, fewer seconds wins', () {
+        final i = interpretRaceName(p);
+        expect(i.manualUnit, 'seconds');
+        expect(i.scoreDirection, 'lower');
+      });
+    }
+
+    for (final p in [
+      'who can study more',
+      'who can focus longer',
+      'who wins the study battle',
+    ]) {
+      test('"$p" asks how to measure instead of guessing', () {
+        final i = interpretRaceName(p);
+        expect(i.question, isNotNull);
+        expect(i.question, contains('measure'));
+        expect(i.scoreDirection, 'higher');
+      });
+    }
+
+    test('"lose 10 lbs" counts pounds, not the verb', () {
+      final i = interpretRaceName('lose 10 lbs');
+      expect(i.manualUnit, 'lb');
+      expect(i.targetValue, 10);
+    });
+
+    test('"no sugar for 30 days" counts days', () {
+      final i = interpretRaceName('no sugar for 30 days');
+      expect(i.manualUnit, 'days');
+      expect(i.targetValue, 30);
+    });
+
+    test('"best study time" stays a duration where more wins', () {
+      final i = interpretRaceName('best study time');
+      expect(i.manualUnit, 'seconds');
+      expect(i.scoreDirection, 'higher');
+    });
+  });
 }

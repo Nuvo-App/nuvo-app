@@ -78,12 +78,12 @@ class _TrackViewScreenState extends State<TrackViewScreen> {
       (a, b) => a.completedAmount >= b.completedAmount ? a : b,
     );
     final contextLabel = leader.id == _currentUser.id
-        ? '#$rank · You lead the crew'
+        ? '#$rank · You lead the board'
         : '#$rank · ${leader.completedAmount - _currentUser.completedAmount} ${_race.unit} behind ${leader.displayName}';
     final toFinish = (_race.goal - currentProgress).clamp(0, _race.goal);
 
     return ColoredBox(
-      color: NuvoColors.surface,
+      color: context.themeColors.surface,
       child: SafeArea(
         bottom: false,
         child: LayoutBuilder(
@@ -563,6 +563,18 @@ class _SwitcherButton extends StatelessWidget {
   }
 }
 
+bool _isDarkCtx(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
+Color _panelText(BuildContext c) =>
+    _isDarkCtx(c) ? c.themeColors.ink : _kPanelText;
+Color _panelMuted(BuildContext c) =>
+    _isDarkCtx(c) ? c.themeColors.inkMuted : _kPanelMuted;
+Color _panelBody(BuildContext c) =>
+    _isDarkCtx(c) ? c.themeColors.ink : const Color(0xFF4A5565);
+Color _panelLine(BuildContext c) =>
+    _isDarkCtx(c) ? c.themeColors.divider : _kPanelLine;
+Color _panelTrack(BuildContext c) =>
+    _isDarkCtx(c) ? c.themeColors.track : const Color(0xFFE4E7EC);
+
 class _StandingsPanel extends StatelessWidget {
   const _StandingsPanel({required this.race, required this.onViewStandings});
 
@@ -582,7 +594,7 @@ class _StandingsPanel extends StatelessWidget {
       builder: (context, constraints) {
         final showRecent = constraints.maxHeight >= 260;
         return DecoratedBox(
-          decoration: const BoxDecoration(color: NuvoColors.surface),
+          decoration: BoxDecoration(color: context.themeColors.surface),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(26, 21, 26, 8),
             child: Column(
@@ -590,10 +602,10 @@ class _StandingsPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'CREW STANDINGS',
+                    Text(
+                      'STANDINGS',
                       style: TextStyle(
-                        color: _kPanelMuted,
+                        color: _panelMuted(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
@@ -627,14 +639,14 @@ class _StandingsPanel extends StatelessWidget {
                     goal: race.goal,
                   ),
                   if (entry.key != standings.length - 1)
-                    const Divider(height: 15, color: _kPanelLine),
+                    Divider(height: 15, color: _panelLine(context)),
                 ],
                 if (showRecent) ...[
                   const Spacer(),
-                  const Text(
+                  Text(
                     'RECENT ACTIVITY',
                     style: TextStyle(
-                      color: _kPanelMuted,
+                      color: _panelMuted(context),
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.2,
@@ -702,7 +714,7 @@ class _StandingRow extends StatelessWidget {
               style: TextStyle(
                 color: selectedFill != null
                     ? NuvoColors.white
-                    : (rank <= 3 ? rankColor : _kPanelMuted),
+                    : (rank <= 3 ? rankColor : _panelMuted(context)),
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
@@ -717,7 +729,7 @@ class _StandingRow extends StatelessWidget {
               style: TextStyle(
                 color: selectedFill != null
                     ? NuvoColors.white
-                    : (rank <= 3 ? rankColor : const Color(0xFF4A5565)),
+                    : (rank <= 3 ? rankColor : _panelBody(context)),
                 fontSize: 16,
                 fontWeight: isUser ? FontWeight.w800 : FontWeight.w700,
               ),
@@ -732,7 +744,7 @@ class _StandingRow extends StatelessWidget {
                   style: TextStyle(
                     color: selectedFill != null
                         ? NuvoColors.white
-                        : (rank <= 3 ? rankColor : _kPanelMuted),
+                        : (rank <= 3 ? rankColor : _panelMuted(context)),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -740,7 +752,9 @@ class _StandingRow extends StatelessWidget {
               ],
             ),
             style: TextStyle(
-              color: selectedFill != null ? NuvoColors.white : _kPanelMuted,
+              color: selectedFill != null
+                  ? NuvoColors.white
+                  : _panelMuted(context),
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
@@ -753,7 +767,7 @@ class _StandingRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: progress,
-                backgroundColor: const Color(0xFFE4E7EC),
+                backgroundColor: _panelTrack(context),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   selectedFill != null ? NuvoColors.white : rankColor,
                 ),
@@ -784,8 +798,8 @@ class _ActivityRow extends StatelessWidget {
               children: [
                 TextSpan(
                   text: participant.displayName,
-                  style: const TextStyle(
-                    color: _kPanelText,
+                  style: TextStyle(
+                    color: _panelText(context),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -796,18 +810,18 @@ class _ActivityRow extends StatelessWidget {
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _kPanelMuted,
+            style: TextStyle(
+              color: _panelMuted(context),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
         ),
         const SizedBox(width: 12),
-        const Text(
+        Text(
           '2m ago',
           style: TextStyle(
-            color: _kPanelMuted,
+            color: _panelMuted(context),
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -842,7 +856,9 @@ class _PanelAvatar extends StatelessWidget {
               shape: BoxShape.circle,
               color: isUser ? _kArenaBlue : _avatarColor(participant.id),
               border: Border.all(
-                color: isUser ? const Color(0xFFBBD5FF) : Colors.white,
+                color: isUser
+                    ? const Color(0xFFBBD5FF)
+                    : context.themeColors.panel,
                 width: 2,
               ),
             ),
@@ -853,7 +869,7 @@ class _PanelAvatar extends StatelessWidget {
                 child: Text(
                   _initials(participant.displayName),
                   style: TextStyle(
-                    color: isUser ? Colors.white : _kPanelText,
+                    color: isUser ? Colors.white : _panelText(context),
                     fontSize: size * 0.36,
                     fontWeight: FontWeight.w900,
                   ),
@@ -867,9 +883,12 @@ class _PanelAvatar extends StatelessWidget {
               bottom: -1,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: isUser ? _kArenaBlue : Colors.white,
+                  color: isUser ? _kArenaBlue : context.themeColors.panel,
                   shape: BoxShape.circle,
-                  border: Border.all(color: NuvoColors.surface, width: 1.5),
+                  border: Border.all(
+                    color: context.themeColors.surface,
+                    width: 1.5,
+                  ),
                 ),
                 child: SizedBox(
                   width: 16,
@@ -878,7 +897,7 @@ class _PanelAvatar extends StatelessWidget {
                     child: Text(
                       '$rank',
                       style: TextStyle(
-                        color: isUser ? Colors.white : _kPanelText,
+                        color: isUser ? Colors.white : _panelText(context),
                         fontSize: 8,
                         fontWeight: FontWeight.w900,
                       ),

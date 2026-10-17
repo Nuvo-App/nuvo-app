@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 import '../../auth/data/auth_api.dart';
 import 'arena_models.dart';
 import '../../../core/network/api_base.dart';
-
+import '../../../core/network/conditional.dart';
 
 class ArenaApi {
   ArenaApi({http.Client? client}) : _client = client ?? http.Client();
@@ -26,11 +26,16 @@ class ArenaApi {
   /// Fails fast instead of hanging a stalled socket indefinitely.
   static const _requestTimeout = Duration(seconds: 20);
 
-  Future<ArenaSnapshot> fetchArenaSnapshot(String token) async {
+  Future<Conditional<ArenaSnapshot>> fetchArenaSnapshot(
+    String token, {
+    String? etag,
+  }) async {
+    final headers = _headers(token);
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
     final http.Response res;
     try {
       res = await _client
-          .get(Uri.parse('$kNuvoApiBase/arena'), headers: _headers(token))
+          .get(Uri.parse('$kNuvoApiBase/arena'), headers: headers)
           .timeout(_requestTimeout);
     } on TimeoutException {
       throw const ApiException(
@@ -51,6 +56,9 @@ class ArenaApi {
     debugPrint(
       '[ArenaApi] status=${res.statusCode} body=${res.body.length > 300 ? res.body.substring(0, 300) : res.body}',
     );
+    if (res.statusCode == 304) {
+      return Conditional.notModified(etag: res.headers['etag'] ?? etag);
+    }
     Map<String, dynamic> json;
     try {
       final decoded = jsonDecode(res.body);
@@ -68,6 +76,10 @@ class ArenaApi {
     if (snapshot == null) {
       throw const ApiException(200, 'Missing snapshot in response');
     }
-    return ArenaSnapshot.fromJson(snapshot as Map<String, dynamic>);
+    return Conditional(
+      data: ArenaSnapshot.fromJson(snapshot as Map<String, dynamic>),
+      etag: res.headers['etag'],
+      raw: snapshot,
+    );
   }
 }

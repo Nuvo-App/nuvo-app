@@ -1,0 +1,27 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "mountain_climbers-tuned-2026.10.0",
+  "activityId": "mountain_climbers",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "plankVerticalnessMax": 1.05,
+    "driveGap": 0.26,
+    "handShoulderVerticalGapMax": 0.55,
+    "proximityGap": 0.24
+  }
+}

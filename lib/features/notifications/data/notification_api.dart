@@ -40,12 +40,20 @@ class NotificationApi {
     return map;
   }
 
-  Future<NotificationPage> list(String token, {String? cursor}) async {
+  /// [etag] is only meaningful for the first page (no cursor); a 304 returns
+  /// [NotificationPage.notModified].
+  Future<NotificationPage> list(String token, {String? cursor, String? etag}) async {
     final uri = Uri.parse('$kNuvoApiBase/notifications').replace(
       queryParameters: {'cursor': ?cursor},
     );
-    final res = await _guard(() => _client.get(uri, headers: _headers(token)));
-    return NotificationPage.fromJson(_decode(res));
+    final headers = _headers(token);
+    if (etag != null && cursor == null) headers['If-None-Match'] = etag;
+    final res = await _guard(() => _client.get(uri, headers: headers));
+    final responseEtag = res.headers['etag'];
+    if (res.statusCode == 304) {
+      return NotificationPage.notModified(etag: responseEtag ?? etag);
+    }
+    return NotificationPage.fromJson(_decode(res), etag: responseEtag);
   }
 
   Future<void> markRead(String token, String id) async {

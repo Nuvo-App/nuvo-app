@@ -19,14 +19,16 @@ const _burpeeLandmarks = [
 /// shared [PoseSignal]) so this file adds zero surface area to the signal
 /// enum every other preset — including the locked three — evaluates against.
 class _HandsUpCondition extends PoseCondition {
-  const _HandsUpCondition();
+  const _HandsUpCondition(this.marginTorso);
+
+  final double marginTorso;
 
   @override
   bool evaluate(PoseFeatureExtractor f) {
     final leftWrist = f.frame.point('leftWrist')!;
     final rightWrist = f.frame.point('rightWrist')!;
     final hipY = f.hipY;
-    final margin = f.torsoHeight * 0.15;
+    final margin = f.torsoHeight * marginTorso;
     return leftWrist.y < hipY - margin && rightWrist.y < hipY - margin;
   }
 }
@@ -34,14 +36,16 @@ class _HandsUpCondition extends PoseCondition {
 /// True when both wrists are at or below hip height — hands reaching toward
 /// the floor, the burpee's crouch-and-plant moment.
 class _HandsDownCondition extends PoseCondition {
-  const _HandsDownCondition();
+  const _HandsDownCondition(this.marginTorso);
+
+  final double marginTorso;
 
   @override
   bool evaluate(PoseFeatureExtractor f) {
     final leftWrist = f.frame.point('leftWrist')!;
     final rightWrist = f.frame.point('rightWrist')!;
     final hipY = f.hipY;
-    final margin = f.torsoHeight * 0.05;
+    final margin = f.torsoHeight * marginTorso;
     return leftWrist.y > hipY - margin && rightWrist.y > hipY - margin;
   }
 }
@@ -63,21 +67,39 @@ class _HandsDownCondition extends PoseCondition {
 ///   standing gate — see squatRepDefinition) AND hands up.
 /// - DOWN: hipToKneeRatio < 0.50 (squat-depth) AND hands down/reaching.
 /// - STANDING again: same condition as phase 0 -> completes the rep.
-MultiPhaseSequenceDefinition buildBurpeeDefinition() {
-  const standing = AndCondition([
-    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.72, greaterThan: true),
-    _HandsUpCondition(),
+MultiPhaseSequenceDefinition buildBurpeeDefinition({
+  MotionTuning tuning = MotionTuning.empty,
+}) {
+  final standing = AndCondition([
+    ComparisonCondition(
+      PoseSignal.hipToKneeRatio,
+      tuning.value('standingRatio', 0.72),
+      greaterThan: true,
+    ),
+    _HandsUpCondition(tuning.value('handsUpMargin', 0.15)),
   ]);
-  const down = AndCondition([
-    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.50, greaterThan: false),
-    _HandsDownCondition(),
+  final down = AndCondition([
+    ComparisonCondition(
+      PoseSignal.hipToKneeRatio,
+      tuning.value('downRatio', 0.50),
+      greaterThan: false,
+    ),
+    _HandsDownCondition(tuning.value('handsDownMargin', 0.05)),
   ]);
 
-  return const MultiPhaseSequenceDefinition(
+  return MultiPhaseSequenceDefinition(
     phases: [
-      SequencePhaseDefinition(id: 'STANDING', condition: standing, stableFrames: 2),
+      SequencePhaseDefinition(
+        id: 'STANDING',
+        condition: standing,
+        stableFrames: 2,
+      ),
       SequencePhaseDefinition(id: 'DOWN', condition: down, stableFrames: 2),
-      SequencePhaseDefinition(id: 'STANDING_FINISH', condition: standing, stableFrames: 2),
+      SequencePhaseDefinition(
+        id: 'STANDING_FINISH',
+        condition: standing,
+        stableFrames: 2,
+      ),
     ],
     resetCondition: standing,
     requiredLandmarks: _burpeeLandmarks,

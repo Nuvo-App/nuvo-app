@@ -3,8 +3,10 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateDemoSnapshot, type ArenaBoard, type ArenaSnapshot, type ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
 import { activityForId, normalizeMetric } from '../domain/raceActivities';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import { finalizeRaceIfEnded } from '../domain/raceFinalize';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { notifyLifecycleTransitions, type LifecycleTransitionLike } from '../domain/notificationPolicy';
 
 export const arenaRouter = new Hono<AppEnv>();
@@ -30,6 +32,7 @@ interface LightRaceRow {
   metric: string | null;
   activity_id: string | null;
   format: string | null;
+  race_type: string | null;
   verification_type: string;
   verification_method: string | null;
   movement_type: string | null;
@@ -67,10 +70,15 @@ function metricLabel(race: LightRaceRow): string {
   return normalizeMetric(race.metric ?? race.target_unit, activity) ?? activity?.defaultMetric ?? 'reps';
 }
 
+function targetOf(race: LightRaceRow): number | null {
+  return effectiveTargetValue(race.format ?? race.race_type, race.target_value);
+}
+
 function progressPercent(race: LightRaceRow, participant: LightParticipantRow | undefined): number {
   if (!participant) return 0;
-  if (race.target_value && race.target_value > 0) {
-    return Math.min(100, Math.floor((participant.progress_value / race.target_value) * 100));
+  const target = targetOf(race);
+  if (target) {
+    return Math.min(100, Math.floor((participant.progress_value / target) * 100));
   }
   return Math.min(100, Math.max(0, participant.progress_percent));
 }
@@ -84,10 +92,11 @@ function buildProgressLabel(
     return `${participantCount} ${participantCount === 1 ? 'racer' : 'racers'} on the board`;
   }
   const { progress_value: val, progress_percent: pct } = myParticipant;
-  if (race.target_value) {
-    return `${val} / ${race.target_value} ${metricLabel(race)}`;
+  const target = targetOf(race);
+  if (target) {
+    return `${val} / ${target} ${metricLabel(race)}`;
   }
-  if (pct > 0) return `${val} ${metricLabel(race)}`;
+  if (pct > 0 || val > 0) return `${val} ${metricLabel(race)}`;
   return 'Submit your first proof';
 }
 
@@ -97,14 +106,15 @@ function buildRowSubtitle(
   participantCount: number,
 ): string {
   const racerLabel = `${participantCount} ${participantCount === 1 ? 'racer' : 'racers'}`;
-  if (myParticipant && race.target_value) {
-    return `${myParticipant.progress_value} / ${race.target_value} ${metricLabel(race)} · ${racerLabel}`;
+  const target = targetOf(race);
+  if (myParticipant && target) {
+    return `${myParticipant.progress_value} / ${target} ${metricLabel(race)} · ${racerLabel}`;
   }
-  if (myParticipant && myParticipant.progress_percent > 0) {
+  if (myParticipant && (myParticipant.progress_percent > 0 || myParticipant.progress_value > 0)) {
     return `${myParticipant.progress_value} ${metricLabel(race)} · ${racerLabel}`;
   }
   if (myParticipant && participantCount === 1) {
-    return 'Solo · add crew from the race room';
+    return 'Solo · add friends from the race room';
   }
   if (myParticipant) {
     return `Submit your first proof · ${racerLabel}`;
@@ -130,6 +140,13 @@ arenaRouter.get('/', async (c) => {
       demo_world_variant: string | null;
     }>();
   if (demoUser?.demo_world_enabled === 1) {
+    // Deterministic fixture world: static validator per user + seed + variant,
+    // bounded by the staleness bucket.
+    const demoNotModified = conditional(
+      c,
+      weakEtag('arena', 'demo', userId, demoUser.demo_world_seed, demoUser.demo_world_variant ?? 'summer_v1', stalenessBucket()),
+    );
+    if (demoNotModified) return demoNotModified;
     return c.json({
       ok: true,
       snapshot: generateDemoSnapshot(
@@ -140,17 +157,22 @@ arenaRouter.get('/', async (c) => {
     });
   }
 
-  const snapshot = await buildRealSnapshot(c.env, userId);
-  return c.json({ ok: true, snapshot });
+  const built = await buildRealSnapshot(c.env, userId, (etag) => conditional(c, etag));
+  if (built instanceof Response) return built;
+  return c.json({ ok: true, snapshot: built });
 });
 
-async function buildRealSnapshot(env: AppEnv['Bindings'], userId: string): Promise<ArenaSnapshot> {
+async function buildRealSnapshot(
+  env: AppEnv['Bindings'],
+  userId: string,
+  gate: (etag: string) => Response | null,
+): Promise<ArenaSnapshot | Response> {
   const db = env.DB;
   // Fetch races this user created or joined (same criteria as GET /races).
   const raceRows = await db
     .prepare(
       `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.target_unit,
-              r.metric, r.activity_id, r.format, r.verification_type,
+              r.metric, r.activity_id, r.format, r.race_type, r.verification_type,
               r.verification_method, r.movement_type, r.creator_id,
               r.start_at, r.end_at, r.score_direction
        FROM races r
@@ -163,9 +185,11 @@ async function buildRealSnapshot(env: AppEnv['Bindings'], userId: string): Promi
 
   const races = raceRows.results;
   if (races.length === 0) {
+    const emptyHit = gate(weakEtag('arena', 'real', 0, stalenessBucket()));
+    if (emptyHit) return emptyHit;
     return {
       mode: 'real',
-      headerPulse: 'Start a race with your crew',
+      headerPulse: 'Start a race with your friends',
       focusBoard: null,
       liveBoards: [],
       activity: [],
@@ -193,9 +217,43 @@ async function buildRealSnapshot(env: AppEnv['Bindings'], userId: string): Promi
     await notifyLifecycleTransitions(env, undefined, transitions);
   }
 
-  // Fetch all participant rows for these races in one query.
+  // Validator, computed after the lazy writes above. Covers: race rows
+  // (count, max version, max updated_at), effective statuses (time-driven
+  // transitions that write nothing), and participant membership/progress/ranks
+  // (which do not always bump races.version). Names/avatars rely on the bucket.
   const raceIds = races.map((r) => r.id);
   const placeholders = raceIds.map(() => '?').join(', ');
+  const raceSig = await db
+    .prepare(
+      `SELECT COUNT(*) AS n, MAX(COALESCE(version, 0)) AS v, MAX(updated_at) AS u
+       FROM races WHERE id IN (${placeholders})`,
+    )
+    .bind(...raceIds)
+    .first<{ n: number; v: number | null; u: string | null }>();
+  const memberSig = await db
+    .prepare(
+      `SELECT COUNT(*) AS n, MAX(rm.joined_at) AS j,
+              MAX(rp.updated_at) AS pu,
+              COALESCE(SUM(rp.progress_value), 0) AS pv,
+              COALESCE(SUM(rp.rank_cache), 0) AS rk
+       FROM race_members rm
+       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'`,
+    )
+    .bind(...raceIds)
+    .first<{ n: number; j: string | null; pu: string | null; pv: number; rk: number }>();
+  const statusSig = races.map((r) => raceEffectiveStatus(r).charAt(0)).join('');
+  const hit = gate(
+    weakEtag(
+      'arena', 'real', raceSig?.n, raceSig?.v, raceSig?.u,
+      statusSig,
+      memberSig?.n, memberSig?.j, memberSig?.pu, memberSig?.pv, memberSig?.rk,
+      stalenessBucket(),
+    ),
+  );
+  if (hit) return hit;
+
+  // Fetch all participant rows for these races in one query.
   const participantRows = await db
     .prepare(
       `SELECT rm.race_id, rm.user_id,
@@ -259,7 +317,7 @@ async function buildRealSnapshot(env: AppEnv['Bindings'], userId: string): Promi
   } else if (resultRaces.length > 0) {
     headerPulse = 'Results are in';
   } else {
-    headerPulse = 'Start a race with your crew';
+    headerPulse = 'Start a race with your friends';
   }
 
   return {
@@ -320,7 +378,7 @@ function buildRealBoard(
   if (isResult) {
     boardContext = `${count} ${count === 1 ? 'racer' : 'racers'} finished`;
   } else if (isSolo) {
-    boardContext = 'Solo · add crew from the race room';
+    boardContext = 'Solo · add friends from the race room';
   } else {
     boardContext = `${count} ${count === 1 ? 'racer' : 'racers'} on the board`;
   }
@@ -332,8 +390,8 @@ function buildRealBoard(
   if (includeMiniLeaderboard && participants.length > 0) {
     miniLeaderboard = participants.slice(0, 5).map((p) => ({
       label: p.user_id === userId ? 'You' : (p.display_name ?? 'Racer'),
-      value: race.target_value
-        ? `${p.progress_value} / ${race.target_value} ${metricLabel(race)}`
+      value: targetOf(race)
+        ? `${p.progress_value} / ${targetOf(race)} ${metricLabel(race)}`
         : `${p.progress_value} ${metricLabel(race)}`,
       isCurrentUser: p.user_id === userId,
       profilePhotoUrl: p.profile_photo_url,

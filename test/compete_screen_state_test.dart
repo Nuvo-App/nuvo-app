@@ -121,9 +121,9 @@ void main() {
     testWidgets('shows race content when loaded with data', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
       await tester.pump(const Duration(milliseconds: 100));
-      // Loading should be done; hero + content should be visible.
+      // Loading should be done; a lone race sits in the waiting summary.
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.text('Pushup Race'), findsWidgets);
+      expect(find.text('Waiting for friends'), findsOneWidget);
     });
 
     testWidgets('shows empty state when loaded with no races', (tester) async {
@@ -164,7 +164,7 @@ void main() {
 
       // Manual retry succeeded → content visible.
       expect(find.byType(NuvoErrorState), findsNothing);
-      expect(find.text('Pushup Race'), findsWidgets);
+      expect(find.text('Waiting for friends'), findsOneWidget);
     });
   });
 }

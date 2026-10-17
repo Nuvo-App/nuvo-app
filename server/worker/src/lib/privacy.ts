@@ -1,15 +1,8 @@
 /**
- * Privacy helpers for private-profile enforcement, crew/connection checks,
- * and user anonymization in shared contexts.
+ * Privacy helpers for block enforcement, crew/connection checks, and user
+ * anonymization. There is no such thing as a private profile: everyone is
+ * visible to everyone except people who have blocked each other.
  */
-
-export async function isProfilePrivate(db: D1Database, userId: string): Promise<boolean> {
-  const row = await db
-    .prepare('SELECT private_profile FROM profiles WHERE user_id = ?')
-    .bind(userId)
-    .first<{ private_profile: number }>();
-  return Boolean(row?.private_profile);
-}
 
 export async function isConnected(
   db: D1Database,
@@ -46,24 +39,18 @@ export async function canViewFullProfile(
 ): Promise<boolean> {
   if (viewerUserId === targetUserId) return true;
   if (await isBlocked(db, targetUserId, viewerUserId)) return false;
-  const isPublic = !(await isProfilePrivate(db, targetUserId));
-  if (isPublic) return true;
-  return await isConnected(db, viewerUserId, targetUserId);
+  if (await isBlocked(db, viewerUserId, targetUserId)) return false;
+  return true;
 }
 
 /**
  * Race-identity visibility policy — the single source of truth for what a
- * viewer sees for another user *inside a race they share*.
+ * viewer sees for another user inside a race.
  *
  * Rules:
  *  - self / no viewer            → real name + photo
- *  - blocked (either direction)  → anonymized, always (wins over everything)
- *  - viewer + target both in this race → real *race identity* (name + photo),
- *      even if the target has a private profile. A leaderboard / "someone
- *      passed you" is meaningless otherwise. The private profile still hides
- *      the deeper profile screen (that path uses canViewFullProfile).
- *  - private profile, no shared context (not crew, not co-racer) → anonymized
- *  - otherwise                   → real name + photo
+ *  - blocked (either direction)  → anonymized
+ *  - everyone else               → real name + photo
  */
 export function resolveRaceMemberVisibility(
   viewerUserId: string | undefined,
@@ -72,7 +59,6 @@ export function resolveRaceMemberVisibility(
     displayName: string | null;
     username: string | null;
     profilePhotoUrl: string | null;
-    privateProfile: boolean;
   },
   ctx: {
     crewIds: Set<string>;
@@ -91,11 +77,6 @@ export function resolveRaceMemberVisibility(
   if (ctx.blockedEitherWay.has(target.userId)) {
     return { displayName: 'Private User', profilePhotoUrl: null, anonymized: true };
   }
-  const known =
-    ctx.crewIds.has(target.userId) || ctx.coRacerIds.has(target.userId);
-  if (target.privateProfile && !known) {
-    return { displayName: 'Private User', profilePhotoUrl: null, anonymized: true };
-  }
   return { displayName: realName, profilePhotoUrl: target.profilePhotoUrl, anonymized: false };
 }
 
@@ -103,7 +84,7 @@ export interface AnonymizedUser {
   displayName: string;
   username: string | null;
   profilePhotoUrl: null;
-  isPrivate: true;
+  isPrivate: false; // legacy key kept for older app builds; always false
 }
 
 export function anonymizeUser(): AnonymizedUser {
@@ -111,7 +92,7 @@ export function anonymizeUser(): AnonymizedUser {
     displayName: 'Private User',
     username: null,
     profilePhotoUrl: null,
-    isPrivate: true,
+    isPrivate: false,
   };
 }
 
@@ -131,5 +112,5 @@ export async function getVisibleUserFields(
       isPrivate: false,
     };
   }
-  return { ...anonymizeUser(), isPrivate: true };
+  return anonymizeUser();
 }

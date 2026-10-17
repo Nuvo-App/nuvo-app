@@ -11,6 +11,7 @@ import {
   type VerificationMethod,
 } from './raceActivities';
 import type { RegistryActivity } from './motionRegistry';
+import { effectiveTargetValue } from './raceTarget';
 
 export interface RaceConfig {
   /// The server-owned activity identity — a static-catalog ID for compiled
@@ -31,21 +32,32 @@ export interface RaceConfig {
 }
 
 export const CUSTOM_VERIFIER_TYPE = 'custom_pose_sequence';
+export const MOTION_V2_VERIFIER_TYPE = 'motion_v2';
 export const PRESET_VERIFIER_TYPE = 'preset_pose';
 export const CUSTOM_VERIFIER_VERSION = 1;
+export const MOTION_V2_VERIFIER_VERSION = 1;
 export const CUSTOM_VERIFIER_SPEC_MAX_BYTES = 128 * 1024;
+// V2 learned specs carry per-demo encoder embeddings (3 refs × proto+trajectory,
+// ~1MB as JSON) — an order of magnitude larger than V1 pose templates.
+export const MOTION_V2_SPEC_MAX_BYTES = 1536 * 1024;
+
+/** Custom taught-movement races: V1 pose templates AND V2 learned specs. */
+export function isCustomVerifierType(t: string | null | undefined): boolean {
+  return t === CUSTOM_VERIFIER_TYPE || t === MOTION_V2_VERIFIER_TYPE;
+}
 
 export interface CustomRaceConfig {
-  verifierType: typeof CUSTOM_VERIFIER_TYPE;
+  verifierType: string;
   verifierVersion: typeof CUSTOM_VERIFIER_VERSION;
   verifierSpecJson: string;
   customActivityName: string;
   metric: 'reps';
-  format: 'first_to_goal';
-  scoringRule: 'cumulative_sum';
-  targetValue: number;
-  attemptDurationSeconds: null;
-  attemptLimit: null;
+  format: RaceFormat;
+  scoringRule: RaceScoringRule;
+  /** Required for first_to_goal only; null for window / attempt formats. */
+  targetValue: number | null;
+  attemptDurationSeconds: number | null;
+  attemptLimit: number | null;
   verificationMethod: 'ai';
   timezone: string;
   startsAt: string | null;
@@ -90,7 +102,8 @@ export interface ManualRaceConfig {
   unit: string; // free-text display unit ("pages", "minutes", "days")
   format: RaceFormat;
   scoringRule: RaceScoringRule;
-  targetValue: number;
+  /** null for window / attempt formats — they have no finish line. */
+  targetValue: number | null;
   recurrence: RaceRecurrence;
   timezone: string;
   startsAt: string | null;
@@ -117,14 +130,17 @@ export function manualConfigFromBody(
   ).toLowerCase();
   if (!MANUAL_PROOF_REQUIREMENTS.has(proof)) return null;
 
-  const targetValue = intValue(body, 'targetValue', 'target_value');
-  if (!targetValue) return { error: 'A goal amount is required.' };
-
   const unitRaw = stringValue(body, 'unit', 'targetUnit', 'target_unit') ?? 'done';
   const unit = unitRaw.slice(0, 24);
 
   const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
   const format = FORMATS.has(rawFormat as RaceFormat) ? (rawFormat as RaceFormat) : 'first_to_goal';
+
+  // A goal amount is only required for a race to a goal; window / attempt
+  // formats are decided by score, so any client-sent target is a placeholder.
+  const rawTarget = intValue(body, 'targetValue', 'target_value');
+  if (format === 'first_to_goal' && !rawTarget) return { error: 'A goal amount is required.' };
+  const targetValue = effectiveTargetValue(format, rawTarget);
 
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence)
@@ -305,13 +321,44 @@ function validateCustomVerifierSpec(spec: Record<string, unknown>, customActivit
   return null;
 }
 
+/**
+ * Motion-V2 learned specs are opaque to the worker — the trained encoder owns
+ * their semantics. Structural check only: the spec's own verifier marker, the
+ * movement name, and the reference demos it was learned from.
+ */
+function validateMotionV2Spec(spec: Record<string, unknown>, customActivityName: string): string | null {
+  if (!hasOnlyFiniteNumbers(spec)) return 'Custom verifier spec contains invalid numeric values.';
+  if (spec.verifier !== MOTION_V2_VERIFIER_TYPE) return 'Custom verifier type is not supported.';
+  if (typeof spec.schema !== 'number' || !Number.isFinite(spec.schema)) {
+    return 'Custom verifier spec is invalid.';
+  }
+  const name = typeof spec.name === 'string' ? spec.name.trim() : '';
+  if (name.toLowerCase() !== customActivityName.trim().toLowerCase()) {
+    return 'Custom movement name does not match the verifier spec.';
+  }
+  const refs = spec.references;
+  if (!Array.isArray(refs) || refs.length === 0 || refs.length > 4) {
+    return 'Custom verifier spec has no reference demos.';
+  }
+  for (const rawRef of refs) {
+    const ref = recordValue(rawRef);
+    if (!Array.isArray(ref?.proto) || ref.proto.length === 0 ||
+        !Array.isArray(ref?.traj) || ref.traj.length === 0) {
+      return 'Custom verifier spec references are invalid.';
+    }
+  }
+  return null;
+}
+
 export function customConfigFromBody(body: Record<string, unknown>): CustomRaceConfig | null | { error: string } {
   const verifierType = stringValue(body, 'verifierType', 'verifier_type');
   if (!verifierType) return null;
-  if (verifierType !== CUSTOM_VERIFIER_TYPE) return { error: 'Verifier type is not supported.' };
+  if (!isCustomVerifierType(verifierType)) return { error: 'Verifier type is not supported.' };
+  const isV2 = verifierType === MOTION_V2_VERIFIER_TYPE;
 
   const verifierVersion = intValue(body, 'verifierVersion', 'verifier_version');
-  if (verifierVersion !== CUSTOM_VERIFIER_VERSION) return { error: 'Verifier version is not supported.' };
+  const expectedVersion = isV2 ? MOTION_V2_VERIFIER_VERSION : CUSTOM_VERIFIER_VERSION;
+  if (verifierVersion !== expectedVersion) return { error: 'Verifier version is not supported.' };
 
   const customActivityName = stringValue(body, 'customActivityName', 'custom_activity_name');
   if (!customActivityName || customActivityName.length > 40) {
@@ -325,33 +372,54 @@ export function customConfigFromBody(body: Record<string, unknown>): CustomRaceC
 
   const spec = recordValue(body.verifierSpec ?? body.verifier_spec);
   if (!spec) return { error: 'Custom verifier spec is required.' };
-  const specError = validateCustomVerifierSpec(spec, customActivityName);
+  const specError = isV2
+    ? validateMotionV2Spec(spec, customActivityName)
+    : validateCustomVerifierSpec(spec, customActivityName);
   if (specError) return { error: specError };
   const verifierSpecJson = JSON.stringify(spec);
-  if (new TextEncoder().encode(verifierSpecJson).length > CUSTOM_VERIFIER_SPEC_MAX_BYTES) {
+  const maxSpecBytes = isV2 ? MOTION_V2_SPEC_MAX_BYTES : CUSTOM_VERIFIER_SPEC_MAX_BYTES;
+  if (new TextEncoder().encode(verifierSpecJson).length > maxSpecBytes) {
     return { error: 'Custom verifier spec is too large.' };
   }
 
+  // Win condition. Absent / unknown keeps the original contract: a race to a
+  // target (older clients never sent a format for custom races).
+  const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
+  if (!FORMATS.has(rawFormat as RaceFormat)) return { error: 'Race format is not supported.' };
+  const format = rawFormat as RaceFormat;
+
   const targetValue = intValue(body, 'targetValue', 'target_value');
-  if (!targetValue) return { error: 'Target is required.' };
+  if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
+
+  const endsAt = stringValue(body, 'endsAt', 'finishLineAt') ?? null;
+  const attemptDurationSeconds =
+    format === 'first_to_goal' ? null : intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
+  const attemptLimit =
+    format === 'first_to_goal' ? null : intValue(body, 'attemptLimit', 'attempt_limit');
+  if (format === 'most_in_window' && !endsAt) return { error: 'A finish line is required.' };
+  if (format === 'timed_attempt' && !attemptDurationSeconds) {
+    return { error: 'Attempt duration is required.' };
+  }
+
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
 
   return {
-    verifierType: CUSTOM_VERIFIER_TYPE,
-    verifierVersion: CUSTOM_VERIFIER_VERSION,
+    verifierType,
+    verifierVersion: expectedVersion,
     verifierSpecJson,
     customActivityName,
     metric: 'reps',
-    format: 'first_to_goal',
-    scoringRule: 'cumulative_sum',
-    targetValue,
-    attemptDurationSeconds: null,
-    attemptLimit: null,
+    format,
+    scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
+    // A window / attempt race has nothing to reach — never store a made-up target.
+    targetValue: format === 'first_to_goal' ? targetValue : null,
+    attemptDurationSeconds,
+    attemptLimit,
     verificationMethod: 'ai',
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
     startsAt: stringValue(body, 'startsAt', 'startLineAt') ?? null,
-    endsAt: stringValue(body, 'endsAt', 'finishLineAt') ?? null,
+    endsAt,
     recurrence,
   };
 }
@@ -386,7 +454,8 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
     metric,
     format,
     scoringRule,
-    targetValue,
+    // A window / attempt race has nothing to reach — never store a placeholder.
+    targetValue: effectiveTargetValue(format, targetValue),
     attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
@@ -433,7 +502,8 @@ export function registryConfigFromBody(
     metric: expectedMetric,
     format,
     scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
-    targetValue,
+    // A window / attempt race has nothing to reach — never store a placeholder.
+    targetValue: effectiveTargetValue(format, targetValue),
     attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
@@ -448,4 +518,14 @@ export function assertSubmissionCompatible(config: RaceConfig, activityId: strin
   if (normalizeActivityIdLoose(activityId) !== config.activityId) return 'Verified movement does not match this race.';
   if (normalizeMetric(metric, activityForId(config.activityId)) !== config.metric) return 'Verified metric does not match this race.';
   return null;
+}
+
+/**
+ * A camera-counted proof can't hold more reps than a body can do in the time
+ * recorded. Generous on purpose (5 reps/second + 5 spare): it only catches
+ * absurd counts, never a fast but real set. Unknown duration is not judged.
+ */
+export function customRepRateImplausible(value: number, durationMs: number | null): boolean {
+  if (durationMs === null) return false;
+  return value > 5 + (durationMs / 1000) * 5;
 }

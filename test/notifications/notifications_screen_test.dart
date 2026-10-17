@@ -20,7 +20,7 @@ import 'package:nuvo/features/social/domain/nuvo_destination.dart';
 
 class _FakeNotifRepo implements NotificationRepository {
   @override
-  Future<NotificationPage> list({String? cursor}) async =>
+  Future<NotificationPage> list({String? cursor, String? etag}) async =>
       const NotificationPage(items: [], unreadCount: 0);
 
   @override

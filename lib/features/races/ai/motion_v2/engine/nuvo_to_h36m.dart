@@ -42,9 +42,22 @@ const Map<int, List<String>> _map = {
 };
 
 const List<List<int>> h36mBones = [
-  [0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6],
-  [0, 7], [7, 8], [8, 9], [9, 10],
-  [8, 11], [11, 12], [12, 13], [8, 14], [14, 15], [15, 16],
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [0, 4],
+  [4, 5],
+  [5, 6],
+  [0, 7],
+  [7, 8],
+  [8, 9],
+  [9, 10],
+  [8, 11],
+  [11, 12],
+  [12, 13],
+  [8, 14],
+  [14, 15],
+  [15, 16],
 ];
 
 /// One frame's landmark map -> (17, 3) as a flat Float32List(51).
@@ -57,7 +70,9 @@ Float32List _frameToH36m(Map<String, NuvoPosePoint> pts) {
   }
 
   _map.forEach((j, names) {
-    final got = [for (final n in names) pt(n)].whereType<({double x, double y, double c})>().toList();
+    final got = [
+      for (final n in names) pt(n),
+    ].whereType<({double x, double y, double c})>().toList();
     if (got.isEmpty) return;
     var sx = 0.0, sy = 0.0, mc = double.infinity;
     for (final g in got) {
@@ -109,7 +124,8 @@ void _fillGaps(List<Float32List> seq) {
       final span = (hi - lo);
       final w = span == 0 ? 0.0 : (i - lo) / span;
       for (var c = 0; c < 2; c++) {
-        seq[i][j * 3 + c] = seq[lo][j * 3 + c] * (1 - w) + seq[hi][j * 3 + c] * w;
+        seq[i][j * 3 + c] =
+            seq[lo][j * 3 + c] * (1 - w) + seq[hi][j * 3 + c] * w;
       }
       final ci = seq[lo][j * 3 + 2] * (1 - w) + seq[hi][j * 3 + 2] * w;
       seq[i][j * 3 + 2] = ci * 0.5;
@@ -155,7 +171,9 @@ MotionInputDiagnostics _rootScaleNormalize(List<Float32List> seq) {
   if (torsoLengths.isNotEmpty) {
     final sorted = List<double>.of(torsoLengths)..sort();
     final m = sorted.length;
-    scale = m.isOdd ? sorted[m ~/ 2] : (sorted[m ~/ 2 - 1] + sorted[m ~/ 2]) / 2.0;
+    scale = m.isOdd
+        ? sorted[m ~/ 2]
+        : (sorted[m ~/ 2 - 1] + sorted[m ~/ 2]) / 2.0;
   }
   if (scale < 1e-6) scale = 1.0;
 
@@ -166,7 +184,9 @@ MotionInputDiagnostics _rootScaleNormalize(List<Float32List> seq) {
     final rx = f[0 * 3], ry = f[0 * 3 + 1];
     firstRootX ??= rx;
     firstRootY ??= ry;
-    final d = math.sqrt(math.pow(rx - firstRootX, 2) + math.pow(ry - firstRootY, 2));
+    final d = math.sqrt(
+      math.pow(rx - firstRootX, 2) + math.pow(ry - firstRootY, 2),
+    );
     if (d > rootDrift) rootDrift = d;
   }
 
@@ -247,8 +267,7 @@ List<Float32List> framesToH36m(
   List<NuvoPoseFrame> frames, {
   bool mirror = false,
   int maxFrames = kEncodeMaxFrames,
-}) =>
-    framesToH36mDiag(frames, mirror: mirror, maxFrames: maxFrames).seq;
+}) => framesToH36mDiag(frames, mirror: mirror, maxFrames: maxFrames).seq;
 
 /// Same as [framesToH36m] but also returns [MotionInputDiagnostics] — the
 /// per-call root drift / scale spread the camera actually saw, computed
@@ -295,8 +314,25 @@ List<Float32List> framesToH36m(
 
 /// per-joint fraction of frames with confidence > 0.
 Map<String, double> h36mCoverage(List<Float32List> seq) {
-  const names = ['root', 'rhip', 'rknee', 'rank', 'lhip', 'lknee', 'lank',
-    'belly', 'neck', 'nose', 'head', 'lsho', 'lelb', 'lwri', 'rsho', 'relb', 'rwri'];
+  const names = [
+    'root',
+    'rhip',
+    'rknee',
+    'rank',
+    'lhip',
+    'lknee',
+    'lank',
+    'belly',
+    'neck',
+    'nose',
+    'head',
+    'lsho',
+    'lelb',
+    'lwri',
+    'rsho',
+    'relb',
+    'rwri',
+  ];
   final out = <String, double>{};
   if (seq.isEmpty) {
     for (final n in names) {

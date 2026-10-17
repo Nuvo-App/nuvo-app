@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/otp_input.dart';
 import '../data/auth_api.dart';
@@ -160,92 +161,95 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Scrollable content ───────────────────────────────────────────
             Expanded(
-              child:
-                  SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            NuvoBackButton(
-                              onPressed: () =>
-                                  safePopOrGo(context, '/auth/email'),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              'Check your email',
-                              style: AppTextStyles.headlineLarge.copyWith(
-                                fontSize: 32,
-                                letterSpacing: -0.9,
+              child: NuvoScrollBottomFade(
+                child:
+                    SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              NuvoBackButton(
+                                onPressed: () =>
+                                    safePopOrGo(context, '/auth/email'),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Enter the 6-digit code we sent to ${widget.email}.',
-                              style: AppTextStyles.bodyLarge.copyWith(
-                                color: NuvoColors.muted,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            OtpInput(controllers: _controllers),
-                            if (_error != null) ...[
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 24),
                               Text(
-                                _error!,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.danger,
+                                'Check your email',
+                                style: AppTextStyles.headlineLarge.copyWith(
+                                  fontSize: 32,
+                                  letterSpacing: -0.9,
                                 ),
                               ),
-                            ],
-                            const SizedBox(height: 22),
-                            Center(
-                              child: Text(
-                                "Didn't get a code?",
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.muted,
+                              const SizedBox(height: 10),
+                              Text(
+                                'Enter the 6-digit code we sent to ${widget.email}.',
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: context.themeColors.inkMuted,
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            GestureDetector(
-                              onTap: (_resending || _resendCooldownLeft > 0)
-                                  ? null
-                                  : _resend,
-                              behavior: HitTestBehavior.opaque,
-                              child: Center(
-                                child: Text(
-                                  _resending
-                                      ? 'Sending...'
-                                      : _resendCooldownLeft > 0
-                                      ? 'Resend code in ${_resendCooldownLeft}s'
-                                      : 'Resend code',
+                              const SizedBox(height: 32),
+                              OtpInput(controllers: _controllers),
+                              if (_error != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _error!,
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color:
-                                        (_resending || _resendCooldownLeft > 0)
-                                        ? NuvoColors.muted
-                                        : NuvoColors.blue,
-                                    fontWeight: FontWeight.w700,
+                                    color: context.themeColors.dangerText,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 22),
+                              Center(
+                                child: Text(
+                                  "Didn't get a code?",
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: context.themeColors.inkMuted,
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: (_resending || _resendCooldownLeft > 0)
+                                    ? null
+                                    : _resend,
+                                behavior: HitTestBehavior.opaque,
+                                child: Center(
+                                  child: Text(
+                                    _resending
+                                        ? 'Sending...'
+                                        : _resendCooldownLeft > 0
+                                        ? 'Resend code in ${_resendCooldownLeft}s'
+                                        : 'Resend code',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color:
+                                          (_resending ||
+                                              _resendCooldownLeft > 0)
+                                          ? context.themeColors.inkMuted
+                                          : context.themeColors.accent,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                        .animate()
+                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                        .slideY(
+                          begin: 0.04,
+                          end: 0,
+                          duration: 320.ms,
+                          curve: Curves.easeOutCubic,
                         ),
-                      )
-                      .animate()
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.04,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
+              ),
             ),
 
             // ── Pinned CTA ───────────────────────────────────────────────────

@@ -37,6 +37,9 @@ sealed class NuvoDestination {
     if (segments.isEmpty) return null;
 
     switch (segments[0]) {
+      // https://<host>/c/<CODE> — a crew's join code (what its QR carries).
+      case 'c' when segments.length >= 2:
+        return CrewJoinDestination(segments[1].toUpperCase());
       case 'invite' when segments.length >= 2:
         return InviteDestination(segments[1]);
       case 'race' when segments.length >= 2:
@@ -135,6 +138,23 @@ class CrewDestination extends NuvoDestination {
   bool operator ==(Object other) => other is CrewDestination;
   @override
   int get hashCode => 0x0c0e;
+}
+
+/// A crew's join code, from its QR or share link. Opens a confirm screen —
+/// scanning never joins by itself.
+class CrewJoinDestination extends NuvoDestination {
+  const CrewJoinDestination(this.code);
+
+  final String code;
+
+  @override
+  String get location => '/crews/join/$code';
+
+  @override
+  bool operator ==(Object other) =>
+      other is CrewJoinDestination && other.code == code;
+  @override
+  int get hashCode => code.hashCode;
 }
 
 class InviteDestination extends NuvoDestination {

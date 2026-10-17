@@ -1,0 +1,31 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "burpees-tuned-2026.10.0",
+  "activityId": "burpees",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle",
+    "leftWrist",
+    "rightWrist"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "standingRatio": 0.72,
+    "downRatio": 0.5,
+    "handsUpMargin": 0.15,
+    "handsDownMargin": 0.05
+  }
+}

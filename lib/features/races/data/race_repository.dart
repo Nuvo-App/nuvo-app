@@ -4,6 +4,8 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../../../core/network/conditional.dart';
 import 'ai_motion_models.dart';
 import 'motion_analysis_contract.dart';
 import 'race_api.dart';
@@ -15,6 +17,30 @@ class RaceRepository {
   final RaceApi _api;
   final SecureTokenStore _store;
   final AuthApi _authApi;
+
+  /// Waits between automatic POST /proof retries (3 attempts in total).
+  /// Mutable so tests can collapse the delays.
+  List<Duration> proofRetryBackoff = const [
+    Duration(milliseconds: 400),
+    Duration(seconds: 1),
+  ];
+
+  /// Runs a proof submission, retrying timeouts / network errors / 5xx with
+  /// the same request (hence the same clientSubmissionId, which the server
+  /// replays idempotently). A 4xx is never retried.
+  Future<T> _withProofRetry<T>(Future<T> Function() send) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await send();
+      } catch (e) {
+        if (attempt >= proofRetryBackoff.length ||
+            !isRetryableProofFailure(e)) {
+          rethrow;
+        }
+        await Future<void>.delayed(proofRetryBackoff[attempt]);
+      }
+    }
+  }
 
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _withRefresh((token) => _api.analyzeMotion(token, request: request));
@@ -30,7 +56,8 @@ class RaceRepository {
     required String family,
     String channel = 'stable',
   }) => _withRefresh(
-    (token) => _api.getCurrentMotionModel(token, family: family, channel: channel),
+    (token) =>
+        _api.getCurrentMotionModel(token, family: family, channel: channel),
   );
 
   Future<VerificationSessionHandshake> createVerificationSession(
@@ -85,6 +112,17 @@ class RaceRepository {
     ),
   );
 
+  Future<void> uploadTeachSession({
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) => _withRefresh(
+    (token) => _api.uploadTeachSession(
+      token,
+      metadata: metadata,
+      gzipBytes: gzipBytes,
+    ),
+  );
+
   Future<void> submitMotionTrainingExample({
     required MotionAnalysisRequest request,
     required String consentVersion,
@@ -116,7 +154,28 @@ class RaceRepository {
     }
   }
 
-  Future<List<Race>> getRaces() => _withRefresh(_api.getRaces);
+  // The last plain (non-conditional) fetch's ETag / raw JSON, so
+  // [getRacesConditional] can route through the overridable [getRaces].
+  String? _lastRacesEtag;
+  Object? _lastRacesRaw;
+
+  Future<List<Race>> getRaces() async {
+    final result = await _withRefresh((token) => _api.getRaces(token));
+    _lastRacesEtag = result.etag;
+    _lastRacesRaw = result.raw;
+    return result.data ?? const <Race>[];
+  }
+
+  /// Conditional list fetch. With no [etag] this is a plain [getRaces] (and
+  /// reports that fetch's ETag); with one it sends If-None-Match and returns
+  /// a not-modified result on 304.
+  Future<Conditional<List<Race>>> getRacesConditional({String? etag}) async {
+    if (etag == null) {
+      final races = await getRaces();
+      return Conditional(data: races, etag: _lastRacesEtag, raw: _lastRacesRaw);
+    }
+    return _withRefresh((token) => _api.getRaces(token, etag: etag));
+  }
 
   Future<List<PublicUser>> searchUsers(String query) =>
       _withRefresh((token) => _api.searchUsers(token, query));
@@ -176,9 +235,15 @@ class RaceRepository {
 
   Future<Race> createCustomRace({
     required String title,
-    required int targetValue,
+    int? targetValue,
     required String customActivityName,
-    required CustomPoseVerifierSpec verifierSpec,
+    CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
+    String format = 'first_to_goal',
+    String? finishLineAt,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
+    String? scoreDirection,
   }) => _withRefresh(
     (token) => _api.createCustomRace(
       token,
@@ -186,6 +251,12 @@ class RaceRepository {
       targetValue: targetValue,
       customActivityName: customActivityName,
       verifierSpec: verifierSpec,
+      motionV2Spec: motionV2Spec,
+      format: format,
+      finishLineAt: finishLineAt,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
+      scoreDirection: scoreDirection,
     ),
   );
 
@@ -228,8 +299,31 @@ class RaceRepository {
     ),
   );
 
-  Future<Race> getRaceDetail(String id) =>
-      _withRefresh((token) => _api.getRaceDetail(token, id));
+  String? _lastDetailEtag;
+  Object? _lastDetailRaw;
+
+  Future<Race> getRaceDetail(String id) async {
+    final result = await _withRefresh((token) => _api.getRaceDetail(token, id));
+    _lastDetailEtag = result.etag;
+    _lastDetailRaw = result.raw;
+    return result.data!;
+  }
+
+  /// Conditional detail fetch — see [getRacesConditional].
+  Future<Conditional<Race>> getRaceDetailConditional(
+    String id, {
+    String? etag,
+  }) async {
+    if (etag == null) {
+      final race = await getRaceDetail(id);
+      return Conditional(
+        data: race,
+        etag: _lastDetailEtag,
+        raw: _lastDetailRaw,
+      );
+    }
+    return _withRefresh((token) => _api.getRaceDetail(token, id, etag: etag));
+  }
 
   Future<Race> submitProof(
     String raceId, {
@@ -276,14 +370,18 @@ class RaceRepository {
     required String clientSubmissionId,
     required String metric,
     String? verificationSessionId,
-  }) => _withRefresh(
-    (token) => _api.submitAiMotionProof(
-      token,
-      raceId,
-      result: result,
-      clientSubmissionId: clientSubmissionId,
-      metric: metric,
-      verificationSessionId: verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) => _withProofRetry(
+    () => _withRefresh(
+      (token) => _api.submitAiMotionProof(
+        token,
+        raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     ),
   );
 
@@ -292,13 +390,17 @@ class RaceRepository {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
     String? verificationSessionId,
-  }) => _withRefresh(
-    (token) => _api.submitCustomPoseProof(
-      token,
-      raceId,
-      result: result,
-      clientSubmissionId: clientSubmissionId,
-      verificationSessionId: verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) => _withProofRetry(
+    () => _withRefresh(
+      (token) => _api.submitCustomPoseProof(
+        token,
+        raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     ),
   );
 
@@ -315,21 +417,25 @@ class RaceRepository {
     required int framesAnalyzed,
     required int durationMs,
     String? verificationSessionId,
-  }) => _withRefresh(
-    (token) => _api.submitObjectCompositionProof(
-      token,
-      raceId,
-      activityId: activityId,
-      clientSubmissionId: clientSubmissionId,
-      metric: metric,
-      value: value,
-      targetValue: targetValue,
-      confidence: confidence,
-      verificationSummary: verificationSummary,
-      validatorVersion: validatorVersion,
-      framesAnalyzed: framesAnalyzed,
-      durationMs: durationMs,
-      verificationSessionId: verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) => _withProofRetry(
+    () => _withRefresh(
+      (token) => _api.submitObjectCompositionProof(
+        token,
+        raceId,
+        activityId: activityId,
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+        value: value,
+        targetValue: targetValue,
+        confidence: confidence,
+        verificationSummary: verificationSummary,
+        validatorVersion: validatorVersion,
+        framesAnalyzed: framesAnalyzed,
+        durationMs: durationMs,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     ),
   );
 

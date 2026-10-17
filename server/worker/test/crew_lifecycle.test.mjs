@@ -26,15 +26,17 @@ test('crewConnectionStatus — the lifecycle', () => {
   assert.equal(crewConnectionStatus(ME, YOU, { status: 'declined', requested_by: YOU }), 'none');
 });
 
-test('canSeeIdentity — private profile hidden until connected', () => {
-  assert.equal(canSeeIdentity(ME, ME, true, 'connected'), true); // self always
-  assert.equal(canSeeIdentity(ME, YOU, false, 'none'), true); // public
-  assert.equal(canSeeIdentity(ME, YOU, true, 'none'), false); // private stranger
-  assert.equal(canSeeIdentity(ME, YOU, true, 'pending_incoming'), false); // still hidden
-  assert.equal(canSeeIdentity(ME, YOU, true, 'connected'), true); // now visible
+test('canSeeIdentity — everyone is visible (no private profiles)', () => {
+  assert.equal(canSeeIdentity(ME, ME, false, 'connected'), true); // self always
+  assert.equal(canSeeIdentity(ME, YOU, false, 'none'), true);
+  assert.equal(canSeeIdentity(ME, YOU, true, 'none'), true); // legacy flag ignored
+  assert.equal(canSeeIdentity(ME, YOU, true, 'pending_incoming'), true);
+  assert.equal(canSeeIdentity(ME, YOU, true, 'connected'), true);
 });
 
-test('connectResult — public = immediate active, private = pending both sides', () => {
-  assert.deepEqual(connectResult(false), { mine: 'active', theirs: 'active', outcome: 'active' });
-  assert.deepEqual(connectResult(true), { mine: 'pending', theirs: 'pending', outcome: 'pending' });
+test('connectResult — every add is a pending request on both sides', () => {
+  const pending = { mine: 'pending', theirs: 'pending', outcome: 'pending' };
+  assert.deepEqual(connectResult(), pending);
+  assert.deepEqual(connectResult(false), pending);
+  assert.deepEqual(connectResult(true), pending);
 });

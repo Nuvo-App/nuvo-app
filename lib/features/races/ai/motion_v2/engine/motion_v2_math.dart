@@ -23,8 +23,9 @@ Float32List l2norm(Float32List v) {
   return out;
 }
 
-List<Float32List> l2normSeq(List<Float32List> seq) =>
-    [for (final r in seq) l2norm(r)];
+List<Float32List> l2normSeq(List<Float32List> seq) => [
+  for (final r in seq) l2norm(r),
+];
 
 double dot(Float32List a, Float32List b) {
   var s = 0.0;
@@ -106,7 +107,11 @@ List<Float32List> resampleSeq(List<Float32List> seq, int target) {
 
 /// Sakoe-Chiba banded DTW, cosine local cost. == np `dtw_distance`.
 /// Re-L2-normalizes both inputs (matches Python).
-double dtwDistance(List<Float32List> a, List<Float32List> b, {double band = 0.2}) {
+double dtwDistance(
+  List<Float32List> a,
+  List<Float32List> b, {
+  double band = 0.2,
+}) {
   final ta = a.length, tb = b.length;
   if (ta == 0 || tb == 0) return 1.0;
   final an = l2normSeq(a), bn = l2normSeq(b);
@@ -153,11 +158,17 @@ double _median(List<double> xs) {
 double median(Iterable<double> xs) => _median(xs.toList());
 
 /// Trim leading/trailing idle by embedding velocity. == np `segment_action`.
-({int start, int end}) segmentAction(List<Float32List> emb, {double idleFrac = 0.30}) {
+({int start, int end}) segmentAction(
+  List<Float32List> emb, {
+  double idleFrac = 0.30,
+}) {
   final t = emb.length;
   if (t < 4) return (start: 0, end: t);
   final v = embeddingVelocity(emb);
-  final active = [for (final x in v) if (x > 1e-5) x];
+  final active = [
+    for (final x in v)
+      if (x > 1e-5) x,
+  ];
   if (active.isEmpty) return (start: 0, end: t);
   final thr = idleFrac * _median(active);
   var first = -1, last = -1;

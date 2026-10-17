@@ -565,11 +565,30 @@ class SingleSessionTeachingCapture {
     );
   }
 
+  bool _allowInconsistentDemos = false;
+
   void _tryBuild() {
     final calibration = currentCalibration();
     if (calibration == null) return;
-    _buildResult = _builder.build(calibration);
+    _buildResult = _builder.build(
+      calibration,
+      allowInconsistentDemos: _allowInconsistentDemos,
+    );
   }
+
+  /// Rebuild after a consistency rejection, on independent evidence the demos
+  /// are one movement (V2 encoder self-validation). The built spec still has
+  /// to pass the builder's own self-validation.
+  void retryBuildLenient() {
+    _allowInconsistentDemos = true;
+    _runBuild();
+  }
+
+  /// Whether the last build failure was the pairwise-consistency heuristic
+  /// (vs a coverage or functional self-validation failure).
+  bool get lastFailureWasConsistency =>
+      _lastBuildFailure == 'inconsistent_demonstrations' ||
+      _lastBuildFailure == 'low_overall_consistency';
 
   void _lockStartPoseFromSamples() {
     if (_startPoseSamples.isEmpty) return;

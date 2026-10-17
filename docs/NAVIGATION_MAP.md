@@ -42,7 +42,7 @@ If you are adding a control that references a race, its tap target is
 | `/arena` | `ArenaScreen` | none (tab) | — | Home. "Your next move". |
 | `/pass` | `PassScreen` | none (tab) | — | Crew / member pass. |
 | `/compete` | `CompeteScreen` | none (tab) | — | Start / join / your races. |
-| `/move` | `MoveScreen` | none (tab) | — | "Verify" — ready / completed / recent. |
+| `/move` | redirect | — | — | Retired Verify tab. `/move?race=<id>` → `/race/<id>/proof`; plain `/move` → `/arena`. |
 | `/profile` | `ProfileScreen` | none (tab) | — | Identity, history, settings. |
 | `/races/new` | `RaceComposerScreen` | cupertino | `extra: RaceCreatePrefill?` | 5-step composer. On create → `go` to race/invite. |
 | `/races/join` | `JoinRaceScreen` | cupertino | — | Invite-code entry. On join → `go` to race. |

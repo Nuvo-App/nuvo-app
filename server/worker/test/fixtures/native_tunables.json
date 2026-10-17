@@ -1,0 +1,324 @@
+{
+ "tunables": {
+  "push_ups": {
+   "topElbowAngle": [
+    150.0,
+    100.0,
+    180.0
+   ],
+   "bottomElbowAngle": [
+    125.0,
+    60.0,
+    170.0
+   ],
+   "shoulderDropRatio": [
+    0.1,
+    0.02,
+    0.4
+   ],
+   "maxSymmetryError": [
+    90.0,
+    20.0,
+    180.0
+   ]
+  },
+  "high_knees": {
+   "raiseLift": [
+    -0.35,
+    -1.0,
+    0.5
+   ],
+   "lowerLift": [
+    -0.72,
+    -1.5,
+    0.0
+   ]
+  },
+  "plank_hold": {
+   "minKneeAngle": [
+    148.0,
+    100.0,
+    180.0
+   ],
+   "maxTorsoVerticalness": [
+    0.7,
+    0.2,
+    1.0
+   ],
+   "maxHipLineError": [
+    0.16,
+    0.03,
+    0.5
+   ],
+   "maxKneeLineError": [
+    0.18,
+    0.03,
+    0.5
+   ]
+  },
+  "mountain_climbers": {
+   "plankVerticalnessMax": [
+    1.05,
+    0.3,
+    3.0
+   ],
+   "driveGap": [
+    0.26,
+    0.05,
+    1.0
+   ],
+   "handShoulderVerticalGapMax": [
+    0.55,
+    0.1,
+    2.0
+   ],
+   "proximityGap": [
+    0.24,
+    0.05,
+    1.0
+   ]
+  },
+  "lateral_steps": {
+   "stepFraction": [
+    0.55,
+    0.1,
+    3.0
+   ],
+   "neutralFraction": [
+    0.2,
+    0.02,
+    1.0
+   ]
+  },
+  "jump_squats": {
+   "standingRatio": [
+    0.6,
+    0.3,
+    1.2
+   ],
+   "squatRatio": [
+    0.58,
+    0.2,
+    0.9
+   ],
+   "flightThresholdRatio": [
+    0.18,
+    0.03,
+    0.6
+   ],
+   "groundedToleranceRatio": [
+    0.1,
+    0.02,
+    0.4
+   ],
+   "minFlightThreshold": [
+    0.025,
+    0.005,
+    0.1
+   ],
+   "jitterTolerance": [
+    0.03,
+    0.005,
+    0.1
+   ]
+  },
+  "lunge_jumps": {
+   "lungeKneeAngle": [
+    120.0,
+    60.0,
+    170.0
+   ],
+   "trailingKneeAngle": [
+    160.0,
+    100.0,
+    180.0
+   ],
+   "standingRatio": [
+    0.86,
+    0.3,
+    1.5
+   ],
+   "flightThresholdRatio": [
+    0.18,
+    0.03,
+    0.6
+   ],
+   "groundedToleranceRatio": [
+    0.1,
+    0.02,
+    0.4
+   ],
+   "minFlightThreshold": [
+    0.025,
+    0.005,
+    0.1
+   ],
+   "jitterTolerance": [
+    0.03,
+    0.005,
+    0.1
+   ]
+  },
+  "burpees": {
+   "standingRatio": [
+    0.72,
+    0.3,
+    1.2
+   ],
+   "downRatio": [
+    0.5,
+    0.1,
+    0.9
+   ],
+   "handsUpMargin": [
+    0.15,
+    -1.0,
+    1.0
+   ],
+   "handsDownMargin": [
+    0.05,
+    -1.0,
+    1.0
+   ]
+  },
+  "running_in_place": {
+   "liftFraction": [
+    0.18,
+    0.02,
+    1.0
+   ],
+   "horizontalCentreAlpha": [
+    0.04,
+    0.005,
+    0.5
+   ],
+   "verticalTiltAlpha": [
+    0.01,
+    0.001,
+    0.5
+   ],
+   "stableFrames": [
+    2.0,
+    1.0,
+    6.0
+   ]
+  },
+  "walking_in_place": {
+   "liftFraction": [
+    0.12,
+    0.02,
+    1.0
+   ],
+   "horizontalCentreAlpha": [
+    0.04,
+    0.005,
+    0.5
+   ],
+   "verticalTiltAlpha": [
+    0.01,
+    0.001,
+    0.5
+   ],
+   "stableFrames": [
+    2.0,
+    1.0,
+    6.0
+   ]
+  },
+  "marching_in_place": {
+   "liftFraction": [
+    0.3,
+    0.02,
+    1.0
+   ],
+   "horizontalCentreAlpha": [
+    0.04,
+    0.005,
+    0.5
+   ],
+   "verticalTiltAlpha": [
+    0.01,
+    0.001,
+    0.5
+   ],
+   "stableFrames": [
+    2.0,
+    1.0,
+    6.0
+   ]
+  },
+  "step_ups": {
+   "liftFraction": [
+    0.3,
+    0.02,
+    1.0
+   ],
+   "horizontalCentreAlpha": [
+    0.04,
+    0.005,
+    0.5
+   ],
+   "verticalTiltAlpha": [
+    0.01,
+    0.001,
+    0.5
+   ],
+   "stableFrames": [
+    2.0,
+    1.0,
+    6.0
+   ]
+  },
+  "butt_kicks": {
+   "kneeUpFraction": [
+    0.55,
+    0.1,
+    1.5
+   ],
+   "ankleGapFraction": [
+    0.2,
+    0.03,
+    1.0
+   ],
+   "stableFrames": [
+    2.0,
+    1.0,
+    6.0
+   ]
+  },
+  "calf_raises": {
+   "riseFraction": [
+    0.07,
+    0.01,
+    0.5
+   ],
+   "lowerFraction": [
+    0.03,
+    0.005,
+    0.4
+   ]
+  },
+  "treadmill_running": {
+   "liftFraction": [
+    0.18,
+    0.02,
+    1.0
+   ],
+   "horizontalCentreAlpha": [
+    0.04,
+    0.005,
+    0.5
+   ],
+   "verticalTiltAlpha": [
+    0.01,
+    0.001,
+    0.5
+   ],
+   "stableFrames": [
+    2.0,
+    1.0,
+    6.0
+   ]
+  }
+ }
+}

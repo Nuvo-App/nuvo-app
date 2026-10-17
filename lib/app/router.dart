@@ -15,6 +15,7 @@ import '../core/widgets/bottom_nav.dart';
 import '../core/widgets/nuvo_motion.dart';
 
 import '../features/arena/presentation/arena_screen.dart';
+import '../core/widgets/keep_screen_awake.dart';
 import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
@@ -28,7 +29,6 @@ import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/badges_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
-import '../features/move/presentation/move_screen.dart';
 import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/data/race_models.dart' show RaceCreatePrefill;
 import '../features/races/presentation/race_composer_screen.dart';
@@ -38,6 +38,7 @@ import '../features/races/presentation/join_race_screen.dart';
 import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
 import '../features/races/presentation/board_moved_screen.dart';
+import '../core/config/nuvo_flags.dart';
 import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/movement_preview/rive_calibration_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
@@ -49,6 +50,7 @@ import '../features/notifications/presentation/notification_prefs_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/social/presentation/add_crew_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
+import '../features/squads/presentation/crew_groups_screen.dart';
 import '../features/social/presentation/my_nuvo_screen.dart';
 import '../features/social/presentation/qr_scan_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
@@ -58,9 +60,10 @@ import '../features/splash/presentation/splash_screen.dart';
 Page<void> _authPage(GoRouterState state, Widget child) =>
     CupertinoPage<void>(key: state.pageKey, child: child);
 
-// Slide-up transition for camera/verification — feels like the action is expanding.
+// Camera/verification pages: the person is mid-move with the phone propped up,
+// so the screen is kept awake for as long as the page is mounted.
 Page<void> _cameraPage(GoRouterState state, Widget child) =>
-    CupertinoPage<void>(key: state.pageKey, child: child);
+    CupertinoPage<void>(key: state.pageKey, child: KeepScreenAwake(child: child));
 
 // Race detail: horizontal slide with slight scale for depth.
 Page<void> _detailPage(GoRouterState state, Widget child) =>
@@ -73,12 +76,19 @@ Page<void> _detailPage(GoRouterState state, Widget child) =>
 Page<void> _tabPage(GoRouterState state, Widget child) =>
     NoTransitionPage<void>(key: state.pageKey, child: child);
 
+/// Redirect target for the retired `/move` (Verify) route.
+@visibleForTesting
+String moveRedirect(Uri uri) {
+  final race = uri.queryParameters['race'];
+  if (race == null || race.isEmpty) return '/arena';
+  return '/race/${Uri.encodeComponent(race)}/proof';
+}
+
 /// The screen behind each shell destination — keyed by the canonical
 /// destination path so route → screen is declared exactly once.
 Widget _tabScreenFor(String path) {
   final screen = switch (path) {
     '/compete' => const CompeteScreen(),
-    '/move' => const MoveScreen(),
     '/pass' => const PassScreen(),
     '/profile' => const ProfileScreen(),
     _ => const ArenaScreen(),
@@ -156,6 +166,31 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => _authPage(state, const AddCrewScreen()),
       ),
       GoRoute(
+        path: '/crews',
+        pageBuilder: (_, state) => _authPage(state, const CrewGroupsScreen()),
+      ),
+      GoRoute(
+        path: '/crews/:id/settings',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          CrewSettingsScreen(groupId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/crews/join/:code',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          CrewJoinScreen(code: state.pathParameters['code']!),
+        ),
+      ),
+      GoRoute(
+        path: '/crews/:id',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          CrewGroupDetailScreen(groupId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
         path: '/my-nuvo',
         pageBuilder: (_, state) => _authPage(state, const MyNuvoScreen()),
       ),
@@ -163,6 +198,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/notifications',
         pageBuilder: (_, state) =>
             _detailPage(state, const NotificationsScreen()),
+      ),
+      GoRoute(
+        path: '/settings',
+        pageBuilder: (_, state) => _authPage(state, const SettingsScreen()),
       ),
       GoRoute(
         path: '/settings/notifications',
@@ -222,7 +261,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // ── Main shell (bottom nav) ────────────────────────────────────────────
-      // StatefulShellRoute gives each of the five destinations its own
+      // StatefulShellRoute gives each of the four destinations its own
       // branch Navigator, so tab switches preserve each screen's mounted
       // state (scroll position, selections, ephemeral UI) instead of
       // rebuilding it. NuvoTabStack is the branch container — it keeps all
@@ -235,9 +274,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute(
         navigatorContainerBuilder: (context, navigationShell, children) =>
             NuvoTabStack(
-          index: navigationShell.currentIndex,
-          children: children,
-        ),
+              index: navigationShell.currentIndex,
+              children: children,
+            ),
         builder: (context, _, navigationShell) =>
             MainShell(child: navigationShell),
         branches: [
@@ -253,6 +292,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
         ],
       ),
+
+      // ── Retired Verify tab ────────────────────────────────────────────────
+      // There is no Verify page any more; proof starts from Race Detail or
+      // the proof routes. Old links and bookmarks keep working:
+      // /move?race=<id> → that race's proof entry (SubmitProofScreen picks
+      // the AI Motion Proof path itself), plain /move → Arena.
+      GoRoute(path: '/move', redirect: (_, state) => moveRedirect(state.uri)),
 
       // ── Detail / standalone ───────────────────────────────────────────────
       GoRoute(
@@ -274,6 +320,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // /races/teach (reached from the race composer's activity step).
       GoRoute(
         path: '/races/teach',
+        // Custom AI movements are switched on from the server.
+        redirect: (_, _) => NuvoFlags.customMotionOn ? null : '/splash',
         pageBuilder: (_, state) => _cameraPage(
           state,
           TeachMovementScreen(

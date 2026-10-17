@@ -61,7 +61,9 @@ String raceDisplayUnit(Race race) {
 String raceActivityTitle(Race race) {
   if (race.isCustomVerifierRace) {
     final name =
-        race.customActivityName ?? race.customVerifierSpec?.movementName;
+        race.customActivityName ??
+        race.customMotionV2Spec?.movementName ??
+        race.customVerifierSpec?.movementName;
     if (name != null && name.trim().isNotEmpty) return name.trim();
   }
   final activity = raceActivityDefinition(race);
@@ -95,10 +97,17 @@ String raceScoreLabel(Race race, int value) => formatMotionTarget(
       raceDisplayUnit(race),
     );
 
+/// Only a race to a goal has a finish line. Window / attempt races are won on
+/// score, so a stored target there is a placeholder, never a number to chase.
+bool raceHasFinishLine(Race race) =>
+    (race.targetValue ?? 0) > 0 &&
+    race.format != 'most_in_window' &&
+    !raceFormatUsesAttempts(race.format);
+
 String raceProgressLabel(Race race, RaceParticipant? participant) {
   if (participant == null) return 'Submit your first proof';
   final target = race.targetValue;
-  if (target != null && target > 0) {
+  if (raceHasFinishLine(race) && target != null) {
     return formatMotionProgress(
       raceMeasurementType(race),
       participant.progressValue,

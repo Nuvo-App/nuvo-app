@@ -78,6 +78,34 @@ profileRouter.get('/photo/object/*', async (c) => {
 // All routes below require a valid access token.
 profileRouter.use('*', requireAuth);
 
+// GET /profile/activity?days=140&tz=-300
+// Verified proofs per local day, for the Profile heat map. Read-only. `tz` is
+// the viewer's UTC offset in minutes (so a late-night proof lands on the right
+// day); both params are clamped.
+profileRouter.get('/activity', async (c) => {
+  const userId = c.get('userId');
+  const days = Math.min(Math.max(Math.floor(Number(c.req.query('days'))) || 140, 7), 366);
+  const tzRaw = Math.floor(Number(c.req.query('tz')));
+  const tz = Number.isFinite(tzRaw) ? Math.min(Math.max(tzRaw, -840), 840) : 0;
+  const shift = `${tz >= 0 ? '+' : '-'}${Math.abs(tz)} minutes`;
+  const { results } = await c.env.DB.prepare(
+    `SELECT date(created_at, ?) AS day, COUNT(*) AS proofs
+       FROM move_logs
+      WHERE user_id = ? AND status = 'verified'
+        AND created_at >= datetime('now', ?)
+      GROUP BY day
+      ORDER BY day`,
+  )
+    .bind(shift, userId, `-${days} days`)
+    .all<{ day: string; proofs: number }>();
+  c.header('Cache-Control', 'private, max-age=60');
+  c.header('Vary', 'Authorization');
+  return c.json({
+    ok: true,
+    days: (results ?? []).map((r) => ({ date: r.day, proofs: r.proofs })),
+  });
+});
+
 // GET /profile/me
 profileRouter.get('/me', async (c) => {
   const userId = c.get('userId');
@@ -94,7 +122,7 @@ profileRouter.get('/me', async (c) => {
     username: profile.username,
     profilePhotoUrl: profile.avatar_url,
     avatarUrl: profile.avatar_url,
-    privateProfile: Boolean(profile.private_profile),
+    privateProfile: false, // legacy key for older app builds; there are no private profiles
     onboardingComplete: Boolean(profile.onboarding_complete),
   });
 });
@@ -186,7 +214,7 @@ profileRouter.post('/', async (c) => {
   let body: {
     fullName?: unknown;
     username?: unknown;
-    privateProfile?: unknown;
+    privateProfile?: unknown; // legacy field from older builds; ignored
     profilePhotoUrl?: unknown;
     avatarUrl?: unknown;
   };
@@ -199,7 +227,6 @@ profileRouter.post('/', async (c) => {
   const isPersonalUpdate =
     typeof body.fullName === 'string' ||
     typeof body.username === 'string' ||
-    typeof body.privateProfile === 'boolean' ||
     body.profilePhotoUrl !== undefined ||
     body.avatarUrl !== undefined;
 
@@ -240,11 +267,6 @@ profileRouter.post('/', async (c) => {
     bindings.push(username);
   }
 
-  if (typeof body.privateProfile === 'boolean') {
-    fields.push('private_profile = ?');
-    bindings.push(body.privateProfile ? 1 : 0);
-  }
-
   if (
     body.profilePhotoUrl === null ||
     body.avatarUrl === null ||
@@ -276,16 +298,20 @@ profileRouter.post('/', async (c) => {
     bindings.push(newKey);
   }
 
-  if (fields.length === 1) {
+  if (fields.length === 1 && body.privateProfile === undefined) {
     // Only the timestamp update — nothing else to change
     return c.json({ ok: false, error: 'No updatable fields provided' }, 400);
   }
 
-  await c.env.DB.prepare(
-    `UPDATE profiles SET ${fields.join(', ')} WHERE user_id = ?`,
-  )
-    .bind(...bindings, userId)
-    .run();
+  // A legacy `privateProfile`-only body (older app builds) is accepted and
+  // ignored: succeed without touching the row.
+  if (fields.length > 1) {
+    await c.env.DB.prepare(
+      `UPDATE profiles SET ${fields.join(', ')} WHERE user_id = ?`,
+    )
+      .bind(...bindings, userId)
+      .run();
+  }
 
   const profile = await c.env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?')
     .bind(userId)
@@ -296,7 +322,7 @@ profileRouter.post('/', async (c) => {
     username: profile?.username ?? null,
     profilePhotoUrl: profile?.avatar_url ?? null,
     avatarUrl: profile?.avatar_url ?? null,
-    privateProfile: Boolean(profile?.private_profile),
+    privateProfile: false,
     onboardingComplete: Boolean(profile?.onboarding_complete),
   });
 });

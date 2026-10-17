@@ -20,6 +20,17 @@
 //   upload-asset --release-id R --asset-id A --file F
 //   audit [--activity-id A] [--release-id R] [--action X] [--limit N]
 //   signals [--activity-id A] [--release-id R]
+//   activity-create <file.json>                  create a NEW motion (starts hidden)
+//   activity-update <activityId> <file.json>     edit name/targets/formats/instructions/aliases/camera/order
+//   sessions-failed [--limit N]                 recent failed/incomplete recorded sessions
+//   session-get <sessionId> [--out file.json]   download one recorded pose log for tool/motion-replay.sh
+//   session-latest <activityId> [--out file.json]  newest recorded session for a motion
+//
+// Teach Nuvo (learned motions):
+//   teach-list [--outcome O] [--movement M] [--user U] [--limit N]
+//                                             triage teach sessions (demos -> learn -> test -> use)
+//   teach-get <sessionId> [--out file.json]   download one teach artifact for
+//                                             tools/motion_v2/replay_session.py
 //
 // System B — model releases (Nuvo Motion Intelligence, independent of
 // verifier releases):
@@ -101,15 +112,15 @@ switch (command) {
     const releaseId = flag('release-id', null);
     const parent = flag('parent', null);
     const semver = flag('semver', null);
-    if (!file || !releaseId || !parent || !semver) {
-      console.error('usage: draft <specFile> --release-id R --parent P --semver S [--change-class] [--notes]');
+    if (!file || !releaseId || !semver) {
+      console.error('usage: draft <specFile> --release-id R --semver S [--parent P (omit only for a new motion\'s first release)] [--change-class] [--notes]');
       process.exit(2);
     }
     const spec = JSON.parse(fs.readFileSync(file, 'utf8'));
     print(await call('POST', '/motion/releases/drafts', {
       activityId: spec.activityId,
       releaseId,
-      parentReleaseId: parent,
+      parentReleaseId: parent ?? undefined,
       semver,
       changeClass: flag('change-class', 'patch'),
       releaseNotes: flag('notes', ''),
@@ -209,6 +220,82 @@ switch (command) {
     print(await call('GET', `/motion/adaptation/signals?${qs}`));
     break;
   }
+  case 'activity-create': {
+    const file = firstPositional();
+    if (!file) { console.error('usage: activity-create <file.json>'); process.exit(2); }
+    print(await call('POST', '/motion/activities', JSON.parse(fs.readFileSync(file, 'utf8'))));
+    break;
+  }
+  case 'activity-update': {
+    const id = firstPositional();
+    const file = args.filter((a) => !a.startsWith('--'))[1];
+    if (!id || !file) { console.error('usage: activity-update <activityId> <file.json>'); process.exit(2); }
+    print(await call('PUT', `/motion/activities/${encodeURIComponent(id)}`, JSON.parse(fs.readFileSync(file, 'utf8'))));
+    break;
+  }
+  case 'sessions-failed': {
+    print(await call('GET', `/motion-sessions/failed?limit=${flag('limit', '20')}`));
+    break;
+  }
+  case 'session-get':
+  case 'session-latest': {
+    const id = firstPositional();
+    if (!id) { console.error(`usage: ${command} <${command === 'session-get' ? 'sessionId' : 'activityId'}> [--out file.json]`); process.exit(2); }
+    const path = command === 'session-get'
+      ? `/motion-sessions/${encodeURIComponent(id)}`
+      : `/activities/${encodeURIComponent(id)}/motion-sessions/latest`;
+    const res = await call('GET', path);
+    const artifact = res.json?.artifact;
+    if (res.status !== 200 || !artifact || artifact.error) {
+      console.error(`HTTP ${res.status}`, JSON.stringify(res.json?.error ?? artifact?.error ?? res.json));
+      process.exit(1);
+    }
+    const out = flag('out', `${res.json.session?.sessionId ?? id}.json`);
+    fs.writeFileSync(out, JSON.stringify(artifact));
+    console.log(`saved ${out} (${artifact.frames?.length ?? 0} frames, app counted ${artifact.result?.detectedValue ?? '?'})`);
+    console.log(`replay: tool/motion-replay.sh ${out}`);
+    break;
+  }
+  case 'teach-list': {
+    const qs = new URLSearchParams();
+    for (const [flag_, param] of [['outcome', 'outcome'], ['movement', 'movement'], ['user', 'userId'], ['limit', 'limit']]) {
+      const v = flag(flag_, null);
+      if (v) qs.set(param, v);
+    }
+    const res = await call('GET', `/teach-sessions?${qs}`);
+    if (res.status !== 200 || !res.json?.ok) { print(res); break; }
+    const sessions = res.json.sessions ?? [];
+    for (const s of sessions) {
+      const flags = [
+        s.v2Available === false ? 'v2-unavailable' : null,
+        s.learned ? 'v1-learned' : 'no-v1-spec',
+        s.v2Learned ? 'v2-learned' : null,
+        s.liveTestMatched === true ? 'test:match' : s.liveTestMatched === false ? 'test:no-match' : null,
+        s.failureStage ? `failed@${s.failureStage}` : null,
+      ].filter(Boolean).join(' ');
+      console.log(`${s.createdAt}  ${s.sessionId}  ${s.outcome.padEnd(9)} ${(s.movementName || '?').padEnd(22)} ${flags}`);
+    }
+    console.log(`\n${res.json.count} session(s). teach-get <sessionId> for the full artifact.`);
+    break;
+  }
+  case 'teach-get': {
+    const id = firstPositional();
+    if (!id) { console.error('usage: teach-get <sessionId> [--out file.json.gz]'); process.exit(2); }
+    const res = await call('GET', `/teach-sessions/${encodeURIComponent(id)}`);
+    const artifact = res.json?.artifact;
+    if (res.status !== 200 || !artifact || artifact.error) {
+      console.error(`HTTP ${res.status}`, JSON.stringify(res.json?.error ?? artifact?.error ?? res.json));
+      process.exit(1);
+    }
+    // Write as .json.gz so tools/motion_v2/replay_session.py opens it directly.
+    const { gzipSync } = await import('node:zlib');
+    const out = flag('out', `${res.json.session?.sessionId ?? id}.json.gz`);
+    fs.writeFileSync(out, gzipSync(JSON.stringify(artifact)));
+    const s = res.json.session ?? {};
+    console.log(`saved ${out} — ${s.movementName ?? '?'} outcome=${s.outcome} engine=${s.engine} demos=${s.demoCount}`);
+    console.log(`replay: tools/motion_v2/replay_session.py ${out}`);
+    break;
+  }
   case 'activity-visibility': {
     const activityId = firstPositional();
     const availability = flag('set', null);
@@ -296,6 +383,6 @@ switch (command) {
   }
   default:
     console.error(`Unknown command: ${command ?? '(none)'}\n`);
-    console.error('Commands: list | releases | draft | evaluate | promote | rollback | disable | preview | upload-asset | audit | signals | models | model-register | model-upload | model-evaluate | model-promote | model-rollback | model-disable | model-status');
+    console.error('Commands: list | releases | draft | evaluate | promote | rollback | disable | preview | upload-asset | audit | signals | activity-create | activity-update | activity-visibility | sessions-failed | session-get | session-latest | teach-list | teach-get | models | model-register | model-upload | model-evaluate | model-promote | model-rollback | model-disable | model-status');
     process.exit(2);
 }

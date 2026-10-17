@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import {
   CATEGORY_DEFAULTS,
   NOTIFICATION_CATEGORIES,
@@ -72,6 +73,32 @@ notificationsRouter.get('/', async (c) => {
   )
     .bind(userId)
     .first<{ n: number }>();
+
+  // Validator: every param shaping the page, newest created_at / read_at over
+  // the returned rows, row count, unread count, plus a 60s bucket (covers
+  // actor name/avatar edits). Auth already ran.
+  const page = rows.results.slice(0, limit);
+  let maxCreated = '';
+  let maxRead = '';
+  for (const r of page) {
+    if (r.created_at > maxCreated) maxCreated = r.created_at;
+    if (r.read_at && r.read_at > maxRead) maxRead = r.read_at;
+  }
+  const notModified = conditional(
+    c,
+    weakEtag(
+      'notif',
+      limit,
+      cursor ?? '',
+      page.length,
+      rows.results.length > limit ? 1 : 0,
+      maxCreated,
+      maxRead,
+      unread?.n ?? 0,
+      stalenessBucket(Date.now(), 60_000),
+    ),
+  );
+  if (notModified) return notModified;
 
   return c.json({
     ok: true,

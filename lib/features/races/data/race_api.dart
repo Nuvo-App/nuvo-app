@@ -16,11 +16,13 @@ import 'package:http/http.dart' as http;
 import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import 'ai_motion_models.dart';
 import 'motion_analysis_contract.dart';
 import 'race_models.dart';
 import '../../../core/network/api_base.dart';
-
+import '../../../core/network/conditional.dart';
 
 class MotionCatalogFetch {
   const MotionCatalogFetch({this.json, this.etag, this.notModified = false});
@@ -84,6 +86,43 @@ class VerificationSession {
   final String releaseChecksum;
   final String status;
 }
+
+/// The client's own account of a finished verification session, sent next to
+/// `verificationSessionId` in `POST /races/:id/proof`. When the session is
+/// still created/running and the release id + checksum match, the server
+/// completes the session itself in the same request. Older servers ignore it.
+class ProofSessionResult {
+  const ProofSessionResult({
+    required this.releaseId,
+    required this.releaseChecksum,
+    required this.resultValue,
+    this.confidence,
+    this.motionSessionId,
+  });
+
+  final String releaseId;
+  final String releaseChecksum;
+  final int resultValue;
+  final double? confidence;
+  final String? motionSessionId;
+
+  Map<String, dynamic> toJson() => {
+    'releaseId': releaseId,
+    'releaseChecksum': releaseChecksum,
+    'resultValue': resultValue,
+    'confidence': ?confidence,
+    'motionSessionId': ?motionSessionId,
+  };
+}
+
+/// True for failures worth retrying with the SAME clientSubmissionId: the
+/// request may never have reached the server (timeout / no network) or the
+/// server failed (5xx). A 4xx is a definitive answer and is never retried.
+bool isRetryableProofFailure(Object error) =>
+    error is ApiException &&
+    (error.statusCode == 0 ||
+        error.statusCode == 408 ||
+        error.statusCode >= 500);
 
 class VerificationSessionHandshake {
   const VerificationSessionHandshake({
@@ -194,7 +233,9 @@ class RaceApi {
   }) async {
     final res = await _guard(
       () => _client.get(
-        Uri.parse('$kNuvoApiBase/motion/models/current?family=$family&channel=$channel'),
+        Uri.parse(
+          '$kNuvoApiBase/motion/models/current?family=$family&channel=$channel',
+        ),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -204,7 +245,10 @@ class RaceApi {
     if (res.statusCode >= 400) _decode(res);
     final decoded = jsonDecode(res.body);
     if (decoded is! Map<String, dynamic>) {
-      throw const ApiException(502, 'Model resolution response was incomplete.');
+      throw const ApiException(
+        502,
+        'Model resolution response was incomplete.',
+      );
     }
     final model = decoded['model'];
     if (model == null) return null;
@@ -241,6 +285,8 @@ class RaceApi {
     );
   }
 
+  /// Not called by the AI Motion Proof flow any more (`complete` accepts a
+  /// `created` session); kept for older code paths.
   Future<VerificationSession> startVerificationSession(
     String token,
     String sessionId,
@@ -317,6 +363,28 @@ class RaceApi {
     _decode(res);
   }
 
+  /// Uploads one gzip'd Teach Nuvo diagnostic session plus its searchable
+  /// metadata — same transport as [uploadMotionSession], indexed in
+  /// `motion_teach_sessions` instead.
+  Future<void> uploadTeachSession(
+    String token, {
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) async {
+    final res = await _guard(
+      () => _client.post(
+        Uri.parse('$kNuvoApiBase/teach-sessions'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/gzip',
+          'X-Teach-Session': base64Encode(utf8.encode(jsonEncode(metadata))),
+        },
+        body: gzipBytes,
+      ),
+    );
+    _decode(res);
+  }
+
   Future<void> submitMotionTrainingExample(
     String token, {
     required MotionAnalysisRequest request,
@@ -386,7 +454,10 @@ class RaceApi {
 
   Future<Map<String, dynamic>> _get(String path, String token) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$kNuvoApiBase$path'), headers: _headers(token)),
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase$path'),
+        headers: _headers(token),
+      ),
     );
     return _decode(res);
   }
@@ -431,11 +502,30 @@ class RaceApi {
     return _decode(res);
   }
 
-  Future<List<Race>> getRaces(String token) async {
-    final json = await _get('/races', token);
-    return (json['races'] as List<dynamic>)
-        .map((r) => Race.fromJson(r as Map<String, dynamic>))
-        .toList();
+  Future<Conditional<List<Race>>> getRaces(String token, {String? etag}) async {
+    final res = await _conditionalGet('/races', token, etag);
+    if (res.statusCode == 304) {
+      return Conditional.notModified(etag: res.headers['etag'] ?? etag);
+    }
+    final json = _decode(res);
+    final raw = json['races'] as List<dynamic>;
+    return Conditional(
+      data: raw.map((r) => Race.fromJson(r as Map<String, dynamic>)).toList(),
+      etag: res.headers['etag'],
+      raw: raw,
+    );
+  }
+
+  Future<http.Response> _conditionalGet(
+    String path,
+    String token,
+    String? etag,
+  ) {
+    final headers = _headers(token);
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
+    return _guard(
+      () => _client.get(Uri.parse('$kNuvoApiBase$path'), headers: headers),
+    );
   }
 
   Future<List<PublicUser>> searchUsers(String token, String query) async {
@@ -513,25 +603,53 @@ class RaceApi {
   Future<Race> createCustomRace(
     String token, {
     required String title,
-    required int targetValue,
+    int? targetValue,
     required String customActivityName,
-    required CustomPoseVerifierSpec verifierSpec,
+    CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
+    // Win condition. Anything but first_to_goal has no finish-line target —
+    // a window / attempt race must never be sent a made-up one.
+    String format = 'first_to_goal',
+    String? finishLineAt,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
+    String? scoreDirection,
   }) async {
+    final racesToTarget = format == 'first_to_goal';
+    // The race verifies with the Motion V2 spec when one was learned — the
+    // encoder matcher that self-validated the demos — falling back to the V1
+    // sequence template only when V2 never produced a spec.
     final json = await _post('/races', token, {
       'title': title,
-      'goalType': 'first_to_goal',
-      'targetValue': targetValue,
+      'goalType': format,
+      if (racesToTarget && targetValue != null) 'targetValue': targetValue,
       'unit': 'reps',
       'targetUnit': 'reps',
       'metric': 'reps',
+      // Omitted for first_to_goal so that payload stays byte-identical to
+      // what older workers already accept.
+      if (!racesToTarget) 'format': format,
+      if (!racesToTarget && finishLineAt != null && finishLineAt.isNotEmpty)
+        'finishLineAt': finishLineAt,
+      if (!racesToTarget && attemptDurationSeconds != null)
+        'attemptDurationSeconds': attemptDurationSeconds,
+      if (!racesToTarget && attemptLimit != null) 'attemptLimit': attemptLimit,
+      if (!racesToTarget && scoreDirection == 'lower')
+        'scoreDirection': 'lower',
       'proofRequirement': 'ai_check',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'verificationMethod': 'ai',
-      'verifierType': customPoseVerifierType,
-      'verifierVersion': customPoseVerifierSpecSchemaVersion,
+      'verifierType': motionV2Spec != null
+          ? motionV2VerifierType
+          : customPoseVerifierType,
+      'verifierVersion': motionV2Spec != null
+          ? motionV2VerifierSpecVersion
+          : customPoseVerifierSpecSchemaVersion,
       'customActivityName': customActivityName,
-      'verifierSpec': verifierSpec.toJson(),
+      'verifierSpec': motionV2Spec != null
+          ? motionV2Spec.toJson()
+          : verifierSpec!.toJson(),
     });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
@@ -575,9 +693,22 @@ class RaceApi {
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
-  Future<Race> getRaceDetail(String token, String id) async {
-    final json = await _get('/races/$id', token);
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  Future<Conditional<Race>> getRaceDetail(
+    String token,
+    String id, {
+    String? etag,
+  }) async {
+    final res = await _conditionalGet('/races/$id', token, etag);
+    if (res.statusCode == 304) {
+      return Conditional.notModified(etag: res.headers['etag'] ?? etag);
+    }
+    final json = _decode(res);
+    final raw = json['race'] as Map<String, dynamic>;
+    return Conditional(
+      data: Race.fromJson(raw),
+      etag: res.headers['etag'],
+      raw: raw,
+    );
   }
 
   Future<Race> submitProof(
@@ -607,10 +738,7 @@ class RaceApi {
       'fileName': fileName,
       'contentType': contentType,
     });
-    return (
-      uploadUrl: json['uploadUrl'] as String,
-      key: json['key'] as String,
-    );
+    return (uploadUrl: json['uploadUrl'] as String, key: json['key'] as String);
   }
 
   Future<Race> submitAiMotionProof(
@@ -620,16 +748,16 @@ class RaceApi {
     required String clientSubmissionId,
     required String metric,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
-    final json = await _post(
-      '/races/$raceId/proof',
-      token,
-      result.toProofPayload(
+    final json = await _post('/races/$raceId/proof', token, {
+      ...result.toProofPayload(
         clientSubmissionId: clientSubmissionId,
         metric: metric,
         verificationSessionId: verificationSessionId,
       ),
-    );
+      if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
+    });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
@@ -647,6 +775,7 @@ class RaceApi {
     required int framesAnalyzed,
     required int durationMs,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
     final json = await _post('/races/$raceId/proof', token, {
       'proofType': 'ai_motion',
@@ -665,6 +794,7 @@ class RaceApi {
       'validPoseFrames': framesAnalyzed,
       'durationMs': durationMs,
       'validatorVersion': validatorVersion,
+      if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
     });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
@@ -675,15 +805,15 @@ class RaceApi {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
-    final json = await _post(
-      '/races/$raceId/proof',
-      token,
-      result.toProofPayload(
+    final json = await _post('/races/$raceId/proof', token, {
+      ...result.toProofPayload(
         clientSubmissionId: clientSubmissionId,
         verificationSessionId: verificationSessionId,
       ),
-    );
+      if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
+    });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 

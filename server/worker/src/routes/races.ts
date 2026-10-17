@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import type { Context } from 'hono';
 import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
@@ -14,18 +15,28 @@ import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityIdLoose, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
 import {
-  CUSTOM_VERIFIER_TYPE,
+  isCustomVerifierType,
   MANUAL_VERIFIER_TYPE,
   PRESET_VERIFIER_TYPE,
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  customRepRateImplausible,
   manualConfigFromBody,
   registryConfigFromBody,
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission } from '../domain/raceScoring';
-import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
+import {
+  ensureMember,
+  ensurePersonId,
+  ensureProgress,
+  isRaceMember,
+  rankedScores,
+  raceIsOpenToJoin,
+  recomputeRanks,
+  REMOVED_FROM_RACE_ERROR,
+} from '../domain/raceMembership';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import {
   deadlineEligibility,
@@ -39,6 +50,7 @@ import { recordRaceEvents, type RaceEventInput } from '../domain/raceEvents';
 import { notifyEvent, notifyLifecycleTransitions, notifyRaceEvents, type LifecycleTransitionLike } from '../domain/notificationPolicy';
 import { scheduleRaceStartingSoon } from '../domain/notificationJobs';
 import { computeViewerContext } from '../domain/raceContext';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import {
   attemptsUsed,
   bindableOpenAttempt,
@@ -52,6 +64,8 @@ import { reconcileProgression } from '../domain/progression';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
+import { decideSessionAction, parseInlineSessionResult } from '../domain/proofSession';
+import { applySessionCompletion } from './verificationSessions';
 import {
   awsEncode,
   encodeKeyPath,
@@ -154,7 +168,7 @@ function isSubmissionValueInRange(value: unknown): boolean {
 function raceSupportsAiMotion(race: RaceRow): boolean {
   if (race.verifier_type === MANUAL_VERIFIER_TYPE) return false;
   if (
-    race.verifier_type === CUSTOM_VERIFIER_TYPE ||
+    isCustomVerifierType(race.verifier_type) ||
     race.verifier_type === PRESET_VERIFIER_TYPE ||
     race.verifier_type === 'remote_release'
   ) return true;
@@ -210,7 +224,7 @@ function parsedVerifierSpec(
   releasedSpec?: Record<string, unknown> | null,
 ): { spec: Record<string, unknown> | null; invalidReason: string | null } {
   if (releasedSpec) return { spec: releasedSpec, invalidReason: null };
-  if (race.verifier_type !== CUSTOM_VERIFIER_TYPE) {
+  if (!isCustomVerifierType(race.verifier_type)) {
     return { spec: null, invalidReason: null };
   }
   if (!race.verifier_spec_json) {
@@ -252,7 +266,7 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
     metric,
     format,
     scoringRule,
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(format, race.target_value),
     attemptDurationSeconds: race.attempt_duration_seconds ?? null,
     attemptLimit: race.attempt_limit ?? null,
     verificationMethod: 'camera_pose',
@@ -261,40 +275,6 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
     endsAt: race.end_at,
     recurrence: race.recurrence === 'daily' || race.recurrence === 'weekly' ? race.recurrence : 'none',
   };
-}
-
-// The live race_members table keeps a legacy person_id column that is NOT NULL and
-// references people(id). Every member row must therefore resolve to a people row.
-async function ensurePersonId(db: D1Database, userId: string): Promise<string> {
-  const existing = await db.prepare('SELECT id FROM people WHERE user_id = ?').bind(userId).first<{ id: string }>();
-  if (existing) return existing.id;
-  const personId = generateId();
-  const displayName = await getProfileName(db, userId);
-  await db.prepare(
-    `INSERT INTO people (id, person_key, user_id, display_name, created_at, updated_at)
-     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-  ).bind(personId, `user-${userId}`, userId, displayName ?? 'Racer').run();
-  return personId;
-}
-
-async function ensureMember(db: D1Database, raceId: string, userId: string, role = 'racer'): Promise<void> {
-  const existing = await db.prepare('SELECT id, status FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string; status: string }>();
-  if (existing) {
-    // A stale 'left'/'removed' row must not lock the user out — rejoining
-    // reactivates the same membership rather than inserting a duplicate.
-    if (existing.status !== 'active') {
-      await db.prepare(
-        "UPDATE race_members SET status = 'active', role = ?, joined_at = CURRENT_TIMESTAMP WHERE id = ?"
-      ).bind(role, existing.id).run();
-    }
-    return;
-  }
-  const displayName = await getProfileName(db, userId);
-  const personId = await ensurePersonId(db, userId);
-  await db.prepare(
-    `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at, cached_display_name)
-     VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
-  ).bind(generateId(), raceId, userId, personId, role, displayName).run();
 }
 
 /** Emit `race_joined` to the creator iff `userId` was not already a member. */
@@ -319,47 +299,6 @@ async function notifyRaceJoined(
     raceId: race.id,
     raceTitle: race.title,
   });
-}
-
-async function isRaceMember(db: D1Database, raceId: string, userId: string): Promise<boolean> {
-  const row = await db
-    .prepare("SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'")
-    .bind(raceId, userId)
-    .first<{ id: string }>();
-  return Boolean(row);
-}
-
-async function ensureProgress(db: D1Database, raceId: string, userId: string): Promise<void> {
-  const existing = await db.prepare('SELECT id FROM race_progress WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string }>();
-  if (existing) return;
-  await db.prepare(
-    `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
-     VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
-  ).bind(generateId(), raceId, userId).run();
-}
-
-async function rankedScores(db: D1Database, raceId: string, direction: 'higher' | 'lower' = 'higher'): Promise<RankedScore[]> {
-  const rows = await db.prepare(
-    `SELECT rm.user_id, rm.joined_at, rp.progress_value, rp.completed_at
-     FROM race_members rm
-     LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-     WHERE rm.race_id = ? AND rm.status = 'active'`
-  ).bind(raceId).all<{ user_id: string; joined_at: string; progress_value: number | null; completed_at: string | null }>();
-  return computeCompetitionRanks(rows.results.map((row) => ({
-    user_id: row.user_id,
-    joined_at: row.joined_at,
-    progress_value: row.progress_value ?? 0,
-    completed_at: row.completed_at,
-  })), { direction: direction === 'lower' ? 'asc' : 'desc' });
-}
-
-async function recomputeRanks(db: D1Database, raceId: string, direction: 'higher' | 'lower' = 'higher'): Promise<RankedScore[]> {
-  const ranked = await rankedScores(db, raceId, direction);
-  const stmts = ranked.map((r) => db.prepare(
-    'UPDATE race_progress SET rank_cache = ? WHERE race_id = ? AND user_id = ?'
-  ).bind(r.rank, raceId, r.user_id));
-  if (stmts.length) await db.batch(stmts);
-  return ranked;
 }
 
 async function snapshotFinalStandings(
@@ -408,11 +347,14 @@ function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
       targetValue: presetConfig.targetValue,
     };
   }
-  const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustom = isCustomVerifierType(race.verifier_type);
   const isManual = race.verifier_type === MANUAL_VERIFIER_TYPE;
   if (!isCustom && !isManual) return null;
   const targetValue = positiveIntOrNull(race.target_value) ?? null;
-  if (targetValue == null) return null;
+  const rowFormat = (((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as unknown) as RaceFormat;
+  // Only a race to a target needs one; window / attempt races (custom or
+  // manual) are decided by score and carry none.
+  if (targetValue == null && rowFormat === 'first_to_goal') return null;
   // Manual races store a free-text unit in target_unit; the wire metric is
   // always 'reps' (an opaque cumulative integer).
   const metric = isManual ? 'reps' : normalizeMetric(race.metric ?? race.target_unit ?? 'reps', undefined);
@@ -464,7 +406,7 @@ async function recomputeRaceProgressForUser(
       score = score > 0 ? Math.min(score, v) : v;
     } else score += v;
   }
-  const target = scoring.targetValue && scoring.targetValue > 0 ? scoring.targetValue : null;
+  const target = effectiveTargetValue(scoring.format, scoring.targetValue);
   const progressPercent = target ? Math.min(100, Math.round((score / target) * 100)) : 0;
   const completed = scoring.format === 'first_to_goal' && Boolean(target && score >= target);
 
@@ -726,9 +668,9 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
   };
 }
 
-type ParticipantRow = { id: string; user_id: string; joined_at: string; finished_at?: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
-type MoveRow = MoveLogRow & { display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
-type StandingRow = { user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
+type ParticipantRow = { id: string; user_id: string; joined_at: string; finished_at?: string | null; display_name: string; profile_photo_url: string | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
+type MoveRow = MoveLogRow & { display_name: string; profile_photo_url: string | null; username: string | null };
+type StandingRow = { user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; username: string | null };
 
 /// Viewer-level visibility inputs (crew allowlist + block set) — the same for
 /// every race in one request, computed once instead of once per race.
@@ -768,10 +710,9 @@ function shapeRaceResponse(
   const levels = collections.levels ?? new Map<string, number>();
   const { allowedIds, blockedEitherWay } = visibilityCtx;
 
-  // Being in the same race is itself an opt-in relationship: fellow racers see
-  // each other's race identity (name + photo) even with a private profile —
-  // a leaderboard / "someone passed you" is unreadable otherwise. Only when
-  // the viewer is themselves in this race; blocking still wins.
+  // Everyone's race identity (name + photo) is visible; there is no private
+  // profile. Only blocking anonymizes someone, and it always wins. The
+  // co-racer set is still passed along for the visibility context shape.
   const coRacerIds = new Set<string>();
   const viewerIsParticipant = Boolean(
     viewerUserId && participants.some((p) => p.user_id === viewerUserId),
@@ -782,7 +723,7 @@ function shapeRaceResponse(
     }
   }
 
-  function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null; anonymized: boolean } {
+  function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null; anonymized: boolean } {
     const v = resolveRaceMemberVisibility(
       viewerUserId,
       {
@@ -790,7 +731,6 @@ function shapeRaceResponse(
         displayName: row.display_name,
         username: row.username ?? null,
         profilePhotoUrl: row.profile_photo_url,
-        privateProfile: Boolean(row.private_profile),
       },
       { crewIds: allowedIds, blockedEitherWay, coRacerIds },
     );
@@ -801,7 +741,7 @@ function shapeRaceResponse(
   const config = raceConfigFromRow(race);
   const scoring = raceScoringConfigFromRow(race);
   const verifier = parsedVerifierSpec(race, releasedSpec);
-  const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustomVerifier = isCustomVerifierType(race.verifier_type);
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
   const scoreDirection = scoreDirectionFor(race);
   const now = new Date();
@@ -809,7 +749,7 @@ function shapeRaceResponse(
   const viewerContext = computeViewerContext({
     raceId: race.id,
     format: scoring?.format ?? 'first_to_goal',
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(scoring?.format ?? race.format ?? race.race_type, race.target_value),
     startAt: race.start_at,
     endAt: race.end_at,
     storedStatus: race.status,
@@ -850,7 +790,7 @@ function shapeRaceResponse(
     customActivityName: race.custom_activity_name ?? null,
     timezone: race.timezone ?? 'America/New_York',
     recurrence: race.recurrence ?? 'none',
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(race.format ?? race.race_type, race.target_value),
     unit: race.target_unit,
     aiActivityType: isCustomVerifier ? null : race.movement_type,
     targetUnit: race.target_unit,
@@ -1024,7 +964,6 @@ async function buildRaceResponse(
       `SELECT rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              p.private_profile,
               p.username,
               rp.progress_value, rp.progress_percent, rp.rank_cache
        FROM race_members rm
@@ -1034,7 +973,7 @@ async function buildRaceResponse(
        ORDER BY COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
     ).bind(race.id).all<ParticipantRow>(),
     db.prepare(
-      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM move_logs ml
        LEFT JOIN profiles p ON p.user_id = ml.user_id
        WHERE ml.race_id = ? AND ml.status != 'removed'
@@ -1044,7 +983,7 @@ async function buildRaceResponse(
       `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
     ).bind(race.id).first<InviteRow>(),
     db.prepare(
-      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM race_final_standings fs
        LEFT JOIN profiles p ON p.user_id = fs.user_id
        WHERE fs.race_id = ?
@@ -1144,7 +1083,7 @@ async function buildRaceResponsesBatch(
       `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              p.private_profile, p.username,
+              p.username,
               rp.progress_value, rp.progress_percent, rp.rank_cache
        FROM race_members rm
        LEFT JOIN profiles p ON p.user_id = rm.user_id
@@ -1153,7 +1092,7 @@ async function buildRaceResponsesBatch(
        ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
     ).bind(...ids).all<ParticipantRow & { race_id: string }>(),
     db.prepare(
-      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM move_logs ml
        LEFT JOIN profiles p ON p.user_id = ml.user_id
        WHERE ml.race_id IN (${placeholders}) AND ml.status != 'removed'
@@ -1164,7 +1103,7 @@ async function buildRaceResponsesBatch(
        ORDER BY race_id, created_at DESC`
     ).bind(...ids).all<InviteRow>(),
     db.prepare(
-      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM race_final_standings fs
        LEFT JOIN profiles p ON p.user_id = fs.user_id
        WHERE fs.race_id IN (${placeholders})
@@ -1226,15 +1165,16 @@ racesRouter.post('/join-code', async (c) => {
 
   const race = await getRace(c.env.DB, invite.race_id);
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
   if (await isBlockedEitherWay(c.env.DB, userId, race.creator_id)) {
     return c.json(badRequest('You cannot join this race'), 403);
   }
 
-  const wasMember = await isRaceMember(c.env.DB, race.id, userId);
-  await ensureMember(c.env.DB, race.id, userId);
+  const joined = await ensureMember(c.env.DB, race.id, userId);
+  if (joined.blocked) return c.json(badRequest(REMOVED_FROM_RACE_ERROR), 403);
   await ensureProgress(c.env.DB, race.id, userId);
-  await notifyRaceJoined(c, race, userId, wasMember);
+  if (joined.created || joined.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  await notifyRaceJoined(c, race, userId, !(joined.created || joined.reactivated));
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
@@ -1247,6 +1187,56 @@ racesRouter.get('/', async (c) => {
      WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
      ORDER BY r.created_at DESC`
   ).bind(userId, userId).all<RaceRow>();
+
+  // Conditional GET. Skipped while any race still has a lazy finalize pending:
+  // the builder below performs that write, so a validator computed before it
+  // could hide the transition (the next read validates the settled state).
+  const nowMs = Date.now();
+  const finalizePending = rows.results.some(
+    (r) => r.status === 'active' && r.end_at && new Date(r.end_at).getTime() <= nowMs,
+  );
+  if (!finalizePending) {
+    // One round trip over exactly the races this viewer's list returns.
+    const sig = await c.env.DB.prepare(
+      `WITH s AS (
+         SELECT DISTINCT r.id FROM races r
+         LEFT JOIN race_members rm ON rm.race_id = r.id AND rm.user_id = ? AND rm.status = 'active'
+         WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
+       )
+       SELECT
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '') FROM race_members
+            WHERE status = 'active' AND race_id IN (SELECT id FROM s)) AS members,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), '') || ':' || COALESCE(SUM(rank_cache), 0)
+                || ':' || COALESCE(SUM(progress_value), 0) FROM race_progress
+            WHERE race_id IN (SELECT id FROM s)) AS progress,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(SUM(status = 'verified'), 0)
+                || ':' || COALESCE(SUM(status = 'rejected'), 0) || ':' || COALESCE(SUM(LENGTH(COALESCE(summary, ''))), 0)
+                FROM move_logs WHERE status != 'removed' AND race_id IN (SELECT id FROM s)) AS moves,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(MAX(id), '') FROM race_invites
+            WHERE status = 'active' AND race_id IN (SELECT id FROM s)) AS invites,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(rank_position), 0) || ':' || COALESCE(SUM(score_value), 0)
+            FROM race_final_standings WHERE race_id IN (SELECT id FROM s)) AS standings,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(status = 'open'), 0) FROM race_attempts
+            WHERE user_id = ? AND race_id IN (SELECT id FROM s)) AS attempts`
+    ).bind(userId, userId, userId).first<Record<string, string | null>>();
+    let maxVersion = 0;
+    let maxUpdated = '';
+    const phases: string[] = [];
+    for (const r of rows.results) {
+      maxVersion = Math.max(maxVersion, r.version ?? 0);
+      if ((r.updated_at ?? '') > maxUpdated) maxUpdated = r.updated_at ?? '';
+      // Time-derived status flips (scheduled -> active) don't touch the row.
+      phases.push(effectiveRaceStatus(r.status, r.start_at, r.end_at, new Date(nowMs)).charAt(0));
+    }
+    const etag = weakEtag(
+      'races', userId, rows.results.length, maxVersion, maxUpdated, phases.join(''),
+      sig?.members, sig?.progress, sig?.moves, sig?.invites, sig?.standings, sig?.attempts,
+      stalenessBucket(nowMs),
+    );
+    const nm = conditional(c, etag);
+    if (nm) return nm;
+  }
+
   let races: unknown[];
   try {
     races = await buildRaceResponsesBatch(c.env, userId, rows.results);
@@ -1336,7 +1326,11 @@ racesRouter.post('/', async (c) => {
   const config = structuredConfig && !('error' in structuredConfig) ? structuredConfig : null;
   const custom = customConfig && !('error' in customConfig) ? customConfig : null;
   const raceType = manual?.format ?? config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
-  const targetValue = custom?.targetValue ?? manual?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
+  // A custom race decides its own target (null for window / attempt formats) —
+  // a stray body.targetValue must never become a made-up finish line.
+  const targetValue = custom
+    ? custom.targetValue
+    : manual?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
   // Manual races keep the human unit ("pages") in target_unit; the wire metric
   // is always 'reps'.
   const targetUnit = custom?.metric ?? manual?.unit ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
@@ -1520,6 +1514,40 @@ racesRouter.get('/:id', async (c) => {
   if (!race) return c.json(badRequest('Race not found'), 404);
   const access = await resolveRaceAccess(c.env.DB, race, c.get('userId'));
   if (!access.canRead) return c.json(badRequest('Race not found'), 404);
+
+  // Conditional GET (after the 404/403 checks above). Skipped while a lazy
+  // finalize is pending: buildRaceResponse performs that write.
+  const nowMs = Date.now();
+  const finalizePending = race.status === 'active' && race.end_at && new Date(race.end_at).getTime() <= nowMs;
+  if (!finalizePending) {
+    const viewerId = c.get('userId');
+    const sig = await c.env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '') FROM race_members
+            WHERE status = 'active' AND race_id = ?1) AS members,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), '') || ':' || COALESCE(SUM(rank_cache), 0)
+                || ':' || COALESCE(SUM(progress_value), 0) FROM race_progress WHERE race_id = ?1) AS progress,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(SUM(status = 'verified'), 0)
+                || ':' || COALESCE(SUM(status = 'rejected'), 0) || ':' || COALESCE(SUM(LENGTH(COALESCE(summary, ''))), 0)
+                FROM move_logs WHERE status != 'removed' AND race_id = ?1) AS moves,
+         (SELECT COUNT(*) FROM proof_votes WHERE race_id = ?1) AS votes,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(MAX(id), '') FROM race_invites
+            WHERE status = 'active' AND race_id = ?1) AS invites,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(rank_position), 0) || ':' || COALESCE(SUM(score_value), 0)
+            FROM race_final_standings WHERE race_id = ?1) AS standings,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(status = 'open'), 0) FROM race_attempts
+            WHERE user_id = ?2 AND race_id = ?1) AS attempts`
+    ).bind(race.id, viewerId).first<Record<string, string | number | null>>();
+    const etag = weakEtag(
+      'race', race.id, viewerId, race.version ?? 0, race.updated_at,
+      effectiveRaceStatus(race.status, race.start_at, race.end_at, new Date(nowMs)),
+      sig?.members, sig?.progress, sig?.moves, sig?.votes, sig?.invites, sig?.standings, sig?.attempts,
+      // 60 s: countdown fields, verifier release, profile names/avatars/levels.
+      stalenessBucket(nowMs, 60_000),
+    );
+    const nm = conditional(c, etag);
+    if (nm) return nm;
+  }
   try {
     return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
   } catch (err) {
@@ -1608,7 +1636,11 @@ racesRouter.patch('/:id', async (c) => {
   }
 
   const targetValue = positiveIntOrNull(body.targetValue);
-  if (targetValue !== undefined) { updates.push('target_value = ?'); values.push(targetValue); }
+  if (targetValue !== undefined) {
+    // A window / attempt race has no finish line: never persist a placeholder.
+    updates.push('target_value = ?');
+    values.push(effectiveTargetValue(race.format ?? race.race_type, targetValue));
+  }
   // Lifecycle (active → completed, winner) is server-derived. The creator may
   // only withdraw a race (cancel/archive); reopening or completing is never
   // a client write.
@@ -1664,9 +1696,12 @@ racesRouter.post('/:id/leave', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.creator_id === userId) return c.json(badRequest('Race creator cannot leave their own race'), 400);
-  await c.env.DB.prepare(
-    "UPDATE race_members SET status = 'left' WHERE race_id = ? AND user_id = ?"
+  // Only an active member can leave: a creator-removed row must stay
+  // 'removed' (turning it into 'left' would let them rejoin by link).
+  const left = await c.env.DB.prepare(
+    "UPDATE race_members SET status = 'left' WHERE race_id = ? AND user_id = ? AND status = 'active'"
   ).bind(race.id, userId).run();
+  if ((left.meta?.changes ?? 1) > 0) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
   return c.json({ ok: true });
 });
 
@@ -1675,16 +1710,17 @@ racesRouter.post('/:id/join', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
   if (!(await hasAcceptedTerms(c.env.DB, userId))) {
     return c.json({ ok: false, error: 'You must accept the Terms of Service before joining a race' }, 403);
   }
   const eligibility = await checkRaceJoinEligibility(c.env.DB, race, userId);
   if (!eligibility.ok) return c.json(badRequest(eligibility.error), eligibility.status as 400 | 403);
-  const wasMember = await isRaceMember(c.env.DB, race.id, userId);
-  await ensureMember(c.env.DB, race.id, userId);
+  const joined = await ensureMember(c.env.DB, race.id, userId);
+  if (joined.blocked) return c.json(badRequest(REMOVED_FROM_RACE_ERROR), 403);
   await ensureProgress(c.env.DB, race.id, userId);
-  await notifyRaceJoined(c, race, userId, wasMember);
+  if (joined.created || joined.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  await notifyRaceJoined(c, race, userId, !(joined.created || joined.reactivated));
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
@@ -1698,7 +1734,7 @@ racesRouter.post('/:id/participants', async (c) => {
 
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
 
   // Organizer flow only — an ordinary participant must not silently insert
   // arbitrary users into a race.
@@ -1715,10 +1751,12 @@ racesRouter.post('/:id/participants', async (c) => {
     return c.json(badRequest('You cannot add this user'), 403);
   }
 
-  const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
-  await ensureMember(c.env.DB, race.id, targetUserId);
+  // An explicit creator add is the one path that may bring back a member the
+  // creator removed earlier.
+  const added = await ensureMember(c.env.DB, race.id, targetUserId, 'racer', { allowRemoved: true });
   await ensureProgress(c.env.DB, race.id, targetUserId);
-  if (!targetWasMember && targetUserId !== userId) {
+  if (added.created || added.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  if ((added.created || added.reactivated) && targetUserId !== userId) {
     const actorName = await getProfileName(c.env.DB, userId);
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
       type: 'race_invited',
@@ -1742,7 +1780,7 @@ racesRouter.post('/:id/members', async (c) => {
 
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
 
   // Organizer flow only — an ordinary participant must not silently insert
   // arbitrary users into a race.
@@ -1759,10 +1797,12 @@ racesRouter.post('/:id/members', async (c) => {
     return c.json(badRequest('You cannot add this user'), 403);
   }
 
-  const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
-  await ensureMember(c.env.DB, race.id, targetUserId);
+  // An explicit creator add is the one path that may bring back a member the
+  // creator removed earlier.
+  const added = await ensureMember(c.env.DB, race.id, targetUserId, 'racer', { allowRemoved: true });
   await ensureProgress(c.env.DB, race.id, targetUserId);
-  if (!targetWasMember && targetUserId !== userId) {
+  if (added.created || added.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  if ((added.created || added.reactivated) && targetUserId !== userId) {
     const actorName = await getProfileName(c.env.DB, userId);
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
       type: 'race_invited',
@@ -1789,6 +1829,7 @@ racesRouter.delete('/:id/members/:userId', async (c) => {
   await c.env.DB.prepare(
     "UPDATE race_members SET status = 'removed' WHERE race_id = ? AND user_id = ?"
   ).bind(race.id, targetUserId).run();
+  await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
@@ -1797,7 +1838,7 @@ racesRouter.post('/:id/invite-code', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can invite crew'), 403);
+  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can invite friends'), 403);
 
   const existing = await c.env.DB.prepare(
     `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
@@ -1883,7 +1924,7 @@ racesRouter.post('/:id/proof', async (c) => {
   const isManualRace = race.verifier_type === MANUAL_VERIFIER_TYPE;
   if (
     !scoring ||
-    (!config && race.verifier_type !== CUSTOM_VERIFIER_TYPE && !isManualRace)
+    (!config && !isCustomVerifierType(race.verifier_type) && !isManualRace)
   ) {
     return c.json(badRequest('Race is missing activity configuration'), 400);
   }
@@ -1897,7 +1938,7 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const proofType = typeof body.proofType === 'string' ? body.proofType : 'manual';
   const isAiMotion = proofType === 'ai_motion';
-  const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustom = isCustomVerifierType(race.verifier_type);
   if (isCustom && !isAiMotion) return c.json(badRequest('Custom races require AI Motion Proof'), 400);
   // The race's persisted contract decides the proof mode — a payload can
   // never upgrade a photo-proof race to AI Motion Proof.
@@ -1979,16 +2020,69 @@ racesRouter.post('/:id/proof', async (c) => {
     return c.json(badRequest('AI Motion Proof requires a verification session'), 400);
   }
   if (verificationSessionId) {
-    const session = await c.env.DB.prepare(
-      'SELECT status, result_value FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
-    ).bind(verificationSessionId, userId, race.id).first<{ status: string; result_value: number | null }>();
-    if (!session || session.status !== 'completed' || (session.result_value ?? 0) < increment) {
+    type ProofSessionRow = {
+      id: string; status: string; result_value: number | null; release_id: string;
+      release_checksum: string; engine_type: string; spec_schema_version: number;
+    };
+    const readProofSession = () => c.env.DB.prepare(
+      'SELECT id, status, result_value, release_id, release_checksum, engine_type, spec_schema_version ' +
+      'FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
+    ).bind(verificationSessionId, userId, race.id).first<ProofSessionRow>();
+    let session = await readProofSession();
+    const existingLog = await c.env.DB.prepare(
+      "SELECT id, client_submission_id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
+    ).bind(race.id, verificationSessionId).first<{ id: string; client_submission_id: string | null }>();
+    const inlineResult = parseInlineSessionResult(body.sessionResult);
+    const decide = (s: ProofSessionRow | null) => decideSessionAction({
+      sessionStatus: s?.status ?? null,
+      sessionResultValue: s?.result_value ?? null,
+      increment,
+      existingLogFound: Boolean(existingLog),
+      existingLogClientSubmissionId: existingLog?.client_submission_id ?? null,
+      requestClientSubmissionId: clientSubmissionId,
+      inlineResult,
+      sessionRelease: { releaseId: s?.release_id ?? '', releaseChecksum: s?.release_checksum ?? '' },
+    });
+    let action = decide(session);
+    if (action === 'complete_inline' && session && inlineResult) {
+      await applySessionCompletion(c.env.DB, session, userId, {
+        status: 'completed',
+        resultValue: inlineResult.resultValue,
+        confidence: inlineResult.confidence,
+        failureReason: null,
+        motionSessionId: inlineResult.motionSessionId,
+      });
+      // Re-read so the normal validation runs against what is actually stored
+      // (a concurrent completion wins; its result is never overwritten).
+      session = await readProofSession();
+      action = decide(session);
+      if (action === 'complete_inline') action = 'mismatch';
+    }
+    if (action === 'replay' && existingLog) {
+      // The proof already committed for this exact submission: answer with the
+      // same success shape, writing and awarding nothing.
+      const prior = await c.env.DB.prepare('SELECT * FROM move_logs WHERE id = ?').bind(existingLog.id).first<MoveLogRow>();
+      const updated = await getRace(c.env.DB, race.id);
+      const result: SubmissionResult | undefined = prior && prior.status === 'verified'
+        ? {
+          verifiedValue: prior.value ?? 0,
+          previousScore: prior.previous_score ?? 0,
+          newScore: prior.new_score ?? 0,
+          previousRank: prior.previous_rank ?? null,
+          newRank: prior.new_rank ?? null,
+          peoplePassed: prior.previous_rank && prior.new_rank && prior.new_rank < prior.previous_rank
+            ? prior.previous_rank - prior.new_rank
+            : 0,
+          raceCompleted: Boolean(prior.race_completed),
+          winnerUserId: updated?.winner_user_id ?? race.winner_user_id ?? null,
+        }
+        : undefined;
+      return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!, result), submissionResult: result ?? null });
+    }
+    if (action === 'mismatch' || action === 'not_found') {
       return c.json(badRequest('Verification session does not match this proof'), 400);
     }
-    const reused = await c.env.DB.prepare(
-      "SELECT id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
-    ).bind(race.id, verificationSessionId).first<{ id: string }>();
-    if (reused) return c.json(badRequest('Verification session was already used'), 409);
+    if (action === 'reused') return c.json(badRequest('Verification session was already used'), 409);
   }
 
   await ensureProgress(c.env.DB, race.id, userId);
@@ -2036,6 +2130,9 @@ racesRouter.post('/:id/proof', async (c) => {
   }
   if (isCustom && completionEvents !== null && completionEvents < increment) {
     return c.json(badRequest('Custom proof completion events must cover value.'), 400);
+  }
+  if (isCustom && aiStatus === 'custom_verified' && customRepRateImplausible(increment, durationMs)) {
+    return c.json(badRequest('Custom proof count is not possible in the recorded time.'), 400);
   }
   if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
     return c.json(badRequest('Custom proof valid frames cannot exceed analyzed frames.'), 400);
@@ -2678,7 +2775,7 @@ racesRouter.get('/:id/live', async (c) => {
   const viewerContext = computeViewerContext({
     raceId: race.id,
     format: scoring?.format ?? 'first_to_goal',
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(scoring?.format ?? race.format ?? race.race_type, race.target_value),
     startAt: race.start_at,
     endAt: race.end_at,
     storedStatus: race.status,

@@ -1,7 +1,18 @@
 import '../domain/nuvo_destination.dart';
 
 /// Availability of an invite token, mirrored from the Worker.
-enum InviteStatus { active, expired, revoked, used, notFound, blocked, unknown }
+enum InviteStatus {
+  active,
+  expired,
+  revoked,
+  used,
+  notFound,
+  blocked,
+
+  /// The race behind the invite has ended (server 410 `status: 'closed'`).
+  closed,
+  unknown,
+}
 
 InviteStatus _statusFrom(String? raw) {
   switch (raw) {
@@ -17,9 +28,26 @@ InviteStatus _statusFrom(String? raw) {
       return InviteStatus.notFound;
     case 'blocked':
       return InviteStatus.blocked;
+    case 'closed':
+      return InviteStatus.closed;
     default:
       return InviteStatus.unknown;
   }
+}
+
+/// Status from a response body: the explicit `status` wins; an unrecognised
+/// one falls back to the `error` text so a "race has ended" message still
+/// reads as closed rather than a generic failure.
+InviteStatus _statusFromBody(Map<String, dynamic> json) {
+  final status = _statusFrom(json['status'] as String?);
+  if (status != InviteStatus.unknown) return status;
+  final error = json['error'];
+  if (error is String &&
+      RegExp(r'\b(closed|ended|finished)\b', caseSensitive: false)
+          .hasMatch(error)) {
+    return InviteStatus.closed;
+  }
+  return InviteStatus.unknown;
 }
 
 /// The safe, minimal preview for `/invite/:token`. Works logged-out.
@@ -53,7 +81,7 @@ class InvitePreview {
   factory InvitePreview.fromJson(Map<String, dynamic> json) {
     final preview = json['preview'] as Map<String, dynamic>?;
     return InvitePreview(
-      status: _statusFrom(json['status'] as String?),
+      status: _statusFromBody(json),
       kind: json['kind'] as String?,
       requiresAuth: json['requiresAuth'] as bool? ?? true,
       destination: NuvoDestination.fromDescriptor(
@@ -129,21 +157,18 @@ class PersonInviteCard {
     required this.displayName,
     this.username,
     this.profilePhotoUrl,
-    this.isPrivate = false,
   });
 
   final String userId;
   final String displayName;
   final String? username;
   final String? profilePhotoUrl;
-  final bool isPrivate;
 
   factory PersonInviteCard.fromJson(Map<String, dynamic> j) => PersonInviteCard(
         userId: j['userId'] as String? ?? '',
         displayName: j['displayName'] as String? ?? 'Nuvo member',
         username: j['username'] as String?,
         profilePhotoUrl: j['profilePhotoUrl'] as String?,
-        isPrivate: j['isPrivate'] as bool? ?? false,
       );
 }
 
@@ -170,7 +195,7 @@ class InviteAcceptResult {
   factory InviteAcceptResult.fromJson(Map<String, dynamic> j) => InviteAcceptResult(
         status: j['ok'] == true
             ? InviteStatus.active
-            : _statusFrom(j['status'] as String?),
+            : _statusFromBody(j),
         kind: j['kind'] as String?,
         destination: NuvoDestination.fromDescriptor(
           j['destination'] as Map<String, dynamic>?,

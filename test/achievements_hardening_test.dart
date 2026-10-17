@@ -99,13 +99,13 @@ final _few = [
 ];
 
 class _SeededProgression extends ProgressionController {
-  _SeededProgression(this._b)
+  _SeededProgression(this._b, {NuvoProgression progression = _progression})
     : super(
         ProgressionApi(),
         SecureTokenStore(),
         isPresentationDemo: () => false,
       ) {
-    state = const AsyncValue.data(_progression);
+    state = AsyncValue.data(progression);
   }
   final List<NuvoBadge> _b;
   @override
@@ -139,11 +139,12 @@ Widget _wrap(
   required List<NuvoBadge> badges,
   bool dark = false,
   double textScale = 1.0,
+  NuvoProgression progression = _progression,
 }) {
   return ProviderScope(
     overrides: [
       progressionControllerProvider.overrideWith(
-        (ref) => _SeededProgression(badges),
+        (ref) => _SeededProgression(badges, progression: progression),
       ),
     ],
     child: MaterialApp(
@@ -505,6 +506,192 @@ void main() {
       await tester.tap(find.text('Unfeature'));
       await _settle(tester);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('what is next leads the Achievements page', () {
+    final withNext = NuvoProgression(
+      level: 8,
+      totalXp: 1410,
+      currentLevelXp: 30,
+      nextLevelXp: 120,
+      progress: 0.25,
+      xpToNext: 90,
+      lastSeenLevel: 8,
+      featuredSlots: 3,
+      achievementsEarned: 30,
+      achievementsTotal: 43,
+      nextAchievement: _badge(50, unlocked: false, category: 'winning'),
+      nextUnlock: const NuvoUnlockRef(
+        unlockId: 'lvl-9',
+        level: 9,
+        type: 'badge',
+        key: 'clap',
+        name: 'Clap reaction',
+        description: 'A new reaction for your crew.',
+      ),
+    );
+
+    testWidgets('next goal and next unlock sit above the full list',
+        (tester) async {
+      _useViewport(tester, 390, 844);
+      await tester.pumpWidget(
+        _wrap(const BadgesScreen(), badges: _all43, progression: withNext),
+      );
+      await _settle(tester);
+
+      expect(find.text('NEXT UP'), findsOneWidget);
+      expect(find.text('Achievement Number 50'), findsOneWidget);
+      expect(find.text('NEXT LEVEL UNLOCK'), findsOneWidget);
+      expect(find.text('Clap reaction'), findsOneWidget);
+      expect(find.text('Unlocks at Level 9'), findsOneWidget);
+      expect(find.text('All achievements'), findsOneWidget);
+
+      double y(Finder f) => tester.getTopLeft(f).dy;
+      expect(y(find.text('NEXT UP')), lessThan(y(find.text('NEXT LEVEL UNLOCK'))));
+      expect(
+        y(find.text('NEXT LEVEL UNLOCK')),
+        lessThan(y(find.text('All achievements'))),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('no next goal or unlock — the page just opens on the list',
+        (tester) async {
+      _useViewport(tester, 390, 844);
+      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
+      await _settle(tester);
+
+      expect(find.text('NEXT UP'), findsNothing);
+      expect(find.text('NEXT LEVEL UNLOCK'), findsNothing);
+      expect(find.text('All achievements'), findsOneWidget);
+    });
+
+    testWidgets('survives 320px at text scale 1.4', (tester) async {
+      _useViewport(tester, 320, 568);
+      await tester.pumpWidget(
+        _wrap(
+          const BadgesScreen(),
+          badges: _all43,
+          progression: withNext,
+          textScale: 1.4,
+        ),
+      );
+      await _settle(tester);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('grid rhythm + filter chips', () {
+    // Row-to-row gap (bottom of a tile's status line -> top of the next
+    // row's badge) measured on the ORIGINAL grid (fixed childAspectRatio
+    // 0.72 + 26px mainAxisSpacing) at 390 wide, text scale 1.0.
+    const oldRowGap = 75.63;
+
+    Future<double> measureGap(WidgetTester tester, double w) async {
+      _useViewport(tester, w, 844);
+      await tester.pumpWidget(
+        _wrap(
+          Scaffold(
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: NuvoBadgeGrid(badges: _all43),
+            ),
+          ),
+          badges: _all43,
+        ),
+      );
+      await _settle(tester);
+      final tile0 = find
+          .ancestor(
+            of: find.byType(NuvoAchievementBadge).at(0),
+            matching: find.byType(PressableScale),
+          )
+          .first;
+      var textBottom = 0.0;
+      for (final e in find
+          .descendant(of: tile0, matching: find.byType(Text))
+          .evaluate()) {
+        final r = tester.getRect(find.byWidget(e.widget));
+        if (r.bottom > textBottom) textBottom = r.bottom;
+      }
+      final nextBadgeTop =
+          tester.getRect(find.byType(NuvoAchievementBadge).at(3)).top;
+      // Row alignment: tiles in a row share the same top.
+      expect(
+        tester.getRect(find.byType(NuvoAchievementBadge).at(1)).top,
+        tester.getRect(find.byType(NuvoAchievementBadge).at(0)).top,
+      );
+      expect(tester.takeException(), isNull);
+      return nextBadgeTop - textBottom;
+    }
+
+    testWidgets('row gap is at most 55% of the old gap', (tester) async {
+      final gap = await measureGap(tester, 390);
+      // ignore: avoid_print
+      print('row gap now: $gap (old: $oldRowGap)');
+      expect(gap, lessThanOrEqualTo(oldRowGap * 0.55));
+      expect(gap, greaterThan(4), reason: 'rows must not touch');
+    });
+
+    for (final (sizeName, w, h) in _sizes) {
+      for (final scale in [1.0, 1.4]) {
+        for (final dark in [false, true]) {
+          testWidgets('"All" chip fully visible $sizeName ts$scale dark=$dark',
+              (tester) async {
+            _useViewport(tester, w, h);
+            await tester.pumpWidget(
+              _wrap(
+                const BadgesScreen(),
+                badges: _all43,
+                textScale: scale,
+                dark: dark,
+              ),
+            );
+            await _settle(tester);
+            final chip = tester.getRect(find
+                .ancestor(
+                  of: find.text('All'),
+                  matching: find.byType(PressableScale),
+                )
+                .first);
+            final label = tester.getRect(find.text('All'));
+            expect(chip.left, greaterThanOrEqualTo(0));
+            expect(chip.right, lessThanOrEqualTo(w));
+            expect(label.left, greaterThanOrEqualTo(chip.left));
+            expect(label.right, lessThanOrEqualTo(chip.right));
+            // Chip is not clipped vertically by the row.
+            final row = tester.getRect(find
+                .ancestor(
+                  of: find.text('All'),
+                  matching: find.byType(ListView),
+                )
+                .first);
+            expect(chip.top, greaterThanOrEqualTo(row.top - 0.5));
+            expect(chip.bottom, lessThanOrEqualTo(row.bottom + 0.5));
+            expect(tester.takeException(), isNull);
+          });
+        }
+      }
+    }
+
+    testWidgets('selected off-screen chip scrolls into view', (tester) async {
+      _useViewport(tester, 320, 568);
+      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
+      await _settle(tester);
+      final special = find.text('Special');
+      await tester.ensureVisible(special);
+      await tester.tap(special);
+      await _settle(tester);
+      final r = tester.getRect(special);
+      expect(r.right, lessThanOrEqualTo(320));
+      expect(r.left, greaterThanOrEqualTo(0));
+      // And back to All (scroll the row back first, as a user would).
+      await tester.ensureVisible(find.text('All'));
+      await _settle(tester);
+      await tester.tap(find.text('All'));
+      await _settle(tester);
+      expect(tester.getRect(find.text('All')).left, greaterThanOrEqualTo(0));
     });
   });
 }

@@ -187,23 +187,54 @@ internalRouter.post('/motion/releases/drafts', async (c) => {
   const semver = bodyString(value, 'semver');
   const changeClass = bodyString(value, 'changeClass', 'patch');
   const spec = value.spec;
-  if (!activityId || !releaseId || !parentReleaseId || !semver || !spec || typeof spec !== 'object' || Array.isArray(spec)) {
-    return c.json({ ok: false, error: 'activityId, releaseId, parentReleaseId, semver, and spec are required.' }, 400);
+  if (!activityId || !releaseId || !semver || !spec || typeof spec !== 'object' || Array.isArray(spec)) {
+    return c.json({ ok: false, error: 'activityId, releaseId, semver, and spec are required.' }, 400);
+  }
+  // A parent is required for every release except an activity's FIRST one
+  // (a motion created through POST /motion/activities has nothing to descend
+  // from). Once an activity has any release, omitting the parent is refused so
+  // lineage and the compatibility group can't be forked by accident.
+  const existingReleases = await c.env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM verifier_releases WHERE activity_id = ?',
+  ).bind(activityId).first<{ n: number }>();
+  const isFirstRelease = (existingReleases?.n ?? 0) === 0;
+  if (!parentReleaseId && !isFirstRelease) {
+    return c.json({ ok: false, error: 'parentReleaseId is required: this activity already has releases.' }, 400);
   }
   if (!/^[a-z0-9][a-z0-9._-]{2,119}$/.test(releaseId)) return c.json({ ok: false, error: 'Invalid release ID.' }, 400);
   if (!['patch', 'minor', 'major'].includes(changeClass)) return c.json({ ok: false, error: 'Invalid change class.' }, 400);
   try { validateMotionVerifierSpec(spec, { releaseId, activityId }); }
   catch (error) { return c.json({ ok: false, code: 'invalid_spec', error: error instanceof Error ? error.message : 'Invalid verifier spec.' }, 400); }
-  const parent = await c.env.DB.prepare(
-    'SELECT id, activity_id, compatibility_group, minimum_app_build FROM verifier_releases WHERE id = ? LIMIT 1',
-  ).bind(parentReleaseId).first<{ id: string; activity_id: string; compatibility_group: string; minimum_app_build: string }>();
-  if (!parent || parent.activity_id !== activityId) return c.json({ ok: false, error: 'Parent release does not match the activity.' }, 400);
+  let parent: { id: string; activity_id: string; compatibility_group: string; minimum_app_build: string } | null = null;
+  if (parentReleaseId) {
+    parent = await c.env.DB.prepare(
+      'SELECT id, activity_id, compatibility_group, minimum_app_build FROM verifier_releases WHERE id = ? LIMIT 1',
+    ).bind(parentReleaseId).first<{ id: string; activity_id: string; compatibility_group: string; minimum_app_build: string }>();
+    if (!parent || parent.activity_id !== activityId) return c.json({ ok: false, error: 'Parent release does not match the activity.' }, 400);
+  } else {
+    const activityRow = await c.env.DB.prepare('SELECT id FROM motion_activities WHERE id = ? LIMIT 1')
+      .bind(activityId).first<{ id: string }>();
+    if (!activityRow) return c.json({ ok: false, error: 'Activity not found. Create it first (POST /motion/activities).' }, 404);
+    const first = spec as Record<string, unknown>;
+    // A brand-new motion has no compiled validator: it must run on a data
+    // engine and carry its own `activity` block for display/camera framing.
+    if (['native_v1', 'native_tuned_v1'].includes(String(first.engineType))) {
+      return c.json({ ok: false, error: 'A new motion needs a data engine (state_machine_v1, alternating_rep_v1, hold_v1, sequence_match_v1, rep_tree_v1).' }, 400);
+    }
+    if (!first.activity) {
+      return c.json({ ok: false, error: 'A new motion spec needs an "activity" block.' }, 400);
+    }
+  }
   const checksum = `sha256:${await hashValue(JSON.stringify(spec))}`;
   const requiredCapabilities = Array.isArray((spec as Record<string, unknown>).requiredCapabilities)
     ? (spec as Record<string, unknown>).requiredCapabilities
     : [];
-  const compatibilityGroup = bodyString(value, 'compatibilityGroup', parent.compatibility_group);
-  const minimumAppBuild = bodyString(value, 'minimumAppBuild', parent.minimum_app_build);
+  const compatibilityGroup = bodyString(
+    value, 'compatibilityGroup', parent?.compatibility_group ?? `${activityId}-remote-v1`,
+  );
+  const minimumAppBuild = bodyString(
+    value, 'minimumAppBuild', parent?.minimum_app_build ?? 'remote-runtime-v1',
+  );
   try {
     await c.env.DB.prepare(
       `INSERT INTO verifier_releases
@@ -216,14 +247,14 @@ internalRouter.post('/motion/releases/drafts', async (c) => {
       String((spec as Record<string, unknown>).engineType),
       Number((spec as Record<string, unknown>).specSchemaVersion),
       JSON.stringify(spec), checksum, JSON.stringify(requiredCapabilities),
-      minimumAppBuild, compatibilityGroup, bodyString(value, 'releaseNotes'), parentReleaseId,
+      minimumAppBuild, compatibilityGroup, bodyString(value, 'releaseNotes'), parentReleaseId || null,
     ).run();
   } catch {
     return c.json({ ok: false, error: 'Release ID or checksum already exists.' }, 409);
   }
   await audit(c.env.DB, {
     actorId: bodyActor(value), action: 'release_drafted', activityId, releaseId,
-    details: { parentReleaseId, changeClass, checksum },
+    details: { parentReleaseId: parentReleaseId || null, changeClass, checksum, firstRelease: isFirstRelease },
   });
   return c.json({ ok: true, release: { id: releaseId, activityId, checksum, status: 'draft' } }, 201);
 });
@@ -434,6 +465,184 @@ internalRouter.post('/motion/releases/:releaseId/disable', async (c) => {
 // availability = 'supported'; flipping it removes/restores the motion for
 // every installed app on its next catalog fetch. Existing races referencing a
 // hidden activity keep their pinned release — hiding stops NEW adoption.
+const ACTIVITY_ID_RE = /^[a-z][a-z0-9_]{2,59}$/;
+const ACTIVITY_FORMATS = new Set(['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt']);
+const ACTIVITY_CATEGORIES = new Set(['upper_body', 'lower_body', 'core', 'cardio', 'full_body']);
+const ACTIVITY_ICONS = new Set([
+  'accessibility_new', 'directions_walk', 'directions_run', 'person_outline',
+  'straighten', 'sports_gymnastics', 'terrain', 'whatshot', 'fitness_center',
+]);
+const CAMERA_ORIENTATIONS = new Set(['front', 'side', 'front_or_angle']);
+
+function stringList(value: unknown, max: number, maxLen: number): string[] | null {
+  if (!Array.isArray(value) || value.length > max) return null;
+  const out: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !entry.trim() || entry.length > maxLen) return null;
+    out.push(entry.trim());
+  }
+  return out;
+}
+
+// Display-level fields shared by create and update. Returns an error string or
+// the validated column values. Identity (id, measurementType, metric) is NOT
+// editable here: races and proofs are already stored against them.
+function parseActivityDisplay(value: Record<string, unknown>, requireAll: boolean):
+  | { error: string }
+  | {
+      displayName?: string; category?: string; proofLabel?: string;
+      suggestedTargets?: number[]; supportedFormats?: string[]; iconKey?: string;
+      sortPriority?: number; featured?: boolean; metadata: Record<string, unknown>;
+    } {
+  const out: {
+    displayName?: string; category?: string; proofLabel?: string;
+    suggestedTargets?: number[]; supportedFormats?: string[]; iconKey?: string;
+    sortPriority?: number; featured?: boolean; metadata: Record<string, unknown>;
+  } = { metadata: {} };
+  const has = (key: string) => value[key] !== undefined;
+  if (requireAll || has('displayName')) {
+    const v = bodyString(value, 'displayName');
+    if (!v || v.length > 60) return { error: 'displayName is required (max 60 characters).' };
+    out.displayName = v;
+  }
+  if (requireAll || has('category')) {
+    const v = bodyString(value, 'category');
+    if (!ACTIVITY_CATEGORIES.has(v)) return { error: `category must be one of ${[...ACTIVITY_CATEGORIES].join(', ')}.` };
+    out.category = v;
+  }
+  if (requireAll || has('proofLabel')) {
+    const v = bodyString(value, 'proofLabel');
+    if (!v || v.length > 60) return { error: 'proofLabel is required (max 60 characters).' };
+    out.proofLabel = v;
+  }
+  if (requireAll || has('suggestedTargets')) {
+    const list = Array.isArray(value.suggestedTargets) ? value.suggestedTargets : null;
+    if (!list || list.length < 1 || list.length > 12 ||
+        list.some((n) => !Number.isInteger(n) || (n as number) < 1 || (n as number) > 100000)) {
+      return { error: 'suggestedTargets must be 1-12 whole numbers between 1 and 100000.' };
+    }
+    out.suggestedTargets = list as number[];
+  }
+  if (requireAll || has('supportedFormats')) {
+    const list = stringList(value.supportedFormats, 4, 30);
+    if (!list || !list.length || list.some((f) => !ACTIVITY_FORMATS.has(f))) {
+      return { error: `supportedFormats must be a non-empty subset of ${[...ACTIVITY_FORMATS].join(', ')}.` };
+    }
+    out.supportedFormats = list;
+  }
+  if (requireAll || has('iconKey')) {
+    const v = bodyString(value, 'iconKey', 'fitness_center');
+    if (!ACTIVITY_ICONS.has(v)) return { error: `iconKey must be one of ${[...ACTIVITY_ICONS].join(', ')}.` };
+    out.iconKey = v;
+  }
+  if (has('sortPriority')) {
+    const n = value.sortPriority;
+    if (!Number.isInteger(n) || (n as number) < 0 || (n as number) > 10000) return { error: 'sortPriority must be a whole number 0-10000.' };
+    out.sortPriority = n as number;
+  }
+  if (has('featured')) {
+    if (typeof value.featured !== 'boolean') return { error: 'featured must be true or false.' };
+    out.featured = value.featured;
+  }
+  if (has('instructions')) {
+    const list = stringList(value.instructions, 8, 200);
+    if (!list) return { error: 'instructions must be up to 8 short strings.' };
+    out.metadata.instructions = list;
+  }
+  if (has('aliases')) {
+    const list = stringList(value.aliases, 12, 60);
+    if (!list) return { error: 'aliases must be up to 12 short strings.' };
+    out.metadata.aliases = list;
+  }
+  if (has('cameraOrientation')) {
+    if (!CAMERA_ORIENTATIONS.has(String(value.cameraOrientation))) return { error: 'cameraOrientation must be front, side or front_or_angle.' };
+    out.metadata.cameraOrientation = value.cameraOrientation;
+  }
+  return out;
+}
+
+// Create a motion. It starts HIDDEN: it appears in the app only after it has a
+// stable release and is switched to supported (activity-visibility). The
+// measurement type is fixed at creation — races are stored against it.
+internalRouter.post('/motion/activities', async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ ok: false, error: 'Invalid body.' }, 400);
+  const value = body as Record<string, unknown>;
+  const id = bodyString(value, 'id');
+  if (!ACTIVITY_ID_RE.test(id)) return c.json({ ok: false, error: 'id must be lowercase letters, numbers and underscores (3-60 characters, starting with a letter).' }, 400);
+  const measurementType = bodyString(value, 'measurementType');
+  if (!['repetitions', 'duration'].includes(measurementType)) {
+    return c.json({ ok: false, error: 'measurementType must be repetitions or duration.' }, 400);
+  }
+  const metric = measurementType === 'duration' ? 'seconds' : 'reps';
+  const display = parseActivityDisplay(value, true);
+  if ('error' in display) return c.json({ ok: false, error: display.error }, 400);
+  const exists = await c.env.DB.prepare('SELECT id FROM motion_activities WHERE id = ? LIMIT 1').bind(id).first();
+  if (exists) return c.json({ ok: false, error: 'An activity with that id already exists.' }, 409);
+  await c.env.DB.prepare(
+    `INSERT INTO motion_activities
+       (id, display_name, category, proof_label, measurement_type, metric,
+        suggested_targets_json, supported_formats_json, icon_key, sort_priority,
+        featured, availability, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'hidden', ?)`,
+  ).bind(
+    id, display.displayName, display.category, display.proofLabel, measurementType, metric,
+    JSON.stringify(display.suggestedTargets), JSON.stringify(display.supportedFormats),
+    display.iconKey, display.sortPriority ?? 100, display.featured ? 1 : 0,
+    JSON.stringify(display.metadata),
+  ).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'activity_created', activityId: id,
+    details: { measurementType },
+  });
+  return c.json({ ok: true, activityId: id, availability: 'hidden' }, 201);
+});
+
+// Edit a motion's display details (name, targets, formats, instructions,
+// aliases, camera hint, order, featured). Identity fields are not editable.
+internalRouter.put('/motion/activities/:activityId', async (c) => {
+  const activityId = c.req.param('activityId');
+  const row = await c.env.DB.prepare(
+    'SELECT id, metadata_json FROM motion_activities WHERE id = ? LIMIT 1',
+  ).bind(activityId).first<{ id: string; metadata_json: string }>();
+  if (!row) return c.json({ ok: false, error: 'Activity not found.' }, 404);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ ok: false, error: 'Invalid body.' }, 400);
+  const value = body as Record<string, unknown>;
+  if (value.id !== undefined || value.measurementType !== undefined || value.metric !== undefined) {
+    return c.json({ ok: false, error: 'id, measurementType and metric cannot be changed.' }, 400);
+  }
+  const display = parseActivityDisplay(value, false);
+  if ('error' in display) return c.json({ ok: false, error: display.error }, 400);
+  let existing: Record<string, unknown> = {};
+  try { existing = JSON.parse(row.metadata_json) as Record<string, unknown>; } catch { /* start clean */ }
+  const metadata = { ...existing, ...display.metadata };
+  await c.env.DB.prepare(
+    `UPDATE motion_activities SET
+       display_name = COALESCE(?, display_name), category = COALESCE(?, category),
+       proof_label = COALESCE(?, proof_label),
+       suggested_targets_json = COALESCE(?, suggested_targets_json),
+       supported_formats_json = COALESCE(?, supported_formats_json),
+       icon_key = COALESCE(?, icon_key), sort_priority = COALESCE(?, sort_priority),
+       featured = COALESCE(?, featured), metadata_json = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(
+    display.displayName ?? null, display.category ?? null, display.proofLabel ?? null,
+    display.suggestedTargets ? JSON.stringify(display.suggestedTargets) : null,
+    display.supportedFormats ? JSON.stringify(display.supportedFormats) : null,
+    display.iconKey ?? null, display.sortPriority ?? null,
+    display.featured === undefined ? null : display.featured ? 1 : 0,
+    JSON.stringify(metadata), activityId,
+  ).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'activity_updated', activityId,
+    details: { fields: Object.keys(value).filter((k) => k !== 'actorId') },
+  });
+  return c.json({ ok: true, activityId });
+});
+
 internalRouter.put('/motion/activities/:activityId/availability', async (c) => {
   const activityId = c.req.param('activityId');
   const activity = await c.env.DB.prepare(
@@ -760,8 +969,13 @@ async function decompressGzip(buf: ArrayBuffer): Promise<ArrayBuffer> {
   return new Response(stream).arrayBuffer();
 }
 
-/** DB row + its full R2 artifact, decompressed — the self-contained payload. */
-async function fullSession(c: Context<AppEnv>, row: SessionRow) {
+/** Fetches + decrypts + gunzips a stored artifact and its metadata sidecar.
+ *  Shared by motion_sessions and motion_teach_sessions rows — both encrypt
+ *  with the same per-account key looked up by the row's user_id/account ref. */
+async function decodeStoredArtifact(
+  c: Context<AppEnv>,
+  row: SessionRow,
+): Promise<{ artifact: unknown; metadata: unknown }> {
   const obj = await c.env.PROFILE_PHOTOS.get(String(row.object_key));
   let artifact: unknown = null;
   let metadata: unknown = null;
@@ -798,6 +1012,12 @@ async function fullSession(c: Context<AppEnv>, row: SessionRow) {
       artifact = { error: `Could not decode artifact: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
+  return { artifact, metadata };
+}
+
+/** DB row + its full R2 artifact, decompressed — the self-contained payload. */
+async function fullSession(c: Context<AppEnv>, row: SessionRow) {
+  const { artifact, metadata } = await decodeStoredArtifact(c, row);
   return {
     ok: true as const,
     session: sessionSummary(row),
@@ -903,6 +1123,103 @@ internalRouter.get('/activities/:activityId/motion-sessions/latest', async (c) =
   ).bind(c.req.param('activityId')).first<SessionRow>();
   if (!row) return c.json({ ok: false, error: 'No sessions for this activity.' }, 404);
   return c.json(await fullSession(c, row));
+});
+
+// ── Teach Nuvo sessions ──────────────────────────────────────────────────────
+// The learned-motion observability loop: each row indexes one encrypted teach
+// artifact (3 demos, V1 spec the race verifies with, V2 spec + self-validation,
+// live-test match trace, outcome/failure stage). `teach-list` triages;
+// `teach-get` pulls the full artifact for tools/motion_v2/replay_session.py.
+
+const TEACH_SUMMARY_COLS = `session_id, user_id, movement_name, outcome, engine,
+  failure_stage, failure_reason, demo_count, frame_count, duration_ms,
+  learned, v2_available, v2_learned, self_validation_passed, live_test_matched,
+  used_for_race, schema_version, app_version, git_commit, model_version,
+  matcher_version, object_key, created_at`;
+
+function teachSessionSummary(row: SessionRow) {
+  return {
+    sessionId: row.session_id,
+    userId: row.user_id,
+    movementName: row.movement_name,
+    outcome: row.outcome,
+    engine: row.engine,
+    failureStage: row.failure_stage,
+    failureReason: row.failure_reason,
+    demoCount: row.demo_count,
+    frameCount: row.frame_count,
+    durationMs: row.duration_ms,
+    learned: row.learned === 1,
+    v2Available: row.v2_available === 1,
+    v2Learned: row.v2_learned === 1,
+    selfValidationPassed: row.self_validation_passed == null ? null : row.self_validation_passed === 1,
+    liveTestMatched: row.live_test_matched == null ? null : row.live_test_matched === 1,
+    usedForRace: row.used_for_race === 1,
+    schemaVersion: row.schema_version,
+    appVersion: row.app_version,
+    gitCommit: row.git_commit,
+    modelVersion: row.model_version,
+    matcherVersion: row.matcher_version,
+    objectKey: row.object_key,
+    createdAt: row.created_at,
+  };
+}
+
+async function fullTeachSession(c: Context<AppEnv>, row: SessionRow) {
+  const { artifact, metadata } = await decodeStoredArtifact(c, row);
+  return {
+    ok: true as const,
+    session: teachSessionSummary(row),
+    metadata,
+    artifact,
+  };
+}
+
+// Recent teach sessions across all users — the triage queue. Filters:
+// ?outcome=failed (or learned/abandoned/used), ?movement=<name>, ?userId=<id>,
+// ?limit=N (default 30, max 200).
+internalRouter.get('/teach-sessions', async (c) => {
+  const clauses = ['1 = 1'];
+  const binds: unknown[] = [];
+  const outcome = c.req.query('outcome')?.trim();
+  const movement = c.req.query('movement')?.trim();
+  const userId = c.req.query('userId')?.trim();
+  if (outcome) { clauses.push('outcome = ?'); binds.push(outcome); }
+  if (movement) { clauses.push('movement_name = ?'); binds.push(movement); }
+  if (userId) {
+    const accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+    clauses.push('user_id IN (?, ?)');
+    binds.push(userId, accountRef);
+  }
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 30), 1), 200);
+  binds.push(limit);
+  const rs = await c.env.DB.prepare(
+    `SELECT ${TEACH_SUMMARY_COLS} FROM motion_teach_sessions
+      WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT ?`,
+  ).bind(...binds).all<SessionRow>();
+  return c.json({ ok: true, count: rs.results.length, sessions: rs.results.map(teachSessionSummary) });
+});
+
+// One teach session by id — metadata + the full decrypted artifact.
+internalRouter.get('/teach-sessions/:sessionId', async (c) => {
+  const row = await c.env.DB.prepare(
+    `SELECT ${TEACH_SUMMARY_COLS}, metadata_json FROM motion_teach_sessions
+      WHERE session_id = ? LIMIT 1`,
+  ).bind(c.req.param('sessionId')).first<SessionRow>();
+  if (!row) return c.json({ ok: false, error: 'Teach session not found.' }, 404);
+  return c.json(await fullTeachSession(c, row));
+});
+
+// A user's teach sessions, newest first.
+internalRouter.get('/users/:userId/teach-sessions', async (c) => {
+  const userId = c.req.param('userId');
+  const accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 30), 1), 200);
+  const rs = await c.env.DB.prepare(
+    `SELECT ${TEACH_SUMMARY_COLS} FROM motion_teach_sessions
+      WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT ?`,
+  ).bind(userId, accountRef, limit).all<SessionRow>();
+  return c.json({ ok: true, count: rs.results.length, sessions: rs.results.map(teachSessionSummary) });
 });
 
 // QA blank-slate reset — founder-only tooling for repeatable first-user

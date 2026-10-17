@@ -1,0 +1,29 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "plank_hold-tuned-2026.10.0",
+  "activityId": "plank_hold",
+  "engineType": "native_tuned_v1",
+  "measurementType": "duration",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "minKneeAngle": 148.0,
+    "maxHipLineError": 0.16,
+    "maxKneeLineError": 0.18,
+    "maxTorsoVerticalness": 0.7
+  }
+}

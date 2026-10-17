@@ -2,7 +2,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
+import '../../../core/network/conditional.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../notifications/application/notification_controller.dart';
@@ -82,7 +84,16 @@ class CrewController extends StateNotifier<CrewState> {
     this.onRequestResolved,
     this.onSessionExpired,
     this.isPresentationDemo = _neverPresentationDemo,
+    this.cache,
+    this.accountId = _noAccount,
   }) : super(const CrewState());
+
+  /// Disk snapshot of members + requests. Null disables hydration/persistence.
+  final CacheStore? cache;
+  final String? Function() accountId;
+  static String? _noAccount() => null;
+  static const _snapshotDomain = 'crew';
+  static const _snapshotMaxAge = Duration(days: 7);
 
   final CrewRepository _repo;
   final VoidCallback? onMutated;
@@ -97,6 +108,9 @@ class CrewController extends StateNotifier<CrewState> {
   DateTime? _loadedAt;
   int _generation = 0;
   int _revision = 0;
+  String? _crewEtag;
+  Object? _crewRaw;
+  Future<void>? _hydration;
   final Map<String, ({String action, Future<dynamic> future})> _mutations = {};
 
   void revalidate() {
@@ -125,22 +139,134 @@ class CrewController extends StateNotifier<CrewState> {
     return request;
   }
 
+  /// Account id usable for the disk snapshot, or null (no cache, demo, or an
+  /// id that is not a safe path segment).
+  String? _cacheAccount() {
+    if (cache == null || isPresentationDemo()) return null;
+    final id = accountId();
+    return id != null && isValidCacheId(id) ? id : null;
+  }
+
+  static Map<String, dynamic> _userJson(PublicUser u) => {
+    'id': u.id,
+    'displayName': u.displayName,
+    'username': u.username,
+    'memberId': u.memberId,
+    'initials': u.initials,
+    'addedAt': u.addedAt,
+    'profilePhotoUrl': u.profilePhotoUrl,
+    'lastActiveAt': u.lastActiveAt?.toIso8601String(),
+    'level': u.level,
+  };
+
+  static List<PublicUser> _users(Object? value) => [
+    for (final e in (value as List<dynamic>? ?? const []))
+      PublicUser.fromJson(e as Map<String, dynamic>),
+  ];
+
+  Future<void> _hydrate() async {
+    final generation = _generation;
+    final account = _cacheAccount();
+    if (account == null) return;
+    try {
+      final entry =
+          await cache!.read(account, _snapshotDomain, maxAge: _snapshotMaxAge);
+      final data = entry?.data;
+      if (data is! Map<String, dynamic>) return;
+      final crewRaw = data['crew'];
+      final reqRaw = data['requests'];
+      if (crewRaw is! Map<String, dynamic> || reqRaw is! Map<String, dynamic>) {
+        return;
+      }
+      final members = _users(crewRaw['crew']);
+      final ids = members.map((u) => u.id).toSet();
+      final requests =
+          _users(reqRaw['requests']).where((u) => !ids.contains(u.id)).toList();
+      final outgoing =
+          _users(reqRaw['outgoing']).where((u) => !ids.contains(u.id)).toList();
+      // Discard if signed out / switched meanwhile, or a network result won.
+      if (!mounted || generation != _generation || _loadedAt != null) return;
+      if (state.hasData) return;
+      _crewEtag = entry!.etag;
+      _crewRaw = crewRaw;
+      state = CrewState(
+        members: members,
+        requests: requests,
+        outgoing: outgoing,
+        pendingUserIds: state.pendingUserIds,
+        relationships: _relationships(members, requests, outgoing),
+      );
+    } catch (_) {
+      // A bad snapshot is just a cache miss.
+    }
+  }
+
+  Map<String, CrewConnectionStatus> _relationships(
+    List<PublicUser> members,
+    List<PublicUser> requests,
+    List<PublicUser> outgoing,
+  ) => {
+    for (final id in state.relationships.keys) id: CrewConnectionStatus.none,
+    for (final user in outgoing) user.id: CrewConnectionStatus.pendingOutgoing,
+    for (final user in requests) user.id: CrewConnectionStatus.pendingIncoming,
+    for (final user in members) user.id: CrewConnectionStatus.connected,
+  };
+
+  /// Writes change what GET /crew returns: drop the validator and the
+  /// persisted snapshot so neither is replayed stale.
+  void _invalidateSnapshot() {
+    _crewEtag = null;
+    _crewRaw = null;
+    final account = _cacheAccount();
+    if (account != null) {
+      cache!.write(account, _snapshotDomain, null).catchError((_) {});
+    }
+  }
+
   Future<void> _fetch() async {
     final generation = _generation;
-    final revision = _revision;
     if (!mounted) return;
+    // Give the disk snapshot a brief head start so its etag can be sent, but
+    // never let a slow or stalled read hold back the network.
+    await Future.any([
+      _hydration ??= _hydrate(),
+      Future<void>.delayed(const Duration(milliseconds: 40)),
+    ]);
+    if (!mounted || generation != _generation) return;
+    final revision = _revision;
+    final account = _cacheAccount();
     state = state.copyWith(loading: !state.hasData, refreshing: state.hasData);
     try {
       final demo = isPresentationDemo();
-      final results = demo
-          ? <Object>[
-              PresentationDemoData.crewMembers(),
-              PresentationDemoData.crewRequestPage(),
-            ]
-          : await Future.wait<Object>([_repo.getCrew(), _repo.getRequestPage()]);
+      Conditional<List<PublicUser>>? crewRes;
+      final CrewRequestPage page;
+      List<PublicUser>? members;
+      if (demo) {
+        members = PresentationDemoData.crewMembers();
+        page = PresentationDemoData.crewRequestPage();
+      } else if (_repo case final CrewConditionalSource source) {
+        final results = await (
+          source.getCrewConditional(etag: _crewEtag),
+          _repo.getRequestPage(),
+        ).wait;
+        crewRes = results.$1;
+        page = results.$2;
+      } else {
+        final results = await (_repo.getCrew(), _repo.getRequestPage()).wait;
+        members = results.$1;
+        page = results.$2;
+      }
       if (!mounted || generation != _generation || revision != _revision) return;
-      final members = results[0] as List<PublicUser>;
-      final page = results[1] as CrewRequestPage;
+      if (crewRes != null) {
+        if (crewRes.notModified) {
+          members = state.members;
+        } else {
+          members = crewRes.data!;
+          _crewEtag = crewRes.etag;
+          _crewRaw = crewRes.raw;
+        }
+      }
+      members = members!;
       final ids = members.map((user) => user.id).toSet();
       final requests = page.incoming.where((user) => !ids.contains(user.id)).toList();
       final outgoing = page.outgoing.where((user) => !ids.contains(user.id)).toList();
@@ -157,6 +283,22 @@ class CrewController extends StateNotifier<CrewState> {
           for (final user in members) user.id: CrewConnectionStatus.connected,
         },
       );
+      if (account != null && _crewRaw != null) {
+        cache!
+            .write(
+              account,
+              _snapshotDomain,
+              {
+                'crew': _crewRaw,
+                'requests': {
+                  'requests': [for (final u in page.incoming) _userJson(u)],
+                  'outgoing': [for (final u in page.outgoing) _userJson(u)],
+                },
+              },
+              etag: _crewEtag,
+            )
+            .catchError((_) {});
+      }
     } catch (error) {
       if (!mounted || generation != _generation || revision != _revision) return;
       // A demo session must never surface a network error — if the session
@@ -191,7 +333,7 @@ class CrewController extends StateNotifier<CrewState> {
       state = state.copyWith(
         loading: false,
         refreshing: false,
-        error: "Couldn't refresh your crew. Try again.",
+        error: "Couldn't refresh your friends. Try again.",
       );
       if (error is ApiException && error.statusCode == 401) onSessionExpired?.call();
     }
@@ -228,7 +370,7 @@ class CrewController extends StateNotifier<CrewState> {
     final existing = _mutations[id];
     if (existing != null) {
       if (existing.action == action) return existing.future.then((value) => value as T);
-      return Future.error(const ApiException(409, 'A crew update is still in progress.'));
+      return Future.error(const ApiException(409, 'A friend update is still in progress.'));
     }
     final generation = _generation;
     state = state.copyWith(pendingUserIds: {...state.pendingUserIds, id});
@@ -237,6 +379,7 @@ class CrewController extends StateNotifier<CrewState> {
         final result = await write();
         if (mounted && generation == _generation) {
           _invalidateFetch();
+          _invalidateSnapshot();
           apply(result);
           _loadedAt = null;
           onMutated?.call();
@@ -320,17 +463,25 @@ class CrewController extends StateNotifier<CrewState> {
     _loadInFlight = null;
   }
 
-  void clear() {
+  /// Resets in-memory state. [wipeAccountId] (set on sign-out/account switch)
+  /// also deletes that account's disk cache.
+  void clear({String? wipeAccountId}) {
     _generation++;
     _invalidateFetch();
     _loadedAt = null;
+    _crewEtag = null;
+    _crewRaw = null;
+    _hydration = null;
+    if (wipeAccountId != null && cache != null) {
+      cache!.clearAccount(wipeAccountId).catchError((_) {});
+    }
     _mutations.clear();
     if (mounted) state = const CrewState();
   }
 }
 
 final _crewApiProvider = Provider<CrewApi>((_) => CrewApi());
-final crewRepositoryProvider = Provider<CrewRepository>((ref) => CrewRepository(
+final crewRepositoryProvider = Provider<CrewRepository>((ref) => CrewSyncRepository(
   ref.watch(_crewApiProvider), ref.watch(secureTokenStoreProvider), ref.watch(authApiProvider),
 ));
 
@@ -338,7 +489,11 @@ final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>(
   final controller = CrewController(
     ref.watch(crewRepositoryProvider),
     isPresentationDemo: () => isPresentationDemoUser(ref.read(authControllerProvider).user),
-    onMutated: () => ref.read(raceControllerProvider.notifier).loadRaces(force: true),
+    cache: ref.watch(cacheStoreProvider),
+    accountId: () => ref.read(authControllerProvider).user?.id,
+    // A crew change can reveal a co-racer's identity — mark races stale; the
+    // controller refetches when something is watching, never blindly.
+    onMutated: () => ref.read(raceControllerProvider.notifier).markStale(),
     onRequestResolved: (id) => ref.read(notificationControllerProvider.notifier).resolveCrewRequest(id),
     onSessionExpired: () => ref.read(authControllerProvider.notifier).sessionExpired(),
   );
@@ -350,7 +505,10 @@ final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>(
   }
   ref.listen<AuthState>(authControllerProvider, (prev, next) {
     if (prev?.user?.id != next.user?.id || prev?.status != next.status) {
-      controller.clear();
+      final prevId = prev?.user?.id;
+      controller.clear(
+        wipeAccountId: prevId != null && next.user?.id != prevId ? prevId : null,
+      );
       demo = isPresentationDemoUser(next.user);
       if (next.status == AuthStatus.authenticated) controller.load(force: false);
     }

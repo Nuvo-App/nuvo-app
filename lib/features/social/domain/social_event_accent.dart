@@ -103,7 +103,7 @@ extension SocialAccentRole on SocialAccent {
       base: t.inkMuted,
       shadow: t.inkShadow,
       bright: t.inkMuted,
-      surface: t.panelLight,
+      surface: t.surface,
       border: t.divider,
       on: t.inkMuted,
     );

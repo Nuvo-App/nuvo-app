@@ -199,7 +199,11 @@ final presetMovementWorkOrders = [
     isHold: false,
     stableFrames: 3,
     demoPhaseNames: ['standing', 'sumoSquat'],
-    confusionLabels: ['narrow_stance', 'not_deep_enough', 'looks_like_regular_squat'],
+    confusionLabels: [
+      'narrow_stance',
+      'not_deep_enough',
+      'looks_like_regular_squat',
+    ],
     behavior: ConfigurableRepBehavior(sumoSquatRepDefinition),
   ),
 
