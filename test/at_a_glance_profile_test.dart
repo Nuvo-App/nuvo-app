@@ -11,6 +11,7 @@ import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/screenshot.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
@@ -181,6 +182,7 @@ void expectFoldRespected(
 }
 
 void main() {
+  setUpAll(loadShotFonts);
   const sizes = [
     Size(320, 568),
     Size(375, 667),
@@ -246,6 +248,9 @@ void main() {
             );
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
+            if (!dark && scale == 1.0 && inset == 34) {
+              await shot(tester, 'profile_${size.width.toInt()}x${size.height.toInt()}');
+            }
 
             final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
             final hasFade =
