@@ -230,9 +230,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  final quickStartTiles = find.byWidgetPredicate(
-    (w) => w.runtimeType.toString() == '_QuickStartTile',
-  );
   // Profile's content blocks: the achievements row, the record strip and the
   // Your Nuvo group. Each must clear the dock or sit below the fold.
   const profileSectionTypes = {
@@ -246,8 +243,8 @@ void main() {
 
   for (final (name, width, height) in _sizes) {
     group('First-viewport contract — $name', () {
-      testWidgets('Compete: Quick Start rows flow contiguously — no seam '
-          'void — and every tile stays reachable', (tester) async {
+      testWidgets('Compete: no quick starts; sections flow with no blank band',
+          (tester) async {
         await pumpInShell(
           tester,
           Size(width, height),
@@ -255,41 +252,9 @@ void main() {
           const CompeteScreen(),
         );
         expect(tester.takeException(), isNull);
-
-        // The grid flows at Wrap run spacing from the first row to the
-        // last. The old SliverFold split inserted a viewport-sized seam
-        // before leftover rows — the dead zone this guards against.
-        // Tiles under the dock are occluded by the shell mask, not
-        // removed, so below-fold rects exist whenever the section mounts.
-        final rects = quickStartTiles
-            .evaluate()
-            .map((e) => tester.getRect(find.byWidget(e.widget)))
-            .toList()
-          ..sort((a, b) {
-            final row = a.top.compareTo(b.top);
-            return row != 0 ? row : a.left.compareTo(b.left);
-          });
-        final rowTops = <double>{};
-        for (final r in rects) {
-          rowTops.add((r.top / 4).round() * 4.0);
-        }
-        final rows = rowTops.toList()..sort();
-        for (var i = 1; i < rows.length; i++) {
-          expect(
-            rows[i] - rows[i - 1],
-            lessThan(120),
-            reason: '$name: Quick Start rows jumped ${rows[i] - rows[i - 1]}'
-                'px — a seam void reopened inside the grid',
-          );
-        }
-
-        // Every tile remains reachable — scroll to the end and confirm.
-        await tester.drag(
-          find.byType(CustomScrollView),
-          Offset(0, -height),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('Plank'), findsWidgets);
+        // Quick starts were removed: Compete is only start / join a race.
+        expect(find.text('Quick starts'), findsNothing);
+        expect(find.text('Plank'), findsNothing);
       });
 
       testWidgets('Compete: a tile under the dock is occluded and scrolls '
