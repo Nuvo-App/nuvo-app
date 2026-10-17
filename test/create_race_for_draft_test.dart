@@ -94,4 +94,69 @@ void main() {
       }
     });
   }
+
+  // The same must hold for manual (honor-system) goals in every win condition.
+  for (final format in RaceFormat.values) {
+    test('manual ${format.backendValue} race builds its request', () async {
+      final draft = RaceDraft(
+        title: 'Read pages',
+        hasCustomName: true,
+        activity: pushups,
+        metric: RaceMetric.reps,
+        format: format,
+        goalKind: RaceGoalKind.manual,
+        manualGoalName: 'Pages read',
+        manualUnit: 'pages',
+        targetValue: format == RaceFormat.firstToGoal ? 50 : 0,
+        finishLineAt: format == RaceFormat.firstToGoal
+            ? null
+            : finish.toIso8601String(),
+        attemptDurationSeconds: format == RaceFormat.timedAttempt ? 60 : null,
+      );
+      String? sentFormat;
+      String? sentUnit;
+      final race = await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace:
+            ({
+              required title,
+              targetValue,
+              required customActivityName,
+              verifierSpec,
+              motionV2Spec,
+              format = 'first_to_goal',
+              finishLineAt,
+              attemptDurationSeconds,
+              attemptLimit,
+              scoreDirection,
+            }) async => fail('manual race must not use the custom creator'),
+        createRace:
+            ({
+              required title,
+              description,
+              category,
+              goalType = 'manual',
+              targetValue,
+              unit,
+              proofRequirement,
+              proofReviewMode,
+              aiActivityType,
+              activityId,
+              metric,
+              format,
+              recurrence,
+              targetUnit,
+              proofMode,
+              scoreDirection,
+            }) async {
+              sentFormat = format;
+              sentUnit = unit;
+              return _race(title, format ?? 'first_to_goal');
+            },
+      );
+      expect(race.id, 'r1');
+      expect(sentFormat, format.backendValue);
+      expect(sentUnit, 'pages');
+    });
+  }
 }
