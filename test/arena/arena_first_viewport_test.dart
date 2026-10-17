@@ -7,6 +7,7 @@ import 'package:nuvo/core/theme/app_colors.dart';
 import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/features/arena/data/arena_models.dart';
 import 'package:nuvo/features/arena/presentation/arena_podium.dart';
+import 'package:nuvo/features/arena/presentation/arena_rest_board.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
 
@@ -190,7 +191,7 @@ void main() {
     );
   }
 
-  testWidgets('4th and below open in a sheet; no viewer chip on the podium', (
+  testWidgets('4th and below sit below the fold and fade in one by one', (
     tester,
   ) async {
     await pumpArena(tester, const Size(390, 844), snapshot: outside);
@@ -200,35 +201,30 @@ void main() {
       findsNothing,
     );
     expect(find.text('You \u00b7 5th \u00b7 22'), findsNothing);
-    // Closed at rest: nothing of the rest board is on screen.
-    expect(find.byKey(const ValueKey('arena-rest-board')), findsNothing);
-    expect(find.byKey(const ValueKey('arena-rest-arrow')), findsOneWidget);
+    final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
+    // Not visible when the page opens: below the nav and fully transparent.
+    final jo = find.text('Jo');
+    expect(jo, findsOneWidget);
+    expect(tester.getTopLeft(jo).dy, greaterThan(navTop));
+    double opacityOf(Finder f) => tester
+        .renderObject<RenderArenaScrollReveal>(
+          find.ancestor(of: f, matching: find.byType(ArenaScrollReveal)).first,
+        )
+        .progress;
+    expect(opacityOf(jo), 0);
 
-    await tester.tap(find.byKey(const ValueKey('arena-rest-arrow')));
+    // A small nudge does not play the whole thing.
+    final scrollable = find.byType(CustomScrollView);
+    await tester.drag(scrollable, const Offset(0, -20));
+    await tester.pump();
+    expect(opacityOf(jo), lessThan(0.5));
+
+    // Scrolled all the way: the rows are in and each is fully shown.
+    await tester.drag(scrollable, const Offset(0, -600));
     await tester.pumpAndSettle();
-    expect(find.text('Jo'), findsOneWidget);
+    expect(opacityOf(jo), 1);
     expect(find.text('You'), findsOneWidget);
-    expect(
-      tester.getBottomLeft(find.byKey(const ValueKey('arena-rest-board'))).dy,
-      lessThanOrEqualTo(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('arena-rest-handle')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('arena-rest-board')), findsNothing);
-  });
-
-  testWidgets('swiping up on the podium opens the rest of the leaderboard', (
-    tester,
-  ) async {
-    await pumpArena(tester, const Size(390, 844), snapshot: outside);
-    await tester.fling(
-      find.byKey(const ValueKey('arena-rest-arrow')),
-      const Offset(0, -200),
-      800,
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('arena-rest-board')), findsOneWidget);
+    expect(opacityOf(find.text('You')), 1);
   });
 
   testWidgets(

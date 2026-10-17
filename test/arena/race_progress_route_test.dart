@@ -36,9 +36,7 @@ Future<void> _pumpArenaPreview(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('hero renders the marker lane with named marks', (
-    tester,
-  ) async {
+  testWidgets('hero renders the marker lane with named marks', (tester) async {
     await _pumpArenaPreview(tester);
 
     // The preview board is 65/100 vs Alex 48/100 — the hero path names

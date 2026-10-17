@@ -95,7 +95,10 @@ Future<ProviderContainer> _pumpArena(
     overrides: [
       authControllerProvider.overrideWith(
         (ref) => AuthController(
-          _ScriptedAuthRepo([authResult, retryResult ?? const RestoreOk(_user)]),
+          _ScriptedAuthRepo([
+            authResult,
+            retryResult ?? const RestoreOk(_user),
+          ]),
         ),
       ),
       arenaRepositoryProvider.overrideWithValue(arenaRepo),
@@ -193,7 +196,10 @@ void main() {
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
 
-    expect(container.read(authControllerProvider).status, AuthStatus.authenticated);
+    expect(
+      container.read(authControllerProvider).status,
+      AuthStatus.authenticated,
+    );
     expect(find.textContaining('No connection'), findsNothing);
   });
 }

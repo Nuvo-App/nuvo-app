@@ -96,8 +96,7 @@ Future<List<String>> _tapSubmit(WidgetTester tester, Race race) async {
     routes: [
       GoRoute(
         path: '/arena',
-        builder: (c, s) =>
-            ArenaScreen(debugSnapshot: _snap(race.id)),
+        builder: (c, s) => ArenaScreen(debugSnapshot: _snap(race.id)),
       ),
       GoRoute(
         path: '/race/:id',
@@ -129,7 +128,9 @@ Future<List<String>> _tapSubmit(WidgetTester tester, Race race) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        authControllerProvider.overrideWith((ref) => AuthController(_AuthRepo())),
+        authControllerProvider.overrideWith(
+          (ref) => AuthController(_AuthRepo()),
+        ),
         raceControllerProvider.overrideWith((ref) => _SeededRaces([race])),
         firstUseStoreProvider.overrideWithValue(store),
       ],

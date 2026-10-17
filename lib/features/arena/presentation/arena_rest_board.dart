@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import 'arena_podium.dart';
 
@@ -60,11 +60,11 @@ class _ArenaRestArrowState extends State<ArenaRestArrow>
             child: AnimatedBuilder(
               animation: _bob,
               builder: (context, child) => Transform.translate(
-                offset: Offset(0, -3 * Curves.easeInOut.transform(_bob.value)),
+                offset: Offset(0, 3 * Curves.easeInOut.transform(_bob.value)),
                 child: child,
               ),
               child: Icon(
-                Icons.keyboard_arrow_up_rounded,
+                Icons.keyboard_arrow_down_rounded,
                 size: 32,
                 color: c.inkMuted,
               ),
@@ -76,90 +76,111 @@ class _ArenaRestArrowState extends State<ArenaRestArrow>
   }
 }
 
-/// Racers from 4th onwards. A sheet that rises from the nav's top edge when
-/// the viewer swipes up (or taps the arrow) and closes on a swipe down — the
-/// page itself never scrolls.
-class ArenaRestSheet extends StatelessWidget {
-  const ArenaRestSheet({
+/// Racers from 4th onwards, on the same page below the fold. Each row fades
+/// in by itself as the scroll lifts it clear of the nav's top edge, so the
+/// places appear one after another, driven by how far the viewer has scrolled
+/// (not by a timer that fires on the first nudge).
+class ArenaRestList extends StatelessWidget {
+  const ArenaRestList({
     super.key,
     required this.entries,
-    required this.progress,
-    required this.height,
-    required this.onDrag,
-    required this.onDragEnd,
-    required this.onClose,
+    required this.foldInset,
     this.onTap,
   });
 
   /// Racers ranked 4th and below, in order.
   final List<ArenaPodiumEntry> entries;
 
-  /// 0 = closed (below the fold), 1 = fully open.
-  final Animation<double> progress;
-  final double height;
-  final ValueChanged<double> onDrag;
-  final ValueChanged<double> onDragEnd;
-  final VoidCallback onClose;
+  /// Distance from the bottom of the scroll view to the nav's top edge.
+  final double foldInset;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return AnimatedBuilder(
-      animation: progress,
-      builder: (context, child) => Visibility(
-        visible: progress.value > 0,
-        maintainState: true,
-        child: Transform.translate(
-          offset: Offset(0, (1 - progress.value) * (height + 24)),
-          child: child,
-        ),
-      ),
-      child: Container(
-        key: const ValueKey('arena-rest-board'),
-        height: height,
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: c.border, width: 2),
-          boxShadow: AppShadows.hardOffset(c.inkShadow),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            GestureDetector(
-              key: const ValueKey('arena-rest-handle'),
-              behavior: HitTestBehavior.opaque,
-              onTap: onClose,
-              onVerticalDragUpdate: (d) => onDrag(d.primaryDelta ?? 0),
-              onVerticalDragEnd: (d) => onDragEnd(d.primaryVelocity ?? 0),
-              child: SizedBox(
-                height: 44,
-                width: double.infinity,
-                child: Center(
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 32,
-                    color: c.inkMuted,
-                  ),
-                ),
-              ),
+    return Column(
+      key: const ValueKey('arena-rest-board'),
+      children: [
+        for (final (i, e) in entries.indexed)
+          Padding(
+            padding: EdgeInsets.only(top: i == 0 ? 0 : 10),
+            child: ArenaScrollReveal(
+              foldInset: foldInset,
+              child: _RestRow(entry: e, onTap: onTap),
             ),
-            Divider(height: 1, thickness: 1, color: c.divider),
-            Expanded(
-              child: ListView.separated(
-                padding: EdgeInsets.zero,
-                itemCount: entries.length,
-                separatorBuilder: (_, _) =>
-                    Divider(height: 1, thickness: 1, color: c.divider),
-                itemBuilder: (_, i) =>
-                    _RestRow(entry: entries[i], onTap: onTap),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
+  }
+}
+
+/// Fades and settles its child in as it rises above the fold line. Progress
+/// is read at paint time from the child's real on-screen position, so it
+/// tracks the finger exactly (a build-time read would lag a frame behind).
+class ArenaScrollReveal extends SingleChildRenderObjectWidget {
+  const ArenaScrollReveal({
+    super.key,
+    required this.foldInset,
+    required super.child,
+  });
+
+  /// Distance from the bottom of the screen to the nav's top edge.
+  final double foldInset;
+
+  @override
+  RenderArenaScrollReveal createRenderObject(BuildContext context) =>
+      RenderArenaScrollReveal(
+        foldInset: foldInset,
+        screenHeight: MediaQuery.sizeOf(context).height,
+        reduceMotion: MediaQuery.disableAnimationsOf(context),
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderArenaScrollReveal renderObject,
+  ) {
+    renderObject
+      ..foldInset = foldInset
+      ..screenHeight = MediaQuery.sizeOf(context).height
+      ..reduceMotion = MediaQuery.disableAnimationsOf(context)
+      ..markNeedsPaint();
+  }
+}
+
+class RenderArenaScrollReveal extends RenderProxyBox {
+  RenderArenaScrollReveal({
+    required this.foldInset,
+    required this.screenHeight,
+    required this.reduceMotion,
+  });
+
+  double foldInset;
+  double screenHeight;
+  bool reduceMotion;
+
+  /// 0 = still below the nav's top edge, 1 = the whole row has cleared it.
+  double get progress {
+    if (reduceMotion) return 1;
+    if (!attached || !hasSize) return 0;
+    final top = localToGlobal(Offset.zero).dy;
+    final line = screenHeight - foldInset;
+    final t = ((line - top) / size.height).clamp(0.0, 1.0);
+    return Curves.easeOut.transform(t);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+    final t = progress;
+    final alpha = (t * 255).round();
+    if (alpha == 0) return;
+    final shifted = offset + Offset(0, 14 * (1 - t));
+    if (alpha == 255) {
+      context.paintChild(child, shifted);
+    } else {
+      context.pushOpacity(shifted, alpha, super.paint);
+    }
   }
 }
 
@@ -175,8 +196,15 @@ class _RestRow extends StatelessWidget {
     final me = entry.isMe;
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        color: me ? c.accent.withValues(alpha: 0.10) : null,
+        decoration: BoxDecoration(
+          color: me
+              ? Color.alphaBlend(c.accent.withValues(alpha: 0.10), c.surface)
+              : c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border, width: 2),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
