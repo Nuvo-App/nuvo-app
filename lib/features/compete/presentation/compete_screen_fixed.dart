@@ -10,6 +10,7 @@ import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
+import '../../../core/widgets/sliver_fold_guard.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
@@ -47,7 +48,22 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
   bool _waitingExpanded = false;
   bool _finishedExpanded = false;
 
-  static const _racesCap = 3;
+  /// How many races the field lists before "show more": as many as the first
+  /// screen has room for (so it fills without cutting a row), between 2 and 6.
+  int _racesCapFor(BuildContext context, bool hasWaiting, bool hasFinished) {
+    // Phones fit to their screen; wider surfaces keep the classic three.
+    if (MediaQuery.sizeOf(context).width > 500) return 3;
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    final room =
+        MediaQuery.sizeOf(context).height -
+        NuvoBottomNav.bottomPadding(context) -
+        MediaQuery.paddingOf(context).top -
+        (150 * scale) - // header + gap
+        (hasWaiting ? 96 * scale : 0) -
+        (hasFinished ? 96 * scale : 0) -
+        40; // field padding
+    return (room / (92 * scale)).floor().clamp(2, 6);
+  }
 
   /// The field body bleeds 10px past the page gutter — a region, not a card
   /// in a row of cards.
@@ -83,32 +99,31 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                   parent: AlwaysScrollableScrollPhysics(),
                 ),
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: _CompactHeader(
-                      activeCount: active.length,
-                      finishedCount: finished.length,
-                      onStart: () {
-                        if (ref.read(firstRaceGuideProvider) ==
-                            FirstRaceGuideStep.competeStart) {
-                          ref.read(firstRaceGuideProvider.notifier).state =
-                              FirstRaceGuideStep.composerName;
-                        }
-                        context.push('/races/new');
-                      },
-                      onJoin: () => context.push('/races/join'),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                      NuvoSpacing.pageHorizontal,
-                      // Header actions → featured card gets a real section gap,
-                      // not a seam — the top of the page breathes.
-                      NuvoSpacing.xl,
-                      NuvoSpacing.pageHorizontal,
-                      0,
-                    ),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
+                  // The first screen is fitted as a whole: sections above the
+                  // fold are never cut, the gaps flex to fill the screen, and
+                  // Quick starts begin below the fold (see SliverFoldFit).
+                  SliverFoldFit(
+                    foldInset: NuvoBottomNav.bottomPadding(context) - 10,
+                    enabled:
+                        !_racesExpanded &&
+                        !_waitingExpanded &&
+                        !_finishedExpanded,
+                    children: [
+                      _CompactHeader(
+                        activeCount: active.length,
+                        finishedCount: finished.length,
+                        onStart: () {
+                          if (ref.read(firstRaceGuideProvider) ==
+                              FirstRaceGuideStep.competeStart) {
+                            ref.read(firstRaceGuideProvider.notifier).state =
+                                FirstRaceGuideStep.composerName;
+                          }
+                          context.push('/races/new');
+                        },
+                        onJoin: () => context.push('/races/join'),
+                      ),
+                      const FoldGap(NuvoSpacing.xl),
+                      for (final w in <Widget>[
                         if (raceState.loading && raceState.races.isEmpty)
                           const _CompeteSkeleton(
                             key: ValueKey('compete-skeleton'),
@@ -132,7 +147,11 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                               races: inMotion,
                               userId: uid,
                               expanded: _racesExpanded,
-                              cap: _racesCap,
+                              cap: _racesCapFor(
+                                context,
+                                waiting.isNotEmpty,
+                                finished.isNotEmpty,
+                              ),
                               onToggleExpand: () => setState(
                                 () => _racesExpanded = !_racesExpanded,
                               ),
@@ -141,7 +160,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                             ),
                             // Back to canvas — a real section beat separates the
                             // field from the secondary destinations below it.
-                            const SizedBox(height: NuvoSpacing.xl),
+                            const FoldGap(NuvoSpacing.xl),
                           ],
                           if (waiting.isNotEmpty) ...[
                             NuvoWaitingCrewSummary(
@@ -153,7 +172,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 () => _waitingExpanded = !_waitingExpanded,
                               ),
                               children: [
-                                const SizedBox(height: NuvoSpacing.sm),
+                                const FoldGap(NuvoSpacing.sm),
                                 _SummaryExpansionList(
                                   races: waiting,
                                   userId: uid,
@@ -162,7 +181,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: NuvoSpacing.sm),
+                            const FoldGap(NuvoSpacing.sm),
                           ],
                           if (finished.isNotEmpty) ...[
                             NuvoFinishedSummary(
@@ -173,7 +192,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 () => _finishedExpanded = !_finishedExpanded,
                               ),
                               children: [
-                                const SizedBox(height: NuvoSpacing.sm),
+                                const FoldGap(NuvoSpacing.sm),
                                 _FinishedExpansionList(
                                   races: finished,
                                   userId: uid,
@@ -182,63 +201,37 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: NuvoSpacing.sm),
+                            const FoldGap(NuvoSpacing.sm),
                           ],
                         ],
-                      ]),
-                    ),
-                  ),
-                  // Quick starts flow as one continuous grid — the shell's dock
-                  // occlusion covers whatever crosses the fold, so a seam split
-                  // would only manufacture a dead zone between the last fitting
-                  // row and the tiles below it.
-                  if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
-                    SliverLayoutBuilder(
-                      builder: (context, sc) {
-                        // Quick starts live below the fold: when the races end
-                        // inside the viewport, the gap carries them to the nav's
-                        // top edge so nothing of them shows until you scroll.
-                        final remaining =
-                            sc.viewportMainAxisExtent -
-                            sc.precedingScrollExtent -
-                            MediaQuery.paddingOf(context).bottom;
-                        return SliverToBoxAdapter(
-                          child: SizedBox(
-                            height: remaining > 0 ? remaining + 4 : 0,
+                      ])
+                        w is FoldGap
+                            ? w
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: NuvoSpacing.pageHorizontal,
+                                ),
+                                child: w,
+                              ),
+                      if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
+                        FoldBelow(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NuvoSpacing.pageHorizontal,
+                            ),
+                            child: _QuickStarts(
+                              onStart: (prefill) =>
+                                  context.push('/races/new', extra: prefill),
+                            ),
                           ),
-                        );
-                      },
-                    ),
-                  if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        NuvoSpacing.pageHorizontal,
-                        0,
-                        NuvoSpacing.pageHorizontal,
-                        // Nav-occupied height + safe inset are already inside
-                        // bottomPadding (the shell inflates padding.bottom);
-                        // +sm is extra breathing so Finished scrolls fully
-                        // clear of the dock, not flush against it.
-                        NuvoBottomNav.bottomPadding(context) + NuvoSpacing.sm,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: _QuickStarts(
-                          onStart: (prefill) =>
-                              context.push('/races/new', extra: prefill),
                         ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.only(
-                        bottom:
+                      SizedBox(
+                        height:
                             NuvoBottomNav.bottomPadding(context) +
                             NuvoSpacing.sm,
                       ),
-                      sliver: const SliverToBoxAdapter(
-                        child: SizedBox.shrink(),
-                      ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),

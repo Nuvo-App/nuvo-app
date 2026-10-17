@@ -172,7 +172,7 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
         await tester.pumpWidget(
-          _buildApp(_StubRaceRepo(_generateRaces(6)), dark: dark),
+          _buildApp(_StubRaceRepo(_generateRaces(12)), dark: dark),
         );
         await tester.pumpAndSettle();
         if (expand) {

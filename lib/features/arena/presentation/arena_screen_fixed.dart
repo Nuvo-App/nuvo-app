@@ -106,7 +106,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             final viewportHeight = viewport.maxHeight;
             final media = MediaQuery.of(context);
             final bottomPad = NuvoBottomNav.bottomPadding(context);
-            final avail = viewportHeight - bottomPad;
             final podiumData = activeBoard == null
                 ? null
                 : _podiumFor(
@@ -122,6 +121,13 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 ? ArenaPodium.minHeight(media.textScaler, withChip: false)
                 : 70.0;
             final hasRest = hasPodium && podiumData.rest.isNotEmpty;
+            // With a rest list the first screen ends on the caret, which can
+            // sit right above the nav — the usual clearance under the last
+            // row isn't needed there, so the podium takes it.
+            final avail =
+                viewportHeight -
+                bottomPad +
+                (hasRest ? NuvoBottomNav.navScrollClearance + 6 : 0);
             final arrowH = hasRest ? ArenaRestArrow.height : 0.0;
             final dots = boards.length > 1 ? 20.0 : 0.0;
             double chromeFor(bool micro) =>
@@ -411,7 +417,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               onNotification: (n) {
                 final more =
                     n.metrics.axis == Axis.vertical &&
-                    n.metrics.extentAfter > 0.5;
+                    n.metrics.extentAfter > 0.5 &&
+                    (!hasRest || n.metrics.pixels > 4);
                 if (more != _moreBelow) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) setState(() => _moreBelow = more);
@@ -422,7 +429,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               child: NotificationListener<ScrollNotification>(
                 onNotification: (n) {
                   if (n.depth == 0 && n.metrics.axis == Axis.vertical) {
-                    final more = n.metrics.extentAfter > 0.5;
+                    final more =
+                        n.metrics.extentAfter > 0.5 &&
+                        (!hasRest || n.metrics.pixels > 4);
                     if (more != _moreBelow) setState(() => _moreBelow = more);
                   }
                   return false;

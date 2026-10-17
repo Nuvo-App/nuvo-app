@@ -319,6 +319,7 @@ void main() {
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
         await tester.pumpAndSettle();
         expect(
           tester.getRect(plank).bottom,
