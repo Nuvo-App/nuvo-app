@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../domain/motion_activity.dart';
 import 'arm_raises_animation.dart';
+import 'cadence_movement_demos.dart';
+import 'multiphase_movement_demos.dart';
 import 'movement_demo.dart';
 import 'nuvo_character_painter.dart';
 
@@ -11,44 +13,47 @@ import 'nuvo_character_painter.dart';
 
 // ── Pushups ───────────────────────────────────────────────────────────────────
 // PushupsValidator: "down" = elbow angle < 112°, "up" = elbow angle > 150°.
-// Front view: body horizontal, arms pushing up and down. Wrists stay on
-// the ground; the body rises and falls.
+// Side view (body in profile, 210 x 150 stage). Hands and toes stay planted on
+// the floor line. Top: arms straight, body one straight diagonal plank.
+// Bottom: elbows bent about 80° and pointing back toward the feet, chest a
+// fist above the floor, body still straight. `left*` joints are the near
+// limbs, `right*` the far limbs.
 
 class _PushupsKeyPoses {
-  // Top position — arms extended, body held in a clean side-on plank.
+  // Top position — arms straight.
   static const top = NuvoCharacterPose(
-    head: Offset(0.16, 0.34),
-    neck: Offset(0.23, 0.41),
-    leftShoulder: Offset(0.28, 0.44),
-    rightShoulder: Offset(0.30, 0.48),
-    leftElbow: Offset(0.30, 0.57),
-    rightElbow: Offset(0.33, 0.60),
-    leftWrist: Offset(0.31, 0.68),
-    rightWrist: Offset(0.35, 0.71),
-    leftHip: Offset(0.64, 0.50),
-    rightHip: Offset(0.67, 0.54),
-    leftKnee: Offset(0.79, 0.54),
-    rightKnee: Offset(0.82, 0.58),
-    leftAnkle: Offset(0.92, 0.57),
-    rightAnkle: Offset(0.95, 0.61),
+    head: Offset(0.1548, 0.3955),
+    neck: Offset(0.2571, 0.4667),
+    leftShoulder: Offset(0.2571, 0.4667),
+    rightShoulder: Offset(0.2857, 0.4667),
+    leftElbow: Offset(0.2762, 0.6533),
+    rightElbow: Offset(0.3048, 0.6533),
+    leftWrist: Offset(0.2952, 0.8367),
+    rightWrist: Offset(0.3238, 0.8367),
+    leftHip: Offset(0.5291, 0.6151),
+    rightHip: Offset(0.5577, 0.6151),
+    leftKnee: Offset(0.7234, 0.7211),
+    rightKnee: Offset(0.7520, 0.7211),
+    leftAnkle: Offset(0.9048, 0.8200),
+    rightAnkle: Offset(0.9333, 0.8200),
   );
 
-  // Bottom position — chest and hips lower while the hands stay planted.
+  // Bottom position — elbows bent back, chest just above the floor.
   static const bottom = NuvoCharacterPose(
-    head: Offset(0.22, 0.45),
-    neck: Offset(0.29, 0.51),
-    leftShoulder: Offset(0.35, 0.53),
-    rightShoulder: Offset(0.37, 0.57),
-    leftElbow: Offset(0.40, 0.62),
-    rightElbow: Offset(0.43, 0.66),
-    leftWrist: Offset(0.31, 0.68),
-    rightWrist: Offset(0.35, 0.71),
-    leftHip: Offset(0.66, 0.60),
-    rightHip: Offset(0.69, 0.64),
-    leftKnee: Offset(0.80, 0.59),
-    rightKnee: Offset(0.83, 0.63),
-    leftAnkle: Offset(0.92, 0.57),
-    rightAnkle: Offset(0.95, 0.61),
+    head: Offset(0.1056, 0.6338),
+    neck: Offset(0.2190, 0.6533),
+    leftShoulder: Offset(0.2190, 0.6533),
+    rightShoulder: Offset(0.2476, 0.6533),
+    leftElbow: Offset(0.3143, 0.6467),
+    rightElbow: Offset(0.3429, 0.6467),
+    leftWrist: Offset(0.2952, 0.8367),
+    rightWrist: Offset(0.3238, 0.8367),
+    leftHip: Offset(0.5070, 0.7233),
+    rightHip: Offset(0.5356, 0.7233),
+    leftKnee: Offset(0.7128, 0.7733),
+    rightKnee: Offset(0.7413, 0.7733),
+    leftAnkle: Offset(0.9048, 0.8200),
+    rightAnkle: Offset(0.9333, 0.8200),
   );
 
   static const poses = [top, bottom, top];
@@ -57,6 +62,7 @@ class _PushupsKeyPoses {
 const pushupsDemo = MovementDemo(
   poses: _PushupsKeyPoses.poses,
   duration: Duration(milliseconds: 2400),
+  sideView: true,
 );
 
 // ── Squats ────────────────────────────────────────────────────────────────────
@@ -713,51 +719,53 @@ const highKneesDemo = MovementDemo(
 
 // ── Plank Hold ────────────────────────────────────────────────────────────────
 // PlankHoldValidator: hold position — body straight, forearms on ground.
-// Side view: body horizontal, held steady with slight breathing.
+// Side view (210 x 150 stage): forearm plank, elbow under the shoulder, body
+// one straight line to the toes, held steady with a subtle breathing rise.
 
 class _PlankHoldKeyPoses {
-  // Plank position — body straight, forearms down.
+  // Plank position — forearm flat on the floor, body straight.
   static const plank = NuvoCharacterPose(
-    head: Offset(0.18, 0.35),
-    neck: Offset(0.24, 0.34),
-    leftShoulder: Offset(0.30, 0.33),
-    rightShoulder: Offset(0.30, 0.38),
-    leftElbow: Offset(0.24, 0.40),
-    rightElbow: Offset(0.24, 0.45),
-    leftWrist: Offset(0.20, 0.46),
-    rightWrist: Offset(0.20, 0.50),
-    leftHip: Offset(0.50, 0.36),
-    rightHip: Offset(0.50, 0.41),
-    leftKnee: Offset(0.68, 0.37),
-    rightKnee: Offset(0.68, 0.42),
-    leftAnkle: Offset(0.82, 0.38),
-    rightAnkle: Offset(0.82, 0.43),
+    head: Offset(0.1653, 0.6077),
+    neck: Offset(0.2762, 0.6467),
+    leftShoulder: Offset(0.2762, 0.6467),
+    rightShoulder: Offset(0.3000, 0.6467),
+    leftElbow: Offset(0.2762, 0.8333),
+    rightElbow: Offset(0.3000, 0.8333),
+    leftWrist: Offset(0.1333, 0.8367),
+    rightWrist: Offset(0.1571, 0.8367),
+    leftHip: Offset(0.5362, 0.7195),
+    rightHip: Offset(0.5600, 0.7195),
+    leftKnee: Offset(0.7219, 0.7715),
+    rightKnee: Offset(0.7457, 0.7715),
+    leftAnkle: Offset(0.8952, 0.8200),
+    rightAnkle: Offset(0.9190, 0.8200),
   );
 
-  // Slight dip — gentle breathing motion.
-  static const plankDip = NuvoCharacterPose(
-    head: Offset(0.18, 0.37),
-    neck: Offset(0.24, 0.36),
-    leftShoulder: Offset(0.30, 0.35),
-    rightShoulder: Offset(0.30, 0.40),
-    leftElbow: Offset(0.24, 0.40),
-    rightElbow: Offset(0.24, 0.45),
-    leftWrist: Offset(0.20, 0.46),
-    rightWrist: Offset(0.20, 0.50),
-    leftHip: Offset(0.50, 0.38),
-    rightHip: Offset(0.50, 0.43),
-    leftKnee: Offset(0.68, 0.39),
-    rightKnee: Offset(0.68, 0.44),
-    leftAnkle: Offset(0.82, 0.38),
-    rightAnkle: Offset(0.82, 0.43),
+  // Breath in — chest and hips lift a touch.
+  static const plankBreath = NuvoCharacterPose(
+    head: Offset(0.1660, 0.5843),
+    neck: Offset(0.2762, 0.6267),
+    leftShoulder: Offset(0.2762, 0.6267),
+    rightShoulder: Offset(0.3000, 0.6267),
+    leftElbow: Offset(0.2762, 0.8333),
+    rightElbow: Offset(0.3000, 0.8333),
+    leftWrist: Offset(0.1333, 0.8367),
+    rightWrist: Offset(0.1571, 0.8367),
+    leftHip: Offset(0.5362, 0.6945),
+    rightHip: Offset(0.5600, 0.6945),
+    leftKnee: Offset(0.7219, 0.7659),
+    rightKnee: Offset(0.7457, 0.7659),
+    leftAnkle: Offset(0.8952, 0.8200),
+    rightAnkle: Offset(0.9190, 0.8200),
   );
 
-  static const poses = [plank, plankDip, plank];
+  static const poses = [plank, plankBreath, plank];
 }
 
 const plankHoldDemo = MovementDemo(
   poses: _PlankHoldKeyPoses.poses,
   duration: Duration(milliseconds: 4000),
+  sideView: true,
 );
 
 /// Maps a [MotionActivityType] to its pre-verify [MovementDemo].
@@ -779,19 +787,17 @@ MovementDemo? movementDemoForType(MotionActivityType type) {
     MotionActivityType.squatJacks => squatJacksDemo,
     MotionActivityType.jumpSquats => jumpSquatsDemo,
     MotionActivityType.lungeJumps => lungeJumpsDemo,
-    // No hand-authored demo pose yet for the new cadence/multi-phase
-    // presets — the pre-verify screen already handles a null demo.
-    MotionActivityType.runningInPlace => null,
-    MotionActivityType.treadmillRunning => null,
-    MotionActivityType.walkingInPlace => null,
-    MotionActivityType.marchingInPlace => null,
-    MotionActivityType.buttKicks => null,
-    MotionActivityType.mountainClimbers => null,
-    MotionActivityType.burpees => null,
-    MotionActivityType.stepUps => null,
-    MotionActivityType.calfRaises => null,
-    MotionActivityType.lateralSteps => null,
-    MotionActivityType.basketballShot => null,
+    MotionActivityType.runningInPlace => runningInPlaceDemo,
+    MotionActivityType.treadmillRunning => treadmillRunningDemo,
+    MotionActivityType.walkingInPlace => walkingInPlaceDemo,
+    MotionActivityType.marchingInPlace => marchingInPlaceDemo,
+    MotionActivityType.buttKicks => buttKicksDemo,
+    MotionActivityType.mountainClimbers => mountainClimbersDemo,
+    MotionActivityType.burpees => burpeesDemo,
+    MotionActivityType.stepUps => stepUpsDemo,
+    MotionActivityType.calfRaises => calfRaisesDemo,
+    MotionActivityType.lateralSteps => lateralStepsDemo,
+    MotionActivityType.basketballShot => basketballShotDemo,
     MotionActivityType.remote => null,
   };
 }

@@ -12,7 +12,11 @@ import 'nuvo_character_painter.dart';
 /// widget interpolates between these poses and renders them with
 /// [NuvoCharacterPainter].
 class MovementDemo {
-  const MovementDemo({required this.poses, required this.duration});
+  const MovementDemo({
+    required this.poses,
+    required this.duration,
+    this.sideView = false,
+  });
 
   /// Ordered key poses for one complete movement cycle.
   /// The animation interpolates from poses[0] → poses[1] → ... → poses[last]
@@ -21,6 +25,10 @@ class MovementDemo {
 
   /// Duration of one full cycle.
   final Duration duration;
+
+  /// Whether the poses are authored for the side-on (profile) camera used by
+  /// floor movements such as pushups and plank. Defaults to the front view.
+  final bool sideView;
 
   /// Interpolate across all key poses given a [t] in 0–1.
   /// Uses ease-in-out sine for natural movement.
@@ -108,6 +116,9 @@ class _NuvoMovementAnimationState extends State<NuvoMovementAnimation>
               style: widget.style,
               outlineColor: widget.outlineColor,
               outlineWidth: widget.outlineWidth,
+              view: widget.demo.sideView
+                  ? NuvoCharacterView.side
+                  : NuvoCharacterView.front,
             ),
             child: const SizedBox.expand(),
           ),

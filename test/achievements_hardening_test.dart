@@ -542,15 +542,15 @@ void main() {
 
       expect(find.text('NEXT UP'), findsOneWidget);
       expect(find.text('Achievement Number 50'), findsOneWidget);
-      expect(find.text('NEXT LEVEL UNLOCK'), findsOneWidget);
+      expect(find.text('NEXT LEVEL REWARD'), findsOneWidget);
       expect(find.text('Clap reaction'), findsOneWidget);
-      expect(find.text('Unlocks at Level 9'), findsOneWidget);
+      expect(find.text('Earned at Level 9'), findsOneWidget);
       expect(find.text('All achievements'), findsOneWidget);
 
       double y(Finder f) => tester.getTopLeft(f).dy;
-      expect(y(find.text('NEXT UP')), lessThan(y(find.text('NEXT LEVEL UNLOCK'))));
+      expect(y(find.text('NEXT UP')), lessThan(y(find.text('NEXT LEVEL REWARD'))));
       expect(
-        y(find.text('NEXT LEVEL UNLOCK')),
+        y(find.text('NEXT LEVEL REWARD')),
         lessThan(y(find.text('All achievements'))),
       );
       expect(tester.takeException(), isNull);
@@ -563,7 +563,7 @@ void main() {
       await _settle(tester);
 
       expect(find.text('NEXT UP'), findsNothing);
-      expect(find.text('NEXT LEVEL UNLOCK'), findsNothing);
+      expect(find.text('NEXT LEVEL REWARD'), findsNothing);
       expect(find.text('All achievements'), findsOneWidget);
     });
 
