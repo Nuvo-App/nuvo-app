@@ -2,6 +2,7 @@
 // mint / accept / revoke require a bearer token. Every request has a hard
 // timeout — a stalled socket must surface as an ApiException, never hang.
 import 'dart:async';
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -70,7 +71,7 @@ class InviteApi {
     }
     final json = _json(res);
     if (res.statusCode == 403 && json['error'] != null) {
-      throw ApiException(403, json['error'] as String);
+      throw ApiException(403, (jStr(json['error']) ?? ''));
     }
     return InviteAcceptResult.fromJson(json);
   }
@@ -97,7 +98,7 @@ class InviteApi {
     );
     final json = _json(res);
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, json['error'] as String? ?? 'Could not create invite');
+      throw ApiException(res.statusCode, jStr(json['error']) ?? 'Could not create invite');
     }
     return MintedInvite.fromJson(json);
   }

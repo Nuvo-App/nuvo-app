@@ -9,6 +9,7 @@ import { isBlocked } from '../lib/privacy';
 import { ensureMember, ensureProgress, getProfileName, getRace, recomputeRanks } from '../domain/raceMembership';
 import { effectiveTargetValue } from '../domain/raceTarget';
 import { notifyEvent } from '../domain/notificationPolicy';
+import { bestEffort } from '../lib/safe';
 import { computeSquadStandings, type SquadRaceInput } from '../domain/squadStandings';
 
 /**
@@ -143,14 +144,16 @@ async function addToRace(
     if (full) await recomputeRanks(db, race.id, full.score_direction === 'lower' ? 'lower' : 'higher');
   }
   if (created && userId !== race.creator_id) {
-    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
-      type: 'race_invited',
-      userId,
-      actorUserId: race.creator_id,
-      actorName: inviterName,
-      raceId: race.id,
-      raceTitle: race.title,
-    });
+    await bestEffort('squad_race_invited', () =>
+      notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+        type: 'race_invited',
+        userId,
+        actorUserId: race.creator_id,
+        actorName: inviterName,
+        raceId: race.id,
+        raceTitle: race.title,
+      }),
+    );
   }
   return created;
 }
@@ -184,15 +187,22 @@ squadsRouter.post('/', async (c) => {
   }
   if (!code) return c.json(badRequest('Could not create a crew code. Try again.'), 500);
 
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      'INSERT INTO squads (id, name, join_code, owner_id, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-    ).bind(id, name, code, userId),
-    c.env.DB.prepare(
-      `INSERT INTO squad_members (id, squad_id, user_id, role, status, joined_at)
-       VALUES (?, ?, ?, 'owner', 'active', CURRENT_TIMESTAMP)`,
-    ).bind(generateId(), id, userId),
-  ]);
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        'INSERT INTO squads (id, name, join_code, owner_id, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+      ).bind(id, name, code, userId),
+      c.env.DB.prepare(
+        `INSERT INTO squad_members (id, squad_id, user_id, role, status, joined_at)
+         VALUES (?, ?, ?, 'owner', 'active', CURRENT_TIMESTAMP)`,
+      ).bind(generateId(), id, userId),
+    ]);
+  } catch (err) {
+    // Lost a join-code race (UNIQUE) or the batch failed; the batch is atomic,
+    // so nothing was written. Ask the app to try again.
+    console.error(JSON.stringify({ evt: 'squad_create_failed', message: err instanceof Error ? err.message : String(err) }));
+    return c.json(badRequest('Could not create the crew. Try again.'), 409);
+  }
 
   return c.json({ ok: true, squad: { id, name, joinCode: code, isOwner: true, memberCount: 1, raceCount: 0 } }, 201);
 });
@@ -326,7 +336,11 @@ squadsRouter.post('/join', async (c) => {
       .bind(squad.id)
       .all<{ id: string; title: string; creator_id: string }>();
     for (const race of open.results) {
-      await addToRace(c, race, userId, await getProfileName(c.env.DB, race.creator_id));
+      // The seat in the crew is already saved; one race failing to take the new
+      // member must not turn the join into an error (the next read heals it).
+      await bestEffort('squad_join_add_to_race', async () =>
+        addToRace(c, race, userId, await getProfileName(c.env.DB, race.creator_id)),
+      );
     }
   }
 
@@ -593,7 +607,7 @@ squadsRouter.post('/:id/races', async (c) => {
   const inviterName = await getProfileName(c.env.DB, userId);
   let added = 0;
   for (const m of members.results) {
-    if (await addToRace(c, race, m.user_id, inviterName)) added += 1;
+    if (await bestEffort('squad_add_race_member', () => addToRace(c, race, m.user_id, inviterName))) added += 1;
   }
 
   return c.json({ ok: true, raceId: race.id, added, memberCount: members.results.length });

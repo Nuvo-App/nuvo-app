@@ -21,6 +21,7 @@ import { scoreDirectionFor } from '../domain/raceFinalize';
 import { deliverNotificationPushes } from '../domain/notifications';
 import { notifyEvent } from '../domain/notificationPolicy';
 import { recordRaceEvent } from '../domain/raceEvents';
+import { readJsonObject } from '../lib/safe';
 import {
   INVITE_KINDS,
   type InviteKind,
@@ -151,12 +152,10 @@ async function raceCard(db: D1Database, viewerUserId: string | undefined, raceId
 // ─────────────────────────────────────────────────────────────────────────────
 invitesRouter.post('/', requireAuth, async (c) => {
   const userId = c.get('userId');
-  let body: { kind?: unknown; targetId?: unknown; maxUses?: unknown; expiresInSeconds?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
-  }
+  const body = (await readJsonObject(c)) as
+    | { kind?: unknown; targetId?: unknown; maxUses?: unknown; expiresInSeconds?: unknown }
+    | null;
+  if (!body) return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
 
   const kind = body.kind as InviteKind;
   if (!INVITE_KINDS.includes(kind)) {

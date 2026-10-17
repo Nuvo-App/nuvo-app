@@ -1,4 +1,5 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import 'package:nuvo/core/utils/json_safe.dart';
 import '../ai/motion_v2/motion_v2_models.dart';
 import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../domain/motion_activity.dart';
@@ -122,82 +123,71 @@ class Race {
   final RaceViewerContext? viewerContext;
 
   factory Race.fromJson(Map<String, dynamic> json) {
-    final verifierType = json['verifierType'] as String? ?? 'preset_pose';
+    final verifierType = jStr(json['verifierType']) ?? 'preset_pose';
     final parsedCustomSpec = _decodeCustomVerifierSpec(json, verifierType);
     return Race(
-      id: json['id'] as String? ?? '',
-      creatorId: json['creatorId'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      description: json['description'] as String?,
-      category: json['category'] as String?,
-      goalType: json['goalType'] as String? ?? 'manual',
-      targetValue: json['targetValue'] as int?,
-      unit: json['unit'] as String?,
-      aiActivityType: json['aiActivityType'] as String?,
-      targetUnit: json['targetUnit'] as String?,
-      proofMode: json['proofMode'] as String?,
+      id: jStr(json['id']) ?? '',
+      creatorId: jStr(json['creatorId']) ?? '',
+      title: jStr(json['title']) ?? '',
+      description: jStr(json['description']),
+      category: jStr(json['category']),
+      goalType: jStr(json['goalType']) ?? 'manual',
+      targetValue: jInt(json['targetValue']),
+      unit: jStr(json['unit']),
+      aiActivityType: jStr(json['aiActivityType']),
+      targetUnit: jStr(json['targetUnit']),
+      proofMode: jStr(json['proofMode']),
       activityId:
-          json['activityId'] as String? ?? json['aiActivityType'] as String?,
+          jStr(json['activityId']) ?? jStr(json['aiActivityType']),
       metric:
-          json['metric'] as String? ??
-          json['targetUnit'] as String? ??
-          json['unit'] as String?,
-      format: json['format'] as String? ?? 'first_to_goal',
-      scoringRule: json['scoringRule'] as String? ?? 'cumulative_sum',
-      attemptDurationSeconds: json['attemptDurationSeconds'] as int?,
-      attemptLimit: json['attemptLimit'] as int?,
+          jStr(json['metric']) ??
+          jStr(json['targetUnit']) ??
+          jStr(json['unit']),
+      format: jStr(json['format']) ?? 'first_to_goal',
+      scoringRule: jStr(json['scoringRule']) ?? 'cumulative_sum',
+      attemptDurationSeconds: jInt(json['attemptDurationSeconds']),
+      attemptLimit: jInt(json['attemptLimit']),
       verificationMethod:
-          json['verificationMethod'] as String? ?? 'camera_pose',
+          jStr(json['verificationMethod']) ?? 'camera_pose',
       verifierType: verifierType,
-      verifierVersion: json['verifierVersion'] as int?,
+      verifierVersion: jInt(json['verifierVersion']),
       verifierSpec: json['verifierSpec'] is Map
           ? Map<String, dynamic>.from(json['verifierSpec'] as Map)
           : null,
-      verifierReleaseId: json['verifierReleaseId'] as String?,
+      verifierReleaseId: jStr(json['verifierReleaseId']),
       customVerifierSpec: parsedCustomSpec.spec,
       customMotionV2Spec: parsedCustomSpec.motionV2Spec,
-      customActivityName: json['customActivityName'] as String?,
+      customActivityName: jStr(json['customActivityName']),
       verifierInvalidReason:
-          json['verifierInvalidReason'] as String? ?? parsedCustomSpec.error,
-      timezone: json['timezone'] as String? ?? 'America/New_York',
-      recurrence: json['recurrence'] as String? ?? 'none',
-      status: json['status'] as String? ?? 'active',
-      storedStatus: json['storedStatus'] as String?,
-      winnerUserId: json['winnerUserId'] as String?,
-      completedAt: json['completedAt'] as String?,
-      startLineAt: json['startLineAt'] as String?,
-      finishLineAt: json['finishLineAt'] as String?,
-      rules: json['rules'] as String?,
-      proofRequirement: json['proofRequirement'] as String? ?? 'manual',
-      proofReviewMode: json['proofReviewMode'] as String? ?? 'auto_accept',
-      visibility: json['visibility'] as String? ?? 'private',
-      inviteCode: json['inviteCode'] as String?,
-      createdAt: json['createdAt'] as String? ?? '',
-      updatedAt: json['updatedAt'] as String? ?? '',
+          jStr(json['verifierInvalidReason']) ?? parsedCustomSpec.error,
+      timezone: jStr(json['timezone']) ?? 'America/New_York',
+      recurrence: jStr(json['recurrence']) ?? 'none',
+      status: jStr(json['status']) ?? 'active',
+      storedStatus: jStr(json['storedStatus']),
+      winnerUserId: jStr(json['winnerUserId']),
+      completedAt: jStr(json['completedAt']),
+      startLineAt: jStr(json['startLineAt']),
+      finishLineAt: jStr(json['finishLineAt']),
+      rules: jStr(json['rules']),
+      proofRequirement: jStr(json['proofRequirement']) ?? 'manual',
+      proofReviewMode: jStr(json['proofReviewMode']) ?? 'auto_accept',
+      visibility: jStr(json['visibility']) ?? 'private',
+      inviteCode: jStr(json['inviteCode']),
+      createdAt: jStr(json['createdAt']) ?? '',
+      updatedAt: jStr(json['updatedAt']) ?? '',
       participants:
-          (json['participants'] as List<dynamic>?)
-              ?.map((p) => RaceParticipant.fromJson(p as Map<String, dynamic>))
-              .toList() ??
-          [],
+          jMapList(json['participants']).map(RaceParticipant.fromJson).toList(),
       recentProofs:
-          (json['recentProofs'] as List<dynamic>?)
-              ?.map((p) => RaceProof.fromJson(p as Map<String, dynamic>))
-              .toList() ??
-          [],
+          jMapList(json['recentProofs']).map(RaceProof.fromJson).toList(),
       finalStandings:
-          (json['finalStandings'] as List<dynamic>?)
-              ?.map(
-                (p) => RaceFinalStanding.fromJson(p as Map<String, dynamic>),
-              )
-              .toList() ??
-          [],
+          jMapList(json['finalStandings']).map(RaceFinalStanding.fromJson).toList(),
       submissionResult: json['submissionResult'] is Map<String, dynamic>
           ? RaceSubmissionResult.fromJson(
               json['submissionResult'] as Map<String, dynamic>,
             )
           : null,
-      scoreDirection: json['scoreDirection'] as String? ?? 'higher',
-      serverTime: json['serverTime'] as String?,
+      scoreDirection: jStr(json['scoreDirection']) ?? 'higher',
+      serverTime: jStr(json['serverTime']),
       viewerContext: json['viewerContext'] is Map<String, dynamic>
           ? RaceViewerContext.fromJson(
               json['viewerContext'] as Map<String, dynamic>,
@@ -350,17 +340,17 @@ class PublicUser {
   final DateTime? lastActiveAt;
 
   factory PublicUser.fromJson(Map<String, dynamic> json) => PublicUser(
-    id: json['id'] as String,
-    displayName: json['displayName'] as String? ?? 'Nuvo member',
-    username: json['username'] as String?,
-    memberId: json['memberId'] as String?,
-    initials: json['initials'] as String? ?? 'N',
-    addedAt: json['addedAt'] as String?,
-    profilePhotoUrl: json['profilePhotoUrl'] as String?,
+    id: (jStr(json['id']) ?? ''),
+    displayName: jStr(json['displayName']) ?? 'Nuvo member',
+    username: jStr(json['username']),
+    memberId: jStr(json['memberId']),
+    initials: jStr(json['initials']) ?? 'N',
+    addedAt: jStr(json['addedAt']),
+    profilePhotoUrl: jStr(json['profilePhotoUrl']),
     lastActiveAt: DateTime.tryParse(
-      json['lastActiveAt'] as String? ?? '',
+      jStr(json['lastActiveAt']) ?? '',
     )?.toUtc(),
-    level: json['level'] as int?,
+    level: jInt(json['level']),
   );
 
   String get handleLine {
@@ -408,16 +398,16 @@ class RaceParticipant {
 
   factory RaceParticipant.fromJson(Map<String, dynamic> json) =>
       RaceParticipant(
-        id: json['id'] as String? ?? '',
-        userId: json['userId'] as String? ?? '',
-        displayName: json['displayName'] as String? ?? 'Nuvo member',
-        progressValue: json['progressValue'] as int? ?? 0,
-        progressPercent: json['progressPercent'] as int? ?? 0,
-        rank: json['rank'] as int?,
-        joinedAt: json['joinedAt'] as String? ?? '',
-        profilePhotoUrl: json['profilePhotoUrl'] as String?,
-        finishedAt: json['finishedAt'] as String?,
-        level: json['level'] as int?,
+        id: jStr(json['id']) ?? '',
+        userId: jStr(json['userId']) ?? '',
+        displayName: jStr(json['displayName']) ?? 'Nuvo member',
+        progressValue: jInt(json['progressValue']) ?? 0,
+        progressPercent: jInt(json['progressPercent']) ?? 0,
+        rank: jInt(json['rank']),
+        joinedAt: jStr(json['joinedAt']) ?? '',
+        profilePhotoUrl: jStr(json['profilePhotoUrl']),
+        finishedAt: jStr(json['finishedAt']),
+        level: jInt(json['level']),
       );
 }
 
@@ -444,13 +434,13 @@ class RaceFinalStanding {
 
   factory RaceFinalStanding.fromJson(Map<String, dynamic> json) =>
       RaceFinalStanding(
-        userId: json['userId'] as String? ?? '',
-        displayName: json['displayName'] as String? ?? 'Nuvo member',
-        profilePhotoUrl: json['profilePhotoUrl'] as String?,
-        rank: json['rank'] as int? ?? 0,
-        scoreValue: json['scoreValue'] as int? ?? 0,
-        completedAt: json['completedAt'] as String?,
-        level: json['level'] as int?,
+        userId: jStr(json['userId']) ?? '',
+        displayName: jStr(json['displayName']) ?? 'Nuvo member',
+        profilePhotoUrl: jStr(json['profilePhotoUrl']),
+        rank: jInt(json['rank']) ?? 0,
+        scoreValue: jInt(json['scoreValue']) ?? 0,
+        completedAt: jStr(json['completedAt']),
+        level: jInt(json['level']),
       );
 }
 
@@ -504,27 +494,27 @@ class RaceViewerContext {
 
   factory RaceViewerContext.fromJson(Map<String, dynamic> json) =>
       RaceViewerContext(
-        raceId: json['raceId'] as String? ?? '',
-        status: json['status'] as String? ?? 'active',
-        rank: (json['rank'] as num?)?.toInt(),
-        previousRank: (json['previousRank'] as num?)?.toInt(),
-        leaderUserId: json['leaderUserId'] as String?,
-        leaderScore: (json['leaderScore'] as num?)?.toInt(),
-        viewerScore: (json['viewerScore'] as num?)?.toInt(),
-        gapToLeader: (json['gapToLeader'] as num?)?.toInt(),
-        gapToNextRank: (json['gapToNextRank'] as num?)?.toInt(),
-        goalRemaining: (json['goalRemaining'] as num?)?.toInt(),
+        raceId: jStr(json['raceId']) ?? '',
+        status: jStr(json['status']) ?? 'active',
+        rank: jInt(json['rank']),
+        previousRank: jInt(json['previousRank']),
+        leaderUserId: jStr(json['leaderUserId']),
+        leaderScore: jInt(json['leaderScore']),
+        viewerScore: jInt(json['viewerScore']),
+        gapToLeader: jInt(json['gapToLeader']),
+        gapToNextRank: jInt(json['gapToNextRank']),
+        goalRemaining: jInt(json['goalRemaining']),
         timeRemainingSeconds:
-            (json['timeRemainingSeconds'] as num?)?.toInt(),
-        startsInSeconds: (json['startsInSeconds'] as num?)?.toInt(),
-        isLeading: json['isLeading'] as bool? ?? false,
-        isTied: json['isTied'] as bool? ?? false,
-        isFinished: json['isFinished'] as bool? ?? false,
-        isMember: json['isMember'] as bool? ?? false,
-        isSpectator: json['isSpectator'] as bool? ?? false,
-        attemptsUsed: (json['attemptsUsed'] as num?)?.toInt() ?? 0,
-        attemptsRemaining: (json['attemptsRemaining'] as num?)?.toInt(),
-        openAttemptId: json['openAttemptId'] as String?,
+            jInt(json['timeRemainingSeconds']),
+        startsInSeconds: jInt(json['startsInSeconds']),
+        isLeading: jBool(json['isLeading']) ?? false,
+        isTied: jBool(json['isTied']) ?? false,
+        isFinished: jBool(json['isFinished']) ?? false,
+        isMember: jBool(json['isMember']) ?? false,
+        isSpectator: jBool(json['isSpectator']) ?? false,
+        attemptsUsed: jInt(json['attemptsUsed']) ?? 0,
+        attemptsRemaining: jInt(json['attemptsRemaining']),
+        openAttemptId: jStr(json['openAttemptId']),
       );
 }
 
@@ -555,14 +545,14 @@ class RaceAttemptResult {
   factory RaceAttemptResult.fromJson(Map<String, dynamic> json) {
     final a = (json['attempt'] as Map<String, dynamic>?) ?? const {};
     return RaceAttemptResult(
-      attemptId: a['id'] as String? ?? '',
-      attemptIndex: (a['attemptIndex'] as num?)?.toInt() ?? 0,
-      status: a['status'] as String? ?? 'open',
-      startedAt: a['startedAt'] as String?,
-      deadlineAt: a['deadlineAt'] as String?,
-      attemptsUsed: (json['attemptsUsed'] as num?)?.toInt() ?? 0,
-      attemptsRemaining: (json['attemptsRemaining'] as num?)?.toInt(),
-      serverTime: json['serverTime'] as String?,
+      attemptId: jStr(a['id']) ?? '',
+      attemptIndex: jInt(a['attemptIndex']) ?? 0,
+      status: jStr(a['status']) ?? 'open',
+      startedAt: jStr(a['startedAt']),
+      deadlineAt: jStr(a['deadlineAt']),
+      attemptsUsed: jInt(json['attemptsUsed']) ?? 0,
+      attemptsRemaining: jInt(json['attemptsRemaining']),
+      serverTime: jStr(json['serverTime']),
     );
   }
 }
@@ -591,20 +581,14 @@ class RaceLiveState {
   final RaceViewerContext? viewer;
 
   factory RaceLiveState.fromJson(Map<String, dynamic> json) => RaceLiveState(
-    raceId: json['raceId'] as String? ?? '',
-    version: (json['version'] as num?)?.toInt() ?? 0,
-    status: json['status'] as String? ?? 'active',
-    unchanged: json['unchanged'] as bool? ?? false,
-    serverTime: json['serverTime'] as String?,
-    winnerUserId: json['winnerUserId'] as String?,
+    raceId: jStr(json['raceId']) ?? '',
+    version: jInt(json['version']) ?? 0,
+    status: jStr(json['status']) ?? 'active',
+    unchanged: jBool(json['unchanged']) ?? false,
+    serverTime: jStr(json['serverTime']),
+    winnerUserId: jStr(json['winnerUserId']),
     participants:
-        (json['participants'] as List<dynamic>?)
-            ?.map(
-              (p) =>
-                  RaceLiveParticipant.fromJson(p as Map<String, dynamic>),
-            )
-            .toList() ??
-        [],
+        jMapList(json['participants']).map(RaceLiveParticipant.fromJson).toList(),
     viewer: json['viewer'] is Map<String, dynamic>
         ? RaceViewerContext.fromJson(json['viewer'] as Map<String, dynamic>)
         : null,
@@ -626,10 +610,10 @@ class RaceLiveParticipant {
 
   factory RaceLiveParticipant.fromJson(Map<String, dynamic> json) =>
       RaceLiveParticipant(
-        userId: json['userId'] as String? ?? '',
-        score: (json['score'] as num?)?.toInt() ?? 0,
-        rank: (json['rank'] as num?)?.toInt(),
-        finishedAt: json['finishedAt'] as String?,
+        userId: jStr(json['userId']) ?? '',
+        score: jInt(json['score']) ?? 0,
+        rank: jInt(json['rank']),
+        finishedAt: jStr(json['finishedAt']),
       );
 }
 
@@ -656,14 +640,14 @@ class RaceSubmissionResult {
 
   factory RaceSubmissionResult.fromJson(Map<String, dynamic> json) =>
       RaceSubmissionResult(
-        verifiedValue: json['verifiedValue'] as int? ?? 0,
-        previousScore: json['previousScore'] as int? ?? 0,
-        newScore: json['newScore'] as int? ?? 0,
-        previousRank: json['previousRank'] as int?,
-        newRank: json['newRank'] as int?,
-        peoplePassed: json['peoplePassed'] as int? ?? 0,
-        raceCompleted: json['raceCompleted'] as bool? ?? false,
-        winnerUserId: json['winnerUserId'] as String?,
+        verifiedValue: jInt(json['verifiedValue']) ?? 0,
+        previousScore: jInt(json['previousScore']) ?? 0,
+        newScore: jInt(json['newScore']) ?? 0,
+        previousRank: jInt(json['previousRank']),
+        newRank: jInt(json['newRank']),
+        peoplePassed: jInt(json['peoplePassed']) ?? 0,
+        raceCompleted: jBool(json['raceCompleted']) ?? false,
+        winnerUserId: jStr(json['winnerUserId']),
       );
 }
 
@@ -737,37 +721,37 @@ class RaceProof {
   final bool viewerVoted;
 
   factory RaceProof.fromJson(Map<String, dynamic> json) => RaceProof(
-    id: json['id'] as String? ?? '',
-    userId: json['userId'] as String? ?? '',
-    displayName: json['displayName'] as String? ?? 'Nuvo member',
-    proofType: json['proofType'] as String? ?? 'manual',
-    aiActivityType: json['aiActivityType'] as String?,
-    note: json['note'] as String?,
-    value: json['value'] as int?,
-    detectedValue: json['detectedValue'] as int?,
-    targetValue: json['targetValue'] as int?,
-    confidence: (json['confidence'] as num?)?.toDouble(),
-    validatorVersion: json['validatorVersion'] as String?,
-    framesAnalyzed: json['framesAnalyzed'] as int?,
-    validPoseFrames: json['validPoseFrames'] as int?,
-    durationMs: json['durationMs'] as int?,
+    id: jStr(json['id']) ?? '',
+    userId: jStr(json['userId']) ?? '',
+    displayName: jStr(json['displayName']) ?? 'Nuvo member',
+    proofType: jStr(json['proofType']) ?? 'manual',
+    aiActivityType: jStr(json['aiActivityType']),
+    note: jStr(json['note']),
+    value: jInt(json['value']),
+    detectedValue: jInt(json['detectedValue']),
+    targetValue: jInt(json['targetValue']),
+    confidence: jDouble(json['confidence']),
+    validatorVersion: jStr(json['validatorVersion']),
+    framesAnalyzed: jInt(json['framesAnalyzed']),
+    validPoseFrames: jInt(json['validPoseFrames']),
+    durationMs: jInt(json['durationMs']),
     // Never default a missing/unknown status to a success — an absent verdict
     // must surface for review, not silently credit the leaderboard.
-    verificationStatus: json['verificationStatus'] as String? ?? 'needs_review',
-    verificationSummary: json['verificationSummary'] as String?,
-    reviewedBy: json['reviewedBy'] as String?,
-    reviewedAt: json['reviewedAt'] as String?,
-    createdAt: json['createdAt'] as String? ?? '',
-    profilePhotoUrl: json['profilePhotoUrl'] as String?,
-    thumbnailUrl: json['thumbnailUrl'] as String?,
-    mediaUrl: json['mediaUrl'] as String?,
-    rankBefore: (json['rankBefore'] as num?)?.toInt(),
-    rankAfter: (json['rankAfter'] as num?)?.toInt(),
-    peoplePassed: (json['peoplePassed'] as num?)?.toInt(),
-    vetoedAt: json['vetoedAt'] as String?,
-    vetoCount: (json['vetoCount'] as num?)?.toInt() ?? 0,
-    vetoState: json['vetoState'] as String? ?? 'none',
-    viewerVoted: json['viewerVoted'] as bool? ?? false,
+    verificationStatus: jStr(json['verificationStatus']) ?? 'needs_review',
+    verificationSummary: jStr(json['verificationSummary']),
+    reviewedBy: jStr(json['reviewedBy']),
+    reviewedAt: jStr(json['reviewedAt']),
+    createdAt: jStr(json['createdAt']) ?? '',
+    profilePhotoUrl: jStr(json['profilePhotoUrl']),
+    thumbnailUrl: jStr(json['thumbnailUrl']),
+    mediaUrl: jStr(json['mediaUrl']),
+    rankBefore: jInt(json['rankBefore']),
+    rankAfter: jInt(json['rankAfter']),
+    peoplePassed: jInt(json['peoplePassed']),
+    vetoedAt: jStr(json['vetoedAt']),
+    vetoCount: jInt(json['vetoCount']) ?? 0,
+    vetoState: jStr(json['vetoState']) ?? 'none',
+    viewerVoted: jBool(json['viewerVoted']) ?? false,
   );
 }
 
@@ -796,12 +780,12 @@ class ProofVetoResult {
 
   factory ProofVetoResult.fromJson(Map<String, dynamic> json) =>
       ProofVetoResult(
-        proofId: json['proofId'] as String? ?? '',
-        state: json['state'] as String? ?? 'none',
-        vetoCount: (json['vetoCount'] as num?)?.toInt() ?? 0,
-        eligibleVoters: (json['eligibleVoters'] as num?)?.toInt() ?? 0,
-        threshold: (json['threshold'] as num?)?.toInt() ?? 0,
-        alreadyVoted: json['alreadyVoted'] as bool? ?? false,
+        proofId: jStr(json['proofId']) ?? '',
+        state: jStr(json['state']) ?? 'none',
+        vetoCount: jInt(json['vetoCount']) ?? 0,
+        eligibleVoters: jInt(json['eligibleVoters']) ?? 0,
+        threshold: jInt(json['threshold']) ?? 0,
+        alreadyVoted: jBool(json['alreadyVoted']) ?? false,
       );
 }
 

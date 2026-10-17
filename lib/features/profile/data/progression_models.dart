@@ -3,6 +3,8 @@
 /// achievement progress itself; it renders what the Worker returns.
 library;
 
+import 'package:nuvo/core/utils/json_safe.dart';
+
 class NuvoUnlockRef {
   const NuvoUnlockRef({
     required this.unlockId,
@@ -23,12 +25,12 @@ class NuvoUnlockRef {
   final Map<String, dynamic>? metadata;
 
   factory NuvoUnlockRef.fromJson(Map<String, dynamic> json) => NuvoUnlockRef(
-        unlockId: json['unlockId'] as String,
-        level: json['level'] as int? ?? 0,
-        type: json['type'] as String? ?? 'badge',
-        key: json['key'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        description: json['description'] as String?,
+        unlockId: (jStr(json['unlockId']) ?? ''),
+        level: jInt(json['level']) ?? 0,
+        type: jStr(json['type']) ?? 'badge',
+        key: jStr(json['key']) ?? '',
+        name: jStr(json['name']) ?? '',
+        description: jStr(json['description']),
         metadata: json['metadata'] is Map<String, dynamic>
             ? json['metadata'] as Map<String, dynamic>
             : null,
@@ -97,24 +99,24 @@ class NuvoBadge {
   }
 
   factory NuvoBadge.fromJson(Map<String, dynamic> json) => NuvoBadge(
-        unlockId: json['unlockId'] as String,
-        type: json['type'] as String? ?? 'badge',
-        key: json['key'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        description: json['description'] as String?,
-        requiredLevel: json['requiredLevel'] as int? ?? 0,
+        unlockId: (jStr(json['unlockId']) ?? ''),
+        type: jStr(json['type']) ?? 'badge',
+        key: jStr(json['key']) ?? '',
+        name: jStr(json['name']) ?? '',
+        description: jStr(json['description']),
+        requiredLevel: jInt(json['requiredLevel']) ?? 0,
         metadata: json['metadata'] is Map<String, dynamic>
             ? json['metadata'] as Map<String, dynamic>
             : null,
-        unlocked: json['unlocked'] as bool? ?? false,
-        unlockedAt: json['unlockedAt'] as String?,
-        featured: json['featured'] as bool? ?? false,
-        position: json['position'] as int?,
-        category: json['category'] as String?,
-        iconKey: json['iconKey'] as String?,
-        statKey: json['statKey'] as String?,
-        threshold: json['threshold'] as int?,
-        progressValue: json['progressValue'] as int? ?? 0,
+        unlocked: jBool(json['unlocked']) ?? false,
+        unlockedAt: jStr(json['unlockedAt']),
+        featured: jBool(json['featured']) ?? false,
+        position: jInt(json['position']),
+        category: jStr(json['category']),
+        iconKey: jStr(json['iconKey']),
+        statKey: jStr(json['statKey']),
+        threshold: jInt(json['threshold']),
+        progressValue: jInt(json['progressValue']) ?? 0,
       );
 }
 
@@ -136,10 +138,10 @@ class ProfileRecord {
   final int? winRatePercent;
 
   factory ProfileRecord.fromJson(Map<String, dynamic> json) => ProfileRecord(
-        active: (json['active'] as num?)?.toInt() ?? 0,
-        finished: (json['finished'] as num?)?.toInt() ?? 0,
-        wins: (json['wins'] as num?)?.toInt() ?? 0,
-        winRatePercent: (json['winRatePercent'] as num?)?.round(),
+        active: jInt(json['active']) ?? 0,
+        finished: jInt(json['finished']) ?? 0,
+        wins: jInt(json['wins']) ?? 0,
+        winRatePercent: (jDouble(json['winRatePercent']))?.round(),
       );
 }
 
@@ -227,16 +229,16 @@ class NuvoProgression {
 
   factory NuvoProgression.fromJson(Map<String, dynamic> json) =>
       NuvoProgression(
-        level: json['level'] as int? ?? 1,
-        totalXp: json['totalXp'] as int? ?? 0,
-        currentLevelXp: json['currentLevelXp'] as int? ?? 0,
-        nextLevelXp: json['nextLevelXp'] as int? ?? 0,
-        progress: (json['progress'] as num?)?.toDouble() ?? 0,
-        xpToNext: json['xpToNext'] as int? ?? 0,
-        lastSeenLevel: json['lastSeenLevel'] as int? ?? 1,
-        featuredSlots: json['featuredSlots'] as int? ?? 1,
-        achievementsEarned: json['achievementsEarned'] as int? ?? 0,
-        achievementsTotal: json['achievementsTotal'] as int? ?? 0,
+        level: jInt(json['level']) ?? 1,
+        totalXp: jInt(json['totalXp']) ?? 0,
+        currentLevelXp: jInt(json['currentLevelXp']) ?? 0,
+        nextLevelXp: jInt(json['nextLevelXp']) ?? 0,
+        progress: jDouble(json['progress']) ?? 0,
+        xpToNext: jInt(json['xpToNext']) ?? 0,
+        lastSeenLevel: jInt(json['lastSeenLevel']) ?? 1,
+        featuredSlots: jInt(json['featuredSlots']) ?? 1,
+        achievementsEarned: jInt(json['achievementsEarned']) ?? 0,
+        achievementsTotal: jInt(json['achievementsTotal']) ?? 0,
         nextUnlock: json['nextUnlock'] is Map<String, dynamic>
             ? NuvoUnlockRef.fromJson(json['nextUnlock'] as Map<String, dynamic>)
             : null,
@@ -275,11 +277,11 @@ class NuvoRaceXp {
         lines: (json['lines'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map((l) => NuvoXpLine(
-                  label: l['label'] as String? ?? '',
-                  xp: l['xp'] as int? ?? 0,
+                  label: jStr(l['label']) ?? '',
+                  xp: jInt(l['xp']) ?? 0,
                 ))
             .toList(),
-        totalXp: json['totalXp'] as int? ?? 0,
+        totalXp: jInt(json['totalXp']) ?? 0,
         earned: (json['earned'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(NuvoBadge.fromJson)
@@ -307,8 +309,8 @@ class NuvoPublicIdentity {
 
   factory NuvoPublicIdentity.fromJson(Map<String, dynamic> json) =>
       NuvoPublicIdentity(
-        level: json['level'] as int? ?? 1,
-        achievementsEarned: json['achievementsEarned'] as int? ?? 0,
+        level: jInt(json['level']) ?? 1,
+        achievementsEarned: jInt(json['achievementsEarned']) ?? 0,
         featured: (json['featured'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(NuvoPublicBadge.fromJson)
@@ -331,9 +333,9 @@ class NuvoPublicBadge {
 
   factory NuvoPublicBadge.fromJson(Map<String, dynamic> json) =>
       NuvoPublicBadge(
-        unlockId: json['unlockId'] as String,
-        key: json['key'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        iconKey: json['iconKey'] as String?,
+        unlockId: (jStr(json['unlockId']) ?? ''),
+        key: jStr(json['key']) ?? '',
+        name: jStr(json['name']) ?? '',
+        iconKey: jStr(json['iconKey']),
       );
 }

@@ -1,4 +1,5 @@
 import '../../social/domain/nuvo_destination.dart';
+import 'package:nuvo/core/utils/json_safe.dart';
 
 class NuvoNotification {
   const NuvoNotification({
@@ -40,14 +41,14 @@ class NuvoNotification {
   factory NuvoNotification.fromJson(Map<String, dynamic> j) {
     final actor = j['actor'] as Map<String, dynamic>?;
     return NuvoNotification(
-      id: j['id'] as String,
-      category: j['category'] as String? ?? 'unknown',
-      title: j['title'] as String? ?? '',
-      body: j['body'] as String?,
+      id: (jStr(j['id']) ?? ''),
+      category: jStr(j['category']) ?? 'unknown',
+      title: jStr(j['title']) ?? '',
+      body: jStr(j['body']),
       createdAt:
-          DateTime.tryParse(j['createdAt'] as String? ?? '')?.toUtc() ??
+          DateTime.tryParse(jStr(j['createdAt']) ?? '')?.toUtc() ??
               DateTime.now().toUtc(),
-      read: j['read'] as bool? ?? false,
+      read: jBool(j['read']) ?? false,
       actorName: actor?['displayName'] as String?,
       actorPhotoUrl: actor?['profilePhotoUrl'] as String?,
       destination: NuvoDestination.fromDescriptor(
@@ -90,10 +91,9 @@ class NotificationPage {
       NotificationPage(
         etag: etag,
         raw: j,
-        items: (j['notifications'] as List<dynamic>? ?? [])
-            .map((e) => NuvoNotification.fromJson(e as Map<String, dynamic>))
+        items: jMapList(j['notifications']).map(NuvoNotification.fromJson)
             .toList(),
-        unreadCount: (j['unreadCount'] as num?)?.toInt() ?? 0,
-        nextCursor: j['nextCursor'] as String?,
+        unreadCount: jInt(j['unreadCount']) ?? 0,
+        nextCursor: jStr(j['nextCursor']),
       );
 }

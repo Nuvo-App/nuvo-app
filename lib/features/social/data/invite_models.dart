@@ -1,4 +1,5 @@
 import '../domain/nuvo_destination.dart';
+import 'package:nuvo/core/utils/json_safe.dart';
 
 /// Availability of an invite token, mirrored from the Worker.
 enum InviteStatus {
@@ -39,7 +40,7 @@ InviteStatus _statusFrom(String? raw) {
 /// one falls back to the `error` text so a "race has ended" message still
 /// reads as closed rather than a generic failure.
 InviteStatus _statusFromBody(Map<String, dynamic> json) {
-  final status = _statusFrom(json['status'] as String?);
+  final status = _statusFrom(jStr(json['status']));
   if (status != InviteStatus.unknown) return status;
   final error = json['error'];
   if (error is String &&
@@ -82,8 +83,8 @@ class InvitePreview {
     final preview = json['preview'] as Map<String, dynamic>?;
     return InvitePreview(
       status: _statusFromBody(json),
-      kind: json['kind'] as String?,
-      requiresAuth: json['requiresAuth'] as bool? ?? true,
+      kind: jStr(json['kind']),
+      requiresAuth: jBool(json['requiresAuth']) ?? true,
       destination: NuvoDestination.fromDescriptor(
         json['destination'] as Map<String, dynamic>?,
       ),
@@ -135,19 +136,19 @@ class RaceInviteCard {
   final String? status;
 
   factory RaceInviteCard.fromJson(Map<String, dynamic> j) => RaceInviteCard(
-        id: j['id'] as String,
-        title: j['title'] as String? ?? 'Race',
-        activityId: j['activityId'] as String?,
-        targetValue: (j['targetValue'] as num?)?.toInt(),
-        targetUnit: j['targetUnit'] as String?,
-        goalType: j['goalType'] as String?,
-        participantCount: (j['participantCount'] as num?)?.toInt() ?? 0,
+        id: (jStr(j['id']) ?? ''),
+        title: jStr(j['title']) ?? 'Race',
+        activityId: jStr(j['activityId']),
+        targetValue: jInt(j['targetValue']),
+        targetUnit: jStr(j['targetUnit']),
+        goalType: jStr(j['goalType']),
+        participantCount: jInt(j['participantCount']) ?? 0,
         creatorName: (j['creator'] as Map<String, dynamic>?)?['displayName'] as String?,
         creatorPhotoUrl:
             (j['creator'] as Map<String, dynamic>?)?['profilePhotoUrl'] as String?,
-        alreadyJoined: j['alreadyJoined'] as bool? ?? false,
-        visibility: j['visibility'] as String?,
-        status: j['status'] as String?,
+        alreadyJoined: jBool(j['alreadyJoined']) ?? false,
+        visibility: jStr(j['visibility']),
+        status: jStr(j['status']),
       );
 }
 
@@ -165,10 +166,10 @@ class PersonInviteCard {
   final String? profilePhotoUrl;
 
   factory PersonInviteCard.fromJson(Map<String, dynamic> j) => PersonInviteCard(
-        userId: j['userId'] as String? ?? '',
-        displayName: j['displayName'] as String? ?? 'Nuvo member',
-        username: j['username'] as String?,
-        profilePhotoUrl: j['profilePhotoUrl'] as String?,
+        userId: jStr(j['userId']) ?? '',
+        displayName: jStr(j['displayName']) ?? 'Nuvo member',
+        username: jStr(j['username']),
+        profilePhotoUrl: jStr(j['profilePhotoUrl']),
       );
 }
 
@@ -196,12 +197,12 @@ class InviteAcceptResult {
         status: j['ok'] == true
             ? InviteStatus.active
             : _statusFromBody(j),
-        kind: j['kind'] as String?,
+        kind: jStr(j['kind']),
         destination: NuvoDestination.fromDescriptor(
           j['destination'] as Map<String, dynamic>?,
         ),
-        alreadyJoined: j['alreadyJoined'] as bool? ?? false,
-        connectionStatus: j['connectionStatus'] as String?,
+        alreadyJoined: jBool(j['alreadyJoined']) ?? false,
+        connectionStatus: jStr(j['connectionStatus']),
       );
 }
 
@@ -215,9 +216,9 @@ class MintedInvite {
   final String? kind;
 
   factory MintedInvite.fromJson(Map<String, dynamic> j) => MintedInvite(
-        token: j['token'] as String,
-        url: j['url'] as String,
-        code: j['code'] as String?,
-        kind: j['kind'] as String?,
+        token: (jStr(j['token']) ?? ''),
+        url: (jStr(j['url']) ?? ''),
+        code: jStr(j['code']),
+        kind: jStr(j['kind']),
       );
 }

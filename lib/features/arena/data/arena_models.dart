@@ -1,3 +1,5 @@
+import 'package:nuvo/core/utils/json_safe.dart';
+
 class ArenaSnapshot {
   const ArenaSnapshot({
     required this.mode,
@@ -16,26 +18,17 @@ class ArenaSnapshot {
   final List<ArenaBoard> results;
 
   factory ArenaSnapshot.fromJson(Map<String, dynamic> json) => ArenaSnapshot(
-    mode: json['mode'] as String? ?? 'real',
-    headerPulse: json['headerPulse'] as String? ?? '',
-    focusBoard: json['focusBoard'] != null
-        ? ArenaBoard.fromJson(json['focusBoard'] as Map<String, dynamic>)
+    mode: jStr(json['mode']) ?? 'real',
+    headerPulse: jStr(json['headerPulse']) ?? '',
+    focusBoard: jMap(json['focusBoard']) != null
+        ? ArenaBoard.fromJson(jMap(json['focusBoard'])!)
         : null,
     liveBoards:
-        (json['liveBoards'] as List<dynamic>?)
-            ?.map((b) => ArenaBoard.fromJson(b as Map<String, dynamic>))
-            .toList() ??
-        [],
+        jMapList(json['liveBoards']).map(ArenaBoard.fromJson).toList(),
     activity:
-        (json['activity'] as List<dynamic>?)
-            ?.map((a) => ArenaActivity.fromJson(a as Map<String, dynamic>))
-            .toList() ??
-        [],
+        jMapList(json['activity']).map(ArenaActivity.fromJson).toList(),
     results:
-        (json['results'] as List<dynamic>?)
-            ?.map((b) => ArenaBoard.fromJson(b as Map<String, dynamic>))
-            .toList() ??
-        [],
+        jMapList(json['results']).map(ArenaBoard.fromJson).toList(),
   );
 
   bool get isEmpty =>
@@ -90,31 +83,25 @@ class ArenaBoard {
   bool get isDemo => source == 'demo';
 
   factory ArenaBoard.fromJson(Map<String, dynamic> json) => ArenaBoard(
-    id: json['id'] as String,
-    source: json['source'] as String? ?? 'real',
-    title: json['title'] as String,
-    proofLabel: json['proofLabel'] as String?,
-    progressLabel: json['progressLabel'] as String? ?? '',
-    boardContext: json['boardContext'] as String? ?? '',
-    primaryActionLabel: json['primaryActionLabel'] as String? ?? 'Open board',
-    primaryActionType: json['primaryActionType'] as String? ?? 'open_board',
-    progressPercent: (json['progressPercent'] as num?)?.toInt(),
-    racerCount: (json['racerCount'] as num?)?.toInt(),
-    isResult: json['isResult'] as bool? ?? false,
-    badgeLabel: json['badgeLabel'] as String?,
+    id: (jStr(json['id']) ?? ''),
+    source: jStr(json['source']) ?? 'real',
+    title: (jStr(json['title']) ?? ''),
+    proofLabel: jStr(json['proofLabel']),
+    progressLabel: jStr(json['progressLabel']) ?? '',
+    boardContext: jStr(json['boardContext']) ?? '',
+    primaryActionLabel: jStr(json['primaryActionLabel']) ?? 'Open board',
+    primaryActionType: jStr(json['primaryActionType']) ?? 'open_board',
+    progressPercent: jInt(json['progressPercent']),
+    racerCount: jInt(json['racerCount']),
+    isResult: jBool(json['isResult']) ?? false,
+    badgeLabel: jStr(json['badgeLabel']),
     miniLeaderboard:
-        (json['miniLeaderboard'] as List<dynamic>?)
-            ?.map(
-              (r) =>
-                  ArenaMiniLeaderboardRow.fromJson(r as Map<String, dynamic>),
-            )
-            .toList() ??
-        [],
-    myRank: (json['myRank'] as num?)?.toInt(),
-    chaseCopy: json['chaseCopy'] as String?,
-    leaderName: json['leaderName'] as String?,
-    leaderPhotoUrl: json['leaderPhotoUrl'] as String?,
-    daysLeft: (json['daysLeft'] as num?)?.toInt(),
+        jMapList(json['miniLeaderboard']).map(ArenaMiniLeaderboardRow.fromJson).toList(),
+    myRank: jInt(json['myRank']),
+    chaseCopy: jStr(json['chaseCopy']),
+    leaderName: jStr(json['leaderName']),
+    leaderPhotoUrl: jStr(json['leaderPhotoUrl']),
+    daysLeft: jInt(json['daysLeft']),
   );
 }
 
@@ -133,10 +120,10 @@ class ArenaMiniLeaderboardRow {
 
   factory ArenaMiniLeaderboardRow.fromJson(Map<String, dynamic> json) =>
       ArenaMiniLeaderboardRow(
-        label: json['label'] as String? ?? '',
-        value: json['value'] as String? ?? '',
-        isCurrentUser: json['isCurrentUser'] as bool? ?? false,
-        profilePhotoUrl: json['profilePhotoUrl'] as String?,
+        label: jStr(json['label']) ?? '',
+        value: jStr(json['value']) ?? '',
+        isCurrentUser: jBool(json['isCurrentUser']) ?? false,
+        profilePhotoUrl: jStr(json['profilePhotoUrl']),
       );
 }
 
@@ -159,11 +146,11 @@ class ArenaActivity {
   type; // 'proof_submitted' | 'joined' | 'leader_changed' | 'finished' | 'waiting'
 
   factory ArenaActivity.fromJson(Map<String, dynamic> json) => ArenaActivity(
-    id: json['id'] as String,
-    actorName: json['actorName'] as String? ?? '',
-    text: json['text'] as String? ?? '',
-    raceTitle: json['raceTitle'] as String?,
-    timeLabel: json['timeLabel'] as String? ?? '',
-    type: json['type'] as String? ?? 'proof_submitted',
+    id: (jStr(json['id']) ?? ''),
+    actorName: jStr(json['actorName']) ?? '',
+    text: jStr(json['text']) ?? '',
+    raceTitle: jStr(json['raceTitle']),
+    timeLabel: jStr(json['timeLabel']) ?? '',
+    type: jStr(json['type']) ?? 'proof_submitted',
   );
 }

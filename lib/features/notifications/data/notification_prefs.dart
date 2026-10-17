@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -21,9 +22,9 @@ class NotificationPref {
   final bool push;
 
   factory NotificationPref.fromJson(Map<String, dynamic> j) => NotificationPref(
-        category: j['category'] as String,
-        inApp: j['inApp'] as bool? ?? true,
-        push: j['push'] as bool? ?? true,
+        category: (jStr(j['category']) ?? ''),
+        inApp: jBool(j['inApp']) ?? true,
+        push: jBool(j['push']) ?? true,
       );
 
   /// Human label + which group a category belongs to.

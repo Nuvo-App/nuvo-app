@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -40,21 +41,20 @@ class CrewGroup {
   bool get canManage => isOwner || myRole == 'admin' || myRole == 'owner';
 
   factory CrewGroup.fromJson(Map<String, dynamic> j) => CrewGroup(
-        id: j['id'] as String,
-        name: j['name'] as String? ?? 'Crew',
-        joinCode: j['joinCode'] as String? ?? '',
-        isOwner: j['isOwner'] as bool? ?? false,
-        memberCount: j['memberCount'] as int? ?? 0,
-        raceCount: j['raceCount'] as int? ?? 0,
-        myRole: j['myRole'] as String?,
+        id: (jStr(j['id']) ?? ''),
+        name: jStr(j['name']) ?? 'Crew',
+        joinCode: jStr(j['joinCode']) ?? '',
+        isOwner: jBool(j['isOwner']) ?? false,
+        memberCount: jInt(j['memberCount']) ?? 0,
+        raceCount: jInt(j['raceCount']) ?? 0,
+        myRole: jStr(j['myRole']),
       );
 }
 
 /// Parses a `GET /squads` body (also the persisted snapshot shape).
 List<CrewGroup> parseCrewGroupList(Object? raw) {
   final map = raw is Map<String, dynamic> ? raw : const <String, dynamic>{};
-  return (map['squads'] as List<dynamic>? ?? [])
-      .whereType<Map<String, dynamic>>()
+  return jMapList(map['squads'])
       .map(CrewGroup.fromJson)
       .toList();
 }
@@ -75,11 +75,11 @@ class CrewGroupRace {
   final String? targetUnit;
 
   factory CrewGroupRace.fromJson(Map<String, dynamic> j) => CrewGroupRace(
-        id: j['id'] as String,
-        title: j['title'] as String? ?? 'Race',
-        status: j['status'] as String? ?? 'active',
-        targetValue: j['targetValue'] as int?,
-        targetUnit: j['targetUnit'] as String?,
+        id: (jStr(j['id']) ?? ''),
+        title: jStr(j['title']) ?? 'Race',
+        status: jStr(j['status']) ?? 'active',
+        targetValue: jInt(j['targetValue']),
+        targetUnit: jStr(j['targetUnit']),
       );
 }
 
@@ -110,11 +110,11 @@ class CrewMember {
   }
 
   factory CrewMember.fromJson(Map<String, dynamic> j) => CrewMember(
-        userId: j['userId'] as String,
-        displayName: j['displayName'] as String? ?? 'Nuvo member',
-        role: j['role'] as String? ?? 'member',
-        username: j['username'] as String?,
-        profilePhotoUrl: j['profilePhotoUrl'] as String?,
+        userId: (jStr(j['userId']) ?? ''),
+        displayName: jStr(j['displayName']) ?? 'Nuvo member',
+        role: jStr(j['role']) ?? 'member',
+        username: jStr(j['username']),
+        profilePhotoUrl: jStr(j['profilePhotoUrl']),
       );
 }
 
@@ -148,14 +148,14 @@ class CrewGroupStanding {
 
   factory CrewGroupStanding.fromJson(Map<String, dynamic> j) =>
       CrewGroupStanding(
-        userId: j['userId'] as String,
-        displayName: j['displayName'] as String? ?? 'Nuvo member',
-        rank: j['rank'] as int? ?? 0,
-        points: j['points'] as int? ?? 0,
-        wins: j['wins'] as int? ?? 0,
-        races: j['races'] as int? ?? 0,
-        isYou: j['isYou'] as bool? ?? false,
-        profilePhotoUrl: j['profilePhotoUrl'] as String?,
+        userId: (jStr(j['userId']) ?? ''),
+        displayName: jStr(j['displayName']) ?? 'Nuvo member',
+        rank: jInt(j['rank']) ?? 0,
+        points: jInt(j['points']) ?? 0,
+        wins: jInt(j['wins']) ?? 0,
+        races: jInt(j['races']) ?? 0,
+        isYou: jBool(j['isYou']) ?? false,
+        profilePhotoUrl: jStr(j['profilePhotoUrl']),
       );
 }
 
@@ -173,17 +173,14 @@ class CrewGroupDetail {
   final List<CrewMember> members;
 
   factory CrewGroupDetail.fromJson(Map<String, dynamic> j) => CrewGroupDetail(
-        group: CrewGroup.fromJson(j['squad'] as Map<String, dynamic>),
-        races: (j['races'] as List<dynamic>? ?? [])
-            .whereType<Map<String, dynamic>>()
+        group: CrewGroup.fromJson(jMap(j['squad']) ?? const {}),
+        races: jMapList(j['races'])
             .map(CrewGroupRace.fromJson)
             .toList(),
-        standings: (j['standings'] as List<dynamic>? ?? [])
-            .whereType<Map<String, dynamic>>()
+        standings: jMapList(j['standings'])
             .map(CrewGroupStanding.fromJson)
             .toList(),
-        members: (j['members'] as List<dynamic>? ?? [])
-            .whereType<Map<String, dynamic>>()
+        members: jMapList(j['members'])
             .map(CrewMember.fromJson)
             .toList(),
       );
@@ -214,7 +211,7 @@ class SquadApi {
     final body = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body);
     final map = body is Map<String, dynamic> ? body : const <String, dynamic>{};
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, map['error'] as String? ?? 'Request failed');
+      throw ApiException(res.statusCode, jStr(map['error']) ?? 'Request failed');
     }
     return map;
   }
@@ -277,7 +274,7 @@ class SquadApi {
           headers: _headers(token),
           body: jsonEncode({'raceId': raceId}),
         ));
-    return json['added'] as int? ?? 0;
+    return jInt(json['added']) ?? 0;
   }
 
   Future<void> leave(String token, String id) async {
