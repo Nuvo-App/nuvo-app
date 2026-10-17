@@ -15,6 +15,7 @@ import '../core/widgets/bottom_nav.dart';
 import '../core/widgets/nuvo_motion.dart';
 
 import '../features/arena/presentation/arena_screen.dart';
+import '../core/widgets/keep_screen_awake.dart';
 import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
@@ -60,9 +61,10 @@ import '../features/splash/presentation/splash_screen.dart';
 Page<void> _authPage(GoRouterState state, Widget child) =>
     CupertinoPage<void>(key: state.pageKey, child: child);
 
-// Slide-up transition for camera/verification — feels like the action is expanding.
+// Camera/verification pages: the person is mid-move with the phone propped up,
+// so the screen is kept awake for as long as the page is mounted.
 Page<void> _cameraPage(GoRouterState state, Widget child) =>
-    CupertinoPage<void>(key: state.pageKey, child: child);
+    CupertinoPage<void>(key: state.pageKey, child: KeepScreenAwake(child: child));
 
 // Race detail: horizontal slide with slight scale for depth.
 Page<void> _detailPage(GoRouterState state, Widget child) =>
