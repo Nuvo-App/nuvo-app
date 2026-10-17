@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 /// Nuvo's custom hand-drawn icon set, ported from the design prototype's
 /// inline SVG `<symbol>` defs. Rendered with [CustomPainter] so no new
@@ -342,4 +343,108 @@ class _NuvoIconPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _NuvoIconPainter oldDelegate) =>
       oldDelegate.color != color || oldDelegate.shapes != shapes;
+}
+
+// ── Crew icon ──────────────────────────────────────────────────────────────────
+
+/// Nuvo's crew mark: three overlapping avatar discs (a front disc in brand
+/// blue carrying a person glyph, two softer discs behind) under a small
+/// start-line flag — "race together on one leaderboard". Painted at a 24x24
+/// viewBox like [NuvoIcon]; [color] is the ink for rings and back discs
+/// (defaults to the theme ink) and [accent] the brand blue (defaults to the
+/// theme accent), so it works in light and dark.
+class NuvoCrewIcon extends StatelessWidget {
+  const NuvoCrewIcon({
+    super.key,
+    this.size = 24,
+    this.color,
+    this.accent,
+    this.semanticLabel = 'Crew',
+  });
+
+  final double size;
+  final Color? color;
+  final Color? accent;
+
+  /// Pass null to exclude the icon from semantics (decorative use).
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<NuvoThemeColors>();
+    final ink =
+        color ?? theme?.ink ?? IconTheme.of(context).color ?? Colors.black;
+    final blue = accent ?? theme?.accent ?? NuvoColors.blue;
+    final paint = CustomPaint(
+      size: Size.square(size),
+      painter: _NuvoCrewPainter(ink, blue),
+    );
+    if (semanticLabel == null) return ExcludeSemantics(child: paint);
+    return Semantics(label: semanticLabel, image: true, child: paint);
+  }
+}
+
+class _NuvoCrewPainter extends CustomPainter {
+  _NuvoCrewPainter(this.ink, this.accent);
+
+  final Color ink;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.width / 24.0;
+    canvas.save();
+    canvas.scale(s, s);
+    final fill = Paint()..isAntiAlias = true;
+    final line = Paint()
+      ..isAntiAlias = true
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    // Back discs — softer tones, ring in ink.
+    for (final d in [
+      (const Offset(6.2, 12.2), 0.28),
+      (const Offset(17.8, 12.2), 0.5),
+    ]) {
+      canvas.drawCircle(d.$1, 4.1, fill..color = ink.withValues(alpha: d.$2));
+    }
+
+    // Flag over the start line.
+    fill.color = accent;
+    canvas.drawRRect(
+      RRect.fromRectXY(const Rect.fromLTWH(11.2, 1.6, 1.5, 7), 0.75, 0.75),
+      fill,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(12.4, 2.2)
+        ..lineTo(17.6, 2.2)
+        ..lineTo(15.9, 4.4)
+        ..lineTo(17.6, 6.6)
+        ..lineTo(12.4, 6.6)
+        ..close(),
+      fill,
+    );
+
+    // Front disc — ink ring, brand-blue body, person glyph.
+    const c = Offset(12, 15);
+    line.color = ink;
+    canvas.drawCircle(c, 6.4, line);
+    canvas.drawCircle(c, 5.65, fill..color = accent);
+    fill.color = Colors.white;
+    canvas.drawCircle(const Offset(12, 13.4), 1.75, fill);
+    canvas.drawPath(
+      Path()
+        ..moveTo(8.9, 19.2)
+        ..cubicTo(9.1, 16.9, 10.4, 15.7, 12, 15.7)
+        ..cubicTo(13.6, 15.7, 14.9, 16.9, 15.1, 19.2)
+        ..close(),
+      fill,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _NuvoCrewPainter old) =>
+      old.ink != ink || old.accent != accent;
 }

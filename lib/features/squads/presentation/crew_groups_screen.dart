@@ -14,6 +14,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart' show ApiException;
@@ -121,6 +122,7 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
             child: Center(
               child: NuvoEmptyState(
                 icon: Icons.groups_rounded,
+                leading: const NuvoCrewIcon(size: 28, semanticLabel: null),
                 title: 'Race with a crew',
                 body: 'Start a crew, share the code, and every race you '
                     'bring to it lands on one leaderboard.',
@@ -269,8 +271,8 @@ class _GroupCard extends StatelessWidget {
                       color: c.panel,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.groups_rounded,
-                        size: 22, color: context.blueInk),
+                    alignment: Alignment.center,
+                    child: const NuvoCrewIcon(size: 26, semanticLabel: null),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

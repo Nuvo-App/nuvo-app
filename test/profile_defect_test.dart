@@ -196,8 +196,9 @@ void main() {
       expect(tester.takeException(), isNull);
 
       for (final row in ['Your Nuvo', 'My code', 'Notifications', 'Settings']) {
+        // Lazily built below the fold — scroll until it exists.
         await tester.scrollUntilVisible(
-          find.text(row).last,
+          find.text(row),
           200,
           scrollable: find.byType(Scrollable).first,
         );

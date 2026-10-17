@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/network/conditional.dart';
 import 'package:nuvo/core/widgets/nuvo_back_header.dart';
+import 'package:nuvo/core/widgets/nuvo_icons.dart';
 import 'package:nuvo/features/squads/application/squad_controller.dart';
 import 'package:nuvo/features/squads/data/squad_api.dart';
 import 'package:nuvo/features/squads/presentation/crew_groups_screen.dart';
@@ -175,5 +176,29 @@ void main() {
         dark: true);
     expect(tester.takeException(), isNull);
     expect(find.text('Leaderboard'), findsOneWidget);
+  });
+
+  group('crew icon', () {
+    const sizes = [
+      Size(320, 568),
+      Size(375, 667),
+      Size(390, 844),
+      Size(393, 852),
+      Size(430, 932),
+    ];
+    for (final size in sizes) {
+      testWidgets('list cards use it at $size', (tester) async {
+        await _pump(tester, const CrewGroupsScreen(), list, size: size);
+        expect(find.byType(NuvoCrewIcon), findsNWidgets(2));
+        expect(find.byIcon(Icons.groups_rounded), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+      testWidgets('empty state uses it at $size', (tester) async {
+        await _pump(tester, const CrewGroupsScreen(), const [], size: size);
+        expect(find.byType(NuvoCrewIcon), findsOneWidget);
+        expect(find.byIcon(Icons.groups_rounded), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }

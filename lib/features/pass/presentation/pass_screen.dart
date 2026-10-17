@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -724,6 +725,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                                     children: [
                                       _ActionRow(
                                         icon: Icons.groups_rounded,
+                                        leading: const NuvoCrewIcon(size: 26, semanticLabel: null),
                                         title: 'Crews',
                                         subtitle:
                                             'Race together on one leaderboard',
@@ -2957,8 +2959,11 @@ class _ActionRow extends StatelessWidget {
     required this.onTap,
     this.actionLabel,
     this.isLast = false,
+    this.leading,
   });
 
+  /// Optional custom mark shown in place of [icon] (e.g. [NuvoCrewIcon]).
+  final Widget? leading;
   final IconData icon;
   final String title;
   final String subtitle;
@@ -2985,7 +2990,8 @@ class _ActionRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(NuvoRadii.md),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: context.themeColors.ink, size: 20),
+                  child: leading ??
+                      Icon(icon, color: context.themeColors.ink, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

@@ -13,7 +13,6 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_motion.dart';
-import '../../../core/widgets/nuvo_podium.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_race_path.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -44,12 +43,45 @@ class ArenaScreen extends ConsumerStatefulWidget {
   ConsumerState<ArenaScreen> createState() => _ArenaScreenState();
 }
 
-class _ArenaScreenState extends ConsumerState<ArenaScreen> {
+class _ArenaScreenState extends ConsumerState<ArenaScreen>
+    with SingleTickerProviderStateMixin {
   final PageController _boardsController = PageController(viewportFraction: 1);
   int _boardPage = 0;
 
+  /// 0 = leaderboard folded to the top 3, 1 = curtain fully dropped.
+  late final AnimationController _curtain;
+
+  @override
+  void initState() {
+    super.initState();
+    _curtain = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 480),
+    );
+  }
+
+  bool get _unfolded =>
+      _curtain.status == AnimationStatus.forward ||
+      _curtain.status == AnimationStatus.completed;
+
+  void _setUnfolded(bool open) {
+    if (open == _unfolded && !_curtain.isAnimating) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _curtain.value = open ? 1 : 0;
+      setState(() {});
+      return;
+    }
+    if (open) {
+      _curtain.forward();
+    } else {
+      _curtain.reverse();
+    }
+    setState(() {});
+  }
+
   @override
   void dispose() {
+    _curtain.dispose();
     _boardsController.dispose();
     super.dispose();
   }
@@ -75,50 +107,59 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         ? null
         : boards[_boardPage.clamp(0, boards.length - 1)];
 
-    // First-composition budget. The first screen is the header plus the
-    // next-move card and its actions — the standings begin BELOW the visible
-    // area and appear only on scroll (see the first-screen block below, which
-    // is given a min height equal to the visible viewport, so the fold is
-    // guaranteed by layout, not by a magic number).
+    // First-composition budget. The first screen is the header, the next-move
+    // card, its actions and the TOP 3 of the leaderboard with the control that
+    // unfolds the rest (the curtain). Everything else is folded away, so the
+    // page does not scroll until the curtain is dropped.
     //
-    // heroHeight: the card's ceiling is whatever the usable viewport leaves
-    // after the header, section label, dots, the action row and the scroll
-    // cue. The fold is the dock's TOP EDGE. Height is density-tier driven,
-    // never raw width: the card has exactly two legal compositions — compact
-    // (~296px, smaller type/pads) and tall (>=324px). When even compact won't
-    // fit the page scrolls; the card never renders shorter than its content.
+    // heroHeight: whatever the usable viewport leaves after the header, label,
+    // dots, actions and the leaderboard peek. The fold is the dock's TOP EDGE.
+    // The card has exactly two legal compositions — compact (~296px) and tall
+    // (>=324px). When even compact won't fit the page scrolls; the card never
+    // renders shorter than its content.
     final media = MediaQuery.of(context);
     final dockReserve = _dockReserve(media);
     final dockTop = media.size.height - dockReserve;
+    // The shell strips the top inset from this context; the status bar still
+    // occupies it, so read it from the view.
+    final topInset = math.max(
+      media.padding.top,
+      MediaQueryData.fromView(View.of(context)).padding.top,
+    );
     final usableViewport =
-        dockTop - media.padding.top - 10; // breathing unit above the dock
+        dockTop - topInset - 10; // breathing unit above the dock
+    final tight = usableViewport < 560;
+    final roomy = usableViewport >= 760; // room for the section label
     final heroBase = switch (usableViewport) {
       < 560 => 300.0, // compact phones
       < 800 => 340.0, // standard
       _ => 400.0, // large
     };
-    // What the usable viewport already spent before the hero: the screen
-    // header (~110), then in the list: top pad + label + hero gap + [dots] +
-    // action gap + actions + the scroll cue.
+    final entries = activeBoard == null
+        ? const <_LbEntry>[]
+        : _leaderboardEntries(
+            board: activeBoard,
+            race: raceById[activeBoard.id],
+            currentUserId: user?.id,
+            initials: user?.avatarInitials ?? '?',
+            photoUrl: user?.profilePhotoUrl,
+          );
+    final peek = _PeekMetrics.of(entries, tight: tight);
     final fixedElsewhere =
-        110.0 +
-        6 +
-        20 +
-        8 +
+        (tight ? 86.0 : 110.0) +
+        (roomy ? 6 + 20 + 8 : 4) +
         (boards.length > 1 ? 20 : 0) +
-        8 +
-        64 +
-        _scrollCueHeight;
+        (tight ? 4 : 8) +
+        (tight ? 56 : 64) +
+        peek.height;
     final allowance = usableViewport - fixedElsewhere;
     // Content floor: the shared PageView slot must fit the WORST board in
     // the carousel — a two-line title is ~32px taller than a one-liner and
     // the slot can't grow per page. Measured with TextPainter at the
-    // card's real text width so long race names never clip. The measurement
-    // uses whichever composition (compact <300 / tall) the resulting slot
-    // will actually render — two passes settle the mode flip.
+    // card's real text width so long race names never clip.
     final cardTextWidth =
         media.size.width - NuvoSpacing.pageHorizontal * 2 - 12 - 40;
-    var heroHeight = allowance >= 324 ? math.min(heroBase, allowance) : 296.0;
+    var heroHeight = allowance >= 300 ? math.min(heroBase, allowance) : 0.0;
     for (var pass = 0; pass < 2; pass++) {
       var need = 0.0;
       for (final board in boards) {
@@ -137,6 +178,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       if (need <= heroHeight) break;
       heroHeight = need;
     }
+    final firstScreenOverflows = fixedElsewhere + heroHeight > usableViewport;
     final greeting =
         user?.fullName?.trim().split(RegExp(r'\s+')).first ?? 'there';
     final loading =
@@ -217,164 +259,129 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                     ),
                   ),
               ] else ...[
-                // First screen: header + next-move card + actions, given a
-                // min height equal to the visible viewport (scroll view
-                // height minus the dock). The standings sliver below can
-                // therefore never start inside the first viewport.
-                SliverLayoutBuilder(
-                  builder: (context, constraints) {
-                    final visibleHeight = math.max(
-                      0.0,
-                      constraints.viewportMainAxisExtent - dockReserve,
-                    );
-                    return SliverToBoxAdapter(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: visibleHeight),
-                        child: Stack(
-                          children: [
+                SliverToBoxAdapter(
+                  child: AnimatedBuilder(
+                    animation: _curtain,
+                    builder: (context, _) {
+                      final t = Curves.easeOutCubic.transform(_curtain.value);
+                      final open = _unfolded;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              22,
+                              tight ? 12 : 18,
+                              22,
+                              0,
+                            ),
+                            child: _ArenaHeader(greeting: greeting),
+                          ),
+                          if (isOffline)
                             Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: _scrollCueHeight,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      22,
-                                      18,
-                                      22,
-                                      0,
-                                    ),
-                                    child: _ArenaHeader(greeting: greeting),
-                                  ),
-                                  if (isOffline)
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        22,
-                                        14,
-                                        22,
-                                        0,
-                                      ),
-                                      child: NuvoOfflineBanner(
-                                        onRetry: retryConnection,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 6),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: NuvoSpacing.pageHorizontal,
-                                    ),
-                                    child: _SectionLabel(
-                                      title: 'Your next move',
-                                      trailing: boards.length > 1
-                                          ? '${_boardPage + 1} / ${boards.length}'
-                                          : null,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: NuvoSpacing.pageHorizontal,
-                                    ),
-                                    child: SizedBox(
-                                      height: heroHeight,
-                                      child: PageView.builder(
-                                        controller: _boardsController,
-                                        clipBehavior: Clip.hardEdge,
-                                        itemCount: boards.length,
-                                        onPageChanged: (page) =>
-                                            setState(() => _boardPage = page),
-                                        padEnds: false,
-                                        itemBuilder: (context, index) =>
-                                            _BoardCarouselItem(
-                                              controller: _boardsController,
-                                              index: index,
-                                              board: boards[index],
-                                              race: raceById[boards[index].id],
-                                              viewerId: user?.id,
-                                              heroHeight: heroHeight,
-                                              onOpen: () => _openBoard(
-                                                context,
-                                                boards[index],
-                                              ),
-                                            ),
-                                      ),
-                                    ),
-                                  ),
-                                  if (boards.length > 1) ...[
-                                    const SizedBox(height: 6),
-                                    Center(
-                                      child: _PageDots(
-                                        count: boards.length,
-                                        selected: _boardPage,
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 8),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: NuvoSpacing.pageHorizontal,
-                                    ),
-                                    child: _QuickActions(
-                                      onSubmit: activeBoard.isResult
-                                          ? null
-                                          : () => _handlePrimaryAction(
-                                              context,
-                                              activeBoard,
-                                              raceById,
-                                            ),
-                                      onStart: () => context.push('/races/new'),
-                                      onJoin: () => context.push('/races/join'),
-                                    ),
-                                  ),
-                                ],
+                              padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                              child: NuvoOfflineBanner(
+                                onRetry: retryConnection,
                               ),
                             ),
-                            // Calm breathing room under the actions: a quiet
-                            // cue that the standings live below the fold.
-                            const Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              height: _scrollCueHeight,
-                              child: _ScrollCue(),
+                          if (!roomy)
+                            const SizedBox(height: 4)
+                          else ...[
+                            const SizedBox(height: 6),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: NuvoSpacing.pageHorizontal,
+                              ),
+                              child: _SectionLabel(
+                                title: 'Your next move',
+                                trailing: boards.length > 1
+                                    ? '${_boardPage + 1} / ${boards.length}'
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NuvoSpacing.pageHorizontal,
+                            ),
+                            child: SizedBox(
+                              height: heroHeight,
+                              child: PageView.builder(
+                                controller: _boardsController,
+                                clipBehavior: Clip.hardEdge,
+                                itemCount: boards.length,
+                                onPageChanged: (page) {
+                                  _curtain.value = 0;
+                                  setState(() => _boardPage = page);
+                                },
+                                padEnds: false,
+                                itemBuilder: (context, index) =>
+                                    _BoardCarouselItem(
+                                      controller: _boardsController,
+                                      index: index,
+                                      board: boards[index],
+                                      race: raceById[boards[index].id],
+                                      viewerId: user?.id,
+                                      heroHeight: heroHeight,
+                                      onOpen: () =>
+                                          _openBoard(context, boards[index]),
+                                    ),
+                              ),
+                            ),
+                          ),
+                          if (boards.length > 1) ...[
+                            const SizedBox(height: 6),
+                            Center(
+                              child: _PageDots(
+                                count: boards.length,
+                                selected: _boardPage,
+                              ),
                             ),
                           ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    NuvoSpacing.pageHorizontal,
-                    20,
-                    NuvoSpacing.pageHorizontal,
-                    NuvoBottomNav.bottomPadding(context),
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      KeyedSubtree(
-                        key: ValueKey('board-sections-${activeBoard.id}'),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _SectionLabel(title: 'Leaderboard'),
-                            const SizedBox(height: 10),
-                            _Standings(
-                              board: activeBoard,
-                              // Prefer the authoritative race so this shows the
-                              // exact same standings as the race page.
-                              race: raceById[activeBoard.id],
-                              currentUserId: user?.id,
-                              initials: user?.avatarInitials ?? '?',
-                              photoUrl: user?.profilePhotoUrl,
+                          SizedBox(height: tight ? 4 : 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NuvoSpacing.pageHorizontal,
                             ),
-                          ],
-                        ),
-                      ),
-                    ]),
+                            child: _QuickActions(
+                              height: tight ? 56 : 64,
+                              onSubmit: activeBoard.isResult
+                                  ? null
+                                  : () => _handlePrimaryAction(
+                                      context,
+                                      activeBoard,
+                                      raceById,
+                                    ),
+                              onStart: () => context.push('/races/new'),
+                              onJoin: () => context.push('/races/join'),
+                            ),
+                          ),
+                          KeyedSubtree(
+                            key: ValueKey('board-sections-${activeBoard.id}'),
+                            child: _LeaderboardPeek(
+                              entries: entries,
+                              metrics: peek,
+                              tight: tight,
+                              unfolded: open,
+                              t: t,
+                              raw: _curtain.value,
+                              onToggle: () => _setUnfolded(!open),
+                              onFlingUp: () => _setUnfolded(true),
+                              onFlingDown: () => _setUnfolded(false),
+                            ),
+                          ),
+                          SizedBox(
+                            // Clear the dock once the curtain is down — or while
+                            // folded when the first screen can't fit at all
+                            // (smallest phones), so the control is reachable.
+                            height:
+                                NuvoBottomNav.bottomPadding(context) *
+                                (firstScreenOverflows ? 1.0 : t),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -745,12 +752,6 @@ class _NextMoveHero extends StatelessWidget {
                       ],
                     ],
                   ),
-                  // Participant context — a fixed gap below the track,
-                  // never a stretch-to-fill blank area.
-                  Padding(
-                    padding: EdgeInsets.only(top: tall ? 6 : 8),
-                    child: _RaceDetails(board: board),
-                  ),
                 ],
               ),
             ),
@@ -805,56 +806,6 @@ class _NextMoveHero extends StatelessWidget {
   }
 }
 
-class _RaceDetails extends StatelessWidget {
-  const _RaceDetails({required this.board});
-  final ArenaBoard board;
-
-  @override
-  Widget build(BuildContext context) {
-    final avatars = board.miniLeaderboard
-        .map(
-          (row) =>
-              (initials: _initials(row.label), photoUrl: row.profilePhotoUrl),
-        )
-        .toList();
-    final total = board.racerCount ?? board.miniLeaderboard.length;
-
-    return Row(
-      children: [
-        if (avatars.isNotEmpty) ...[
-          NuvoAvatarStack(
-            avatars: avatars,
-            total: total,
-            size: 26,
-            max: 3,
-            borderColor: arenaHeroSurface(
-              Theme.of(context).brightness,
-              context.themeColors.surface,
-            ),
-          ),
-          const SizedBox(width: 9),
-        ],
-        Expanded(
-          child: Text(
-            // One clean participant line — the card already shows progress
-            // ("0 / 6 reps") prominently, so this is just "N racers", not a
-            // compound restatement of the same facts.
-            total == 1 ? '1 racer' : '$total racers',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelSmall.copyWith(
-              // inkMuted, not inkSubtle: keeps >= 4.5:1 on the lighter dark
-              // hero surface.
-              color: context.themeColors.inkMuted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _PageDots extends StatelessWidget {
   const _PageDots({required this.count, required this.selected});
   final int count;
@@ -884,10 +835,12 @@ class _PageDots extends StatelessWidget {
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
+    this.height = 64,
     required this.onSubmit,
     required this.onStart,
     required this.onJoin,
   });
+  final double height;
   final VoidCallback? onSubmit;
   final VoidCallback onStart;
   final VoidCallback onJoin;
@@ -906,7 +859,7 @@ class _QuickActions extends StatelessWidget {
           label: 'Submit proof',
           onPressed: onSubmit,
           expand: true,
-          height: 64,
+          height: height,
           horizontalPadding: 16,
         ),
       ),
@@ -920,7 +873,7 @@ class _QuickActions extends StatelessWidget {
           label: 'New',
           onPressed: onStart,
           expand: true,
-          height: 64,
+          height: height,
           horizontalPadding: 8,
         ),
       ),
@@ -932,17 +885,13 @@ class _QuickActions extends StatelessWidget {
           label: 'Join',
           onPressed: onJoin,
           expand: true,
-          height: 64,
+          height: height,
           horizontalPadding: 8,
         ),
       ),
     ],
   );
 }
-
-/// Height reserved at the bottom of the first screen for the quiet
-/// "standings below" cue; part of the hero budget.
-const double _scrollCueHeight = 36;
 
 /// Dark-mode surface of the Arena next-move hero: one step lighter than the
 /// page/surface ladder (surface 0xFF14171D) so the card lifts off the page.
@@ -958,123 +907,530 @@ Color arenaHeroSurface(Brightness brightness, Color lightSurface) =>
 /// `padding.bottom`; if a host reports only the raw inset, add the dock.
 double _dockReserve(MediaQueryData media) {
   final bottom = media.padding.bottom;
-  return bottom >= NuvoBottomNav.navDockHeight
-      ? bottom
-      : bottom + NuvoBottomNav.navDockHeight;
+  return bottom >= 48 ? bottom : bottom + NuvoBottomNav.navDockHeight;
 }
 
-class _ScrollCue extends StatelessWidget {
-  const _ScrollCue();
-  @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Center(
-      child: Icon(
-        Icons.keyboard_arrow_down_rounded,
-        size: 26,
-        color: context.themeColors.inkSubtle,
-      ),
-    ),
-  );
+/// Entries of the active board, in rank order. When the real race is loaded
+/// they come from serverRankedParticipants so the Arena shows the exact same
+/// standings (people, order, scores) as the race page; otherwise the arena
+/// snapshot's mini leaderboard.
+List<_LbEntry> _leaderboardEntries({
+  required ArenaBoard board,
+  required Race? race,
+  required String? currentUserId,
+  required String initials,
+  required String? photoUrl,
+}) {
+  final r = race;
+  return [
+    if (r != null && r.participants.isNotEmpty)
+      for (final (i, p) in serverRankedParticipants(r).indexed)
+        _LbEntry(
+          rank: i + 1,
+          name: p.userId == currentUserId ? 'You' : p.displayName,
+          stat: raceProgressLabel(r, p),
+          photoUrl: p.userId == currentUserId ? photoUrl : p.profilePhotoUrl,
+          initials: p.userId == currentUserId ? initials : null,
+          seed: p.userId,
+          isMe: p.userId == currentUserId,
+        )
+    else
+      for (final (i, row) in board.miniLeaderboard.indexed)
+        _LbEntry(
+          rank: i + 1,
+          name: row.isCurrentUser ? 'You' : row.label,
+          stat: row.value,
+          photoUrl: row.isCurrentUser ? photoUrl : row.profilePhotoUrl,
+          initials: row.isCurrentUser ? initials : null,
+          seed: row.label,
+          isMe: row.isCurrentUser,
+        ),
+  ];
 }
 
-class _Standings extends StatelessWidget {
-  const _Standings({
-    required this.board,
-    required this.currentUserId,
-    required this.initials,
-    this.race,
-    this.photoUrl,
+String _ordinal(int n) {
+  final mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return '${n}th';
+  return switch (n % 10) {
+    1 => '${n}st',
+    2 => '${n}nd',
+    3 => '${n}rd',
+    _ => '${n}th',
+  };
+}
+
+/// Heights of the first-screen leaderboard peek (top 3 [+ pinned You] + the
+/// unfold control). Feeds the hero budget, so the layout is guaranteed rather
+/// than hoped for.
+class _PeekMetrics {
+  const _PeekMetrics({
+    required this.rowHeight,
+    required this.showLabel,
+    required this.pinned,
+    required this.hasControl,
+    required this.height,
   });
-  final ArenaBoard board;
-  final Race? race;
-  final String? currentUserId;
-  final String initials;
-  final String? photoUrl;
+  final double rowHeight;
+  final bool showLabel;
+  final bool pinned;
+  final bool hasControl;
+  final double height;
+
+  static const double controlHeight = 32;
+
+  factory _PeekMetrics.of(List<_LbEntry> entries, {required bool tight}) {
+    final hasControl = entries.length >= 4;
+    final pinned = entries.length > 3 && entries.skip(3).any((e) => e.isMe);
+    if (entries.isEmpty) {
+      return const _PeekMetrics(
+        rowHeight: 0,
+        showLabel: false,
+        pinned: false,
+        hasControl: false,
+        height: 8 + 64.0 + 8,
+      );
+    }
+    if (tight) {
+      // Small phones: the top 3 sit side by side in one strip; the viewer's
+      // own place (when outside the top 3) rides the control row.
+      return _PeekMetrics(
+        rowHeight: stripHeight,
+        showLabel: false,
+        pinned: pinned,
+        hasControl: hasControl,
+        height: 2 + stripHeight + 2 + (hasControl ? controlHeight : 0) + 6,
+      );
+    }
+    const rowHeight = 36.0;
+    final rows = math.min(entries.length, 3) + (pinned ? 1 : 0);
+    return _PeekMetrics(
+      rowHeight: rowHeight,
+      showLabel: false,
+      pinned: pinned,
+      hasControl: hasControl,
+      height: 8 + rows * rowHeight + 2 + (hasControl ? controlHeight : 0) + 8,
+    );
+  }
+
+  static const double stripHeight = 48;
+}
+
+/// The first-screen leaderboard: top 3 (plus a pinned "You · 7th" row when the
+/// viewer is further down), the unfold control, and the curtain that holds
+/// rank 4+ and drops down from the seam under the control.
+class _LeaderboardPeek extends StatelessWidget {
+  const _LeaderboardPeek({
+    required this.entries,
+    required this.metrics,
+    required this.tight,
+    required this.unfolded,
+    required this.t,
+    required this.raw,
+    required this.onToggle,
+    required this.onFlingUp,
+    required this.onFlingDown,
+  });
+  final List<_LbEntry> entries;
+  final _PeekMetrics metrics;
+  final bool tight;
+  final bool unfolded;
+
+  /// Eased curtain progress 0..1; [raw] is the linear controller value.
+  final double t;
+  final double raw;
+  final VoidCallback onToggle;
+  final VoidCallback onFlingUp;
+  final VoidCallback onFlingDown;
 
   @override
   Widget build(BuildContext context) {
-    // When the real race is loaded, build from serverRankedParticipants so the
-    // Arena shows the *exact* same standings (people, order, scores) as the
-    // race page. Fall back to the arena snapshot's mini leaderboard.
-    final r = race;
-    final entries = <_LbEntry>[
-      if (r != null && r.participants.isNotEmpty)
-        for (final (i, p) in serverRankedParticipants(r).indexed)
-          _LbEntry(
-            rank: i + 1,
-            name: p.userId == currentUserId ? 'You' : p.displayName,
-            stat: raceProgressLabel(r, p),
-            photoUrl: p.userId == currentUserId ? photoUrl : p.profilePhotoUrl,
-            initials: p.userId == currentUserId ? initials : null,
-            seed: p.userId,
-            isMe: p.userId == currentUserId,
-          )
-      else
-        for (final (i, row) in board.miniLeaderboard.indexed)
-          _LbEntry(
-            rank: i + 1,
-            name: row.isCurrentUser ? 'You' : row.label,
-            stat: row.value,
-            photoUrl: row.isCurrentUser ? photoUrl : row.profilePhotoUrl,
-            initials: row.isCurrentUser ? initials : null,
-            seed: row.label,
-            isMe: row.isCurrentUser,
-          ),
-    ];
-
-    if (entries.isEmpty) {
-      return _OutlinedSheet(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          child: Text(
-            'Your crew will appear here as they join the start line.',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: context.themeColors.inkSubtle,
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Small fields use the same podium composition as the race room — a
-    // 1- or 2-person race still shows a podium (empty places simply don't
-    // render), never the generic rows reserved for ranks 4+.
+    final c = context.themeColors;
+    final top = entries.take(3).toList();
     final rest = entries.length > 3 ? entries.sublist(3) : const <_LbEntry>[];
+    _LbEntry? pinned;
+    if (metrics.pinned) pinned = rest.firstWhere((e) => e.isMe);
+    // While the curtain is dropping (or down) the pinned row is redundant —
+    // the real row is in the curtain — so it folds away with it.
+    final showPinned = pinned != null && raw == 0;
 
-    return NuvoPodium(
-      top: [
-        for (final e in entries.take(3))
-          NuvoPodiumEntry(
-            rank: e.rank,
-            name: e.name,
-            statLabel: e.stat,
-            photoUrl: e.photoUrl,
-            initials: e.initials,
-            avatarSeedId: e.seed,
-            isCurrentUser: e.isMe,
-          ),
-      ],
-      // Rank 4+ is ordinary scroll content — the shorter card is what keeps
-      // it below the first viewport now, not an artificial spacer here.
-      rest: rest.isEmpty
-          ? null
-          : _OutlinedSheet(
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NuvoSpacing.pageHorizontal,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (metrics.showLabel) ...[
+            const _SectionLabel(title: 'Leaderboard'),
+            const SizedBox(height: 6),
+          ] else
+            SizedBox(height: tight ? 2 : 8),
+          if (entries.isEmpty)
+            _OutlinedSheet(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Text(
+                  'Your crew will appear here as they join the start line.',
+                  style: AppTextStyles.bodySmall.copyWith(color: c.inkSubtle),
+                ),
+              ),
+            )
+          else if (tight)
+            _OutlinedSheet(
               child: Column(
                 children: [
-                  for (var i = 0; i < rest.length; i++) ...[
-                    _StandingRow(entry: rest[i]),
-                    if (i < rest.length - 1)
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: context.themeColors.divider,
-                        indent: 16,
-                        endIndent: 16,
-                      ),
+                  SizedBox(
+                    height: _PeekMetrics.stripHeight,
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < top.length; i++) ...[
+                          if (i > 0)
+                            VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: c.divider,
+                            ),
+                          Expanded(child: _StripCell(entry: top[i])),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (raw > 0 && rest.isNotEmpty)
+                    _Curtain(rest: rest, t: t, raw: raw),
+                ],
+              ),
+            )
+          else
+            _OutlinedSheet(
+              child: Column(
+                children: [
+                  for (var i = 0; i < top.length; i++) ...[
+                    _PeekRow(entry: top[i], height: metrics.rowHeight),
+                    if (i < top.length - 1 || showPinned) _rowDivider(c),
                   ],
+                  if (showPinned)
+                    _PeekRow(
+                      entry: pinned,
+                      height: metrics.rowHeight,
+                      pinnedLabel: 'You · ${_ordinal(pinned.rank)}',
+                    ),
+                  // The curtain: rank 4+ drops from the seam under the top 3,
+                  // inside the same sheet so it reads as one folding card.
+                  if (raw > 0 && rest.isNotEmpty)
+                    _Curtain(rest: rest, t: t, raw: raw),
                 ],
               ),
             ),
+          if (metrics.hasControl)
+            _UnfoldControl(
+              pinnedLabel: tight && showPinned
+                  ? 'You · ${_ordinal(pinned.rank)}'
+                  : null,
+              unfolded: unfolded,
+              turns: t * 0.5,
+              onToggle: onToggle,
+              onFlingUp: onFlingUp,
+              onFlingDown: onFlingDown,
+            ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _rowDivider(NuvoThemeColors c) => Divider(
+    height: 1,
+    thickness: 1,
+    color: c.divider,
+    indent: 14,
+    endIndent: 14,
+  );
+}
+
+/// Rows 4+, revealed by a clip that grows from the seam (ClipRect +
+/// Align.heightFactor), each row fading and sliding down a little with a
+/// stagger, and a soft shadow riding the moving bottom edge.
+class _Curtain extends StatelessWidget {
+  const _Curtain({required this.rest, required this.t, required this.raw});
+  final List<_LbEntry> rest;
+  final double t;
+  final double raw;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final moving = raw < 1;
+    final rows = <Widget>[
+      for (var i = 0; i < rest.length; i++)
+        Builder(
+          builder: (context) {
+            // Stagger by position, capped so long lists still land together.
+            final delay = math.min(i, 6) * 0.07;
+            final local = ((raw - delay) / (1 - delay)).clamp(0.0, 1.0);
+            final eased = Curves.easeOutCubic.transform(local);
+            return Opacity(
+              opacity: eased,
+              child: Transform.translate(
+                offset: Offset(0, -10 * (1 - eased)),
+                child: Column(
+                  children: [
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: c.divider,
+                      indent: 14,
+                      endIndent: 14,
+                    ),
+                    _StandingRow(entry: rest[i]),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+    ];
+    return Stack(
+      children: [
+        ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: t,
+            child: Column(children: rows),
+          ),
+        ),
+        if (moving)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 14,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(
+                        alpha: 0.16 * math.sin(math.pi * raw),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// "See full leaderboard" / "Show less": a button with an animated chevron.
+/// Swiping up on it unfolds the curtain (down folds it back).
+class _UnfoldControl extends StatelessWidget {
+  const _UnfoldControl({
+    this.pinnedLabel,
+    required this.unfolded,
+    required this.turns,
+    required this.onToggle,
+    required this.onFlingUp,
+    required this.onFlingDown,
+  });
+  final String? pinnedLabel;
+  final bool unfolded;
+  final double turns;
+  final VoidCallback onToggle;
+  final VoidCallback onFlingUp;
+  final VoidCallback onFlingDown;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final label = unfolded ? 'Show less' : 'See full leaderboard';
+    return Semantics(
+      button: true,
+      expanded: unfolded,
+      label: label,
+      onTap: onToggle,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onToggle,
+          onVerticalDragEnd: (d) {
+            final v = d.primaryVelocity ?? 0;
+            if (v < -200) onFlingUp();
+            if (v > 200) onFlingDown();
+          },
+          child: SizedBox(
+            height: _PeekMetrics.controlHeight,
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (pinnedLabel != null) ...[
+                    Text(
+                      pinnedLabel!,
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: c.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(width: 1, height: 14, color: c.divider),
+                    const SizedBox(width: 12),
+                  ],
+                  Text(
+                    label,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: c.accent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Transform.rotate(
+                    angle: turns * 2 * math.pi,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 24,
+                      color: c.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One of the top 3 in the small-phone strip: rank, avatar, name over stat.
+class _StripCell extends StatelessWidget {
+  const _StripCell({required this.entry});
+  final _LbEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final me = entry.isMe;
+    return Container(
+      color: me ? c.panel : null,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          Text(
+            '${entry.rank}',
+            style: AppTextStyles.labelMedium.copyWith(
+              color: entry.rank == 1 ? c.accent : c.inkSubtle,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 5),
+          NuvoAvatar(
+            initials: entry.initials ?? _initials(entry.name),
+            photoUrl: entry.photoUrl,
+            size: 26,
+            bgColor: nuvoAvatarColorFor(entry.seed),
+            textColor: NuvoColors.white,
+            borderColor: me ? _arenaBlue : c.border,
+            borderWidth: me ? 2 : 1.5,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontSize: 12,
+                    color: c.ink,
+                  ),
+                ),
+                Text(
+                  entry.stat,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.raceRowMeta.copyWith(
+                    fontSize: 10.5,
+                    color: me ? c.accent : c.inkSubtle,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact top-3 row.
+class _PeekRow extends StatelessWidget {
+  const _PeekRow({required this.entry, required this.height, this.pinnedLabel});
+  final _LbEntry entry;
+  final double height;
+  final String? pinnedLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final me = entry.isMe;
+    final avatar = height >= 44 ? 30.0 : 26.0;
+    return Container(
+      height: height,
+      color: me ? c.panel : null,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 22,
+            child: Text(
+              pinnedLabel != null ? '' : '${entry.rank}',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: entry.rank == 1 ? c.accent : c.inkSubtle,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          NuvoAvatar(
+            initials: entry.initials ?? _initials(entry.name),
+            photoUrl: entry.photoUrl,
+            size: avatar,
+            bgColor: nuvoAvatarColorFor(entry.seed),
+            textColor: NuvoColors.white,
+            borderColor: me ? _arenaBlue : c.border,
+            borderWidth: me ? 2 : 1.5,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              pinnedLabel ?? entry.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleMedium.copyWith(
+                fontSize: 14,
+                color: c.ink,
+              ),
+            ),
+          ),
+          Text(
+            entry.stat,
+            style: AppTextStyles.raceRowMeta.copyWith(
+              color: me ? c.accent : c.inkSubtle,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1475,13 +1831,6 @@ double _heroContentHeight(
               ),
             )
       : 0.0;
-  final racerRow = math.max(
-    26.0,
-    measure(
-      '${board.racerCount ?? board.miniLeaderboard.length} racers',
-      AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
-    ),
-  );
   return (tall ? 12.0 : 10.0) +
       title +
       (tall ? 8.0 : 6.0) +
@@ -1489,8 +1838,6 @@ double _heroContentHeight(
       (tall ? 8.0 : 4.0) +
       laneHeight +
       stakes +
-      (tall ? 6.0 : 8.0) +
-      racerRow +
       (tall ? 8.0 : 4.0) +
       (tall ? 54.0 : 50.0) +
       10 +

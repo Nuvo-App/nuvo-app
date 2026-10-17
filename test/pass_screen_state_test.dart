@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/core/config/nuvo_flags.dart';
 import 'package:nuvo/core/widgets/nuvo_error_state.dart';
+import 'package:nuvo/core/widgets/nuvo_icons.dart';
 import 'package:nuvo/core/widgets/pressable_scale.dart';
 import 'package:nuvo/core/widgets/nuvo_motion.dart';
 import 'package:nuvo/core/demo/presentation_demo.dart';
@@ -662,5 +664,31 @@ void main() {
       await tester.pump();
       expect(find.text('Search failed. Try again.'), findsNothing);
     });
+  });
+
+  group('People tab Crews row', () {
+    const sizes = [
+      Size(320, 568),
+      Size(375, 667),
+      Size(390, 844),
+      Size(393, 852),
+      Size(430, 932),
+    ];
+    for (final size in sizes) {
+      testWidgets('uses the crew icon, no overflow at $size', (tester) async {
+        NuvoFlags.crews.value = true;
+        addTearDown(() => NuvoFlags.crews.value = false);
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(_buildApp(demo: true));
+        await _settleDemo(tester);
+        expect(find.text('Crews'), findsOneWidget);
+        expect(find.text('Race together on one leaderboard'), findsOneWidget);
+        expect(find.byType(NuvoCrewIcon), findsOneWidget);
+        expect(find.byIcon(Icons.groups_rounded), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }

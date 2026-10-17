@@ -24,7 +24,11 @@ class NuvoEmptyState extends StatelessWidget {
     this.accent = NuvoColors.blue,
     this.align = TextAlign.start,
     this.compact = false,
+    this.leading,
   });
+
+  /// Optional custom mark drawn in the tile instead of [icon].
+  final Widget? leading;
 
   final IconData icon;
   final String title;
@@ -63,7 +67,7 @@ class NuvoEmptyState extends StatelessWidget {
             borderRadius: BorderRadius.circular(NuvoRadii.md),
             border: Border.all(color: _roleBorder(context, accent)),
           ),
-          child: Icon(icon, size: compact ? 20 : 24, color: accent),
+          child: leading ?? Icon(icon, size: compact ? 20 : 24, color: accent),
         ),
         SizedBox(height: compact ? 14 : 18),
         Text(

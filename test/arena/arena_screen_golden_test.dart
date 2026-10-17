@@ -77,7 +77,7 @@ void main() {
   ) async {
     await pumpArena(tester, bottomInset: 34);
 
-    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.text('Alex R.'), findsOneWidget); // top 3 on the first screen
     expect(find.text('Submit proof'), findsWidgets);
     expect(tester.takeException(), isNull);
   });

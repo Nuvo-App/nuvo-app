@@ -3,7 +3,6 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_motion.dart';
 
@@ -64,18 +63,17 @@ const nuvoDestinations = <NuvoDestination>[
 
 /// Bottom navigation for Nuvo.
 ///
-/// FLOATING DOCK: the nav is a compact white rounded container inset from
-/// the screen edges — it behaves like a control, not a section of the
-/// screen. `MainShell` hosts it with `Scaffold(bottomNavigationBar: ...,
-/// extendBody: true)`: page content extends to the bottom edge and is
-/// visible in the dock's horizontal margins while scrolling.
+/// CONNECTED BAR: the nav is a full-width, flush-bottom iOS-style tab bar
+/// (one surface, 1px top hairline, safe inset absorbed inside). `MainShell`
+/// hosts it with `Scaffold(bottomNavigationBar: ..., extendBody: true)`:
+/// page content extends to the bottom edge and scrolls behind the opaque bar.
 ///
 /// Because the body extends behind/around the dock, [bottomPadding] is the
 /// contract every scrollable screen applies to its final padding so the
 /// last row can scroll fully clear of the dock instead of hiding behind it.
 ///
 /// GEOMETRY CONTRACT (single source of truth):
-///   navDockHeight — the dock's visual height (58px), above the safe inset.
+///   navDockHeight — the dock's visual height (52pt incl. 1px hairline), above the safe inset.
 ///   navScrollClearance — the one section gap below a screen's last row.
 ///   bottomPadding(context) = MediaQuery.padding.bottom + navScrollClearance
 ///
@@ -106,13 +104,10 @@ class NuvoBottomNav extends StatelessWidget {
   // ── Geometry contract ──────────────────────────────────────────────────────
 
   /// The dock's visual height — compact by design. Content owns the screen.
-  static const double navDockHeight = 58;
+  static const double navDockHeight = 52;
 
-  /// Horizontal margin between the dock and the screen edges.
-  static const double navDockInset = 16;
-
-  /// Breathing strip above the dock's top edge (shadow + separation).
-  static const double navTopBreath = 8;
+  /// Breathing strip above the bar — none: the bar is flush and hairlined.
+  static const double navTopBreath = 0;
 
   /// Content height of the dark trackside bar (non-shell screens).
   static const double navContentHeight = 48;
@@ -172,39 +167,29 @@ class NuvoBottomNav extends StatelessWidget {
       );
     }
 
-    // Floating dock — white rounded container inset from the edges, resting
-    // directly on the safe inset. Nuvo structure comes from the thin navy
-    // edge + offset navy shadow (the app's tactile shadow language), not
-    // from a divider or a full-width surface.
-    return Padding(
-      padding: EdgeInsets.fromLTRB(navDockInset, 0, navDockInset, safeBottom),
-      child: Container(
-        height: navDockHeight,
-        decoration: BoxDecoration(
-          color: context.themeColors.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.hero),
-          border: Border.all(color: context.themeColors.border, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: context.themeColors.inkShadow,
-              blurRadius: 0,
-              offset: const Offset(0, 3),
+    // Connected bar: full width, flush to the screen bottom, one surface with
+    // a 1px top hairline. The home-indicator inset is absorbed inside the
+    // bar's own background so no strip of page colour shows under it.
+    final colors = context.themeColors;
+    return Container(
+      height: navDockHeight + safeBottom,
+      padding: EdgeInsets.only(bottom: safeBottom),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.divider, width: 1)),
+      ),
+      child: Row(
+        key: rowKey,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < _items.length; index++)
+            _NavButton(
+              item: _items[index],
+              selected: currentIndex == index,
+              isDark: false,
+              onTap: () => _tap(index),
             ),
-          ],
-        ),
-        child: Row(
-          key: rowKey,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var index = 0; index < _items.length; index++)
-              _NavButton(
-                item: _items[index],
-                selected: currentIndex == index,
-                isDark: false,
-                onTap: () => _tap(index),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -260,7 +245,7 @@ class _NavButtonState extends State<_NavButton> {
   Widget build(BuildContext context) {
     final inactiveColor = widget.isDark
         ? NuvoColors.white.withValues(alpha: 0.75)
-        : context.themeColors.inkSubtle;
+        : context.themeColors.inkMuted;
     final activeColor = widget.isDark
         ? _kTrackActiveBlue
         : context.themeColors.accent;
@@ -296,22 +281,22 @@ class _NavButtonState extends State<_NavButton> {
                         key: widget.selected
                             ? const ValueKey('nuvo-nav-indicator')
                             : null,
-                        width: 52,
-                        height: 28,
+                        width: 48,
+                        height: 26,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: activeColor.withValues(alpha: 0.14 * t),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(13),
                         ),
                         child: Icon(
                           widget.selected
                               ? widget.item.selectedIcon
                               : widget.item.icon,
-                          size: 20,
+                          size: 22,
                           color: color,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         widget.item.label,
                         maxLines: 1,
