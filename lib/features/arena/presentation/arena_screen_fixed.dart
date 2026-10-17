@@ -23,6 +23,7 @@ import '../../races/presentation/race_controller.dart';
 import '../data/arena_models.dart';
 import 'arena_controller.dart';
 import 'arena_podium.dart';
+import 'arena_rest_board.dart';
 
 // Structural chrome (page/surface/ink/muted) resolves through
 // `context.themeColors` at each call site — module-level consts can't
@@ -46,12 +47,14 @@ class ArenaScreen extends ConsumerStatefulWidget {
 
 class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   final PageController _boardsController = PageController(viewportFraction: 1);
+  final ScrollController _scroll = ScrollController();
   int _boardPage = 0;
   bool _moreBelow = false;
 
   @override
   void dispose() {
     _boardsController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -121,12 +124,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                     withChip: podiumData.viewer != null,
                   )
                 : 70.0;
+            final hasRest = hasPodium && podiumData.rest.isNotEmpty;
+            final arrowH = hasRest ? ArenaRestArrow.height : 0.0;
             final dots = boards.length > 1 ? 20.0 : 0.0;
             double chromeFor(bool micro) =>
                 (micro ? _microHeaderHeight : 120.0) +
                 6 +
                 (micro ? 0 : 28) +
                 dots +
+                arrowH +
                 8 +
                 (micro ? 56 : 64) +
                 12;
@@ -187,6 +193,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         .read(arenaControllerProvider.notifier)
                         .loadSnapshot(),
               child: CustomScrollView(
+                controller: _scroll,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   if (loading ||
@@ -344,21 +351,56 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               bottomPad,
                             ),
                             child: hasPodium
-                                ? ArenaPodium(
-                                    key: ValueKey(
-                                      'arena-podium-${activeBoard.id}',
-                                    ),
-                                    entries: podiumData.entries,
-                                    viewer: podiumData.viewer,
-                                    height: podiumHeight,
-                                    onTap: () =>
-                                        _openBoard(context, activeBoard),
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ArenaPodium(
+                                        key: ValueKey(
+                                          'arena-podium-${activeBoard.id}',
+                                        ),
+                                        entries: podiumData.entries,
+                                        viewer: podiumData.viewer,
+                                        height: podiumHeight,
+                                        onTap: () =>
+                                            _openBoard(context, activeBoard),
+                                      ),
+                                      if (hasRest)
+                                        ArenaRestArrow(
+                                          onTap: () => _scroll.animateTo(
+                                            math.max(
+                                              0,
+                                              _scroll.position.maxScrollExtent,
+                                            ),
+                                            duration: const Duration(
+                                              milliseconds: 520,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                          ),
+                                        ),
+                                    ],
                                   )
                                 : _EmptyPodium(),
                           ),
                         ],
                       ),
                     ),
+                    if (hasRest)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            NuvoSpacing.pageHorizontal,
+                            0,
+                            NuvoSpacing.pageHorizontal,
+                            bottomPad,
+                          ),
+                          child: ArenaRestBoard(
+                            entries: podiumData.rest,
+                            scroll: _scroll,
+                            revealExtent: math.max(120.0, avail * 0.5),
+                            onTap: () => _openBoard(context, activeBoard),
+                          ),
+                        ),
+                      ),
                   ],
                 ],
               ),
@@ -421,7 +463,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     );
   }
 
-  ({List<ArenaPodiumEntry> entries, ArenaPodiumEntry? viewer}) _podiumFor(
+  ({
+    List<ArenaPodiumEntry> entries,
+    ArenaPodiumEntry? viewer,
+    List<ArenaPodiumEntry> rest,
+  })
+  _podiumFor(
     ArenaBoard board,
     Race? race,
     String? viewerId,
@@ -466,7 +513,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     }
     final top = all.take(3).toList();
     final outside = all.skip(3).where((e) => e.isMe).firstOrNull;
-    return (entries: top, viewer: outside);
+    return (entries: top, viewer: outside, rest: all.skip(3).toList());
   }
 
   List<ArenaBoard> _boardsFor(ArenaSnapshot? snapshot) {

@@ -196,7 +196,12 @@ void main() {
     await pumpArena(tester, const Size(390, 844), snapshot: outside);
     expect(tester.takeException(), isNull);
     expect(find.text('You \u00b7 5th \u00b7 22'), findsOneWidget);
-    expect(find.text('Jo'), findsNothing);
+    // 4th and below live in the rest board under the fold, not on the podium.
+    expect(find.text('Jo'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('arena-rest-board'))).dy,
+      greaterThan(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
+    );
     final chipTop = tester
         .getTopLeft(find.byKey(const ValueKey('arena-podium-viewer-chip')))
         .dy;
@@ -208,6 +213,14 @@ void main() {
       tester
           .getBottomLeft(find.byKey(const ValueKey('arena-podium-viewer-chip')))
           .dy,
+      lessThanOrEqualTo(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
+    );
+
+    expect(find.byKey(const ValueKey('arena-rest-arrow')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('arena-rest-arrow')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getBottomLeft(find.byKey(const ValueKey('arena-rest-board'))).dy,
       lessThanOrEqualTo(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
     );
   });
