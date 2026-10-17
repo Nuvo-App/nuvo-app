@@ -106,6 +106,79 @@ async function readJson(c: Context<AppEnv>): Promise<Record<string, unknown> | n
   }
 }
 
+export type SessionCompletionRow = {
+  id: string;
+  release_id: string;
+  release_checksum: string;
+  engine_type: string;
+  spec_schema_version: number;
+};
+
+/**
+ * Single implementation of "complete a verification session", shared by the
+ * /complete route and the inline completion in POST /races/:id/proof.
+ * The UPDATE only touches sessions still 'created'/'running', so a completed
+ * session's result is never overwritten.
+ */
+export async function applySessionCompletion(
+  db: D1Database,
+  session: SessionCompletionRow,
+  userId: string,
+  input: {
+    status: 'completed' | 'failed';
+    resultValue: number | null;
+    confidence: number | null;
+    failureReason: string | null;
+    motionSessionId: string | null;
+  },
+): Promise<void> {
+  const { status, resultValue, confidence, failureReason, motionSessionId } = input;
+  const sessionId = session.id;
+  await db.prepare(
+    'UPDATE verification_sessions SET status = ?, result_value = ?, confidence = ?, failure_reason = ?, ' +
+    'completed_at = CURRENT_TIMESTAMP, motion_session_id = ?, started_at = COALESCE(started_at, CURRENT_TIMESTAMP) ' +
+    'WHERE id = ? AND user_id = ? AND status IN (?, ?)',
+  ).bind(status, resultValue, confidence, failureReason, motionSessionId, sessionId, userId, 'created', 'running').run();
+
+  // Link the already-uploaded artifact to the immutable release that actually
+  // ran. Older clients may upload before this endpoint completes; in that case
+  // this update is simply a no-op and the historical artifact remains readable.
+  if (motionSessionId) {
+    await db.prepare(
+      'UPDATE motion_sessions SET verifier_release_id = ?, verifier_release_checksum = ?, ' +
+      'engine_type = ?, spec_schema_version = ?, assignment_policy = ? WHERE session_id = ?',
+    ).bind(
+      session.release_id,
+      session.release_checksum,
+      session.engine_type,
+      session.spec_schema_version,
+      null,
+      motionSessionId,
+    ).run();
+
+    const artifact = await db.prepare(
+      'SELECT activity_id, outcome, failed_rule_reason, detected_value, confidence ' +
+      'FROM motion_sessions WHERE session_id = ? LIMIT 1',
+    ).bind(motionSessionId).first<{
+      activity_id: string;
+      outcome: string;
+      failed_rule_reason: string;
+      detected_value: number;
+      confidence: number;
+    }>();
+    if (artifact) {
+      await recordReleaseMetric(db, {
+        releaseId: session.release_id,
+        activityId: artifact.activity_id,
+        outcome: artifact.outcome,
+        failureReason: artifact.failed_rule_reason,
+        detectedValue: artifact.detected_value,
+        confidence: artifact.confidence,
+      });
+    }
+  }
+}
+
 verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireAuth, async (c) => {
   const raceId = c.req.param('raceId');
   const userId = c.get('userId');
@@ -264,49 +337,8 @@ verificationSessionsRouter.post('/verification-sessions/:sessionId/complete', re
   const failureReason = typeof body.failureReason === 'string' && body.failureReason.trim() ? body.failureReason.trim().slice(0, 500) : null;
   const status = body.status === 'failed' || failureReason ? 'failed' : 'completed';
   const motionSessionId = typeof body.motionSessionId === 'string' && body.motionSessionId.trim() ? body.motionSessionId.trim() : null;
-  await c.env.DB.prepare(
-    'UPDATE verification_sessions SET status = ?, result_value = ?, confidence = ?, failure_reason = ?, ' +
-    'completed_at = CURRENT_TIMESTAMP, motion_session_id = ?, started_at = COALESCE(started_at, CURRENT_TIMESTAMP) ' +
-    'WHERE id = ? AND user_id = ? AND status IN (?, ?)',
-  ).bind(status, resultValue, confidence, failureReason, motionSessionId, sessionId, userId, 'created', 'running').run();
+  await applySessionCompletion(c.env.DB, session, userId, { status, resultValue, confidence, failureReason, motionSessionId });
 
-  // Link the already-uploaded artifact to the immutable release that actually
-  // ran. Older clients may upload before this endpoint completes; in that case
-  // this update is simply a no-op and the historical artifact remains readable.
-  if (motionSessionId) {
-    await c.env.DB.prepare(
-      'UPDATE motion_sessions SET verifier_release_id = ?, verifier_release_checksum = ?, ' +
-      'engine_type = ?, spec_schema_version = ?, assignment_policy = ? WHERE session_id = ?',
-    ).bind(
-      session.release_id,
-      session.release_checksum,
-      session.engine_type,
-      session.spec_schema_version,
-      null,
-      motionSessionId,
-    ).run();
-
-    const artifact = await c.env.DB.prepare(
-      'SELECT activity_id, outcome, failed_rule_reason, detected_value, confidence ' +
-      'FROM motion_sessions WHERE session_id = ? LIMIT 1',
-    ).bind(motionSessionId).first<{
-      activity_id: string;
-      outcome: string;
-      failed_rule_reason: string;
-      detected_value: number;
-      confidence: number;
-    }>();
-    if (artifact) {
-      await recordReleaseMetric(c.env.DB, {
-        releaseId: session.release_id,
-        activityId: artifact.activity_id,
-        outcome: artifact.outcome,
-        failureReason: artifact.failed_rule_reason,
-        detectedValue: artifact.detected_value,
-        confidence: artifact.confidence,
-      });
-    }
-  }
   const updated = await readSession(c.env.DB, sessionId, userId);
   return updated ? c.json({ ok: true, session: sessionView(updated) }) : c.json({ ok: false, error: 'Verification session could not be completed.' }, 500);
 });

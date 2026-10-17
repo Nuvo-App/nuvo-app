@@ -54,6 +54,8 @@ import { reconcileProgression } from '../domain/progression';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
+import { decideSessionAction, parseInlineSessionResult } from '../domain/proofSession';
+import { applySessionCompletion } from './verificationSessions';
 import {
   awsEncode,
   encodeKeyPath,
@@ -2071,16 +2073,69 @@ racesRouter.post('/:id/proof', async (c) => {
     return c.json(badRequest('AI Motion Proof requires a verification session'), 400);
   }
   if (verificationSessionId) {
-    const session = await c.env.DB.prepare(
-      'SELECT status, result_value FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
-    ).bind(verificationSessionId, userId, race.id).first<{ status: string; result_value: number | null }>();
-    if (!session || session.status !== 'completed' || (session.result_value ?? 0) < increment) {
+    type ProofSessionRow = {
+      id: string; status: string; result_value: number | null; release_id: string;
+      release_checksum: string; engine_type: string; spec_schema_version: number;
+    };
+    const readProofSession = () => c.env.DB.prepare(
+      'SELECT id, status, result_value, release_id, release_checksum, engine_type, spec_schema_version ' +
+      'FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
+    ).bind(verificationSessionId, userId, race.id).first<ProofSessionRow>();
+    let session = await readProofSession();
+    const existingLog = await c.env.DB.prepare(
+      "SELECT id, client_submission_id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
+    ).bind(race.id, verificationSessionId).first<{ id: string; client_submission_id: string | null }>();
+    const inlineResult = parseInlineSessionResult(body.sessionResult);
+    const decide = (s: ProofSessionRow | null) => decideSessionAction({
+      sessionStatus: s?.status ?? null,
+      sessionResultValue: s?.result_value ?? null,
+      increment,
+      existingLogFound: Boolean(existingLog),
+      existingLogClientSubmissionId: existingLog?.client_submission_id ?? null,
+      requestClientSubmissionId: clientSubmissionId,
+      inlineResult,
+      sessionRelease: { releaseId: s?.release_id ?? '', releaseChecksum: s?.release_checksum ?? '' },
+    });
+    let action = decide(session);
+    if (action === 'complete_inline' && session && inlineResult) {
+      await applySessionCompletion(c.env.DB, session, userId, {
+        status: 'completed',
+        resultValue: inlineResult.resultValue,
+        confidence: inlineResult.confidence,
+        failureReason: null,
+        motionSessionId: inlineResult.motionSessionId,
+      });
+      // Re-read so the normal validation runs against what is actually stored
+      // (a concurrent completion wins; its result is never overwritten).
+      session = await readProofSession();
+      action = decide(session);
+      if (action === 'complete_inline') action = 'mismatch';
+    }
+    if (action === 'replay' && existingLog) {
+      // The proof already committed for this exact submission: answer with the
+      // same success shape, writing and awarding nothing.
+      const prior = await c.env.DB.prepare('SELECT * FROM move_logs WHERE id = ?').bind(existingLog.id).first<MoveLogRow>();
+      const updated = await getRace(c.env.DB, race.id);
+      const result: SubmissionResult | undefined = prior && prior.status === 'verified'
+        ? {
+          verifiedValue: prior.value ?? 0,
+          previousScore: prior.previous_score ?? 0,
+          newScore: prior.new_score ?? 0,
+          previousRank: prior.previous_rank ?? null,
+          newRank: prior.new_rank ?? null,
+          peoplePassed: prior.previous_rank && prior.new_rank && prior.new_rank < prior.previous_rank
+            ? prior.previous_rank - prior.new_rank
+            : 0,
+          raceCompleted: Boolean(prior.race_completed),
+          winnerUserId: updated?.winner_user_id ?? race.winner_user_id ?? null,
+        }
+        : undefined;
+      return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!, result), submissionResult: result ?? null });
+    }
+    if (action === 'mismatch' || action === 'not_found') {
       return c.json(badRequest('Verification session does not match this proof'), 400);
     }
-    const reused = await c.env.DB.prepare(
-      "SELECT id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
-    ).bind(race.id, verificationSessionId).first<{ id: string }>();
-    if (reused) return c.json(badRequest('Verification session was already used'), 409);
+    if (action === 'reused') return c.json(badRequest('Verification session was already used'), 409);
   }
 
   await ensureProgress(c.env.DB, race.id, userId);

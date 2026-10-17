@@ -94,6 +94,37 @@ function raceDb() {
       );
       return s ? { status: s.status, result_value: s.result_value } : null;
     }
+    if (q.startsWith('SELECT id, status, result_value, release_id, release_checksum')) {
+      const s = T.verification_sessions.find(
+        (x) => x.id === args[0] && x.user_id === args[1] && x.race_id === args[2],
+      );
+      return s
+        ? {
+            id: s.id,
+            status: s.status,
+            result_value: s.result_value,
+            release_id: s.release_id ?? 'rel-1',
+            release_checksum: s.release_checksum ?? 'sum-1',
+            engine_type: s.engine_type ?? 'pose',
+            spec_schema_version: s.spec_schema_version ?? 1,
+          }
+        : null;
+    }
+    if (q.startsWith('SELECT id, client_submission_id FROM move_logs') && q.includes('verification_session_id')) {
+      const m = T.move_logs.find((x) => {
+        if (x.race_id !== args[0] || !x.metadata_json) return false;
+        try {
+          return JSON.parse(x.metadata_json).verification_session_id === args[1];
+        } catch {
+          return false;
+        }
+      });
+      return m ? { id: m.id, client_submission_id: m.client_submission_id ?? null } : null;
+    }
+    if (q.startsWith('SELECT * FROM move_logs WHERE id = ?') && !q.includes('race_id')) {
+      const m = T.move_logs.find((x) => x.id === args[0]);
+      return m ? { ...m } : null;
+    }
     if (q.startsWith('SELECT id FROM move_logs') && q.includes('verification_session_id')) {
       const m = T.move_logs.find((x) => {
         if (x.race_id !== args[0] || !x.metadata_json) return false;
@@ -286,6 +317,15 @@ function raceDb() {
   }
 
   function runOf(q, args) {
+    if (q.startsWith('UPDATE verification_sessions SET status = ?')) {
+      const [status, result_value, confidence, failure_reason, motion_session_id, id, user_id] = args;
+      const sess = T.verification_sessions.find(
+        (x) => x.id === id && x.user_id === user_id && (x.status === 'created' || x.status === 'running'),
+      );
+      if (!sess) return 0;
+      Object.assign(sess, { status, result_value, confidence, failure_reason, motion_session_id });
+      return 1;
+    }
     if (q.startsWith('INSERT INTO move_logs')) {
       const [id, race_id, user_id, source, movement_type, activity_id, metric, value, unit,
         status, summary, media_object_key, validator_version, duration_ms, metadata_json,
@@ -706,6 +746,104 @@ test('AI Motion Proof does not require a photo', async () => {
   const move = db.T.move_logs.find((m) => m.user_id === 'A');
   assert.equal(move.source, 'movecheck');
   assert.equal(move.media_object_key, null);
+});
+
+// ── AI proof ↔ verification session (inline completion + replay) ──────────────
+
+function aiRace() {
+  return setupRace({
+    activity_id: 'pushups',
+    verifier_type: null,
+    verification_type: 'movecheck',
+    format: 'most_in_window',
+    target_value: 100,
+    target_unit: 'reps',
+    metric: 'reps',
+  });
+}
+
+const aiBody = (extra = {}) => ({
+  proofType: 'ai_motion',
+  value: 30,
+  clientSubmissionId: 'cs-1',
+  verificationSessionId: 'vs-1',
+  verificationStatus: 'ai_verified',
+  activityType: 'pushups',
+  metric: 'reps',
+  ...extra,
+});
+
+test('AI proof completes a still-running session inline when sessionResult matches the release', async () => {
+  const { db, race } = aiRace();
+  db.T.verification_sessions.push({
+    id: 'vs-1', race_id: race.id, user_id: 'A', status: 'running', result_value: null,
+    release_id: 'rel-1', release_checksum: 'sum-1',
+  });
+  const c = makeClient(db);
+  const res = await c.postProof('A', race.id, aiBody({
+    sessionResult: { releaseId: 'rel-1', releaseChecksum: 'sum-1', resultValue: 30, confidence: 0.9 },
+  }));
+  assert.equal(res.status, 200);
+  const sess = db.T.verification_sessions.find((x) => x.id === 'vs-1');
+  assert.equal(sess.status, 'completed');
+  assert.equal(sess.result_value, 30);
+  assert.equal(db.T.move_logs.filter((m) => m.user_id === 'A').length, 1);
+});
+
+test('AI proof with a mismatched release checksum is rejected and the session stays open', async () => {
+  const { db, race } = aiRace();
+  db.T.verification_sessions.push({
+    id: 'vs-1', race_id: race.id, user_id: 'A', status: 'running', result_value: null,
+    release_id: 'rel-1', release_checksum: 'sum-1',
+  });
+  const c = makeClient(db);
+  const res = await c.postProof('A', race.id, aiBody({
+    sessionResult: { releaseId: 'rel-1', releaseChecksum: 'WRONG', resultValue: 30 },
+  }));
+  assert.equal(res.status, 400);
+  assert.equal(db.T.verification_sessions.find((x) => x.id === 'vs-1').status, 'running');
+  assert.equal(db.T.move_logs.length, 0);
+});
+
+test('AI proof against an unfinished session without sessionResult behaves as before (400)', async () => {
+  const { db, race } = aiRace();
+  db.T.verification_sessions.push({
+    id: 'vs-1', race_id: race.id, user_id: 'A', status: 'running', result_value: null,
+  });
+  const c = makeClient(db);
+  const res = await c.postProof('A', race.id, aiBody());
+  assert.equal(res.status, 400);
+  assert.equal(db.T.move_logs.length, 0);
+});
+
+test('AI proof cannot overwrite an already-completed session with a larger inline result', async () => {
+  const { db, race } = aiRace();
+  db.T.verification_sessions.push({
+    id: 'vs-1', race_id: race.id, user_id: 'A', status: 'completed', result_value: 10,
+    release_id: 'rel-1', release_checksum: 'sum-1',
+  });
+  const c = makeClient(db);
+  const res = await c.postProof('A', race.id, aiBody({
+    sessionResult: { releaseId: 'rel-1', releaseChecksum: 'sum-1', resultValue: 999 },
+  }));
+  assert.equal(res.status, 400); // completed at 10 < claimed 30
+  assert.equal(db.T.verification_sessions.find((x) => x.id === 'vs-1').result_value, 10);
+});
+
+test('retrying the same submission replays success without a second proof; a new id on a used session is 409', async () => {
+  const { db, race } = aiRace();
+  db.T.verification_sessions.push({
+    id: 'vs-1', race_id: race.id, user_id: 'A', status: 'completed', result_value: 30,
+  });
+  const c = makeClient(db);
+  const first = await c.postProof('A', race.id, aiBody());
+  assert.equal(first.status, 200);
+  const again = await c.postProof('A', race.id, aiBody());
+  assert.equal(again.status, 200);
+  assert.equal(db.T.move_logs.filter((m) => m.user_id === 'A').length, 1);
+  const different = await c.postProof('A', race.id, aiBody({ clientSubmissionId: 'cs-OTHER' }));
+  assert.equal(different.status, 409);
+  assert.equal(db.T.move_logs.filter((m) => m.user_id === 'A').length, 1);
 });
 
 // ── Veto access control ───────────────────────────────────────────────────────

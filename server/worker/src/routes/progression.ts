@@ -9,6 +9,7 @@ import {
   readRaceXp,
   setFeaturedBadges,
 } from '../domain/progression';
+import { readProfileRecord } from '../domain/profileRecord';
 
 /** Small non-cryptographic string hash (FNV-1a, base36) for ETag parts. */
 function fnv(str: string): string {
@@ -28,7 +29,10 @@ progressionRouter.use('*', requireAuth);
 // canonical race_events before answering, so XP can never go stale.
 progressionRouter.get('/', async (c) => {
   const userId = c.get('userId');
-  const payload = await readProgression(c.env.DB, userId);
+  const [payload, record] = await Promise.all([
+    readProgression(c.env.DB, userId),
+    readProfileRecord(c.env.DB, userId),
+  ]);
   // Validator derived from the reconciled payload itself, so every input to it
   // (xp, level, stats-driven achievement progress, unlocks, featured badges,
   // newlyEarned) is covered. 5-minute bucket bounds unlock_definitions edits.
@@ -44,11 +48,12 @@ progressionRouter.get('/', async (c) => {
       payload.achievementsTotal,
       fnv(JSON.stringify(rest)),
       fnv(JSON.stringify(newlyEarned ?? null)),
+      fnv(JSON.stringify(record)),
       stalenessBucket(),
     ),
   );
   if (notModified) return notModified;
-  return c.json({ ok: true, progression: payload });
+  return c.json({ ok: true, progression: payload, record });
 });
 
 // GET /progression/badges — the full collection, unlocked and locked.
