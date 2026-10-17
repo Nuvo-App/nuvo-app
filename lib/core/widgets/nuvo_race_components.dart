@@ -1152,12 +1152,14 @@ class RaceHero extends StatelessWidget {
 /// [RaceProgress] bar. Lower-wins and best-attempt races pass
 /// `hasGoal: false` so no finish ring implies a denominator that
 /// doesn't exist.
-/// Colour grammar for race status pills: green = you lead, blue = you're
-/// in the race and chasing, grey = waiting / not started, gold = finished.
-enum RaceRowTone { leading, chasing, waiting, finished }
+/// Colour grammar for race status pills: green = you lead, blue = you are
+/// in the race and chasing, orange = waiting / not started, gold = finished,
+/// red = cancelled.
+enum RaceRowTone { leading, chasing, waiting, finished, cancelled }
 
-/// Small status pill that says WHY a race row is emphasised. Tints adapt to
-/// dark mode (brighter text on a stronger wash).
+/// Small status pill that says WHY a race row is emphasised. Solid semantic
+/// fill: leading = green, chasing/info = blue, waiting = orange,
+/// finished = gold, cancelled = red.
 class RaceStatusPill extends StatelessWidget {
   const RaceStatusPill({super.key, required this.label, required this.tone});
 
@@ -1166,30 +1168,31 @@ class RaceStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final Color base;
+    final Color fill;
     final Color text;
     switch (tone) {
       case RaceRowTone.leading:
-        base = NuvoColors.success;
-        text = dark ? c.successText : NuvoColors.successOn;
+        fill = NuvoColors.success;
+        text = NuvoColors.inkNavy;
       case RaceRowTone.chasing:
-        base = NuvoColors.actionBlue;
-        text = dark ? c.accent : const Color(0xFF0E4FD0);
+        fill = NuvoColors.actionBlue;
+        text = NuvoColors.white;
       case RaceRowTone.finished:
-        base = NuvoColors.gold;
-        text = dark ? c.goldText : const Color(0xFF7A5700);
+        fill = NuvoColors.gold;
+        text = NuvoColors.inkNavy;
       case RaceRowTone.waiting:
-        base = c.inkMuted;
-        text = dark ? c.ink : const Color(0xFF4E5B73);
+        fill = NuvoColors.warning;
+        text = NuvoColors.inkNavy;
+      case RaceRowTone.cancelled:
+        fill = NuvoColors.danger;
+        text = NuvoColors.white;
     }
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 132),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: base.withValues(alpha: dark ? 0.16 : 0.14),
+          color: fill,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
         ),
         child: Text(
@@ -1472,7 +1475,8 @@ class RaceRow extends StatelessWidget {
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: c.panel,
+                                      color: c.surface,
+                                      border: Border.all(color: c.border),
                                       borderRadius: BorderRadius.circular(
                                         NuvoRadii.pill,
                                       ),

@@ -158,7 +158,7 @@ class NuvoRaceHero extends StatelessWidget {
             decoration: BoxDecoration(
               color: isComplete
                   ? NuvoColors.success.withValues(alpha: 0.08)
-                  : c.panel,
+                  : c.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.sm),
               border: Border.all(
                 color: isComplete
@@ -317,7 +317,7 @@ class NuvoBoardLane extends StatelessWidget {
       constraints: BoxConstraints(minHeight: minHeight),
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       decoration: BoxDecoration(
-        color: participant.isCurrentUser ? c.panelLight : c.surface,
+        color: participant.isCurrentUser ? c.surface : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: participant.isCurrentUser ? NuvoColors.actionBlue : c.border,
@@ -337,7 +337,7 @@ class NuvoBoardLane extends StatelessWidget {
             decoration: BoxDecoration(
               color: participant.isCurrentUser
                   ? NuvoColors.blue.withValues(alpha: 0.12)
-                  : c.panel,
+                  : c.surface,
               shape: BoxShape.circle,
             ),
             child: Text(

@@ -743,7 +743,7 @@ class _PreVerifySetupCard extends ConsumerWidget {
         decoration: showRivePreview
             ? const BoxDecoration(color: Colors.transparent)
             : BoxDecoration(
-                color: context.semanticColors.neutral.surface,
+                color: context.themeColors.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.card),
                 border: Border.all(color: context.themeColors.border, width: 2),
               ),
@@ -1045,7 +1045,7 @@ class _EvidenceTile extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: context.semanticColors.neutral.surface,
+              color: context.themeColors.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: context.themeColors.border, width: 1.5),
             ),
@@ -1132,7 +1132,8 @@ class _EvidenceSheetOption extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: context.semanticColors.neutral.surface,
+          color: context.themeColors.surface,
+          border: Border.all(color: context.themeColors.border, width: 1.5),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(

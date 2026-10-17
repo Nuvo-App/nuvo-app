@@ -91,8 +91,8 @@ class CameraPrimerSheet extends StatelessWidget {
                 height: 56,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: c.panel,
-                  border: Border.all(color: c.ink, width: 1.6),
+                  color: c.surface,
+                  border: Border.all(color: c.border, width: 2),
                 ),
                 child: Icon(
                   Icons.accessibility_new_rounded,

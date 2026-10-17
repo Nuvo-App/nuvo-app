@@ -313,7 +313,7 @@ class _ViewerChip extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: c.panel,
+        color: c.surface,
         borderRadius: BorderRadius.circular(17),
         border: Border.all(color: c.accent, width: 1.5),
       ),

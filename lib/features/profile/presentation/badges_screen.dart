@@ -276,7 +276,7 @@ class _TabChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? NuvoColors.blue : c.panelLight,
+          color: selected ? NuvoColors.blue : c.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
           border: Border.all(
             color: selected ? c.inkShadow : c.border,

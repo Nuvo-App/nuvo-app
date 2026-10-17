@@ -146,7 +146,7 @@ class NuvoAchievementBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        color: badge.unlocked ? nuvoBadgeAccent(badge) : c.panelLight,
+        color: badge.unlocked ? nuvoBadgeAccent(badge) : c.surface,
         border: Border.all(
           color: badge.unlocked ? c.inkShadow : c.border,
           width: 2.5,
@@ -516,7 +516,7 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  color: badge.featured ? c.panelLight : NuvoColors.blue,
+                  color: badge.featured ? c.surface : NuvoColors.blue,
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
                   border: Border.all(color: c.inkShadow, width: 2),
                   boxShadow: [

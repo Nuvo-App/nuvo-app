@@ -75,12 +75,18 @@ Do not casually touch:
 
 Use Nuvo product language in all copy, comments, variable names, and docs:
 
-**Use:** race, crew, proof, progress, leaderboard, start line, finish line,
-submit proof, pull in your crew, arena, member pass, AI Motion Proof, invite code
+**Use:** race, friend, crew, proof, progress, leaderboard, start line, finish line,
+submit proof, invite your friends (races), pull in your crew (crews feature only), arena, member pass, AI Motion Proof, invite code
 
 **Never use:** challenge, event, journey, unlock, discover, coming soon, needs
 setup, betting, gambling, crypto, payment, payout, sponsor, investor, SMS,
 Twilio, Firebase, Supabase
+
+FRIENDS = the person-to-person link (Friends tab, friend requests, "Add
+friend"). CREW = the named group (create/join with code or QR, owner/admin/member
+roles, Races + Members tabs, settings: rename, code, leave). Private profiles
+do not exist: everyone is visible, blocking is the only privacy control, and
+every friend add is a request.
 
 Full language rules are in `docs/NUVO_PRODUCT_MODEL.md`.
 
@@ -90,9 +96,10 @@ Full language rules are in `docs/NUVO_PRODUCT_MODEL.md`.
 
 Respect screen ownership. Do not move responsibilities between screens:
 
-- Arena: next-move board only
+- Arena: next-move board + podium (top 3), rest of the leaderboard revealed by scrolling
 - Compete: start or join a race only
-- Crew: social graph only
+- Friends: social graph only (friends, requests, search, scan, my code)
+- Crews: group management only (create/join, roles, Races + Members, settings)
 - Profile: identity, history, settings only
 - Race Detail: leaderboard room for one race
 - Submit Proof: choose or complete proof

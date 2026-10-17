@@ -450,7 +450,7 @@ class _InviteCodeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: context.themeColors.panelLight,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
         border: Border.all(color: context.themeColors.border, width: 1.5),
       ),

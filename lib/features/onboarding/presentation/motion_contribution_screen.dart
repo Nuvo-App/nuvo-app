@@ -145,7 +145,7 @@ class _MotionContributionScreenState
                                                               .circle,
                                                           color:
                                                               NuvoColors
-                                                                  .panel,
+                                                                  .surface,
                                                           border:
                                                               Border.all(
                                                                 color:

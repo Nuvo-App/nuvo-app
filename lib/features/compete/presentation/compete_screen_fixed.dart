@@ -924,7 +924,7 @@ class _QuickStartTile extends StatelessWidget {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: context.themeColors.panelLight,
+                    color: context.themeColors.surface,
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(icon, color: context.themeColors.ink, size: 17),

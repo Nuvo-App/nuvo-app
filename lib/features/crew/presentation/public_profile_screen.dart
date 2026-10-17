@@ -800,8 +800,9 @@ class _PublicProgressionPlane extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 20, 20, docksBadges ? 34 : 14),
       decoration: BoxDecoration(
-        color: c.panelLight,
+        color: c.surface,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: c.border, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

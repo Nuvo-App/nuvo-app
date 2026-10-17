@@ -1735,7 +1735,7 @@ class _SocialPostCard extends StatelessWidget {
             ? sem.warning.surface
             : NuvoColors.success.withValues(alpha: 0.07);
       default:
-        return sem.neutral.surface;
+        return context.themeColors.surface;
     }
   }
 
@@ -2923,7 +2923,7 @@ class _PeopleStrip extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: context.themeColors.panel,
+                color: context.themeColors.surface,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: context.themeColors.border,
@@ -3098,8 +3098,12 @@ class _ActionRow extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: context.themeColors.panel,
+                    color: context.themeColors.surface,
                     borderRadius: BorderRadius.circular(NuvoRadii.md),
+                    border: Border.all(
+                      color: context.themeColors.border,
+                      width: 1.5,
+                    ),
                   ),
                   alignment: Alignment.center,
                   child:
@@ -3264,11 +3268,12 @@ class _UserRow extends StatelessWidget {
                 added
                     ? Padding(
                         padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          actionLabel!,
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: context.themeColors.inkSubtle,
-                          ),
+                        child: _TonePill(
+                          label: actionLabel!,
+                          // Friends = green (active); Requested = orange (pending).
+                          color: actionLabel == 'Friends'
+                              ? NuvoColors.successOn
+                              : NuvoColors.warningOn,
                         ),
                       )
                     : SizedBox(
@@ -3422,8 +3427,14 @@ class _IncomingRequestRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.fromLTRB(6, 3, 0, 3),
+      decoration: const BoxDecoration(
+        border: Border(
+          left: BorderSide(color: NuvoColors.warning, width: 3),
+        ),
+      ),
       child: Row(
         children: [
           NuvoAvatar(
@@ -3496,13 +3507,7 @@ class _SentRequestRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            'Pending',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.themeColors.inkMuted,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          const _TonePill(label: 'Pending', color: NuvoColors.warningOn),
           const SizedBox(width: 2),
           PressableScale(
             onTap: busy ? null : onCancel,
@@ -3517,6 +3522,33 @@ class _SentRequestRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Solid status pill: white text on a dark semantic fill (green = friends,
+/// orange = pending/request). Contrast stays above 4.5:1.
+class _TonePill extends StatelessWidget {
+  const _TonePill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: NuvoColors.white,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -3550,7 +3582,7 @@ class _MiniAction extends StatelessWidget {
         child: Text(
           label,
           style: AppTextStyles.labelSmall.copyWith(
-            color: filled ? NuvoColors.white : context.themeColors.inkMuted,
+            color: filled ? NuvoColors.white : context.semanticColors.danger.on,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -3715,7 +3747,7 @@ class _CrewSkeleton extends StatelessWidget {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: context.themeColors.panel,
+          color: context.themeColors.divider,
           borderRadius: BorderRadius.circular(8),
         ),
       ),
@@ -3731,7 +3763,7 @@ class _CrewSkeleton extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: context.themeColors.panel,
+                    color: context.themeColors.divider,
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),

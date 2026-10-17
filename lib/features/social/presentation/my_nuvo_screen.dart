@@ -181,7 +181,7 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
           margin: const EdgeInsets.only(top: 32),
           padding: const EdgeInsets.fromLTRB(18, 44, 18, 14),
           decoration: BoxDecoration(
-            color: t.panelLight,
+            color: t.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: t.border, width: 1.5),
           ),

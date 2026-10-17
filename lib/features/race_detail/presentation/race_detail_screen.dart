@@ -548,7 +548,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
         !myRaceComplete && onPrimary != null && primaryLabel != 'Unsupported';
 
     final screen = Scaffold(
-      backgroundColor: context.themeColors.panelLight,
+      backgroundColor: context.themeColors.page,
       bottomNavigationBar: showBottomBar
           ? _VerifyBar(
               key: FirstRaceGuideKeys.racePrimary,
@@ -1090,7 +1090,7 @@ class _VerifyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: context.themeColors.panelLight,
+      color: context.themeColors.surface,
       padding: EdgeInsets.fromLTRB(
         18,
         10,
@@ -1325,18 +1325,14 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: NuvoColors.actionBlue.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.09,
-        ),
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(
-          color: NuvoColors.actionBlue.withValues(alpha: 0.22),
-        ),
+        border: Border.all(color: context.themeColors.border, width: 1.5),
       ),
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
-          color: context.themeColors.accent,
+          color: context.themeColors.ink,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -1475,7 +1471,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Container(
-      color: isCurrentUser ? context.semanticColors.neutral.surface : null,
+      color: isCurrentUser ? context.semanticColors.accent.surface : null,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
@@ -2213,8 +2209,9 @@ class _ManageRow extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: context.semanticColors.neutral.surface,
+                color: context.themeColors.surface,
                 shape: BoxShape.circle,
+                border: Border.all(color: context.themeColors.border, width: 1.5),
               ),
               child: Icon(icon, color: context.themeColors.ink, size: 18),
             ),

@@ -174,71 +174,43 @@ async function loadStandings(db: D1Database, raceId: string, direction: 'higher'
   );
 }
 
-/**
- * Atomically finalize a race whose window has ended.
- *
- *   deadline reached → conditional UPDATE claims the race → standings
- *   computed → race_final_standings snapshot → winner/tie recorded →
- *   race_finished (+winner_determined) events → result immutable.
- *
- * Idempotent: the `WHERE status='active'` claim means concurrent cron +
- * lazy-read finalization can only succeed once.
- */
-export async function finalizeRaceIfEnded(
-  db: D1Database,
-  race: FinalizableRace,
-  now = new Date(),
-): Promise<FinalizeResult> {
-  const empty: FinalizeResult = { finalized: false, alreadyCompleted: false, winnerUserId: race.winner_user_id ?? null, tiedForFirst: false, events: [] };
-  if (race.status !== 'active') {
-    return { ...empty, alreadyCompleted: race.status === 'completed' };
-  }
-  if (!race.end_at || new Date(race.end_at).getTime() > now.getTime()) return empty;
+interface FinalOutcome {
+  top: { user_id: string; progress_value: number } | null;
+  tiedForFirst: boolean;
+  winnerUserId: string | null;
+}
 
-  // Claim the finalization. Only one caller can transition active→completed.
-  const completedAt = race.end_at; // the race ended AT the deadline
-  const claim = await db
-    .prepare(
-      `UPDATE races SET status = 'completed', completed_at = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'active'`,
-    )
-    .bind(completedAt, race.id)
-    .run();
-  if ((claim.meta.changes ?? 0) === 0) {
-    return { ...empty, alreadyCompleted: true };
-  }
-
-  const direction = scoreDirectionFor(race);
-  const standings = await loadStandings(db, race.id, direction);
+function determineOutcome(standings: { user_id: string; progress_value: number; rank: number }[]): FinalOutcome {
   const top = standings[0] ?? null;
   const leaders = standings.filter((s) => s.rank === 1);
   // A tied lead is a shared result, not a hidden tiebreaker (PRD §39).
   const tiedForFirst = leaders.length > 1;
   const winnerUserId = top && !tiedForFirst && top.progress_value > 0 ? top.user_id : null;
+  return { top, tiedForFirst, winnerUserId };
+}
 
-  if (winnerUserId) {
-    await db
-      .prepare('UPDATE races SET winner_user_id = ? WHERE id = ?')
-      .bind(winnerUserId, race.id)
-      .run();
-  }
+/** One idempotent snapshot write per member, keyed on UNIQUE(race_id, user_id). */
+function standingsStatements(db: D1Database, raceId: string, standings: RankedStandingRow[]) {
+  return standings.map((row) =>
+    db
+      .prepare(
+        `INSERT OR REPLACE INTO race_final_standings
+           (id, race_id, user_id, rank_position, score_value, completed_at, created_at)
+         VALUES (
+           COALESCE((SELECT id FROM race_final_standings WHERE race_id = ? AND user_id = ?), ?),
+           ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+         )`,
+      )
+      .bind(raceId, row.user_id, generateId(), raceId, row.user_id, row.rank, row.progress_value, row.completed_at),
+  );
+}
 
-  if (standings.length > 0) {
-    const stmts = standings.map((row) =>
-      db
-        .prepare(
-          `INSERT OR REPLACE INTO race_final_standings
-             (id, race_id, user_id, rank_position, score_value, completed_at, created_at)
-           VALUES (
-             COALESCE((SELECT id FROM race_final_standings WHERE race_id = ? AND user_id = ?), ?),
-             ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
-           )`,
-        )
-        .bind(race.id, row.user_id, generateId(), race.id, row.user_id, row.rank, row.progress_value, row.completed_at),
-    );
-    await db.batch(stmts);
-  }
-
+function buildFinishEvents(
+  race: FinalizableRace,
+  standingsCount: number,
+  outcome: FinalOutcome,
+): RaceEventInput[] {
+  const { top, tiedForFirst, winnerUserId } = outcome;
   const events: RaceEventInput[] = [
     {
       type: 'race_finished',
@@ -246,7 +218,7 @@ export async function finalizeRaceIfEnded(
         title: race.title,
         format: race.format ?? race.race_type,
         endAt: race.end_at,
-        participantCount: standings.length,
+        participantCount: standingsCount,
         tiedForFirst,
         winnerUserId,
         topScore: top?.progress_value ?? 0,
@@ -260,8 +232,194 @@ export async function finalizeRaceIfEnded(
       payload: { score: top!.progress_value, rank: 1, tied: false },
     });
   }
-  await recordRaceEvents(db, race.id, events);
+  return events;
+}
+
+/**
+ * Record finish events at most once per race (race_events has no natural
+ * unique key, so the guard is NOT EXISTS). Safe to re-run from the repair
+ * sweep after a crash. Returns only the events this call actually inserted.
+ */
+async function recordFinishEventsOnce(
+  db: D1Database,
+  raceId: string,
+  events: RaceEventInput[],
+): Promise<RaceEventInput[]> {
+  if (events.length === 0) return [];
+  const stmts = events.map((e) =>
+    db
+      .prepare(
+        `INSERT INTO race_events (id, race_id, event_type, actor_user_id, subject_user_id, payload_json, move_log_id, created_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+         WHERE NOT EXISTS (SELECT 1 FROM race_events WHERE race_id = ? AND event_type = ?)`,
+      )
+      .bind(
+        generateId(),
+        raceId,
+        e.type,
+        e.actorUserId ?? null,
+        e.subjectUserId ?? null,
+        e.payload ? JSON.stringify(e.payload) : null,
+        e.moveLogId ?? null,
+        raceId,
+        e.type,
+      ),
+  );
+  const results = await db.batch(stmts);
+  return events.filter((_, i) => (results[i]?.meta?.changes ?? 0) > 0);
+}
+
+/**
+ * Atomically finalize a race whose window has ended.
+ *
+ *   deadline reached → standings + winner computed (race still active) →
+ *   ONE db.batch: conditional claim (active→completed, winner set) plus the
+ *   race_final_standings snapshot → race_finished (+winner_determined)
+ *   events → result immutable.
+ *
+ * The claim and the result are a single atomic D1 batch, so a crash can never
+ * leave a completed race without its winner/standings. Idempotent: the
+ * `WHERE status='active'` claim means concurrent cron + lazy-read
+ * finalization can only succeed once. If the process dies after the batch but
+ * before the events, repairCompletedRaces() writes them.
+ */
+export async function finalizeRaceIfEnded(
+  db: D1Database,
+  race: FinalizableRace,
+  now = new Date(),
+): Promise<FinalizeResult> {
+  const empty: FinalizeResult = { finalized: false, alreadyCompleted: false, winnerUserId: race.winner_user_id ?? null, tiedForFirst: false, events: [] };
+  if (race.status !== 'active') {
+    return { ...empty, alreadyCompleted: race.status === 'completed' };
+  }
+  if (!race.end_at || new Date(race.end_at).getTime() > now.getTime()) return empty;
+
+  const completedAt = race.end_at; // the race ended AT the deadline
+  const direction = scoreDirectionFor(race);
+  const standings = await loadStandings(db, race.id, direction);
+  const outcome = determineOutcome(standings);
+  const { winnerUserId, tiedForFirst } = outcome;
+
+  // Claim + winner in one UPDATE (only one caller can transition
+  // active→completed). Standings are written only while the race is in the
+  // state this claim produces, all inside the same atomic batch.
+  const claimStmt = db
+    .prepare(
+      `UPDATE races SET status = 'completed', completed_at = ?, winner_user_id = COALESCE(?, winner_user_id),
+              updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'active'`,
+    )
+    .bind(completedAt, winnerUserId, race.id);
+  const standingStmts = standings.map((row) =>
+    db
+      .prepare(
+        `INSERT OR REPLACE INTO race_final_standings
+           (id, race_id, user_id, rank_position, score_value, completed_at, created_at)
+         SELECT COALESCE((SELECT id FROM race_final_standings WHERE race_id = ? AND user_id = ?), ?),
+                ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+         WHERE EXISTS (SELECT 1 FROM races WHERE id = ? AND status = 'completed' AND completed_at = ?)`,
+      )
+      .bind(
+        race.id, row.user_id, generateId(),
+        race.id, row.user_id, row.rank, row.progress_value, row.completed_at,
+        race.id, completedAt,
+      ),
+  );
+  const results = await db.batch([claimStmt, ...standingStmts]);
+  if ((results[0]?.meta?.changes ?? 0) === 0) {
+    return { ...empty, alreadyCompleted: true };
+  }
+
+  const events = buildFinishEvents(race, standings.length, outcome);
+  await recordFinishEventsOnce(db, race.id, events);
   return { finalized: true, alreadyCompleted: false, winnerUserId, tiedForFirst, events };
+}
+
+/** How far back the repair sweep looks — bounds notification blast radius. */
+export const FINALIZE_REPAIR_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const FINALIZE_REPAIR_BATCH = 50;
+const FINALIZE_REPAIR_SETTLE_MS = 2 * 60 * 1000;
+
+/**
+ * Repair sweep for races that are 'completed' but missing their result:
+ * no race_final_standings rows (while they have active members) or no
+ * race_finished event — the footprint of a crash between a finalization claim
+ * and its follow-up writes. Re-derives and writes idempotently
+ * (INSERT OR REPLACE keyed on UNIQUE(race_id, user_id); events guarded by
+ * NOT EXISTS; winner only filled if still NULL). Returns the transitions whose
+ * events were newly written so the caller can notify.
+ */
+export async function repairCompletedRaces(
+  db: D1Database,
+  now = new Date(),
+): Promise<LifecycleTransition[]> {
+  const cutoff = new Date(now.getTime() - FINALIZE_REPAIR_WINDOW_MS).toISOString();
+  // Skip races touched in the last minutes: another request may be mid-way
+  // through its own completion writes (e.g. the first-to-goal path).
+  const settled = new Date(now.getTime() - FINALIZE_REPAIR_SETTLE_MS).toISOString();
+  const broken = await db
+    .prepare(
+      `SELECT r.* FROM races r
+       WHERE r.status = 'completed' AND r.deleted_at IS NULL
+         AND COALESCE(r.completed_at, r.end_at, r.updated_at) >= ?
+         AND datetime(r.updated_at) <= datetime(?)
+         AND (
+           NOT EXISTS (SELECT 1 FROM race_events e WHERE e.race_id = r.id AND e.event_type = 'race_finished')
+           OR (
+             NOT EXISTS (SELECT 1 FROM race_final_standings s WHERE s.race_id = r.id)
+             AND EXISTS (SELECT 1 FROM race_members m WHERE m.race_id = r.id AND m.status = 'active')
+           )
+         )
+       LIMIT ${FINALIZE_REPAIR_BATCH}`,
+    )
+    .bind(cutoff, settled)
+    .all<RaceRow>();
+
+  const transitions: LifecycleTransition[] = [];
+  for (const race of broken.results) {
+    const stored = await db
+      .prepare(
+        'SELECT user_id, rank_position, score_value FROM race_final_standings WHERE race_id = ? ORDER BY rank_position ASC',
+      )
+      .bind(race.id)
+      .all<{ user_id: string; rank_position: number; score_value: number }>();
+
+    let ranked: { user_id: string; progress_value: number; rank: number }[];
+    const writes: ReturnType<D1Database['prepare']>[] = [];
+    if (stored.results.length > 0) {
+      ranked = stored.results.map((r) => ({
+        user_id: r.user_id,
+        progress_value: r.score_value,
+        rank: r.rank_position,
+      }));
+    } else {
+      const loaded = await loadStandings(db, race.id, scoreDirectionFor(race));
+      ranked = loaded;
+      writes.push(...standingsStatements(db, race.id, loaded));
+    }
+    const outcome = determineOutcome(ranked);
+    const winnerUserId = race.winner_user_id ?? outcome.winnerUserId;
+    if (!race.winner_user_id && outcome.winnerUserId) {
+      writes.push(
+        db
+          .prepare('UPDATE races SET winner_user_id = ? WHERE id = ? AND winner_user_id IS NULL')
+          .bind(outcome.winnerUserId, race.id),
+      );
+    }
+    if (writes.length > 0) await db.batch(writes);
+
+    const finalOutcome: FinalOutcome = { ...outcome, winnerUserId };
+    const events = buildFinishEvents(
+      { id: race.id, title: race.title, status: 'completed', race_type: race.race_type, format: race.format, end_at: race.end_at },
+      ranked.length,
+      finalOutcome,
+    );
+    const written = await recordFinishEventsOnce(db, race.id, events);
+    if (written.length > 0) {
+      transitions.push({ race: { ...race, winner_user_id: winnerUserId }, events: written });
+    }
+  }
+  return transitions;
 }
 
 /**
@@ -327,6 +485,13 @@ export async function sweepRaceLifecycle(
         events: res.events,
       });
     }
+  }
+
+  // Repair completed races a crash left without standings / race_finished.
+  try {
+    transitions.push(...(await repairCompletedRaces(db, now)));
+  } catch (err) {
+    console.error('[sweep] finalize repair failed:', (err as Error).message);
   }
 
   const due = await db

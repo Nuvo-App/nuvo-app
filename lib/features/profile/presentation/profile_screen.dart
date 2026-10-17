@@ -525,7 +525,7 @@ class _LevelTrack extends ConsumerWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           decoration: BoxDecoration(
-            color: c.panelLight,
+            color: c.surface,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: c.border, width: 2),
             boxShadow: AppShadows.hardOffset(c.inkShadow),
@@ -772,7 +772,7 @@ void _showLevelExplainer(BuildContext context, NuvoProgression p) {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: c.panelLight,
+                color: c.surface,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: c.border.withValues(alpha: 0.35)),
               ),
@@ -805,7 +805,7 @@ void _showLevelExplainer(BuildContext context, NuvoProgression p) {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: c.panelLight,
+                  color: c.surface,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: c.border.withValues(alpha: 0.35)),
                 ),
@@ -1066,7 +1066,7 @@ class _ProgressionSkeleton extends StatelessWidget {
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: c.panelLight,
+        color: c.surface,
         borderRadius: BorderRadius.circular(999),
       ),
     );
@@ -1078,7 +1078,7 @@ class _ProgressionSkeleton extends StatelessWidget {
         Container(
           height: 12,
           decoration: BoxDecoration(
-            color: c.panelLight,
+            color: c.surface,
             borderRadius: BorderRadius.circular(999),
           ),
         ),
@@ -1369,7 +1369,7 @@ class _PresentationModeRow extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: c.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.slideshow_rounded, color: c.ink, size: 17),
@@ -1421,7 +1421,7 @@ class _AppearanceRow extends ConsumerWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: c.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -1552,7 +1552,7 @@ class _MotionConsentRowState extends ConsumerState<_MotionConsentRow> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: c.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.motion_photos_on_rounded, color: c.ink, size: 17),
@@ -1615,7 +1615,7 @@ class _AccountRow extends StatelessWidget {
     final color = isDanger ? context.themeColors.dangerText : c.ink;
     final bg = isDanger
         ? NuvoColors.danger.withValues(alpha: 0.10)
-        : c.panelLight;
+        : c.surface;
     final navigates = !isDanger && !isAction;
 
     return PressableScale(

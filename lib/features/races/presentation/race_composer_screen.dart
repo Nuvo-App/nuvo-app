@@ -2417,7 +2417,7 @@ class _SearchBar extends StatelessWidget {
         hintStyle: AppTextStyles.bodyMedium.copyWith(color: c.inkSubtle),
         prefixIcon: Icon(Icons.search_rounded, color: c.inkSubtle, size: 20),
         filled: true,
-        fillColor: c.panel,
+        fillColor: c.surface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,
@@ -2590,12 +2590,10 @@ class _RecentChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.14)
-              : c.panelLight,
+          color: selected ? NuvoColors.actionBlue : c.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
           border: Border.all(
-            color: selected ? NuvoColors.actionBlue : Colors.transparent,
+            color: selected ? NuvoColors.actionBlue : c.border,
             width: 1.5,
           ),
         ),
@@ -2605,14 +2603,14 @@ class _RecentChip extends StatelessWidget {
             Icon(
               activity.icon,
               size: 14,
-              color: selected ? context.themeColors.accent : c.inkMuted,
+              color: selected ? NuvoColors.white : c.inkMuted,
             ),
             const SizedBox(width: 6),
             Text(
               activity.title,
               style: AppTextStyles.labelMedium.copyWith(
                 fontSize: 12.5,
-                color: selected ? context.themeColors.accent : c.ink,
+                color: selected ? NuvoColors.white : c.ink,
               ),
             ),
           ],
@@ -3957,7 +3955,7 @@ class _RacerOption extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
+              ? context.themeColors.surface
               : context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           border: Border.all(
@@ -3973,15 +3971,15 @@ class _RacerOption extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: selected
-                    ? NuvoColors.actionBlue.withValues(alpha: 0.12)
-                    : context.themeColors.panel,
+                    ? NuvoColors.actionBlue
+                    : context.themeColors.surface,
                 borderRadius: BorderRadius.circular(14),
               ),
               alignment: Alignment.center,
               child: Icon(
                 icon,
                 color: selected
-                    ? NuvoColors.actionBlue
+                    ? NuvoColors.white
                     : context.themeColors.ink,
                 size: 22,
               ),
@@ -4466,7 +4464,7 @@ class _ReviewDetailRow extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: context.themeColors.panelLight,
+              color: context.themeColors.surface,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: context.themeColors.accent, size: 17),

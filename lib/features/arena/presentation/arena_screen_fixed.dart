@@ -1256,7 +1256,7 @@ class _FirstRunState extends StatelessWidget {
             height: 64,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: c.panel,
+              color: c.surface,
               border: Border.all(color: c.ink, width: 2),
             ),
             child: Icon(Icons.flag_rounded, color: c.accent, size: 30),

@@ -510,7 +510,7 @@ class _MoveSummaryCard extends StatelessWidget {
   Color _statusColor(BuildContext context) => switch (proof.verificationStatus) {
     'accepted' || 'verified' => NuvoColors.success,
     'rejected' => NuvoColors.danger,
-    'needs_review' => context.themeColors.inkMuted,
+    'needs_review' => NuvoColors.warning,
     _ => NuvoColors.blue,
   };
 
@@ -589,7 +589,8 @@ class _MoveSummaryCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: context.semanticColors.neutral.surface,
+                color: context.themeColors.surface,
+                border: Border.all(color: context.themeColors.border, width: 1.5),
                 borderRadius: BorderRadius.circular(NuvoRadii.sm),
               ),
               child: Text(

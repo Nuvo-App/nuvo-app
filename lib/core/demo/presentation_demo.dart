@@ -682,7 +682,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-request',
       category: 'crew_request',
-      title: 'Sam Rivera wants to connect',
+      title: 'Sam Rivera sent you a friend request',
       actorName: 'Sam Rivera',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=68',
       createdAt: DateTime.now().toUtc().subtract(const Duration(minutes: 8)),

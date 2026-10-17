@@ -78,7 +78,7 @@ class NuvoOfflineBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: c.panel,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
         border: Border.all(color: c.border, width: 1.25),
       ),

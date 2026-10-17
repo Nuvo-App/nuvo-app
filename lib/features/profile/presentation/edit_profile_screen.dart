@@ -364,7 +364,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                         height: 64,
                                                         decoration:
                                                             BoxDecoration(
-                                                              color: c.panel,
+                                                              color: c.surface,
                                                               shape: BoxShape
                                                                   .circle,
                                                             ),
@@ -389,7 +389,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                             _pendingImageBytes,
                                                         photoUrl: photoUrl,
                                                         size: 64,
-                                                        bgColor: c.panel,
+                                                        bgColor: c.surface,
                                                         textColor: c.ink,
                                                       ),
                                                 if (!_uploading)
@@ -558,7 +558,7 @@ class _EditSheetOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDestructive
               ? NuvoColors.danger.withValues(alpha: 0.05)
-              : c.panel,
+              : c.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isDestructive

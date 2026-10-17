@@ -8,14 +8,14 @@ changes.
 
 ## One-line definition
 
-Nuvo turns real-life goals into leaderboard races with your crew.
+Nuvo turns real-life goals into leaderboard races with your friends and crews.
 
 ---
 
 ## Core product loop
 
 ```
-Set a finish line → pull in your crew → submit proof → move the leaderboard
+Set a finish line → invite your friends → submit proof → move the leaderboard
 ```
 
 ---
@@ -78,7 +78,8 @@ among many. Every update to a race should visibly change the leaderboard.
 |---|---|---|
 | Arena | What needs my attention right now — next-move board, featured race, quick access to submit proof | Active race lists, dashboards, stats |
 | Compete | Start a race or join a race | Active race lists, leaderboard views |
-| Crew | People I can race with — search, add, manage | Active races, proof, leaderboard |
+| Friends | The person-to-person social graph — friends, friend requests, search, add friend | Crew management, active races, proof, leaderboard |
+| Crews | Group management — create/join a crew, Races + Members tabs, crew settings | Friend requests, proof, leaderboard |
 | Profile | Identity, member pass, race record, settings | Active race management, proof submission |
 
 ---
@@ -88,11 +89,12 @@ among many. Every update to a race should visibly change the leaderboard.
 | Screen | Owns | Answers |
 |---|---|---|
 | Onboarding | Teach Nuvo by helping the user start their first race | What is Nuvo? What is my first step? |
-| Arena | Next-move board — the one race that needs action right now | What race needs my attention? What do I do next? |
+| Arena | Next-move board plus podium (top 3); the rest of the leaderboard is revealed by scrolling | What race needs my attention? What do I do next? |
 | Race Detail | Leaderboard room for one race | Who is winning? What is the finish line? How do I submit proof? |
 | Submit Proof | Choose or complete proof | How do I move the leaderboard? What proof do I submit? |
 | AI Motion Proof | Verify a supported movement with camera and on-device pose detection | Is my movement verified? What is my count? |
-| Crew | Search, add, and manage people | Who is in my crew? How do I add people? |
+| Friends | Friends list, friend requests, search, Add friend (social graph only) | Who are my friends? Who has asked to be my friend? |
+| Crews | Crew group management: create/join with code or QR, owner/admin/member roles, Races + Members tabs, crew settings (rename, code, about, leave) | Which crews am I in? Who is in this crew? |
 | Profile | Identity, pass, race history, settings | Who am I? What is my record? |
 
 ---
@@ -148,18 +150,28 @@ among many. Every update to a race should visibly change the leaderboard.
 | Term | Meaning |
 |---|---|
 | race | A shared leaderboard competition with a finish line |
-| crew | The people in a race or the user's social network |
+| friend | A person-to-person link. Friends tab, friend requests, "Add friend". Every friend add is a request |
+| crew | A named group of people. Created or joined with a code or QR; roles are owner, admin, member; has Races and Members tabs and crew settings (rename, code, about, leave) |
 | proof | How a participant moves on the leaderboard |
 | progress | A participant's position toward the finish line |
 | leaderboard | The ranked list of participants and their progress |
 | start line | The moment a race begins |
 | finish line | The goal / completion target |
 | submit proof | The act of recording progress |
-| pull in your crew | Inviting people to join a race |
+| invite your friends | Inviting people to join a race |
+| pull in your crew | Only for the crews feature (growing a crew) |
 | arena | The tab showing what needs the user's attention now |
 | member pass | The user's identity card with QR code |
 | AI Motion Proof | The camera-based live movement verification feature |
 | invite code | A short code used to join a race |
+
+### Friends vs crew
+
+- FRIENDS is the person link. Use "friend" only for a one-to-one relationship.
+- CREW is the named group. Use "crew" only for the group.
+- Never say "add to crew" for a person link or "friend" for a group.
+- Private profiles do not exist. Everyone is visible. Blocking is the only
+  privacy control, and every friend add is a request that must be accepted.
 
 ### Never use
 

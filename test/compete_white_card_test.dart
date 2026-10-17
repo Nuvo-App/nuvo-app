@@ -189,6 +189,13 @@ void main() {
           final rt = el.widget as RichText;
           final plain = rt.text.toPlainText();
           if (plain.trim().length <= 2) continue;
+          // Status pills are solid semantic fills with their own contrast.
+          if (find
+              .ancestor(of: find.byWidget(el.widget), matching: find.byType(RaceStatusPill))
+              .evaluate()
+              .isNotEmpty) {
+            continue;
+          }
           final style = rt.text is TextSpan
               ? (rt.text as TextSpan).style
               : null;

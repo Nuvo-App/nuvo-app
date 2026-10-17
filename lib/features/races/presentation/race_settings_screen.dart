@@ -527,7 +527,7 @@ class _SettingsAction extends StatelessWidget {
     final iconColor = titleColor;
     final iconBackground = destructive
         ? context.semanticColors.danger.surface
-        : context.themeColors.panelLight;
+        : context.themeColors.surface;
     return Semantics(
       button: true,
       enabled: onPressed != null,

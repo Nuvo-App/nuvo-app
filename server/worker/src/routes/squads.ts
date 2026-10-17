@@ -483,6 +483,25 @@ squadsRouter.get('/:id', async (c) => {
   const standings = computeSquadStandings(memberIds, raceInputs);
   const byUser = new Map(members.results.map((m) => [m.user_id, m]));
 
+  // Blocked pairs (either direction) are anonymized; everyone else shows
+  // their real name and photo.
+  const otherIds = memberIds.filter((id) => id !== userId);
+  const blockedIds = new Set<string>();
+  if (otherIds.length > 0) {
+    const marks = otherIds.map(() => '?').join(',');
+    const blockRows = await c.env.DB
+      .prepare(
+        `SELECT user_id, blocked_user_id FROM blocked_users
+         WHERE (user_id = ? AND blocked_user_id IN (${marks}))
+            OR (blocked_user_id = ? AND user_id IN (${marks}))`,
+      )
+      .bind(userId, ...otherIds, userId, ...otherIds)
+      .all<{ user_id: string; blocked_user_id: string }>();
+    for (const b of blockRows.results) {
+      blockedIds.add(b.user_id === userId ? b.blocked_user_id : b.user_id);
+    }
+  }
+
   return c.json({
     ok: true,
     squad: {
@@ -496,9 +515,11 @@ squadsRouter.get('/:id', async (c) => {
     },
     members: members.results.map((m) => ({
       userId: m.user_id,
-      displayName: m.full_name ?? (m.username ? `@${m.username}` : 'Nuvo member'),
-      username: m.username,
-      profilePhotoUrl: m.avatar_url,
+      displayName: blockedIds.has(m.user_id)
+        ? 'Private User'
+        : (m.full_name ?? (m.username ? `@${m.username}` : 'Nuvo member')),
+      username: blockedIds.has(m.user_id) ? null : m.username,
+      profilePhotoUrl: blockedIds.has(m.user_id) ? null : m.avatar_url,
       role: effectiveRole(squad.owner_id, m.user_id, m.role),
     })),
     races: races.results.map((r) => ({
@@ -517,8 +538,10 @@ squadsRouter.get('/:id', async (c) => {
         points: s.points,
         wins: s.wins,
         races: s.races,
-        displayName: m?.full_name ?? (m?.username ? `@${m.username}` : 'Nuvo member'),
-        profilePhotoUrl: m?.avatar_url ?? null,
+        displayName: blockedIds.has(s.user_id)
+          ? 'Private User'
+          : (m?.full_name ?? (m?.username ? `@${m.username}` : 'Nuvo member')),
+        profilePhotoUrl: blockedIds.has(s.user_id) ? null : (m?.avatar_url ?? null),
         isYou: s.user_id === userId,
       };
     }),
