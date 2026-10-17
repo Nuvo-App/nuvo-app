@@ -122,7 +122,7 @@ Future<Race> createRaceForComposerDraft({
     description: payload['description'] as String,
     category: payload['category'] as String,
     goalType: payload['goalType'] as String,
-    targetValue: payload['targetValue'] as int,
+    targetValue: payload['targetValue'] as int?,
     unit: payload['unit'] as String,
     proofRequirement: payload['proofRequirement'] as String,
     proofReviewMode: payload['proofReviewMode'] as String,
