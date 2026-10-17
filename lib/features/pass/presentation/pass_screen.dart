@@ -3248,7 +3248,6 @@ class _RequestSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: Border.all(color: context.themeColors.divider, width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.card - 1),
@@ -3602,10 +3601,9 @@ class _PeopleSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: Border.all(color: context.themeColors.divider, width: 1),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(NuvoRadii.card - 1),
+        borderRadius: BorderRadius.circular(NuvoRadii.card),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Column(children: children),

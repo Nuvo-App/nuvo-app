@@ -130,8 +130,8 @@ double _ratio(Color a, Color b) {
 void main() {
   for (final dark in [false, true]) {
     final name = dark ? 'dark' : 'light';
-    final pageBg = dark ? NuvoThemeColors.dark.page : NuvoColors.page;
-    final fill = dark ? NuvoThemeColors.dark.panel : NuvoColors.navy;
+    // Pure white in light mode; the normal card surface in dark mode.
+    final fill = dark ? NuvoThemeColors.dark.surface : const Color(0xFFFFFFFF);
 
     Finder card() => find.ancestor(
       of: find.textContaining('Your races'),
@@ -143,7 +143,7 @@ void main() {
       ),
     );
 
-    testWidgets('Your races card is navy ($name)', (tester) async {
+    testWidgets('Your races card is white with a navy outline ($name)', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -156,13 +156,12 @@ void main() {
       expect(d.color, fill);
       expect(
         (d.border! as Border).top.color,
-        dark ? NuvoThemeColors.dark.border : NuvoColors.navy,
+        dark ? NuvoThemeColors.dark.border : NuvoColors.border,
       );
       expect((d.border! as Border).top.width, 2);
       expect(d.boxShadow, isNotEmpty);
       expect(d.boxShadow!.first.blurRadius, 0);
       expect(d.boxShadow!.first.offset, isNot(Offset.zero));
-      if (dark) expect(_ratio(fill, pageBg), greaterThanOrEqualTo(1.3));
     });
 
     for (final expand in [false, true]) {
@@ -202,7 +201,7 @@ void main() {
         }
         expect(n, greaterThan(3));
         expect(find.byType(RaceStatusPill), findsWidgets);
-        // Same navy fill after expansion.
+        // Same white fill after expansion.
         expect(
           (tester.widget<Container>(card().first).decoration! as BoxDecoration)
               .color,

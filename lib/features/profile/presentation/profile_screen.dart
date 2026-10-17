@@ -1150,8 +1150,6 @@ class _AchievementsRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
-            // Navy outline only — no hard-offset shadow on this row.
-            border: Border.all(color: c.border, width: 2),
           ),
           child: Row(
             children: [

@@ -457,41 +457,9 @@ class _CappedRaceList extends StatelessWidget {
     );
   }
 
-  Widget _buildField(BuildContext outer, List<Race> visible, bool hasMore) {
-    // Navy card: light mode is solid brand navy, dark mode a lifted navy
-    // (dark panel). Everything inside resolves to the DARK tokens so text,
-    // pills, dividers and painters read light-on-navy.
-    final lightMode = Theme.of(outer).brightness == Brightness.light;
-    final fill = lightMode ? NuvoColors.navy : NuvoThemeColors.dark.panel;
-    final edge = lightMode ? NuvoColors.navy : NuvoThemeColors.dark.border;
-    final base = Theme.of(outer);
-    final darkTheme = base.copyWith(
-      brightness: Brightness.dark,
-      extensions: [
-        for (final e in base.extensions.values)
-          if (e is! NuvoThemeColors && e is! NuvoSemanticColors) e,
-        NuvoSemanticColors.dark,
-        NuvoThemeColors.dark,
-      ],
-    );
-    return Theme(
-      data: darkTheme,
-      child: Builder(
-        builder: (context) => DefaultTextStyle.merge(
-          style: TextStyle(color: NuvoThemeColors.dark.ink),
-          child: _navyField(context, visible, hasMore, fill, edge),
-        ),
-      ),
-    );
-  }
-
-  Widget _navyField(
-    BuildContext context,
-    List<Race> visible,
-    bool hasMore,
-    Color fill,
-    Color edge,
-  ) {
+  Widget _buildField(BuildContext context, List<Race> visible, bool hasMore) {
+    // The main card on Compete: pure white (the normal surface in dark mode)
+    // with the app's ink outline and hard-offset plate.
     final c = context.themeColors;
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -501,13 +469,10 @@ class _CappedRaceList extends StatelessWidget {
         NuvoSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: fill,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        // Navy card: same-colour outline + hard-offset plate.
-        border: Border.all(color: edge, width: 2),
-        boxShadow: AppShadows.hardOffset(
-          fill == NuvoColors.navy ? NuvoColors.navy : c.inkShadow,
-        ),
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(c.inkShadow),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,7 +597,7 @@ class _CappedRaceList extends StatelessWidget {
       contextColor: contextNote == null
           ? null
           : leading
-          ? (dark ? c.successText : NuvoColors.success)
+          ? (dark ? c.successText : NuvoColors.successOn)
           : (dark ? c.accent : NuvoColors.actionBlue),
       // Finishing pays +25 — deterministic from the server award table.
       // On the field it docks as a tag on the context line, not a third
@@ -757,7 +722,7 @@ class _SummaryExpansionList extends StatelessWidget {
       contextColor: contextNote == null
           ? null
           : leading
-          ? (dark ? c.successText : NuvoColors.success)
+          ? (dark ? c.successText : NuvoColors.successOn)
           : (dark ? c.accent : NuvoColors.actionBlue),
       rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
       onTap: () => onOpen(race),
