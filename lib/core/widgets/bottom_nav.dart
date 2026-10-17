@@ -1,8 +1,9 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons, Theme;
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 
 /// One root destination of the app shell. THE canonical tab table: the
@@ -116,7 +117,6 @@ class NuvoBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     final colors = context.themeColors;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final reduce = MediaQuery.disableAnimationsOf(context);
     final scaler = MediaQuery.textScalerOf(
       context,
@@ -136,29 +136,14 @@ class NuvoBottomNav extends StatelessWidget {
       ),
       child: Container(
         height: navDockHeight,
+        // The app's signature physical treatment, same as buttons and cards: a
+        // solid surface, an ink edge, and a hard-offset plate shadow (navy on
+        // light, near-black on dark) — not a soft floating blur.
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(navDockHeight / 2),
-          border: dark
-              ? Border.all(
-                  color: NuvoColors.white.withValues(alpha: 0.10),
-                  width: 1,
-                )
-              : null,
-          boxShadow: dark
-              ? null
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF0B1B3A).withValues(alpha: 0.10),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFF0B1B3A).withValues(alpha: 0.06),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
+          border: Border.all(color: colors.border, width: 2),
+          boxShadow: AppShadows.hardOffset(colors.inkShadow),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -286,9 +271,23 @@ class _NavSlotState extends State<_NavSlot> {
                     width: width,
                     height: slot,
                     alignment: Alignment.center,
+                    // Primary-button treatment: electric blue, ink edge, small
+                    // hard plate. The edge is a foreground overlay so it never
+                    // changes the pill's layout width.
                     decoration: BoxDecoration(
                       color: NuvoColors.blue.withValues(alpha: t),
                       borderRadius: BorderRadius.circular(slot / 2),
+                      boxShadow: AppShadows.hardOffset(
+                        colors.inkShadow.withValues(alpha: t),
+                        offset: const Offset(2, 2),
+                      ),
+                    ),
+                    foregroundDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(slot / 2),
+                      border: Border.all(
+                        color: colors.border.withValues(alpha: t),
+                        width: 1.5,
+                      ),
                     ),
                     child: ClipRect(
                       child: Row(
