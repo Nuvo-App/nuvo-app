@@ -56,6 +56,24 @@ async function getSquad(db: D1Database, squadId: string): Promise<SquadRow | nul
     .first<SquadRow>();
 }
 
+type CrewRole = 'owner' | 'admin' | 'member';
+
+/** Small stable hash so a role change always changes the ETag. */
+function hashString(value: string): string {
+  let h = 5381;
+  for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+async function roleOf(db: D1Database, squadId: string, userId: string): Promise<CrewRole | null> {
+  const row = await db
+    .prepare("SELECT role FROM squad_members WHERE squad_id = ? AND user_id = ? AND status = 'active'")
+    .bind(squadId, userId)
+    .first<{ role: string }>();
+  if (!row) return null;
+  return row.role === 'owner' || row.role === 'admin' ? row.role : 'member';
+}
+
 async function isActiveMember(db: D1Database, squadId: string, userId: string): Promise<boolean> {
   const row = await db
     .prepare("SELECT id FROM squad_members WHERE squad_id = ? AND user_id = ? AND status = 'active'")
@@ -246,6 +264,9 @@ squadsRouter.post('/join', async (c) => {
   const existing = await c.env.DB.prepare('SELECT id, status FROM squad_members WHERE squad_id = ? AND user_id = ?')
     .bind(squad.id, userId)
     .first<{ id: string; status: string }>();
+  if (existing?.status === 'removed') {
+    return c.json(badRequest('You were removed from this crew'), 403);
+  }
   const alreadyJoined = existing?.status === 'active';
 
   if (!alreadyJoined) {
@@ -299,6 +320,8 @@ squadsRouter.get('/:id', async (c) => {
     `SELECT
        (SELECT COUNT(*) FROM squad_members WHERE squad_id = ?1 AND status = 'active') AS members,
        (SELECT MAX(joined_at) FROM squad_members WHERE squad_id = ?1 AND status = 'active') AS max_joined,
+       (SELECT GROUP_CONCAT(user_id || role, '') FROM
+         (SELECT user_id, role FROM squad_members WHERE squad_id = ?1 AND status = 'active' ORDER BY user_id)) AS roles,
        (SELECT COUNT(*) FROM squad_races sr JOIN races r ON r.id = sr.race_id
          WHERE sr.squad_id = ?1 AND r.deleted_at IS NULL) AS races,
        (SELECT MAX(r.version) FROM squad_races sr JOIN races r ON r.id = sr.race_id
@@ -316,6 +339,7 @@ squadsRouter.get('/:id', async (c) => {
     .first<{
       members: number;
       max_joined: string | null;
+      roles: string | null;
       races: number;
       max_version: number | null;
       max_race_updated: string | null;
@@ -329,6 +353,7 @@ squadsRouter.get('/:id', async (c) => {
       squad.id,
       stamp?.members,
       stamp?.max_joined,
+      stamp?.roles ? stamp.roles.length + ':' + hashString(stamp.roles) : '',
       stamp?.races,
       stamp?.max_version,
       stamp?.max_race_updated,
@@ -433,6 +458,7 @@ squadsRouter.get('/:id', async (c) => {
       name: squad.name,
       joinCode: squad.join_code,
       isOwner: squad.owner_id === userId,
+      myRole: members.results.find((m) => m.user_id === userId)?.role ?? 'member',
       memberCount: members.results.length,
       raceCount: races.results.length,
     },
@@ -474,6 +500,10 @@ squadsRouter.post('/:id/races', async (c) => {
   if (!squad || !(await isActiveMember(c.env.DB, squad.id, userId))) {
     return c.json(badRequest('Crew not found'), 404);
   }
+  const myRole = await roleOf(c.env.DB, squad.id, userId);
+  if (myRole !== 'owner' && myRole !== 'admin') {
+    return c.json(badRequest('Only crew admins can add races'), 403);
+  }
   const body = await readJson(c);
   const raceId = typeof body?.raceId === 'string' ? body.raceId.trim() : '';
   if (!raceId) return c.json(badRequest('raceId is required'), 400);
@@ -512,6 +542,70 @@ squadsRouter.post('/:id/races', async (c) => {
   }
 
   return c.json({ ok: true, raceId: race.id, added, memberCount: members.results.length });
+});
+
+// DELETE /squads/:id/races/:raceId — unlink a race from the crew (owner/admin).
+// Members stay in the race itself; it just stops counting for the crew.
+squadsRouter.delete('/:id/races/:raceId', async (c) => {
+  const userId = c.get('userId');
+  const squad = await getSquad(c.env.DB, c.req.param('id'));
+  if (!squad) return c.json(badRequest('Crew not found'), 404);
+  const myRole = await roleOf(c.env.DB, squad.id, userId);
+  if (!myRole) return c.json(badRequest('Crew not found'), 404);
+  if (myRole === 'member') return c.json(badRequest('Only crew admins can remove races'), 403);
+  await c.env.DB.prepare('DELETE FROM squad_races WHERE squad_id = ? AND race_id = ?')
+    .bind(squad.id, c.req.param('raceId'))
+    .run();
+  return c.json({ ok: true });
+});
+
+// POST /squads/:id/members/:userId/role { role: 'admin' | 'member' } — owner only.
+squadsRouter.post('/:id/members/:userId/role', async (c) => {
+  const userId = c.get('userId');
+  const squad = await getSquad(c.env.DB, c.req.param('id'));
+  if (!squad) return c.json(badRequest('Crew not found'), 404);
+  const myRole = await roleOf(c.env.DB, squad.id, userId);
+  if (!myRole) return c.json(badRequest('Crew not found'), 404);
+  if (myRole !== 'owner') return c.json(badRequest('Only the crew owner can change roles'), 403);
+
+  const targetId = c.req.param('userId');
+  const body = await readJson(c);
+  const role = body?.role;
+  if (role !== 'admin' && role !== 'member') {
+    return c.json(badRequest("role must be 'admin' or 'member'"), 400);
+  }
+  const targetRole = await roleOf(c.env.DB, squad.id, targetId);
+  if (!targetRole) return c.json(badRequest('Member not found'), 404);
+  if (targetRole === 'owner') return c.json(badRequest('The owner role cannot be changed'), 400);
+
+  await c.env.DB.prepare("UPDATE squad_members SET role = ? WHERE squad_id = ? AND user_id = ? AND status = 'active'")
+    .bind(role, squad.id, targetId)
+    .run();
+  return c.json({ ok: true, userId: targetId, role });
+});
+
+// DELETE /squads/:id/members/:userId — remove a member. The owner can remove
+// anyone; an admin can remove regular members. Nobody removes the owner.
+squadsRouter.delete('/:id/members/:userId', async (c) => {
+  const userId = c.get('userId');
+  const squad = await getSquad(c.env.DB, c.req.param('id'));
+  if (!squad) return c.json(badRequest('Crew not found'), 404);
+  const myRole = await roleOf(c.env.DB, squad.id, userId);
+  if (!myRole) return c.json(badRequest('Crew not found'), 404);
+
+  const targetId = c.req.param('userId');
+  if (targetId === userId) return c.json(badRequest('Use leave to exit the crew'), 400);
+  const targetRole = await roleOf(c.env.DB, squad.id, targetId);
+  if (!targetRole) return c.json(badRequest('Member not found'), 404);
+  const allowed =
+    targetRole !== 'owner' &&
+    (myRole === 'owner' || (myRole === 'admin' && targetRole === 'member'));
+  if (!allowed) return c.json(badRequest('You cannot remove this member'), 403);
+
+  await c.env.DB.prepare("UPDATE squad_members SET status = 'removed', role = 'member' WHERE squad_id = ? AND user_id = ?")
+    .bind(squad.id, targetId)
+    .run();
+  return c.json({ ok: true });
 });
 
 // POST /squads/:id/leave

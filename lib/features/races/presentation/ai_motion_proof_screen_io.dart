@@ -708,8 +708,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   CameraDescription _preferredCamera(List<CameraDescription> cameras) {
+    // Front camera first: most people prop the phone up and face it. The
+    // switch-camera button still flips to the back one.
     return cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.back,
+      (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
   }

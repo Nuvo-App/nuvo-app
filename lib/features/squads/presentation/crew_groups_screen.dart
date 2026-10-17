@@ -464,7 +464,7 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final router = GoRouter.of(context);
+    final router = GoRouter.maybeOf(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -554,7 +554,7 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
                 expand: true,
                 onPressed: () {
                   Navigator.of(context).pop();
-                  router.push('/scan');
+                  router?.push('/scan');
                 },
               ),
             ],
@@ -581,6 +581,7 @@ class CrewGroupDetailScreen extends ConsumerStatefulWidget {
 class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
   String? _actionError;
   bool _busy = false;
+  int _tab = 0;
 
   @override
   void initState() {
@@ -677,6 +678,139 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
     }
   }
 
+  Future<void> _addPeople() async {
+    final detail = ref.read(squadControllerProvider).details[widget.groupId];
+    if (detail == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(_kSide, 0, _kSide, _kSide),
+          child: SingleChildScrollView(child: _CodeCard(group: detail.group)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _manageMember(CrewMember member) async {
+    final detail = ref.read(squadControllerProvider).details[widget.groupId];
+    if (detail == null) return;
+    final iAmOwner = detail.group.isOwner;
+    final canRemove =
+        !member.isOwner &&
+        (iAmOwner || (!member.isAdmin && detail.group.canManage));
+    final canSetRole = iAmOwner && !member.isOwner;
+    if (!canRemove && !canSetRole) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(_kSide, 0, _kSide, _kSide),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                member.displayName,
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: ctx.themeColors.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (canSetRole)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    member.isAdmin
+                        ? Icons.remove_moderator_outlined
+                        : Icons.admin_panel_settings_outlined,
+                  ),
+                  title: Text(member.isAdmin ? 'Remove admin' : 'Make admin'),
+                  subtitle: Text(
+                    member.isAdmin
+                        ? 'They go back to a regular member.'
+                        : 'Admins can add races and remove members.',
+                  ),
+                  onTap: () => Navigator.of(ctx).pop('role'),
+                ),
+              if (canRemove)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.person_remove_outlined,
+                    color: ctx.dangerInk,
+                  ),
+                  title: Text(
+                    'Remove from crew',
+                    style: TextStyle(color: ctx.dangerInk),
+                  ),
+                  onTap: () => Navigator.of(ctx).pop('remove'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    final squads = ref.read(squadControllerProvider.notifier);
+    if (action == 'remove') {
+      final ok = await showNuvoConfirmDialog(
+        context,
+        title: 'Remove ${member.displayName}?',
+        message: 'They leave this crew and can\'t rejoin with the code.',
+        confirmLabel: 'Remove',
+      );
+      if (ok != true) return;
+    }
+    setState(() {
+      _busy = true;
+      _actionError = null;
+    });
+    try {
+      if (action == 'role') {
+        await squads.setRole(
+          widget.groupId,
+          member.userId,
+          member.isAdmin ? 'member' : 'admin',
+        );
+      } else {
+        await squads.removeMember(widget.groupId, member.userId);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _actionError = _messageFor(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _removeRace(CrewGroupRace race) async {
+    final ok = await showNuvoConfirmDialog(
+      context,
+      title: 'Remove "${race.title}"?',
+      message:
+          'It stops counting for the crew leaderboard. Everyone stays in the race.',
+      confirmLabel: 'Remove',
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _actionError = null;
+    });
+    try {
+      await ref
+          .read(squadControllerProvider.notifier)
+          .removeRace(widget.groupId, race.id);
+    } catch (e) {
+      if (mounted) setState(() => _actionError = _messageFor(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _leaveCrew() async {
     final ok = await showNuvoConfirmDialog(
       context,
@@ -709,6 +843,26 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       );
     }
 
+    final group = detail.group;
+    final canManage = group.canManage;
+    final alone = detail.members.length <= 1 && group.memberCount <= 1;
+
+    final Widget content = switch (_tab) {
+      1 => _MembersTab(
+        detail: detail,
+        onAdd: _addPeople,
+        onManage: _manageMember,
+      ),
+      2 => _RacesTab(
+        detail: detail,
+        canManage: canManage,
+        busy: _busy,
+        onAdd: _bringRace,
+        onRemove: _removeRace,
+      ),
+      _ => _LeaderboardTab(detail: detail, alone: alone),
+    };
+
     return LiveRefresh(
       onRefresh: () => ref
           .read(squadControllerProvider.notifier)
@@ -716,7 +870,7 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       child: NuvoPage(
         topBar: _topBar(
           context,
-          detail.group.name,
+          group.name,
           trailing: PopupMenuButton<String>(
             tooltip: 'More',
             icon: Icon(Icons.more_horiz_rounded, color: c.ink),
@@ -738,53 +892,11 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
                 32 + MediaQuery.viewPaddingOf(context).bottom,
               ),
               children: [
-                // Leaderboard first — it is the point of the crew.
-                Row(
-                  children: [
-                    Text(
-                      'Leaderboard',
-                      style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-                    ),
-                    const SizedBox(width: NuvoSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        '5 · 3 · 2 pts, 1 per proof',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: c.inkMuted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: NuvoSpacing.md),
-                if (detail.races.isEmpty)
-                  const _InlineNote(
-                    icon: Icons.flag_outlined,
-                    text:
-                        'No races yet. Bring a race to start the leaderboard.',
-                  )
-                else if (detail.standings.every((s) => s.points == 0))
-                  const _InlineNote(
-                    icon: Icons.bolt_rounded,
-                    text: 'No proof yet. The first proof takes the lead.',
-                  ),
-                if (_showPodium(detail.standings)) ...[
-                  _Podium(standings: detail.standings.take(3).toList()),
-                  const SizedBox(height: NuvoSpacing.sm),
-                  for (final s in detail.standings.skip(3))
-                    _StandingRow(standing: s),
-                ] else
-                  for (final s in detail.standings) _StandingRow(standing: s),
-                const SizedBox(height: NuvoSpacing.sm),
-                NuvoPrimaryButton(
-                  label: 'Bring a race to the crew',
-                  icon: Icons.flag_rounded,
-                  expand: true,
-                  loading: _busy,
-                  onPressed: _bringRace,
+                _CrewSummaryCard(
+                  detail: detail,
+                  onAddPeople: _addPeople,
+                  onAddRace: canManage ? _bringRace : null,
+                  busy: _busy,
                 ),
                 if (_actionError != null) ...[
                   const SizedBox(height: 10),
@@ -796,16 +908,17 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
                   ),
                 ],
                 const SizedBox(height: NuvoSpacing.lg),
-                _CodeCard(group: detail.group),
-                if (detail.races.isNotEmpty) ...[
-                  const SizedBox(height: NuvoSpacing.xxl),
-                  Text(
-                    'Crew races',
-                    style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-                  ),
-                  const SizedBox(height: NuvoSpacing.xs),
-                  for (final r in detail.races) _RaceRow(race: r),
-                ],
+                _CrewTabBar(
+                  selected: _tab,
+                  labels: [
+                    'Leaderboard',
+                    'Members ${group.memberCount}',
+                    'Races ${group.raceCount}',
+                  ],
+                  onSelect: (i) => setState(() => _tab = i),
+                ),
+                const SizedBox(height: NuvoSpacing.lg),
+                content,
               ],
             ),
           ),
@@ -816,6 +929,434 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
 
   static bool _showPodium(List<CrewGroupStanding> s) =>
       s.length >= 3 && s.any((e) => e.points > 0);
+}
+
+/// The crew at a glance: how big it is, my role, and the two things an owner
+/// does most — pull people in and bring races.
+class _CrewSummaryCard extends StatelessWidget {
+  const _CrewSummaryCard({
+    required this.detail,
+    required this.onAddPeople,
+    required this.onAddRace,
+    required this.busy,
+  });
+
+  final CrewGroupDetail detail;
+  final VoidCallback onAddPeople;
+  final VoidCallback? onAddRace;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final g = detail.group;
+    final role = g.isOwner
+        ? 'Owner'
+        : (g.myRole == 'admin' ? 'Admin' : 'Member');
+    return Container(
+      key: const ValueKey('crew-summary'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(c.inkShadow),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: c.panel,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const NuvoCrewIcon(size: 28, semanticLabel: null),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      g.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+                    ),
+                    Text(
+                      '${g.memberCount} ${g.memberCount == 1 ? 'member' : 'members'}'
+                      ' · ${g.raceCount} ${g.raceCount == 1 ? 'race' : 'races'}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: c.inkMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _RoleChip(label: role, strong: g.canManage),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NuvoPrimaryButton(
+                  label: 'Add people',
+                  icon: Icons.qr_code_2_rounded,
+                  expand: true,
+                  onPressed: onAddPeople,
+                ),
+              ),
+              if (onAddRace != null) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: NuvoOutlineButton(
+                    label: 'Add race',
+                    icon: Icons.flag_rounded,
+                    expand: true,
+                    onPressed: busy ? null : onAddRace,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoleChip extends StatelessWidget {
+  const _RoleChip({required this.label, this.strong = false});
+  final String label;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: strong ? c.accent.withValues(alpha: 0.12) : c.panel,
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        border: Border.all(color: strong ? c.accent : c.border),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: AppTextStyles.labelMedium.copyWith(
+          color: strong ? c.accent : c.inkMuted,
+        ),
+      ),
+    );
+  }
+}
+
+/// Three views of one crew: standings, people, races.
+class _CrewTabBar extends StatelessWidget {
+  const _CrewTabBar({
+    required this.selected,
+    required this.labels,
+    required this.onSelect,
+  });
+
+  final int selected;
+  final List<String> labels;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      key: const ValueKey('crew-tabs'),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: c.panel,
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: i == selected,
+                label: labels[i],
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelect(i),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 40),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: i == selected ? c.surface : Colors.transparent,
+                      borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                      border: i == selected
+                          ? Border.all(color: c.border, width: 1.5)
+                          : null,
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        labels[i],
+                        maxLines: 1,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: i == selected ? c.ink : c.inkMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeaderboardTab extends StatelessWidget {
+  const _LeaderboardTab({required this.detail, required this.alone});
+  final CrewGroupDetail detail;
+  final bool alone;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final standings = detail.standings;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Points: 5 · 3 · 2 for the top three, 1 per proof',
+          style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+        ),
+        const SizedBox(height: NuvoSpacing.md),
+        if (alone) ...[
+          // Nobody else yet: the next move is getting people in.
+          _CodeCard(group: detail.group, title: 'Just you so far'),
+          const SizedBox(height: NuvoSpacing.md),
+        ],
+        if (detail.races.isEmpty)
+          const _InlineNote(
+            icon: Icons.flag_outlined,
+            text: 'No races yet. Add a race to start the leaderboard.',
+          )
+        else if (standings.every((s) => s.points == 0))
+          const _InlineNote(
+            icon: Icons.bolt_rounded,
+            text: 'No proof yet. The first proof takes the lead.',
+          ),
+        if (_CrewGroupDetailScreenState._showPodium(standings)) ...[
+          _Podium(standings: standings.take(3).toList()),
+          const SizedBox(height: NuvoSpacing.sm),
+          for (final s in standings.skip(3)) _StandingRow(standing: s),
+        ] else
+          for (final s in standings) _StandingRow(standing: s),
+      ],
+    );
+  }
+}
+
+class _MembersTab extends StatelessWidget {
+  const _MembersTab({
+    required this.detail,
+    required this.onAdd,
+    required this.onManage,
+  });
+
+  final CrewGroupDetail detail;
+  final VoidCallback onAdd;
+  final ValueChanged<CrewMember> onManage;
+
+  static int _order(CrewMember m) => m.isOwner ? 0 : (m.isAdmin ? 1 : 2);
+
+  @override
+  Widget build(BuildContext context) {
+    final g = detail.group;
+    final members = [...detail.members]
+      ..sort((a, b) => _order(a).compareTo(_order(b)));
+    if (members.isEmpty) {
+      return const _InlineNote(
+        icon: Icons.groups_outlined,
+        text: 'Members will show up here.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final m in members)
+          _MemberRow(
+            member: m,
+            canManage: !m.isOwner && (g.isOwner || (g.canManage && !m.isAdmin)),
+            onManage: () => onManage(m),
+          ),
+        const SizedBox(height: NuvoSpacing.xs),
+        NuvoOutlineButton(
+          label: 'Add people',
+          icon: Icons.qr_code_2_rounded,
+          expand: true,
+          onPressed: onAdd,
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberRow extends StatelessWidget {
+  const _MemberRow({
+    required this.member,
+    required this.canManage,
+    required this.onManage,
+  });
+
+  final CrewMember member;
+  final bool canManage;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          NuvoAvatar(
+            initials: member.initials,
+            size: NuvoAvatarSizes.sm,
+            photoUrl: member.profilePhotoUrl,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
+                ),
+                if (member.username != null)
+                  Text(
+                    '@${member.username}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+                  ),
+              ],
+            ),
+          ),
+          if (member.isOwner || member.isAdmin) ...[
+            _RoleChip(label: member.isOwner ? 'Owner' : 'Admin', strong: true),
+            const SizedBox(width: 4),
+          ],
+          if (canManage)
+            IconButton(
+              tooltip: 'Manage ${member.displayName}',
+              icon: Icon(Icons.more_horiz_rounded, color: c.ink),
+              onPressed: onManage,
+            )
+          else
+            const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _RacesTab extends StatelessWidget {
+  const _RacesTab({
+    required this.detail,
+    required this.canManage,
+    required this.busy,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final CrewGroupDetail detail;
+  final bool canManage;
+  final bool busy;
+  final VoidCallback onAdd;
+  final ValueChanged<CrewGroupRace> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final live = detail.races.where((r) => r.status == 'active').toList();
+    final done = detail.races.where((r) => r.status != 'active').toList();
+    if (detail.races.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _InlineNote(
+            icon: Icons.flag_outlined,
+            text: 'No races yet. Races you add count for the whole crew.',
+          ),
+          if (canManage)
+            NuvoPrimaryButton(
+              label: 'Add a race',
+              icon: Icons.flag_rounded,
+              expand: true,
+              loading: busy,
+              onPressed: onAdd,
+            )
+          else
+            Text(
+              'Crew admins add races.',
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+            ),
+        ],
+      );
+    }
+    Widget section(String title, List<CrewGroupRace> races) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            title,
+            style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+          ),
+        ),
+        for (final r in races)
+          Row(
+            children: [
+              Expanded(child: _RaceRow(race: r)),
+              if (canManage)
+                IconButton(
+                  tooltip: 'Remove ${r.title} from crew',
+                  icon: Icon(Icons.more_horiz_rounded, color: c.ink),
+                  onPressed: () => onRemove(r),
+                ),
+            ],
+          ),
+        const SizedBox(height: NuvoSpacing.lg),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (live.isNotEmpty) section('Racing now', live),
+        if (done.isNotEmpty) section('Finished', done),
+      ],
+    );
+  }
 }
 
 class _InlineNote extends StatelessWidget {
@@ -846,8 +1387,9 @@ class _InlineNote extends StatelessWidget {
 }
 
 class _CodeCard extends StatelessWidget {
-  const _CodeCard({required this.group});
+  const _CodeCard({required this.group, this.title = 'Pull in your crew'});
   final CrewGroup group;
+  final String title;
 
   /// What the QR carries; `NuvoDestination` parses it back to the code.
   String get _link => 'https://getnuvo.net/c/${group.joinCode}';
@@ -867,10 +1409,7 @@ class _CodeCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Pull in your crew',
-            style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-          ),
+          Text(title, style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
           const SizedBox(height: 14),
           Center(
             child: Container(

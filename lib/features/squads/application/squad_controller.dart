@@ -382,6 +382,31 @@ class SquadController extends StateNotifier<SquadState> {
     return added;
   }
 
+  /// Owner only: make a member an admin, or take it back.
+  Future<void> setRole(String id, String userId, String role) async {
+    await _repo.setRole(id, userId, role);
+    _invalidateDetail(id);
+    await loadDetail(id, force: true);
+  }
+
+  /// Owner / admin: remove someone from the crew.
+  Future<void> removeMember(String id, String userId) async {
+    await _repo.removeMember(id, userId);
+    _invalidateDetail(id);
+    _invalidateList();
+    await loadDetail(id, force: true);
+    unawaited(load(force: true));
+  }
+
+  /// Owner / admin: stop a race counting for the crew.
+  Future<void> removeRace(String id, String raceId) async {
+    await _repo.removeRace(id, raceId);
+    _invalidateDetail(id);
+    _invalidateList();
+    await loadDetail(id, force: true);
+    unawaited(load(force: true));
+  }
+
   Future<void> leave(String id) async {
     await _repo.leave(id);
     final account = _account();

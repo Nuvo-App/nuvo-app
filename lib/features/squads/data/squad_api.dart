@@ -23,6 +23,7 @@ class CrewGroup {
     required this.isOwner,
     required this.memberCount,
     required this.raceCount,
+    this.myRole,
   });
 
   final String id;
@@ -32,6 +33,12 @@ class CrewGroup {
   final int memberCount;
   final int raceCount;
 
+  /// 'owner' | 'admin' | 'member' (detail only; null on list rows).
+  final String? myRole;
+
+  /// Owners and admins run the crew: add races, remove members.
+  bool get canManage => isOwner || myRole == 'admin' || myRole == 'owner';
+
   factory CrewGroup.fromJson(Map<String, dynamic> j) => CrewGroup(
         id: j['id'] as String,
         name: j['name'] as String? ?? 'Crew',
@@ -39,6 +46,7 @@ class CrewGroup {
         isOwner: j['isOwner'] as bool? ?? false,
         memberCount: j['memberCount'] as int? ?? 0,
         raceCount: j['raceCount'] as int? ?? 0,
+        myRole: j['myRole'] as String?,
       );
 }
 
@@ -72,6 +80,41 @@ class CrewGroupRace {
         status: j['status'] as String? ?? 'active',
         targetValue: j['targetValue'] as int?,
         targetUnit: j['targetUnit'] as String?,
+      );
+}
+
+/// One person in a crew, with the role that decides what they can do.
+class CrewMember {
+  const CrewMember({
+    required this.userId,
+    required this.displayName,
+    required this.role,
+    this.username,
+    this.profilePhotoUrl,
+  });
+
+  final String userId;
+  final String displayName;
+  final String role; // owner | admin | member
+  final String? username;
+  final String? profilePhotoUrl;
+
+  bool get isOwner => role == 'owner';
+  bool get isAdmin => role == 'admin';
+
+  String get initials {
+    final parts = displayName.replaceFirst('@', '').trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'N';
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return parts.first[0].toUpperCase();
+  }
+
+  factory CrewMember.fromJson(Map<String, dynamic> j) => CrewMember(
+        userId: j['userId'] as String,
+        displayName: j['displayName'] as String? ?? 'Nuvo member',
+        role: j['role'] as String? ?? 'member',
+        username: j['username'] as String?,
+        profilePhotoUrl: j['profilePhotoUrl'] as String?,
       );
 }
 
@@ -121,11 +164,13 @@ class CrewGroupDetail {
     required this.group,
     required this.races,
     required this.standings,
+    this.members = const [],
   });
 
   final CrewGroup group;
   final List<CrewGroupRace> races;
   final List<CrewGroupStanding> standings;
+  final List<CrewMember> members;
 
   factory CrewGroupDetail.fromJson(Map<String, dynamic> j) => CrewGroupDetail(
         group: CrewGroup.fromJson(j['squad'] as Map<String, dynamic>),
@@ -136,6 +181,10 @@ class CrewGroupDetail {
         standings: (j['standings'] as List<dynamic>? ?? [])
             .whereType<Map<String, dynamic>>()
             .map(CrewGroupStanding.fromJson)
+            .toList(),
+        members: (j['members'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(CrewMember.fromJson)
             .toList(),
       );
 }
@@ -234,6 +283,28 @@ class SquadApi {
   Future<void> leave(String token, String id) async {
     await _send(() => _client.post(_uri('/$id/leave'), headers: _headers(token)));
   }
+
+  Future<void> setRole(String token, String id, String userId, String role) async {
+    await _send(() => _client.post(
+          _uri('/$id/members/$userId/role'),
+          headers: _headers(token),
+          body: jsonEncode({'role': role}),
+        ));
+  }
+
+  Future<void> removeMember(String token, String id, String userId) async {
+    await _send(() => _client.delete(
+          _uri('/$id/members/$userId'),
+          headers: _headers(token),
+        ));
+  }
+
+  Future<void> removeRace(String token, String id, String raceId) async {
+    await _send(() => _client.delete(
+          _uri('/$id/races/$raceId'),
+          headers: _headers(token),
+        ));
+  }
 }
 
 /// Token injection + 401 refresh (mirrors CrewRepository).
@@ -253,6 +324,12 @@ class SquadRepository {
   Future<int> addRace(String id, String raceId) =>
       _withRefresh((t) => _api.addRace(t, id, raceId));
   Future<void> leave(String id) => _withRefresh((t) => _api.leave(t, id));
+  Future<void> setRole(String id, String userId, String role) =>
+      _withRefresh((t) => _api.setRole(t, id, userId, role));
+  Future<void> removeMember(String id, String userId) =>
+      _withRefresh((t) => _api.removeMember(t, id, userId));
+  Future<void> removeRace(String id, String raceId) =>
+      _withRefresh((t) => _api.removeRace(t, id, raceId));
 
   Future<T> _withRefresh<T>(Future<T> Function(String token) call) async {
     final token = await _store.getAccessToken();

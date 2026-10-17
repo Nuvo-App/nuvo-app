@@ -15,7 +15,7 @@ Map<String, dynamic> _g(String id, String name) => {
       'joinCode': 'CODE$id',
       'isOwner': true,
       'memberCount': 4,
-      'raceCount': 2,
+      'raceCount': 1,
     };
 
 Map<String, dynamic> _s(String id, String name, int rank, int pts,
@@ -47,6 +47,12 @@ class _Repo implements SquadRepository {
       'races': [
         {'id': 'r1', 'title': 'Morning push-ups', 'status': 'active'},
       ],
+      'members': [
+        {'userId': '2', 'displayName': 'Ben', 'role': 'owner'},
+        {'userId': '1', 'displayName': 'Ava Long', 'role': 'admin'},
+        {'userId': '3', 'displayName': 'Cy Extremely Long Name', 'role': 'member'},
+        {'userId': '4', 'displayName': 'Dee', 'role': 'member'},
+      ],
       'standings': [
         _s('1', 'Ava Long', 1, 9),
         _s('2', 'Ben', 2, 6, you: true),
@@ -66,6 +72,15 @@ class _Repo implements SquadRepository {
   Future<int> addRace(String id, String raceId) async => 1;
   @override
   Future<void> leave(String id) async {}
+
+  @override
+  Future<void> setRole(String id, String userId, String role) async {}
+
+  @override
+  Future<void> removeMember(String id, String userId) async {}
+
+  @override
+  Future<void> removeRace(String id, String raceId) async {}
 }
 
 Future<void> _pump(
@@ -157,12 +172,21 @@ void main() {
     expect(find.text('Ava Long'), findsOneWidget);
     expect(find.text('You'), findsOneWidget); // podium step for me
     expect(find.text('Dee'), findsOneWidget); // rank 4 row
-    expect(find.text('Bring a race to the crew'), findsOneWidget);
-    expect(find.text('Crew code'), findsOneWidget);
-    expect(find.byKey(const ValueKey('crew-qr')), findsOneWidget);
-    // The QR card is tall; the crew's races sit below it.
-    await tester.scrollUntilVisible(find.text('Morning push-ups'), 200);
+    // Structure: summary card, then Leaderboard | Members | Races.
+    expect(find.byKey(const ValueKey('crew-summary')), findsOneWidget);
+    expect(find.text('Add people'), findsOneWidget);
+    expect(find.text('Add race'), findsOneWidget); // I own this crew
+    await tester.tap(find.text('Members 4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Owner'), findsWidgets);
+    await tester.tap(find.text('Races 1'));
+    await tester.pumpAndSettle();
     expect(find.text('Morning push-ups'), findsOneWidget);
+    // Add people opens the QR + code sheet.
+    await tester.tap(find.text('Add people').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('crew-qr')), findsOneWidget);
+    expect(find.text('Crew code'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -81,6 +81,15 @@ class _FakeRepo implements SquadRepository {
 
   @override
   Future<void> leave(String id) async {}
+
+  @override
+  Future<void> setRole(String id, String userId, String role) async {}
+
+  @override
+  Future<void> removeMember(String id, String userId) async {}
+
+  @override
+  Future<void> removeRace(String id, String raceId) async {}
 }
 
 SquadController _make(_FakeRepo repo, CacheStore store, {String? account = 'u1'}) =>
