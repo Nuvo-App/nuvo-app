@@ -84,6 +84,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String _metric = 'reps';
   int _raceTotalBefore = 0;
   int? _raceTargetValue;
+
   /// The race's competitive context — format, direction, banked score,
   /// score-to-beat — so the HUD can talk about the race, not just the count.
   VerifierRaceContext? _raceContext;
@@ -129,6 +130,20 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   ({int value, double confidence, bool verified})? _sessionCompletionResult;
   Future<void>? _sessionCompletion;
   bool _verificationSessionCompleted = false;
+
+  /// A proof request (and its optimistic board patch) is already running —
+  /// a second tap / auto-submit must not start another.
+  bool _submitInFlight = false;
+
+  /// The board-moved celebration was pushed optimistically on top of this
+  /// screen and is still waiting for the server to confirm the proof.
+  bool _optimisticCelebrationOpen = false;
+
+  /// Completes when POST /proof has returned (accepted or rejected). The
+  /// /motion/analyze call and the motion-session artifact upload wait for it
+  /// so they never compete with complete/proof on the wire. Only set for a
+  /// verified result that is about to be submitted.
+  Completer<void>? _proofSettled;
 
   /// Release whose package is pin-protected for the active session — the
   /// installer must never evict the bytes a live verifier depends on.
@@ -264,9 +279,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _status = AiMotionProofStatus.processing;
         _message = null;
       });
-      final race = await ref
-          .read(raceControllerProvider.notifier)
-          .getRaceDetail(widget.raceId);
+      // Mint the verification session in parallel with the race-detail load:
+      // the handshake does not depend on the race body, so it is no longer a
+      // separate stage (and its failure is no longer a separate swallow
+      // point — the submit gate re-mints when this comes back null).
+      final loaded = await Future.wait<Object?>([
+        ref.read(raceControllerProvider.notifier).getRaceDetail(widget.raceId),
+        _mintVerificationSession(),
+      ]);
+      final race = loaded[0] as Race;
+      final prefetchedHandshake = loaded[1] as VerificationSessionHandshake?;
       if (!mounted) return;
       final eligibility = resolveCameraVerification(
         race,
@@ -335,9 +357,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // caller-owned session for this race. Remote-spec races additionally
       // pin the exact verifier release through the same handshake.
       RemoteVerifierSpec? sessionRemoteSpec;
-      VerificationSessionHandshake? handshake;
+      VerificationSessionHandshake? handshake = prefetchedHandshake;
       try {
-        handshake = await ref
+        handshake ??= await ref
             .read(raceControllerProvider.notifier)
             .createVerificationSession(
               race.id,
@@ -372,8 +394,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           if (!install.runnable) {
             setState(() {
               _status = AiMotionProofStatus.unsupportedMovement;
-              _message = install.status ==
-                          MotionPackageStatus.missingRequiredAsset ||
+              _message =
+                  install.status == MotionPackageStatus.missingRequiredAsset ||
                       install.status == MotionPackageStatus.installPending
                   ? 'This verifier needs a download that could not finish yet.'
                   : 'This verifier package could not be verified on device.';
@@ -433,6 +455,25 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _status = AiMotionProofStatus.setup;
         _message = 'Race details could not load. Start when ready.';
       });
+    }
+  }
+
+  /// Session handshake started alongside the race-detail load. Never throws;
+  /// null means "mint again later" (here once, then at submit).
+  Future<VerificationSessionHandshake?> _mintVerificationSession() async {
+    if (_isPresentationFixtureRace) return null;
+    try {
+      return await ref
+          .read(raceControllerProvider.notifier)
+          .createVerificationSession(
+            widget.raceId,
+            appVersion: 'local',
+            appBuild: MotionCapabilities.appBuild,
+            runtimeCapabilities: MotionCapabilities.current(),
+          );
+    } catch (_) {
+      _debugLog('verificationSessionCreateFailed');
+      return null;
     }
   }
 
@@ -585,6 +626,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   @override
   void dispose() {
     _disposed = true;
+    _releaseProofSettled();
     // Catch attempts abandoned before server analysis resolved.
     _finalizeSession();
     WidgetsBinding.instance.removeObserver(this);
@@ -703,10 +745,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
 
     if (!_isObjectComposition) _runtime.start();
-    final verificationSessionId = _verificationSessionId;
-    if (verificationSessionId != null && verificationSessionId.isNotEmpty) {
-      unawaited(_startVerificationSession(verificationSessionId));
-    }
+    // No POST …/start: `complete` accepts a session that is still `created`.
     _elapsed = Duration.zero;
     _debugFrameCount = 0;
     _capturedFrames.clear();
@@ -984,7 +1023,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         detail: verified ? 'made_basket' : (update?.diagnostic ?? 'no_result'),
         metrics: {'count': value.toDouble()},
       );
-      _finalizeSession();
+      if (verified) {
+        _proofSettled = Completer<void>();
+        unawaited(_awaitProofSettled().then((_) => _finalizeSession()));
+      } else {
+        _finalizeSession();
+      }
       _sessionCompletionResult = (
         value: value,
         confidence: _objectConfidence,
@@ -1028,6 +1072,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             : AiMotionProofStatus.aiFailed;
         _message = null;
       });
+      if (acceptedResult.isVerified) _proofSettled = Completer<void>();
       unawaited(_analyzeCapturedMotion());
       _sessionCompletionResult = (
         value: acceptedResult.count,
@@ -1063,6 +1108,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           : AiMotionProofStatus.aiFailed;
       _message = null;
     });
+    if (acceptedResult.isVerified) _proofSettled = Completer<void>();
     unawaited(_analyzeCapturedMotion());
     _sessionCompletionResult = (
       value: acceptedResult.detectedReps,
@@ -1072,6 +1118,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _sessionCompletion = _completeVerificationSession();
     if (acceptedResult.isVerified) _scheduleAutoSubmit();
   }
+
+  /// Set once the server accepted the proof — stops background retries.
+  bool _proofAccepted = false;
 
   Future<void> _completeVerificationSession() async {
     final result = _sessionCompletionResult;
@@ -1087,26 +1136,53 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         checksum.isEmpty) {
       return;
     }
-    try {
-      await ref
-          .read(raceControllerProvider.notifier)
-          .completeVerificationSession(
-            sessionId,
-            releaseId: releaseId,
-            releaseChecksum: checksum,
-            status: result.verified ? 'completed' : 'failed',
-            resultValue: result.value,
-            confidence: result.confidence,
-            failureReason: result.verified
-                ? null
-                : _isObjectComposition
-                ? (_objectUpdate?.diagnostic ?? 'shot_not_confirmed')
-                : _runtime.failedRuleReason,
-          );
-      if (result.verified) _verificationSessionCompleted = true;
-    } catch (_) {
-      _debugLog('verificationSessionCompletionUnavailable');
+    // Transient failures are retried in the background (3 tries); the proof
+    // request also carries `sessionResult`, so even if every try fails the
+    // server can finish the session itself.
+    final done = await ref
+        .read(raceControllerProvider.notifier)
+        .completeVerificationSessionWithRetry(
+          sessionId,
+          releaseId: releaseId,
+          releaseChecksum: checksum,
+          status: result.verified ? 'completed' : 'failed',
+          resultValue: result.value,
+          confidence: result.confidence,
+          failureReason: result.verified
+              ? null
+              : _isObjectComposition
+              ? (_objectUpdate?.diagnostic ?? 'shot_not_confirmed')
+              : _runtime.failedRuleReason,
+          shouldContinue: () => mounted && !_disposed && !_proofAccepted,
+        );
+    if (done && result.verified) _verificationSessionCompleted = true;
+    if (!done) _debugLog('verificationSessionCompletionUnavailable');
+  }
+
+  /// The client's own account of the finished session, sent with the proof so
+  /// the server can complete the session itself. Null when the release the
+  /// session pinned is unknown (then the old complete-first gate applies).
+  ProofSessionResult? _sessionResultForProof() {
+    final result = _sessionCompletionResult;
+    final sessionId = _verificationSessionId;
+    final releaseId = _verificationReleaseId;
+    final checksum = _verificationReleaseChecksum;
+    if (result == null ||
+        !result.verified ||
+        sessionId == null ||
+        sessionId.isEmpty ||
+        releaseId == null ||
+        releaseId.isEmpty ||
+        checksum == null ||
+        checksum.isEmpty) {
+      return null;
     }
+    return ProofSessionResult(
+      releaseId: releaseId,
+      releaseChecksum: checksum,
+      resultValue: result.value,
+      confidence: result.confidence,
+    );
   }
 
   /// The server only accepts an AI Motion Proof bound to this user's
@@ -1138,24 +1214,39 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         return false;
       }
     }
-    await _sessionCompletion;
+    // Give an in-flight completion a short head start, but never block the
+    // proof on it: a slow or failed `complete` is covered by `sessionResult`.
+    try {
+      await _sessionCompletion?.timeout(const Duration(milliseconds: 1500));
+    } on TimeoutException {
+      // Still running in the background — carry on.
+    }
     if (_verificationSessionCompleted) return true;
+    // The proof carries sessionResult (release id + checksum + value): the
+    // server completes the session itself, so a failed complete is not fatal.
+    if (_sessionResultForProof() != null) return true;
     await _completeVerificationSession();
     return _verificationSessionCompleted;
   }
 
-  Future<void> _startVerificationSession(String sessionId) async {
-    try {
-      await ref
-          .read(raceControllerProvider.notifier)
-          .startVerificationSession(sessionId);
-    } catch (_) {
-      _debugLog('verificationSessionStartUnavailable');
-    }
+  /// Waits (bounded) for POST /proof to resolve before the non-critical
+  /// background traffic — server motion analysis and the session artifact
+  /// upload — is allowed onto the wire.
+  Future<void> _awaitProofSettled() async {
+    final settled = _proofSettled;
+    if (settled == null || settled.isCompleted) return;
+    await settled.future.timeout(const Duration(seconds: 60), onTimeout: () {});
+  }
+
+  void _releaseProofSettled() {
+    final settled = _proofSettled;
+    if (settled != null && !settled.isCompleted) settled.complete();
   }
 
   Future<void> _analyzeCapturedMotion() async {
     if (_capturedFrames.length < 2 || !mounted) return;
+    await _awaitProofSettled();
+    if (_disposed) return;
     try {
       final result = await ref
           .read(raceControllerProvider.notifier)
@@ -1215,7 +1306,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _sessionFinalized = true;
 
     final MotionSessionOutcome outcome;
-    if (_status == AiMotionProofStatus.aiVerified) {
+    if (_status == AiMotionProofStatus.aiVerified ||
+        _status == AiMotionProofStatus.submitting ||
+        _status == AiMotionProofStatus.submitted) {
+      // The artifact is sealed after POST /proof, so a submitted proof is
+      // still a verified session.
       outcome = MotionSessionOutcome.verified;
     } else if (_status == AiMotionProofStatus.aiFailed) {
       outcome = MotionSessionOutcome.failed;
@@ -1321,10 +1416,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       isPresentationDemoCreatedRace(widget.raceId);
 
   Future<void> _submitVerifiedProof() async {
+    if (_submitInFlight) return;
+    _submitInFlight = true;
+    try {
+      await _submitVerifiedProofOnce();
+    } finally {
+      _submitInFlight = false;
+      // Whatever happened, the proof request is no longer on the wire: the
+      // deferred motion analysis / artifact upload may go now.
+      _releaseProofSettled();
+    }
+  }
+
+  Future<void> _submitVerifiedProofOnce() async {
     // Local presentation fixtures have no server race and resolve in the
     // controller's demo path — they never need a verification session.
     // Everything else — preset and custom verifier alike — fails closed:
-    // no completed session, no proof.
+    // no session, no proof. (A session whose `complete` call failed is fine
+    // as long as the proof carries `sessionResult`.)
     if (!_isPresentationFixtureRace &&
         !await _verificationSessionReadyForProof()) {
       if (!mounted) return;
@@ -1335,129 +1444,154 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       });
       return;
     }
+    final sessionResult = _isPresentationFixtureRace
+        ? null
+        : _sessionResultForProof();
+    final controller = ref.read(raceControllerProvider.notifier);
+
     if (_isObjectComposition) {
       if (_objectCount <= 0 || _status != AiMotionProofStatus.aiVerified) {
         return;
       }
-      setState(() {
-        _status = AiMotionProofStatus.submitting;
-        _message = null;
-      });
-      try {
-        final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
-        _clientSubmissionId = clientSubmissionId;
-        final race = await ref
-            .read(raceControllerProvider.notifier)
-            .submitObjectCompositionProof(
-              widget.raceId,
-              activityId: _objectCompositionSpec!.activityId,
-              clientSubmissionId: clientSubmissionId,
-              metric: _metric,
-              value: _objectCount,
-              targetValue: _raceTarget,
-              confidence: _objectConfidence,
-              verificationSummary:
-                  'Confirmed $_objectCount made basketball shot${_objectCount == 1 ? '' : 's'} from dot-only object tracking.',
-              validatorVersion: _objectCompositionSpec!.releaseId,
-              framesAnalyzed: _session?.objectFrameCount ?? 0,
-              durationMs: _elapsed.inMilliseconds,
-              verificationSessionId: _verificationSessionId,
-            );
-        if (!mounted) return;
-        setState(() => _status = AiMotionProofStatus.submitted);
-        _goToCelebration(race, _objectCount, 'ai_verified');
-      } on ApiException catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _status = AiMotionProofStatus.aiVerified;
-          _message = e.message;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _status = AiMotionProofStatus.aiVerified;
-          _message = 'Verified proof could not be submitted. Try again.';
-        });
-      }
+      final count = _objectCount;
+      await _sendProof(
+        value: count,
+        status: 'ai_verified',
+        send: (clientSubmissionId) => controller.submitObjectCompositionProof(
+          widget.raceId,
+          activityId: _objectCompositionSpec!.activityId,
+          clientSubmissionId: clientSubmissionId,
+          metric: _metric,
+          value: count,
+          targetValue: _raceTarget,
+          confidence: _objectConfidence,
+          verificationSummary:
+              'Confirmed $count made basketball shot${count == 1 ? '' : 's'} from dot-only object tracking.',
+          validatorVersion: _objectCompositionSpec!.releaseId,
+          framesAnalyzed: _session?.objectFrameCount ?? 0,
+          durationMs: _elapsed.inMilliseconds,
+          verificationSessionId: _verificationSessionId,
+          sessionResult: sessionResult,
+        ),
+      );
       return;
     }
     if (_usesCustomRuntimeOutput) {
       final result = _customResult;
       if (result == null || !result.isVerified) return;
-      setState(() {
-        _status = AiMotionProofStatus.submitting;
-        _message = null;
-      });
-      try {
-        final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
-        _clientSubmissionId = clientSubmissionId;
-        final race = await ref
-            .read(raceControllerProvider.notifier)
-            .submitCustomPoseProof(
-              widget.raceId,
-              result: result,
-              clientSubmissionId: clientSubmissionId,
-              verificationSessionId: _verificationSessionId,
-            );
-        if (!mounted) return;
-        setState(() => _status = AiMotionProofStatus.submitted);
-        _goToCelebration(race, result.count, result.verificationStatus);
-      } on ApiException catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _status = AiMotionProofStatus.aiVerified;
-          _message = e.message;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _status = AiMotionProofStatus.aiVerified;
-          _message = 'Verified proof could not be submitted. Try again.';
-        });
-      }
+      await _sendProof(
+        value: result.count,
+        status: result.verificationStatus,
+        send: (clientSubmissionId) => controller.submitCustomPoseProof(
+          widget.raceId,
+          result: result,
+          clientSubmissionId: clientSubmissionId,
+          verificationSessionId: _verificationSessionId,
+          sessionResult: sessionResult,
+        ),
+      );
       return;
     }
 
     final result = _result;
     if (result == null || !result.isVerified) return;
+    await _sendProof(
+      value: result.detectedReps,
+      status: 'ai_verified',
+      send: (clientSubmissionId) => controller.submitAiMotionProof(
+        widget.raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        metric: _metric,
+        verificationSessionId: _verificationSessionId,
+        sessionResult: sessionResult,
+      ),
+    );
+  }
+
+  /// The request pipeline around submit: patch the cached board and open the
+  /// celebration right away, send the proof (the repository retries timeouts
+  /// and 5xx with the same clientSubmissionId), then reconcile with the
+  /// returned race — or roll the patch back and show the server's message on
+  /// this screen.
+  Future<void> _sendProof({
+    required int value,
+    required String status,
+    required Future<Race> Function(String clientSubmissionId) send,
+  }) async {
     setState(() {
       _status = AiMotionProofStatus.submitting;
       _message = null;
     });
+    final controller = ref.read(raceControllerProvider.notifier);
+    final userId = ref.read(authControllerProvider).user?.id;
+    // One id for the whole submission, reset only after success.
+    final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
+    _clientSubmissionId = clientSubmissionId;
+
+    final optimistic = (_isPresentationFixtureRace || userId == null)
+        ? null
+        : controller.applyOptimisticProof(widget.raceId, userId, value);
+    if (optimistic != null) {
+      _openOptimisticCelebration(optimistic, value, status);
+    }
     try {
-      final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
-      _clientSubmissionId = clientSubmissionId;
-      final race = await ref
-          .read(raceControllerProvider.notifier)
-          .submitAiMotionProof(
-            widget.raceId,
-            result: result,
-            clientSubmissionId: clientSubmissionId,
-            metric: _metric,
-            verificationSessionId: _verificationSessionId,
-          );
+      final race = await send(clientSubmissionId);
+      _proofAccepted = true;
+      _clientSubmissionId = null;
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);
-      _goToCelebration(race, result.detectedReps, 'ai_verified');
+      if (!_optimisticCelebrationOpen) _goToCelebration(race, value, status);
     } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _status = AiMotionProofStatus.aiVerified;
-        _message = e.message;
-      });
+      _proofRejected(e.message);
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _status = AiMotionProofStatus.aiVerified;
-        _message = 'Verified proof could not be submitted. Try again.';
-      });
+      _proofRejected('Verified proof could not be submitted. Try again.');
     }
   }
 
-  void _goToCelebration(Race race, int value, String status) {
+  /// The controller has already rolled the optimistic patch back; surface the
+  /// message here and take the celebration down if it is still on top.
+  void _proofRejected(String message) {
     if (!mounted) return;
-    final uid = ref.read(authControllerProvider).user?.id;
-    final proof = race.recentProofs.isNotEmpty ? race.recentProofs.first : null;
+    final celebrationOpen = _optimisticCelebrationOpen;
+    _optimisticCelebrationOpen = false;
+    if (celebrationOpen && ModalRoute.of(context)?.isCurrent == false) {
+      context.pop();
+    }
+    setState(() {
+      _status = AiMotionProofStatus.aiVerified;
+      _message = message;
+    });
+  }
+
+  /// Pushed (not replaced) so a rejection can come back to this screen; the
+  /// screen is removed with the rest of the stack when the celebration leaves.
+  void _openOptimisticCelebration(
+    OptimisticProofPatch patch,
+    int value,
+    String status,
+  ) {
+    if (!mounted) return;
+    _optimisticCelebrationOpen = true;
+    _advanceFirstRaceGuide();
+    final race = patch.race;
+    context.push(
+      '/race/${widget.raceId}/board-moved',
+      extra: BoardMovedArgs(
+        raceId: widget.raceId,
+        raceName: race.displayTitle,
+        value: value,
+        unit: race.unit,
+        status: status,
+        rankBefore: patch.rankBefore,
+        rankAfter: patch.rankAfter,
+        peoplePassed: patch.peoplePassed,
+        aiMotionProof: true,
+      ),
+    );
+  }
+
+  void _advanceFirstRaceGuide() {
     // First-race guide: the coached story continues past the proof — the
     // celebration's continue lands on Profile where the earned progress is
     // pointed out before the guide completes. Only advances an armed guide.
@@ -1465,6 +1599,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ref.read(firstRaceGuideProvider.notifier).state =
           FirstRaceGuideStep.profileReward;
     }
+  }
+
+  void _goToCelebration(Race race, int value, String status) {
+    if (!mounted) return;
+    final uid = ref.read(authControllerProvider).user?.id;
+    final proof = race.recentProofs.isNotEmpty ? race.recentProofs.first : null;
+    _advanceFirstRaceGuide();
     context.pushReplacement(
       '/race/${widget.raceId}/board-moved',
       extra: BoardMovedArgs(
@@ -1556,6 +1697,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _elapsed = Duration.zero;
       _autoSubmitScheduled = false;
       _clientSubmissionId = null;
+      _proofAccepted = false;
+      _releaseProofSettled();
+      _proofSettled = null;
       _resetRepFlash();
       _skeletonHold.clear();
       _status = _cameraController?.value.isInitialized == true
@@ -1609,8 +1753,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// treatment — celebration, "goal" color states, the /target readout. A
   /// best-attempt race has nothing to reach; its session target is a
   /// machine value, never a finish line.
-  bool get _hasFinishTarget =>
-      _raceContext?.format.usesScoreTarget ?? true;
+  bool get _hasFinishTarget => _raceContext?.format.usesScoreTarget ?? true;
 
   /// The session reached a real finish line — never true for attempt or
   /// deadline modes, where the machine target is not a finish.
@@ -1729,8 +1872,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ? 'Basketball shot'
       : _usesCustomRuntimeOutput
       ? (_customMovementName ?? 'Custom movement')
-      : motionActivityForBackendValue(_activityId)?.title ??
-            _activityLabel;
+      : motionActivityForBackendValue(_activityId)?.title ?? _activityLabel;
 
   /// True while a live preview is on screen. In that case the camera takes the
   /// whole screen instead of sitting in an inset card.
@@ -1795,8 +1937,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         )
                       else
                         Icon(
-                          _status ==
-                                  AiMotionProofStatus.unsupportedMovement
+                          _status == AiMotionProofStatus.unsupportedMovement
                               ? Icons.block_rounded
                               : Icons.videocam_off_rounded,
                           color: NuvoColors.white.withValues(alpha: 0.85),
@@ -2557,10 +2698,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
         ),
       ],
-      AiMotionProofStatus.aiFailed ||
-      AiMotionProofStatus.cameraError => [
+      AiMotionProofStatus.aiFailed || AiMotionProofStatus.cameraError => [
         NuvoPrimaryButton(
-          label: _basketballPreflightFailed ? 'Retry verification' : 'Record again',
+          label: _basketballPreflightFailed
+              ? 'Retry verification'
+              : 'Record again',
           icon: Icons.replay_rounded,
           expand: true,
           onPressed: _basketballPreflightFailed ? _loadRace : _recordAgain,

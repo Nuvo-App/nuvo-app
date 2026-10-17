@@ -32,6 +32,7 @@ import '../data/race_api.dart';
 import '../data/race_models.dart';
 import '../data/race_repository.dart';
 import '../domain/motion_activity.dart';
+import '../domain/race_display.dart';
 
 class RaceState {
   const RaceState({
@@ -65,6 +66,21 @@ class RaceState {
     refreshing: refreshing ?? this.refreshing,
     error: error,
   );
+}
+
+/// The local effect of an optimistic proof, for the board-moved celebration.
+class OptimisticProofPatch {
+  const OptimisticProofPatch({
+    required this.race,
+    required this.rankBefore,
+    required this.rankAfter,
+    required this.peoplePassed,
+  });
+
+  final Race race;
+  final int? rankBefore;
+  final int rankAfter;
+  final int peoplePassed;
 }
 
 class RaceController extends StateNotifier<RaceState> {
@@ -209,6 +225,53 @@ class RaceController extends StateNotifier<RaceState> {
     failureReason: failureReason,
     motionSessionId: motionSessionId,
   );
+
+  /// Backoff before each background retry of a failed `complete` call
+  /// (1 try + 2 retries). Mutable so tests can collapse the delays.
+  List<Duration> sessionCompleteRetryBackoff = const [
+    Duration(milliseconds: 600),
+    Duration(milliseconds: 1800),
+  ];
+
+  /// Completes the session, retrying transient failures (network / timeout /
+  /// 5xx) in the background instead of swallowing the first miss. Returns
+  /// whether the server confirmed the completion. Never throws. A 4xx is a
+  /// definitive answer and stops the retries. [shouldContinue] lets the
+  /// caller (a screen) stop retrying once it is gone.
+  Future<bool> completeVerificationSessionWithRetry(
+    String sessionId, {
+    required String releaseId,
+    required String releaseChecksum,
+    required String status,
+    required int resultValue,
+    required double confidence,
+    String? failureReason,
+    String? motionSessionId,
+    bool Function()? shouldContinue,
+  }) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await _repo.completeVerificationSession(
+          sessionId,
+          releaseId: releaseId,
+          releaseChecksum: releaseChecksum,
+          status: status,
+          resultValue: resultValue,
+          confidence: confidence,
+          failureReason: failureReason,
+          motionSessionId: motionSessionId,
+        );
+        return true;
+      } catch (e) {
+        if (e is ApiException && !isRetryableProofFailure(e)) return false;
+        if (attempt >= sessionCompleteRetryBackoff.length) return false;
+      }
+      await Future<void>.delayed(sessionCompleteRetryBackoff[attempt]);
+      if (!mounted || (shouldContinue != null && !shouldContinue())) {
+        return false;
+      }
+    }
+  }
 
   Future<void> submitMotionTrainingExample({
     required MotionAnalysisRequest request,
@@ -591,6 +654,185 @@ class RaceController extends StateNotifier<RaceState> {
     if (mounted) state = const RaceState();
   }
 
+  // ── Optimistic proof board ─────────────────────────────────────────────────
+  // When a user confirms a proof the cached race is patched immediately with
+  // the local value/rank effect so the board moves before the server answers.
+  // The patch lives in memory only: it is never written to the disk snapshot
+  // (only reconciled server data is), and it is either replaced by the
+  // returned race (reconcile) or restored (rollback) when /proof resolves.
+  final Map<String, ({Race original, Race patched})> _optimisticProofs = {};
+
+  /// True while [raceId] shows an unreconciled optimistic proof.
+  bool hasOptimisticProof(String raceId) =>
+      _optimisticProofs.containsKey(raceId);
+
+  /// Patches my participant's progress by [value] (best score for attempt
+  /// races) and recomputes ranks with the standings helpers. Returns the
+  /// local rank effect, or null when the race / participant isn't cached
+  /// (nothing is patched then). Does not touch the disk snapshot.
+  OptimisticProofPatch? applyOptimisticProof(
+    String raceId,
+    String userId,
+    int value,
+  ) {
+    if (!mounted || value <= 0) return null;
+    final existing = state.races.where((r) => r.id == raceId).firstOrNull;
+    if (existing == null) return null;
+    final mine = existing.participantFor(userId);
+    if (mine == null) return null;
+    // A second patch must not overwrite the true baseline.
+    final baseline = _optimisticProofs[raceId]?.original ?? existing;
+    final rankBefore = rankForUser(baseline, userId);
+
+    final lowerIsBetter = existing.scoreDirection == 'lower';
+    final int newScore;
+    if (raceFormatUsesAttempts(existing.format)) {
+      final prev = mine.progressValue;
+      newScore = lowerIsBetter
+          ? (prev <= 0 ? value : math.min(prev, value))
+          : math.max(prev, value);
+    } else {
+      newScore = mine.progressValue + value;
+    }
+    final target = existing.targetValue;
+    final newPercent = target == null || target <= 0
+        ? mine.progressPercent
+        : math.min(100, ((newScore / target) * 100).round());
+
+    RaceParticipant copy(
+      RaceParticipant p, {
+      int? score,
+      int? percent,
+      int? rank,
+    }) => RaceParticipant(
+      id: p.id,
+      userId: p.userId,
+      displayName: p.displayName,
+      progressValue: score ?? p.progressValue,
+      progressPercent: percent ?? p.progressPercent,
+      rank: rank,
+      joinedAt: p.joinedAt,
+      profilePhotoUrl: p.profilePhotoUrl,
+      finishedAt: p.finishedAt,
+      level: p.level,
+    );
+
+    // Rank-less copies so the standings helper orders purely by score
+    // (direction-aware), then join time.
+    final unranked = _raceWithParticipants(existing, [
+      for (final p in existing.participants)
+        p.userId == userId
+            ? copy(p, score: newScore, percent: newPercent)
+            : copy(p),
+    ]);
+    final ordered = serverRankedParticipants(unranked);
+    final ranks = {
+      for (var i = 0; i < ordered.length; i++) ordered[i].userId: i + 1,
+    };
+    final participants = [
+      for (final p in unranked.participants)
+        copy(
+          p,
+          score: p.progressValue,
+          percent: p.progressPercent,
+          rank: ranks[p.userId],
+        ),
+    ];
+    final patched = _raceWithParticipants(existing, participants);
+    _optimisticProofs[raceId] = (original: baseline, patched: patched);
+    state = state.copyWith(
+      races: [for (final r in state.races) r.id == raceId ? patched : r],
+    );
+    final rankAfter = ranks[userId] ?? 1;
+    return OptimisticProofPatch(
+      race: patched,
+      rankBefore: rankBefore,
+      rankAfter: rankAfter,
+      peoplePassed: math.max(0, (rankBefore ?? rankAfter) - rankAfter),
+    );
+  }
+
+  /// Restores the pre-proof race — unless a fresher server copy has already
+  /// replaced the optimistic one, which is left alone.
+  void rollbackOptimisticProof(String raceId) {
+    final entry = _optimisticProofs.remove(raceId);
+    if (entry == null || !mounted) return;
+    final current = state.races.where((r) => r.id == raceId).firstOrNull;
+    if (current == null || !identical(current, entry.patched)) return;
+    state = state.copyWith(
+      races: [for (final r in state.races) r.id == raceId ? entry.original : r],
+    );
+  }
+
+  /// Runs a proof request; on a rejection the optimistic patch is rolled
+  /// back before the error reaches the caller, on success the patch is
+  /// dropped (the caller then folds in the returned, authoritative race).
+  Future<Race> _sendReconciling(
+    String raceId,
+    Future<Race> Function() send,
+  ) async {
+    try {
+      final race = await send();
+      _optimisticProofs.remove(raceId);
+      return race;
+    } catch (_) {
+      rollbackOptimisticProof(raceId);
+      rethrow;
+    }
+  }
+
+  Race _raceWithParticipants(Race r, List<RaceParticipant> participants) =>
+      Race(
+        id: r.id,
+        creatorId: r.creatorId,
+        title: r.title,
+        description: r.description,
+        category: r.category,
+        goalType: r.goalType,
+        targetValue: r.targetValue,
+        unit: r.unit,
+        aiActivityType: r.aiActivityType,
+        targetUnit: r.targetUnit,
+        proofMode: r.proofMode,
+        activityId: r.activityId,
+        metric: r.metric,
+        format: r.format,
+        scoringRule: r.scoringRule,
+        attemptDurationSeconds: r.attemptDurationSeconds,
+        attemptLimit: r.attemptLimit,
+        verificationMethod: r.verificationMethod,
+        verifierType: r.verifierType,
+        verifierVersion: r.verifierVersion,
+        customVerifierSpec: r.customVerifierSpec,
+        customMotionV2Spec: r.customMotionV2Spec,
+        customActivityName: r.customActivityName,
+        verifierInvalidReason: r.verifierInvalidReason,
+        timezone: r.timezone,
+        recurrence: r.recurrence,
+        status: r.status,
+        storedStatus: r.storedStatus,
+        winnerUserId: r.winnerUserId,
+        completedAt: r.completedAt,
+        startLineAt: r.startLineAt,
+        finishLineAt: r.finishLineAt,
+        rules: r.rules,
+        proofRequirement: r.proofRequirement,
+        proofReviewMode: r.proofReviewMode,
+        visibility: r.visibility,
+        inviteCode: r.inviteCode,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        participants: participants,
+        recentProofs: r.recentProofs,
+        finalStandings: r.finalStandings,
+        submissionResult: r.submissionResult,
+        scoreDirection: r.scoreDirection,
+        serverTime: r.serverTime,
+        verifierReleaseId: r.verifierReleaseId,
+        verifierSpec: r.verifierSpec,
+        viewerContext: r.viewerContext,
+      );
+
   Future<Race> submitProof(
     String raceId, {
     String proofType = 'manual',
@@ -647,6 +889,7 @@ class RaceController extends StateNotifier<RaceState> {
     required String clientSubmissionId,
     required String metric,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -667,12 +910,16 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
-    final race = await _repo.submitAiMotionProof(
+    final race = await _sendReconciling(
       raceId,
-      result: result,
-      clientSubmissionId: clientSubmissionId,
-      metric: metric,
-      verificationSessionId: verificationSessionId,
+      () => _repo.submitAiMotionProof(
+        raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     );
     if (mounted) {
       state = state.copyWith(
@@ -698,6 +945,7 @@ class RaceController extends StateNotifier<RaceState> {
     required int framesAnalyzed,
     required int durationMs,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -716,19 +964,23 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
-    final race = await _repo.submitObjectCompositionProof(
+    final race = await _sendReconciling(
       raceId,
-      activityId: activityId,
-      clientSubmissionId: clientSubmissionId,
-      metric: metric,
-      value: value,
-      targetValue: targetValue,
-      confidence: confidence,
-      verificationSummary: verificationSummary,
-      validatorVersion: validatorVersion,
-      framesAnalyzed: framesAnalyzed,
-      durationMs: durationMs,
-      verificationSessionId: verificationSessionId,
+      () => _repo.submitObjectCompositionProof(
+        raceId,
+        activityId: activityId,
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+        value: value,
+        targetValue: targetValue,
+        confidence: confidence,
+        verificationSummary: verificationSummary,
+        validatorVersion: validatorVersion,
+        framesAnalyzed: framesAnalyzed,
+        durationMs: durationMs,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     );
     if (mounted) {
       state = state.copyWith(
@@ -746,6 +998,7 @@ class RaceController extends StateNotifier<RaceState> {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -766,11 +1019,15 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
-    final race = await _repo.submitCustomPoseProof(
+    final race = await _sendReconciling(
       raceId,
-      result: result,
-      clientSubmissionId: clientSubmissionId,
-      verificationSessionId: verificationSessionId,
+      () => _repo.submitCustomPoseProof(
+        raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     );
     if (mounted) {
       state = state.copyWith(

@@ -18,6 +18,30 @@ class RaceRepository {
   final SecureTokenStore _store;
   final AuthApi _authApi;
 
+  /// Waits between automatic POST /proof retries (3 attempts in total).
+  /// Mutable so tests can collapse the delays.
+  List<Duration> proofRetryBackoff = const [
+    Duration(milliseconds: 400),
+    Duration(seconds: 1),
+  ];
+
+  /// Runs a proof submission, retrying timeouts / network errors / 5xx with
+  /// the same request (hence the same clientSubmissionId, which the server
+  /// replays idempotently). A 4xx is never retried.
+  Future<T> _withProofRetry<T>(Future<T> Function() send) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await send();
+      } catch (e) {
+        if (attempt >= proofRetryBackoff.length ||
+            !isRetryableProofFailure(e)) {
+          rethrow;
+        }
+        await Future<void>.delayed(proofRetryBackoff[attempt]);
+      }
+    }
+  }
+
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _withRefresh((token) => _api.analyzeMotion(token, request: request));
 
@@ -346,14 +370,18 @@ class RaceRepository {
     required String clientSubmissionId,
     required String metric,
     String? verificationSessionId,
-  }) => _withRefresh(
-    (token) => _api.submitAiMotionProof(
-      token,
-      raceId,
-      result: result,
-      clientSubmissionId: clientSubmissionId,
-      metric: metric,
-      verificationSessionId: verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) => _withProofRetry(
+    () => _withRefresh(
+      (token) => _api.submitAiMotionProof(
+        token,
+        raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     ),
   );
 
@@ -362,13 +390,17 @@ class RaceRepository {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
     String? verificationSessionId,
-  }) => _withRefresh(
-    (token) => _api.submitCustomPoseProof(
-      token,
-      raceId,
-      result: result,
-      clientSubmissionId: clientSubmissionId,
-      verificationSessionId: verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) => _withProofRetry(
+    () => _withRefresh(
+      (token) => _api.submitCustomPoseProof(
+        token,
+        raceId,
+        result: result,
+        clientSubmissionId: clientSubmissionId,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     ),
   );
 
@@ -385,21 +417,25 @@ class RaceRepository {
     required int framesAnalyzed,
     required int durationMs,
     String? verificationSessionId,
-  }) => _withRefresh(
-    (token) => _api.submitObjectCompositionProof(
-      token,
-      raceId,
-      activityId: activityId,
-      clientSubmissionId: clientSubmissionId,
-      metric: metric,
-      value: value,
-      targetValue: targetValue,
-      confidence: confidence,
-      verificationSummary: verificationSummary,
-      validatorVersion: validatorVersion,
-      framesAnalyzed: framesAnalyzed,
-      durationMs: durationMs,
-      verificationSessionId: verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) => _withProofRetry(
+    () => _withRefresh(
+      (token) => _api.submitObjectCompositionProof(
+        token,
+        raceId,
+        activityId: activityId,
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+        value: value,
+        targetValue: targetValue,
+        confidence: confidence,
+        verificationSummary: verificationSummary,
+        validatorVersion: validatorVersion,
+        framesAnalyzed: framesAnalyzed,
+        durationMs: durationMs,
+        verificationSessionId: verificationSessionId,
+        sessionResult: sessionResult,
+      ),
     ),
   );
 

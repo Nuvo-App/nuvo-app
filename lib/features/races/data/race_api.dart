@@ -87,6 +87,43 @@ class VerificationSession {
   final String status;
 }
 
+/// The client's own account of a finished verification session, sent next to
+/// `verificationSessionId` in `POST /races/:id/proof`. When the session is
+/// still created/running and the release id + checksum match, the server
+/// completes the session itself in the same request. Older servers ignore it.
+class ProofSessionResult {
+  const ProofSessionResult({
+    required this.releaseId,
+    required this.releaseChecksum,
+    required this.resultValue,
+    this.confidence,
+    this.motionSessionId,
+  });
+
+  final String releaseId;
+  final String releaseChecksum;
+  final int resultValue;
+  final double? confidence;
+  final String? motionSessionId;
+
+  Map<String, dynamic> toJson() => {
+    'releaseId': releaseId,
+    'releaseChecksum': releaseChecksum,
+    'resultValue': resultValue,
+    'confidence': ?confidence,
+    'motionSessionId': ?motionSessionId,
+  };
+}
+
+/// True for failures worth retrying with the SAME clientSubmissionId: the
+/// request may never have reached the server (timeout / no network) or the
+/// server failed (5xx). A 4xx is a definitive answer and is never retried.
+bool isRetryableProofFailure(Object error) =>
+    error is ApiException &&
+    (error.statusCode == 0 ||
+        error.statusCode == 408 ||
+        error.statusCode >= 500);
+
 class VerificationSessionHandshake {
   const VerificationSessionHandshake({
     required this.session,
@@ -248,6 +285,8 @@ class RaceApi {
     );
   }
 
+  /// Not called by the AI Motion Proof flow any more (`complete` accepts a
+  /// `created` session); kept for older code paths.
   Future<VerificationSession> startVerificationSession(
     String token,
     String sessionId,
@@ -709,16 +748,16 @@ class RaceApi {
     required String clientSubmissionId,
     required String metric,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
-    final json = await _post(
-      '/races/$raceId/proof',
-      token,
-      result.toProofPayload(
+    final json = await _post('/races/$raceId/proof', token, {
+      ...result.toProofPayload(
         clientSubmissionId: clientSubmissionId,
         metric: metric,
         verificationSessionId: verificationSessionId,
       ),
-    );
+      if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
+    });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
@@ -736,6 +775,7 @@ class RaceApi {
     required int framesAnalyzed,
     required int durationMs,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
     final json = await _post('/races/$raceId/proof', token, {
       'proofType': 'ai_motion',
@@ -754,6 +794,7 @@ class RaceApi {
       'validPoseFrames': framesAnalyzed,
       'durationMs': durationMs,
       'validatorVersion': validatorVersion,
+      if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
     });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
@@ -764,15 +805,15 @@ class RaceApi {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
     String? verificationSessionId,
+    ProofSessionResult? sessionResult,
   }) async {
-    final json = await _post(
-      '/races/$raceId/proof',
-      token,
-      result.toProofPayload(
+    final json = await _post('/races/$raceId/proof', token, {
+      ...result.toProofPayload(
         clientSubmissionId: clientSubmissionId,
         verificationSessionId: verificationSessionId,
       ),
-    );
+      if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
+    });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
