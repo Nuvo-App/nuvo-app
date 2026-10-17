@@ -49,6 +49,7 @@ class ArenaPodium extends StatefulWidget {
     super.key,
     required this.entries,
     required this.height,
+    this.compact = false,
     this.viewer,
     this.onTap,
   });
@@ -59,6 +60,9 @@ class ArenaPodium extends StatefulWidget {
   /// Total height granted to the podium (blocks + labels + viewer chip).
   final double height;
 
+  /// Shortest phones: smaller avatars and a lower minimum block.
+  final bool compact;
+
   /// The viewer's entry when they are outside the top three.
   final ArenaPodiumEntry? viewer;
   final VoidCallback? onTap;
@@ -66,15 +70,41 @@ class ArenaPodium extends StatefulWidget {
   static const double chipHeight = 34;
   static const double _winnerAvatar = 42;
   static const double _otherAvatar = 36;
-  static const double _minBlock = 56;
+  static const double _denseWinnerAvatar = 34;
+  static const double _denseOtherAvatar = 30;
+  static const double _minBlock = 48;
+  static const double _compactMinBlock = 30;
+  static const double _compactWinnerAvatar = 28;
+  static const double _compactOtherAvatar = 26;
+
+  /// Below this stage height the avatars shrink so the blocks keep their
+  /// share on short phones; above it the full-size avatars are used.
+  static const double denseBelow = 190;
 
   /// Height of the label stack above a block (avatar, name, score).
-  static double labelsHeight(TextScaler scaler) =>
-      _winnerAvatar + 2 + scaler.scale(13) * 1.25 + scaler.scale(15) * 1.25 + 4;
+  static double labelsHeight(
+    TextScaler scaler, {
+    bool dense = false,
+    bool compact = false,
+  }) =>
+      (compact
+          ? _compactWinnerAvatar
+          : (dense ? _denseWinnerAvatar : _winnerAvatar)) +
+      2 +
+      scaler.scale(13) * 1.25 +
+      scaler.scale(15) * 1.25 +
+      4;
 
-  /// Smallest height at which the podium still reads (blocks + labels).
-  static double minHeight(TextScaler scaler, {required bool withChip}) =>
-      labelsHeight(scaler) + _minBlock / 0.9 + (withChip ? chipHeight + 8 : 0);
+  /// Smallest height at which the podium still reads (blocks + labels, with
+  /// the dense avatars).
+  static double minHeight(
+    TextScaler scaler, {
+    required bool withChip,
+    bool compact = false,
+  }) =>
+      labelsHeight(scaler, dense: true, compact: compact) +
+      (compact ? _compactMinBlock : _minBlock) / 0.9 +
+      (withChip ? chipHeight + 8 : 0);
 
   @override
   State<ArenaPodium> createState() => _ArenaPodiumState();
@@ -119,7 +149,12 @@ class _ArenaPodiumState extends State<ArenaPodium>
     final chip = widget.viewer;
     final chipSpace = chip == null ? 0.0 : ArenaPodium.chipHeight + 8;
     final stageHeight = widget.height - chipSpace;
-    final labels = ArenaPodium.labelsHeight(scaler);
+    final dense = stageHeight < ArenaPodium.denseBelow;
+    final labels = ArenaPodium.labelsHeight(
+      scaler,
+      dense: dense,
+      compact: widget.compact,
+    );
     // 10% headroom so the back-ease overshoot never exceeds the stage.
     final blockMax = math.max(0.0, (stageHeight - labels) * 0.9);
     final byRank = {for (final e in widget.entries.take(3)) e.rank: e};
@@ -148,6 +183,8 @@ class _ArenaPodiumState extends State<ArenaPodium>
                       blockHeight: math.max(0, blockMax * frac * raw),
                       fade: fade,
                       winner: rank == 1,
+                      dense: dense,
+                      compact: widget.compact,
                     ),
             );
           },
@@ -200,16 +237,28 @@ class _PodiumColumn extends StatelessWidget {
     required this.blockHeight,
     required this.fade,
     required this.winner,
+    this.dense = false,
+    this.compact = false,
   });
+  final bool compact;
   final ArenaPodiumEntry entry;
   final double blockHeight;
   final double fade;
   final bool winner;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final size = winner ? ArenaPodium._winnerAvatar : ArenaPodium._otherAvatar;
+    final size = compact
+        ? (winner
+              ? ArenaPodium._compactWinnerAvatar
+              : ArenaPodium._compactOtherAvatar)
+        : dense
+        ? (winner
+              ? ArenaPodium._denseWinnerAvatar
+              : ArenaPodium._denseOtherAvatar)
+        : (winner ? ArenaPodium._winnerAvatar : ArenaPodium._otherAvatar);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

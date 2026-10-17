@@ -63,6 +63,9 @@ class NuvoPodium extends StatelessWidget {
     final third = _byRank(3);
     final s = context.nuvoScale;
 
+    return LayoutBuilder(builder: (context, box) {
+    final compact = box.hasBoundedHeight && box.maxHeight < 200;
+    final drop = (compact ? 14 : 22) * s;
     return Column(
       children: [
         Row(
@@ -70,15 +73,15 @@ class NuvoPodium extends StatelessWidget {
           children: [
             Expanded(
               child: Padding(
-                padding: EdgeInsets.only(top: 22 * s),
-                child: _Place(entry: second, place: 2),
+                padding: EdgeInsets.only(top: drop),
+                child: _Place(entry: second, place: 2, compact: compact),
               ),
             ),
-            Expanded(child: _Place(entry: first, place: 1, raised: true)),
+            Expanded(child: _Place(entry: first, place: 1, raised: true, compact: compact)),
             Expanded(
               child: Padding(
-                padding: EdgeInsets.only(top: 22 * s),
-                child: _Place(entry: third, place: 3),
+                padding: EdgeInsets.only(top: drop),
+                child: _Place(entry: third, place: 3, compact: compact),
               ),
             ),
           ],
@@ -86,11 +89,19 @@ class NuvoPodium extends StatelessWidget {
         if (rest != null) ...[SizedBox(height: 22 * s), rest!],
       ],
     );
+    });
   }
 }
 
 class _Place extends StatelessWidget {
-  const _Place({required this.entry, required this.place, this.raised = false});
+  const _Place({
+    required this.entry,
+    required this.place,
+    this.raised = false,
+    this.compact = false,
+  });
+
+  final bool compact;
 
   final NuvoPodiumEntry? entry;
   final int place;
@@ -107,7 +118,8 @@ class _Place extends StatelessWidget {
     final e = entry;
     if (e == null) return const SizedBox.shrink();
     final s = context.nuvoScale;
-    final avatarSize = (raised ? 76.0 : 60.0) * s;
+    final avatarSize =
+        (compact ? (raised ? 52.0 : 42.0) : (raised ? 76.0 : 60.0)) * s;
     final me = e.isCurrentUser;
 
     Widget column = Column(
@@ -162,7 +174,7 @@ class _Place extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: 10 * s),
+        SizedBox(height: (compact ? 6 : 10) * s),
         Text(
           e.isCurrentUser ? 'You' : e.name.split(' ').first,
           maxLines: 1,

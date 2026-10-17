@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'helpers/screenshot.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
@@ -22,6 +23,7 @@ const _stepNames = ['name', 'activity', 'goal', 'racers', 'review'];
 
 void main() {
   GoogleFonts.config.allowRuntimeFetching = false;
+  setUpAll(loadShotFonts);
 
   for (final size in _sizes) {
     for (final inset in [0.0, 34.0]) {
@@ -54,6 +56,9 @@ void main() {
             for (var i = 0; i < _stepNames.length; i++) {
               await tester.pumpAndSettle(const Duration(milliseconds: 100));
               _check(tester, size, '$label step ${_stepNames[i]}');
+              if (!dark && scale == 1.0 && inset == 34) {
+                await shot(tester, 'composer$i${_stepNames[i]}_${size.width.toInt()}x${size.height.toInt()}');
+              }
               if (i == _stepNames.length - 1) break;
               if (i == 0) {
                 await tester.enterText(
@@ -61,6 +66,10 @@ void main() {
                   'Sunday showdown',
                 );
                 await tester.pump();
+              }
+              if (i == 1) {
+                await tester.tap(find.text('Pushups').first);
+                await tester.pumpAndSettle(const Duration(milliseconds: 100));
               }
               final cta = find.byType(NuvoPrimaryButton).hitTestable();
               expect(cta, findsWidgets, reason: 'CTA on ${_stepNames[i]}');

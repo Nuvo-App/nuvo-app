@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -567,7 +568,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     SliverFoldFit(
                       foldInset: NuvoBottomNav.bottomPadding(context) - 10,
                       enabled:
-                          _feedTab == 0 &&
                           !passLoading &&
                           passError == null &&
                           !_searchOpen,
@@ -815,7 +815,8 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                                 ],
                               ),
                             ),
-                            const FoldGap(20),
+                            // Flexible, so the fold fit can tighten or grow it.
+                            const FoldGap(32),
                             // Races running with the crew, one section each,
                             // so the first screen can fit whole cards.
                             ..._CrewRacesNow(
@@ -827,29 +828,28 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                               onOpen: (r) => context.push('/race/${r.id}'),
                               onOpenLive: _openCrewActivity,
                               onReact: _react,
-                            ).items(),
+                            ).items(
+                              compactFirstLive: _shortScreen(context),
+                            ),
                           ]
                           // ── Activity — what the crew has done.
                           else
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: NuvoSpacing.pageHorizontal,
-                              ),
-                              child: _FeedColumn(
-                                items: feedItems,
-                                reactingIds: activityState.reactingItemIds,
-                                crew: crew,
-                                myId: myId,
-                                racesById: racesById,
-                                busyIds: _ctaBusy,
-                                emptyNote:
-                                    'Race, finish, set a personal best — your friends\' moves land here.',
-                                onTap: _openCrewActivity,
-                                onPerson: (i) => _tapFeedPerson(i, crew),
-                                onReact: _react,
-                                actionFor: (i) =>
-                                    _actionFor(i, myId, racesById),
-                              ),
+                            ..._FeedColumn(
+                              items: feedItems,
+                              reactingIds: activityState.reactingItemIds,
+                              crew: crew,
+                              myId: myId,
+                              racesById: racesById,
+                              busyIds: _ctaBusy,
+                              emptyNote:
+                                  'Race, finish, set a personal best — your friends\' moves land here.',
+                              onTap: _openCrewActivity,
+                              onPerson: (i) => _tapFeedPerson(i, crew),
+                              onReact: _react,
+                              actionFor: (i) => _actionFor(i, myId, racesById),
+                            ).sections(
+                              context,
+                              compactFirstLive: _shortScreen(context),
                             ),
                         ],
                       ],
@@ -900,6 +900,10 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 // (serverRankedParticipants / raceProgressLabel) — scoring direction and
 // "/target" semantics live in the race system, so Crew never re-sorts by raw
 // score or guesses the format.
+
+/// Short phones (a 4.7" iPhone or smaller): rich first-screen cards drop to
+/// their compact form so the first screen holds more of what is going on.
+bool _shortScreen(BuildContext context) => MediaQuery.sizeOf(context).height < 640;
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label});
@@ -956,7 +960,14 @@ class _FeedColumn extends StatelessWidget {
   final _PostAction? Function(CrewActivityItem item) actionFor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      Column(children: sections(context, compactFirstLive: false));
+
+  /// One section per item with flexible gaps between them, for the fit
+  /// column on the first screen: an item the fold would cut starts just
+  /// below it instead.
+  List<Widget> sections(BuildContext context, {required bool compactFirstLive}) {
+    const pad = EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal);
     // Live posts pin to the top — they're the only thing happening right
     // now; everything else stays chronological.
     final ordered = [...items]
@@ -967,18 +978,21 @@ class _FeedColumn extends StatelessWidget {
         return b.occurredAt.compareTo(a.occurredAt);
       });
     if (ordered.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: _EmptyNote(text: emptyNote),
-      );
+      return [
+        Padding(
+          padding: pad.copyWith(top: 20, bottom: 20),
+          child: _EmptyNote(text: emptyNote),
+        ),
+      ];
     }
     final levels = [
       for (final it in ordered) _feedLevelOf(it, myId, racesById),
     ];
-    return Column(
-      children: [
-        for (var i = 0, liveSeen = 0; i < ordered.length; i++)
-          NuvoStaggerIn(
+    return [
+      for (var i = 0, liveSeen = 0; i < ordered.length; i++) ...[
+        Padding(
+          padding: pad,
+          child: NuvoStaggerIn(
             index: i,
             child: Column(
               children: [
@@ -994,22 +1008,42 @@ class _FeedColumn extends StatelessWidget {
                   onPerson: onPerson,
                   onReact: onReact,
                   // The first live race is the room's pulse; a second one
-                  // compacts so live cards never stack into a wall.
-                  liveVariant: ordered[i].live != null && liveSeen++ > 0
+                  // compacts so live cards never stack into a wall. On a
+                  // short screen even the first compacts, so the first
+                  // screen holds the live race and what follows it.
+                  liveVariant:
+                      ordered[i].live != null &&
+                          (liveSeen++ > 0 || compactFirstLive)
                       ? NuvoLiveRaceCardVariant.compact
                       : NuvoLiveRaceCardVariant.primary,
                 ),
-                if (i < ordered.length - 1)
+                // A hairline between two substantial posts stays with the
+                // post above it.
+                if (i < ordered.length - 1 &&
+                    _feedWeightOf(ordered[i], levels[i]) == _FeedWeight.post &&
+                    _feedWeightOf(ordered[i + 1], levels[i + 1]) ==
+                        _FeedWeight.post)
                   _feedSpacer(
                     context,
-                    _feedWeightOf(ordered[i], levels[i]),
-                    _feedWeightOf(ordered[i + 1], levels[i + 1]),
+                    _FeedWeight.post,
+                    _FeedWeight.post,
                   ),
               ],
             ),
           ),
+        ),
+        if (i < ordered.length - 1 &&
+            !(_feedWeightOf(ordered[i], levels[i]) == _FeedWeight.post &&
+                _feedWeightOf(ordered[i + 1], levels[i + 1]) ==
+                    _FeedWeight.post))
+          FoldGap(
+            _feedGapAfter(
+              _feedWeightOf(ordered[i], levels[i]),
+              _feedWeightOf(ordered[i + 1], levels[i + 1]),
+            ),
+          ),
       ],
-    );
+    ];
   }
 }
 
@@ -2265,40 +2299,55 @@ class _CrewRacesNow extends StatelessWidget {
 
   /// The same content as [build], one section per card with flexible gaps
   /// between them, for [FoldFitColumn].
-  List<Widget> items() {
+  List<Widget> items({bool compactFirstLive = false}) {
     const pad = EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal);
     Widget section(Widget child) => Padding(padding: pad, child: child);
     if (liveItems.isEmpty && ongoing.isEmpty) return [section(_emptyNote())];
+    // A group's label travels with its first card, so the label is never
+    // left alone above the dock with its card a scroll away.
+    Widget labelled(Widget label, Widget card) => section(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [label, const SizedBox(height: 8), card],
+      ),
+    );
     return [
       if (liveItems.isNotEmpty) ...[
-        section(const _LiveSectionLabel()),
-        const FoldGap(8),
-        for (final (i, item) in liveItems.take(2).indexed)
-          section(
-            _LiveRaceCard(
+        for (final (i, item) in liveItems.take(2).indexed) ...[
+          if (i > 0) const FoldGap(8),
+          () {
+            final card = _LiveRaceCard(
               item: item,
               busy: reactingIds.contains(item.id),
               onTap: () => onOpenLive(item),
               onReact: (emoji) => onReact(item, emoji),
-              variant: i == 0
+              variant: i == 0 && !compactFirstLive
                   ? NuvoLiveRaceCardVariant.primary
                   : NuvoLiveRaceCardVariant.compact,
-            ),
-          ),
+            );
+            return i == 0
+                ? labelled(const _LiveSectionLabel(), card)
+                : section(card);
+          }(),
+        ],
       ],
       if (ongoing.isNotEmpty) ...[
-        FoldGap(liveItems.isNotEmpty ? 6 : 0),
-        section(const _SectionLabel(label: 'Racing with your friends')),
-        const FoldGap(8),
-        for (final race in ongoing.take(3)) ...[
-          section(
-            _ActiveRaceCard(
+        FoldGap(liveItems.isNotEmpty ? 14 : 0),
+        for (final (i, race) in ongoing.take(3).indexed) ...[
+          () {
+            final card = _ActiveRaceCard(
               race: race,
               myId: myId,
               crewIds: crewIds,
               onTap: () => onOpen(race),
-            ),
-          ),
+            );
+            return i == 0
+                ? labelled(
+                    const _SectionLabel(label: 'Racing with your friends'),
+                    card,
+                  )
+                : section(card);
+          }(),
           const FoldGap(10),
         ],
       ],
@@ -2883,11 +2932,19 @@ class _PeopleStrip extends StatelessWidget {
         : '${meParts[0][0]}${meParts[1][0]}'.toUpperCase();
     return SizedBox(
       height: 78,
-      child: ListView(
+      child: LayoutBuilder(builder: (context, box) {
+      // Fluid pitch: a whole number of faces plus a visible peek of the next
+      // one (the cue that the strip scrolls), spread over the real width.
+      final faces = math.max(3, (box.maxWidth / 70 - 0.3).floor());
+      final pitch = box.maxWidth / (faces + 0.4);
+      final tileWidth = (pitch - 12).clamp(52.0, 76.0);
+      return ListView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         children: [
           _StripTile(
+            width: tileWidth,
+            gap: pitch - tileWidth,
             label: 'You',
             onTap: onYou,
             avatar: NuvoAvatar(
@@ -2899,6 +2956,8 @@ class _PeopleStrip extends StatelessWidget {
           ),
           for (final m in members)
             _StripTile(
+              width: tileWidth,
+              gap: pitch - tileWidth,
               label: m.displayName.split(' ').first,
               status: racingIds.contains(m.id)
                   ? _StripStatus.racing
@@ -2917,6 +2976,8 @@ class _PeopleStrip extends StatelessWidget {
               ),
             ),
           _StripTile(
+            width: tileWidth,
+            gap: pitch - tileWidth,
             label: 'Add',
             onTap: onAdd,
             avatar: Container(
@@ -2939,7 +3000,8 @@ class _PeopleStrip extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      );
+      }),
     );
   }
 }
@@ -2951,9 +3013,13 @@ class _StripTile extends StatelessWidget {
     required this.label,
     required this.avatar,
     required this.onTap,
+    required this.width,
+    required this.gap,
     this.status,
   });
 
+  final double width;
+  final double gap;
   final String label;
   final Widget avatar;
   final VoidCallback onTap;
@@ -2972,9 +3038,9 @@ class _StripTile extends StatelessWidget {
         scale: 0.94,
         haptic: false,
         child: Padding(
-          padding: const EdgeInsets.only(right: 12),
+          padding: EdgeInsets.only(right: gap),
           child: SizedBox(
-            width: 58,
+            width: width,
             // Fixed-height rail — a 50px tile can't absorb scaled type, so
             // name + status pill are pinned (they ellipsize, never grow).
             child: MediaQuery.withClampedTextScaling(
@@ -3435,35 +3501,63 @@ class _IncomingRequestRow extends StatelessWidget {
           left: BorderSide(color: NuvoColors.warning, width: 3),
         ),
       ),
-      child: Row(
-        children: [
-          NuvoAvatar(
+      // Narrow phones: the name gets its own line and the actions sit under
+      // it, so the name never truncates beside two buttons.
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final stacked = box.maxWidth < 350;
+          final name = Text(
+            user.displayName,
+            maxLines: stacked ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.themeColors.ink,
+              fontWeight: FontWeight.w700,
+            ),
+          );
+          final actions = <Widget>[
+            _MiniAction(label: 'Decline', onTap: busy ? null : onDecline),
+            const SizedBox(width: 4),
+            _MiniAction(
+              label: 'Accept',
+              filled: true,
+              onTap: busy ? null : onAccept,
+            ),
+          ];
+          final avatar = NuvoAvatar(
             initials: user.initials,
             photoUrl: user.profilePhotoUrl,
             size: 32,
             bgColor: nuvoAvatarColorFor(user.id),
             textColor: NuvoColors.white,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              user.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: context.themeColors.ink,
-                fontWeight: FontWeight.w700,
+          );
+          if (!stacked) {
+            return Row(
+              children: [
+                avatar,
+                const SizedBox(width: 10),
+                Expanded(child: name),
+                ...actions,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  avatar,
+                  const SizedBox(width: 10),
+                  Expanded(child: name),
+                ],
               ),
-            ),
-          ),
-          _MiniAction(label: 'Decline', onTap: busy ? null : onDecline),
-          const SizedBox(width: 4),
-          _MiniAction(
-            label: 'Accept',
-            filled: true,
-            onTap: busy ? null : onAccept,
-          ),
-        ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: actions,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -3499,7 +3593,7 @@ class _SentRequestRow extends StatelessWidget {
           Expanded(
             child: Text(
               user.displayName,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: context.themeColors.ink,
@@ -3571,19 +3665,29 @@ class _MiniAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return PressableScale(
       onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: filled ? 12 : 8, vertical: 6),
-        decoration: filled
-            ? BoxDecoration(
-                color: NuvoColors.blue,
-                borderRadius: BorderRadius.circular(999),
-              )
-            : null,
-        child: Text(
-          label,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: filled ? NuvoColors.white : context.semanticColors.danger.on,
-            fontWeight: FontWeight.w800,
+      // 44pt tall hit area; the blue pill itself stays compact inside it.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        child: Center(
+          widthFactor: 1,
+          child: Container(
+            padding:
+                EdgeInsets.symmetric(horizontal: filled ? 12 : 8, vertical: 6),
+            decoration: filled
+                ? BoxDecoration(
+                    color: NuvoColors.blue,
+                    borderRadius: BorderRadius.circular(999),
+                  )
+                : null,
+            child: Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: filled
+                    ? NuvoColors.white
+                    : context.semanticColors.danger.on,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ),
       ),
@@ -3667,7 +3771,7 @@ class _SocialField extends StatelessWidget {
         NuvoSpacing.pageHorizontal,
         8,
         NuvoSpacing.pageHorizontal,
-        32,
+        0,
       ),
       child: DecoratedBox(
         key: const ValueKey('people-card'),

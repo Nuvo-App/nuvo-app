@@ -142,6 +142,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
         ),
       ),
       child: SafeArea(
+        top: false,
         child: Stack(
           children: [
             ListView(

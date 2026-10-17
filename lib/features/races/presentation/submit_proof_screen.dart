@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -491,9 +492,16 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       return _preVerifyContent(race);
     }
 
+    // Short phones give up some of the vertical breathing room so the first
+    // input is visible without scrolling; tall phones keep it.
+    final gap = context.nuvoDensity.pick(
+      compact: 14.0,
+      regular: 24.0,
+      large: 24.0,
+    );
     return [
       _backRow(),
-      const SizedBox(height: 24),
+      SizedBox(height: gap),
 
       Text(
         eligibility.isCameraVerifiable ? 'Submit proof' : 'Log progress',
@@ -519,7 +527,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         ),
       ),
 
-      const SizedBox(height: 24),
+      SizedBox(height: gap),
 
       if (eligibility.isCameraVerifiable)
         _MoveCheckCard(race: race, eligibility: eligibility)
@@ -571,10 +579,18 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         ),
       ],
 
-      const SizedBox(height: 32),
+      SizedBox(height: context.nuvoDensity.pick(
+        compact: 8.0,
+        regular: 32.0,
+        large: 32.0,
+      )),
 
       _PreVerifySetupCard(movementType: eligibility.movementType),
-      const SizedBox(height: 24),
+      SizedBox(height: context.nuvoDensity.pick(
+        compact: 8.0,
+        regular: 24.0,
+        large: 24.0,
+      )),
 
       // Camera/setup instruction
       Text(
@@ -596,7 +612,12 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     ];
   }
 
-  Widget _backRow() => NuvoBackButton(onPressed: _leave);
+  // Inside a ListView the children are width-tight, which would centre the
+  // fixed-size button — pin it to the leading edge.
+  Widget _backRow() => Align(
+    alignment: Alignment.centerLeft,
+    child: NuvoBackButton(onPressed: _leave),
+  );
 }
 
 // ── MoveCheck card ────────────────────────────────────────────────────────────
@@ -735,6 +756,9 @@ class _PreVerifySetupCard extends ConsumerWidget {
         );
     return Semantics(
       label: 'Camera verification is ready. Tap Begin to open the camera.',
+      // The preview is decorative; keep the label the only node so it is not
+      // merged with the fallback cue's own text.
+      excludeSemantics: true,
       child: Container(
         width: double.infinity,
         padding: showRivePreview
@@ -748,7 +772,15 @@ class _PreVerifySetupCard extends ConsumerWidget {
                 border: Border.all(color: context.themeColors.border, width: 2),
               ),
         child: SizedBox(
-          height: showRivePreview ? 300 : 78,
+          // The movement preview takes a share of the usable height, so a
+          // short phone keeps the title and Begin in view and a tall phone
+          // does not float a small preview in empty space.
+          height: showRivePreview
+              ? (context.nuvoUsableHeight * 0.30).clamp(
+                  context.nuvoUsableHeight < 520 ? 100.0 : 140.0,
+                  320.0,
+                )
+              : 78,
           child: showRivePreview
               ? RiveMovementPreview(
                   movement: movement,

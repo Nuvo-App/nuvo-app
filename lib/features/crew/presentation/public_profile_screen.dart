@@ -12,7 +12,10 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/theme/nuvo_entrance.dart';
+import '../../../core/config/legal_links.dart';
+import '../../../core/widgets/nuvo_legal_footer.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_page.dart';
@@ -257,7 +260,14 @@ class _State extends ConsumerState<PublicProfileScreen> {
               style: AppTextStyles.bodySmall
                   .copyWith(color: context.themeColors.inkSubtle),
             ),
-            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: NuvoLegalLink(
+                label: 'Community Guidelines',
+                uri: LegalLinks.communityGuidelinesUri,
+                fontSize: 13,
+              ),
+            ),
             TextField(
               controller: controller,
               maxLines: 3,
@@ -306,6 +316,14 @@ class _State extends ConsumerState<PublicProfileScreen> {
                 Navigator.of(ctx).pop();
                 _block();
               },
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: NuvoLegalLink(
+                label: 'Community Guidelines',
+                uri: LegalLinks.communityGuidelinesUri,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -363,7 +381,8 @@ class _State extends ConsumerState<PublicProfileScreen> {
     final hasPlane = card.level != null || card.racesFinished != null;
     final shown = _publicFeaturedBadges(card);
     return SafeArea(
-      child: ListView(
+      top: false,
+      child: NuvoScrollBottomFade(child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         children: [
           _hero(card).nuvoEnter(),
@@ -402,7 +421,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
           const SizedBox(height: 24),
           _cta(card),
         ],
-      ),
+      )),
     );
   }
 

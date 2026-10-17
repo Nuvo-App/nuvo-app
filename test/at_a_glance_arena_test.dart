@@ -3,12 +3,14 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'helpers/screenshot.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
 import 'package:nuvo/features/arena/data/arena_models.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
 
 void main() {
+  setUpAll(loadShotFonts);
   Future<void> pumpArena(
     WidgetTester tester,
     Size size, {
@@ -98,6 +100,14 @@ void main() {
     ('Maya L.', '31', false),
     ('You', '22', true),
   ]);
+  final many = snap([
+    ('Alex R.', '39', false),
+    ('Maya L.', '31', false),
+    ('You', '22', true),
+    ('Sam K.', '18', false),
+    ('Jo P.', '12', false),
+    ('Lee T.', '9', false),
+  ]);
   const sizes = <Size>[
     Size(320, 568),
     Size(375, 667),
@@ -106,6 +116,16 @@ void main() {
     Size(430, 932),
   ];
   for (final size in sizes) {
+    testWidgets(
+      'arena shots with rest ${size.width.toInt()}x${size.height.toInt()}',
+      (tester) async {
+        await pumpArena(tester, size, snapshot: many);
+        await shot(
+          tester,
+          'bigrace_${size.width.toInt()}x${size.height.toInt()}',
+        );
+      },
+    );
     for (final inset in [0.0, 34.0]) {
       for (final dark in [false, true]) {
         for (final scale in [1.0, 1.3]) {
@@ -122,6 +142,12 @@ void main() {
                 snapshot: full,
               );
               expect(tester.takeException(), isNull);
+              if (!dark && scale == 1.0 && inset == 34) {
+                await shot(
+                  tester,
+                  'arena_${size.width.toInt()}x${size.height.toInt()}',
+                );
+              }
               final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
               final fade = find
                   .byKey(const ValueKey('nuvo-bottom-fade'))

@@ -87,6 +87,9 @@ class _FakeRepo implements SquadRepository {
   Future<void> leave(String id) async {}
 
   @override
+  Future<void> deleteCrew(String id) async {}
+
+  @override
   Future<void> rename(String id, String name) async {}
 
   @override

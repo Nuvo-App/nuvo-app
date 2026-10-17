@@ -362,7 +362,13 @@ class NuvoLiveRaceCard extends StatelessWidget {
             _watchAction(context),
             if (trailing != null) ...[
               const SizedBox(width: 8),
-              Flexible(child: trailing!),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: trailing!,
+                ),
+              ),
             ],
           ],
         ),

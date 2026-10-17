@@ -313,6 +313,9 @@ class NuvoBadgeGrid extends StatelessWidget {
             ((constraints.maxWidth - colGap * (columns - 1)) / columns)
                 .floorToDouble();
         final statusHeight = MediaQuery.textScalerOf(context).scale(12);
+        // The badge grows with its column so wide phones aren't a sparse
+        // field of small marks, and narrow ones stay comfortable.
+        final badgeSize = (tileWidth * 0.58).clamp(52.0, 76.0).toDouble();
         return Wrap(
           spacing: colGap,
           runSpacing: _rowGap,
@@ -320,7 +323,7 @@ class NuvoBadgeGrid extends StatelessWidget {
             for (final badge in badges)
               SizedBox(
                 width: tileWidth,
-                child: _tile(context, c, badge, statusHeight),
+                child: _tile(context, c, badge, statusHeight, badgeSize),
               ),
           ],
         );
@@ -336,6 +339,7 @@ class NuvoBadgeGrid extends StatelessWidget {
     NuvoThemeColors c,
     NuvoBadge badge,
     double statusHeight,
+    double badgeSize,
   ) {
         return PressableScale(
           onTap: onTap == null ? null : () => onTap!(badge),
@@ -348,7 +352,7 @@ class NuvoBadgeGrid extends StatelessWidget {
                 children: [
                   Opacity(
                     opacity: badge.unlocked ? 1 : 0.6,
-                    child: NuvoAchievementBadge(badge: badge, size: 60),
+                    child: NuvoAchievementBadge(badge: badge, size: badgeSize),
                   ),
                   if (badge.featured)
                     Positioned(
@@ -372,15 +376,18 @@ class NuvoBadgeGrid extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              Text(
-                badge.name,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: badge.unlocked ? c.ink : c.inkDim,
-                  fontWeight: FontWeight.w800,
+              // Long names scale down to fit the tile instead of ellipsizing.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  badge.name,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: badge.unlocked ? c.ink : c.inkDim,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 3),
               SizedBox(

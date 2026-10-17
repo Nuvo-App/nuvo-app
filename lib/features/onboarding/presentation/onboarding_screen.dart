@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,17 +8,16 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart' show ImageSource, XFile;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/legal_links.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/photo_service.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
+import '../../../core/widgets/nuvo_legal_footer.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/presentation/auth_controller.dart';
-
-const _kPrivacyUrl = 'https://getnuvo.net/privacy';
-const _kTermsUrl = 'https://getnuvo.net/terms';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -47,35 +45,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _avatarUploadFailed = false;
   bool _avatarDenied = false;
   String? _avatarError;
-
-  late final TapGestureRecognizer _termsTap = TapGestureRecognizer()
-    ..onTap = () => _openLegalUrl(_kTermsUrl);
-  late final TapGestureRecognizer _privacyTap = TapGestureRecognizer()
-    ..onTap = () => _openLegalUrl(_kPrivacyUrl);
-
-  /// Opens a legal page in the in-app browser (the user keeps their place in
-  /// onboarding), falling back to the system browser. A failure is said out
-  /// loud — a link that silently does nothing reads as "no link at all".
-  Future<void> _openLegalUrl(String url) async {
-    final uri = Uri.parse(url);
-    var opened = false;
-    for (final mode in const [
-      LaunchMode.inAppBrowserView,
-      LaunchMode.externalApplication,
-    ]) {
-      try {
-        opened = await launchUrl(uri, mode: mode);
-      } catch (_) {
-        opened = false;
-      }
-      if (opened) break;
-    }
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't open that page. Try again.")),
-      );
-    }
-  }
 
   @override
   void initState() {
@@ -137,8 +106,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _debounce?.cancel();
     _nameController.dispose();
     _usernameController.dispose();
-    _termsTap.dispose();
-    _privacyTap.dispose();
     super.dispose();
   }
 
@@ -717,35 +684,35 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 value: _termsAccepted,
                                 onChanged: (v) =>
                                     setState(() => _termsAccepted = v),
-                                child: RichText(
-                                  text: TextSpan(
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color: NuvoColors.muted,
-                                    ),
-                                    children: [
-                                      const TextSpan(text: 'I agree to the '),
-                                      TextSpan(
-                                        text: 'Terms of Service',
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: NuvoColors.blue,
-                                          fontWeight: FontWeight.w700,
-                                          decoration: TextDecoration.underline,
-                                        ),
-                                        recognizer: _termsTap,
-                                      ),
-                                      const TextSpan(text: ' and '),
-                                      TextSpan(
-                                        text: 'Privacy Policy',
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: NuvoColors.blue,
-                                          fontWeight: FontWeight.w700,
-                                          decoration: TextDecoration.underline,
-                                        ),
-                                        recognizer: _privacyTap,
-                                      ),
-                                      const TextSpan(text: '.'),
-                                    ],
+                                child: Text(
+                                  "I agree to Nuvo's Terms of Service, "
+                                  'Privacy Policy and Community Guidelines.',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.muted,
                                   ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 48),
+                                child: Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    NuvoLegalLink(
+                                      label: 'Terms of Service',
+                                      uri: LegalLinks.termsUri,
+                                      fontSize: 13,
+                                    ),
+                                    NuvoLegalLink(
+                                      label: 'Privacy Policy',
+                                      uri: LegalLinks.privacyUri,
+                                      fontSize: 13,
+                                    ),
+                                    NuvoLegalLink(
+                                      label: 'Community Guidelines',
+                                      uri: LegalLinks.communityGuidelinesUri,
+                                      fontSize: 13,
+                                    ),
+                                  ],
                                 ),
                               ),
                               _ConsentRow(

@@ -547,6 +547,15 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
     final showBottomBar =
         !myRaceComplete && onPrimary != null && primaryLabel != 'Unsupported';
 
+    // Section rhythm follows the available height: a short phone tightens the
+    // gaps so the board and "Your progress" reach the first screen, a taller
+    // phone keeps the roomier spacing.
+    final density = context.nuvoDensity;
+    final sectionGap = density.pick(compact: 16.0, regular: 26.0, large: 26.0);
+    final cardGap = density.pick(compact: 12.0, regular: 20.0, large: 20.0);
+    final logGap = density.pick(compact: 20.0, regular: 30.0, large: 30.0);
+    final blockGap = density.pick(compact: 20.0, regular: 28.0, large: 28.0);
+
     final screen = Scaffold(
       backgroundColor: context.themeColors.page,
       bottomNavigationBar: showBottomBar
@@ -627,7 +636,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
                   userId: user?.id,
                 ),
               ] else ...[
-                const SizedBox(height: 26),
+                SizedBox(height: sectionGap),
                 if (sorted.isEmpty)
                   NuvoEmptyState(
                     icon: Icons.group_add_rounded,
@@ -669,7 +678,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
               if (isParticipant &&
                   !myRaceComplete &&
                   race.targetValue != null) ...[
-                const SizedBox(height: 20),
+                SizedBox(height: cardGap),
                 _YourProgressCard(
                   measurementType: raceMeasurementType(race),
                   progressValue: myPart?.progressValue ?? 0,
@@ -699,7 +708,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
                 ),
               ],
 
-              const SizedBox(height: 30),
+              SizedBox(height: logGap),
 
               // ── Move log ────────────────────────────────────────────────
               const _SectionLabel(label: 'Move log'),
@@ -721,7 +730,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
                       context.push('/race/${race.id}/proofs/${proof.id}'),
                 ),
 
-              const SizedBox(height: 28),
+              SizedBox(height: blockGap),
 
               // ── Rules (hidden on completed races) ────────────────────
               if (!myRaceComplete) ...[
@@ -739,7 +748,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
 
               // ── Owner manage section ────────────────────────────────────
               if (isOwner) ...[
-                const SizedBox(height: 28),
+                SizedBox(height: blockGap),
                 const _SectionLabel(label: 'Manage'),
                 const SizedBox(height: 12),
                 _ManageGroup(
@@ -763,7 +772,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
 
               // ── Leave (non-owner participant) ───────────────────────────
               if (isParticipant && !isOwner) ...[
-                const SizedBox(height: 28),
+                SizedBox(height: blockGap),
                 NuvoDangerButton(
                   label: 'Leave race',
                   expand: true,
@@ -882,7 +891,13 @@ class _LiveRaceHeader extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(
+          height: context.nuvoDensity.pick(
+            compact: 12.0,
+            regular: 20.0,
+            large: 20.0,
+          ),
+        ),
         Text(
           race.displayTitle,
           style: AppTextStyles.displaySmall.copyWith(

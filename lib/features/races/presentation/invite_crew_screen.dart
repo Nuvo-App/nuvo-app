@@ -219,9 +219,12 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
               ListView(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
-                    NuvoBackButton(
-                      onPressed: () =>
-                          safePopOrGo(context, '/race/${widget.raceId}'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: NuvoBackButton(
+                        onPressed: () =>
+                            safePopOrGo(context, '/race/${widget.raceId}'),
+                      ),
                     ),
                     const SizedBox(height: 18),
                     Text(
@@ -243,7 +246,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                     const SizedBox(height: 10),
                     NuvoSearchField(
                       controller: _searchController,
-                      hint: 'Search username or member ID',
+                      hint: 'Username or member ID',
                       searching: _searching,
                       onChanged: _onSearchChanged,
                     ),

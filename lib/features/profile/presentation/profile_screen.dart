@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/legal_links.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -39,11 +39,26 @@ import 'widgets/nuvo_badges.dart';
 
 part 'settings_screen.dart';
 
-const _kPrivacyUrl = 'https://getnuvo.net/privacy';
-const _kTermsUrl = 'https://getnuvo.net/terms';
-
 /// Height of the soft fade that ends at the floating nav's top edge.
 const double _kBottomFadeHeight = 28;
+
+/// How roomy the top block is. 1.0 on a tall phone; shorter screens ease the
+/// vertical rhythm down (never below [_kMinDensity]) so title, identity,
+/// level, achievements and the record still sit whole above the dock.
+double _density(BuildContext context) {
+  final h = MediaQuery.sizeOf(context).height;
+  final t = ((h - _kTightHeight) / (_kRoomyHeight - _kTightHeight)).clamp(
+    0.0,
+    1.0,
+  );
+  return _kMinDensity + (1 - _kMinDensity) * t;
+}
+
+/// Screen heights between which the top block eases from its tightest to its
+/// full rhythm. Anything taller than [_kRoomyHeight] keeps the full rhythm.
+const double _kTightHeight = 540;
+const double _kRoomyHeight = 680;
+const double _kMinDensity = 0.5;
 
 /// Profile — "who am I on Nuvo, and what have I done?"
 ///
@@ -205,9 +220,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             MediaQuery.paddingOf(context).bottom -
                             NuvoBottomNav.navTopBreath -
                             _kBottomFadeHeight;
+                        // The card is whole above the dock or not there at
+                        // all: when the room can't hold its header, grid and
+                        // key, it starts just past the viewport's bottom edge
+                        // (a short scroll away) instead of being sliced by the
+                        // dock.
+                        final natural = ActivityHeatmap.naturalHeight(
+                          sc.crossAxisExtent,
+                          MediaQuery.textScalerOf(context),
+                        );
+                        if (room >= natural) {
+                          return SliverToBoxAdapter(
+                            child: ActivityHeatmapSection(minHeight: room),
+                          );
+                        }
+                        final toFold =
+                            sc.viewportMainAxisExtent -
+                            sc.precedingScrollExtent;
                         return SliverToBoxAdapter(
-                          child: ActivityHeatmapSection(
-                            minHeight: math.max(0.0, room),
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              top: toFold > 0 ? toFold + 1 : 0,
+                            ),
+                            child: const ActivityHeatmapSection(),
                           ),
                         );
                       },
@@ -365,7 +400,10 @@ class _IdentityCard extends StatelessWidget {
                     child: NuvoAvatar(
                       initials: initials,
                       photoUrl: photoUrl,
-                      size: 74,
+                      size: 48 +
+                          26 *
+                              ((_density(context) - _kMinDensity) /
+                                  (1 - _kMinDensity)),
                       bgColor: nuvoAvatarColorFor(user?.id ?? ''),
                       textColor: NuvoColors.white,
                     ),
@@ -519,7 +557,12 @@ class _LevelTrack extends ConsumerWidget {
         // The main progression element wears the app's signature physical
         // edge: ink outline + hard-offset plate, like buttons and cards.
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: EdgeInsets.fromLTRB(
+            14,
+            12 * _density(context),
+            14,
+            12 * _density(context),
+          ),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(22),
@@ -578,10 +621,10 @@ class _LevelTrack extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8 * _density(context)),
               // The beam — one straight run to the next level.
               _LevelRoute(level: p.level, progress: p.progress, color: xpColor),
-              const SizedBox(height: 6),
+              SizedBox(height: 6 * _density(context)),
               Center(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1147,7 +1190,12 @@ class _AchievementsRow extends StatelessWidget {
         scale: 0.99,
         haptic: false,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            14 * _density(context),
+            14,
+            14 * _density(context),
+          ),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
@@ -1268,7 +1316,7 @@ class _HeaderStat extends StatelessWidget {
             Text(
               '—',
               style: AppTextStyles.number(
-                24,
+                22 + 2 * ((_density(context) - _kMinDensity) / (1 - _kMinDensity)),
                 color: c.inkDim,
                 weight: FontWeight.w800,
               ),
@@ -1280,7 +1328,7 @@ class _HeaderStat extends StatelessWidget {
               value: value!,
               format: (v) => '$v$suffix',
               style: AppTextStyles.number(
-                24,
+                22 + 2 * ((_density(context) - _kMinDensity) / (1 - _kMinDensity)),
                 color: color ?? c.ink,
                 weight: FontWeight.w800,
               ),

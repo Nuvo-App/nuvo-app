@@ -86,11 +86,37 @@ class ActivityHeatmap extends StatelessWidget {
   final double minHeight;
 
   static const int weeks = 20;
-  static const double maxCellRatio = 1.3;
+  static const double maxCellRatio = 1.5;
   static const double _topGap = 18;
   static const double _pad = 14;
   static const double _gap = 3;
   static const double _cellOutline = 1.25;
+
+  /// Square cell edge for a card [cardWidth] wide (the card's outer width,
+  /// border and padding included).
+  static double cellFor(double cardWidth) =>
+      ((cardWidth - 2 * (_pad + 2) - _gap * (weeks - 1)) / weeks).clamp(
+        4.0,
+        18.0,
+      );
+
+  /// The least height the whole section (top gap included) needs to show
+  /// header, every row of the grid and the Less/More key without cramping,
+  /// for a card [cardWidth] wide. Profile uses it to decide whether the card
+  /// fits above the dock or starts below the fold.
+  static double naturalHeight(double cardWidth, TextScaler scaler) {
+    final cell = cellFor(cardWidth);
+    final headerH = scaler.scale(16) * 1.5;
+    final keyH = math.max(10.0, scaler.scale(11) * 1.6);
+    return _topGap +
+        4 + // 2pt border, top and bottom
+        2 * _pad +
+        headerH +
+        12 +
+        (7 * cell + 6 * _gap) +
+        12 +
+        keyH;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +176,10 @@ class ActivityHeatmap extends StatelessWidget {
                   cell,
                   cell * maxCellRatio,
                 );
+                // Room beyond the tallest comfortable tile opens the rows up a
+                // little instead of leaving dead air around the grid.
+                final spare = budget - (7 * cellH + 6 * _gap);
+                final rowGap = _gap + (spare / 6).clamp(0.0, _gap).toDouble();
                 final radius = math.min(cell, cellH) * 0.28;
                 return Column(
                   mainAxisSize: MainAxisSize.min,
@@ -157,8 +187,9 @@ class ActivityHeatmap extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
+                        Flexible(
                           child: Text(
                             'Activity',
                             maxLines: 1,
@@ -170,6 +201,7 @@ class ActivityHeatmap extends StatelessWidget {
                                 ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Flexible(
                           child: Text(
                             '$total verified proofs',
@@ -192,7 +224,7 @@ class ActivityHeatmap extends StatelessWidget {
                               for (var d = 0; d < 7; d++)
                                 Padding(
                                   padding: EdgeInsets.only(
-                                    bottom: d < 6 ? _gap : 0,
+                                    bottom: d < 6 ? rowGap : 0,
                                   ),
                                   child: Container(
                                     width: cell,

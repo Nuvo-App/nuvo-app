@@ -1,6 +1,7 @@
 // At-a-glance contract for the social / auth / onboarding pages: at rest on
 // first load no text line is bisected by the viewport bottom, no label
 // ellipsizes at text scale 1.0, and nothing overflows.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/screenshot.dart';
+import 'package:nuvo/core/demo/presentation_demo.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -68,6 +71,35 @@ class _Repo extends AuthRepository {
 class _InviteRepo extends InviteRepository {
   _InviteRepo() : super(InviteApi(), SecureTokenStore(), AuthApi());
   @override
+  Future<InvitePreview> preview(String token) async => token == 'person'
+      ? InvitePreview.fromJson(const {
+          'status': 'active',
+          'kind': 'crew_connect',
+          'requiresAuth': true,
+          'preview': {
+            'person': {
+              'userId': 'u2',
+              'displayName': 'Noah Williams',
+              'username': 'noahw',
+            },
+          },
+        })
+      : InvitePreview.fromJson(const {
+          'status': 'active',
+          'kind': 'race_join',
+          'requiresAuth': true,
+          'preview': {
+            'race': {
+              'id': 'r1',
+              'title': 'Sunday morning push-ups',
+              'targetValue': 100,
+              'targetUnit': 'reps',
+              'participantCount': 4,
+              'creator': {'displayName': 'Maya Chen'},
+            },
+          },
+        });
+  @override
   Future<MintedInvite> mintMyCrewInvite() async => const MintedInvite(
     token: 't',
     url: 'https://getnuvo.net/i/t',
@@ -104,8 +136,23 @@ final _cases = <_Case>[
   _Case('my code', () => const MyNuvoScreen()),
   _Case('add crew', () => const AddCrewScreen()),
   _Case('invite', () => const InviteScreen(token: 'tok')),
+  _Case('invite person', () => const InviteScreen(token: 'person')),
   _Case('public profile', () => const PublicProfileScreen(userId: 'demo-1')),
   _Case('public badges', () => const PublicBadgesScreen(userId: 'demo-1')),
+  // Loaded states with the real presentation-demo people (Noah: Lv 27, 18
+  // earned badges incl. "Quarter Century"; Priya: Lv 8).
+  _Case(
+    'public profile loaded',
+    () => const PublicProfileScreen(userId: 'presentation-demo-crew-noah'),
+  ),
+  _Case(
+    'public profile loaded low level',
+    () => const PublicProfileScreen(userId: 'presentation-demo-crew-priya'),
+  ),
+  _Case(
+    'public badges loaded',
+    () => const PublicBadgesScreen(userId: 'presentation-demo-crew-noah'),
+  ),
   _Case('welcome', () => const WelcomeAuthScreen()),
   _Case('welcome login', () => const WelcomeAuthScreen(initialLogin: true)),
   _Case('email start', () => const EmailStartScreen()),
@@ -179,6 +226,14 @@ class _NoCrew extends CrewRepository {
   Future<List<PublicUser>> getCrew() async => const [];
   @override
   Future<CrewRequestPage> getRequestPage() async => const CrewRequestPage();
+  // Loaded public profiles: the real presentation-demo people. Other ids
+  // never resolve (the loading state stays on screen).
+  @override
+  Future<PublicProfileCard> getUser(String userId) async {
+    final card = presentationDemoProfile(userId, viewerId: 'demo-viewer-1');
+    if (card == null) return Completer<PublicProfileCard>().future;
+    return card;
+  }
 }
 
 /// Problems for every visible paragraph: bisected by the viewport bottom, or
@@ -225,6 +280,10 @@ List<String> _audit(
 
 void main() {
   setUpAll(() async {
+    if (Platform.environment['SHOTS_DIR']?.isNotEmpty ?? false) {
+      await loadShotFonts();
+      return;
+    }
     final bytes = ByteData.sublistView(
       await File('test/fonts/Manrope-VariableFont_wght.ttf').readAsBytes(),
     );
@@ -255,6 +314,9 @@ void main() {
                   onboarding: c.onboarding,
                 );
                 expect(tester.takeException(), isNull);
+                if (!dark && scale == 1.0 && inset == 34) {
+                  await shot(tester, '${c.name.replaceAll(' ', '')}_${size.width.toInt()}x${size.height.toInt()}');
+                }
                 final fade = find
                     .byKey(const ValueKey('nuvo-bottom-fade'))
                     .evaluate()
@@ -297,6 +359,9 @@ void main() {
                 await tester.pump(const Duration(milliseconds: 150));
               }
               expect(tester.takeException(), isNull);
+              if (!dark && scale == 1.0) {
+                await shot(tester, '${entry.key.replaceAll(' ', '')}_${size.width.toInt()}x${size.height.toInt()}');
+              }
               expect(_audit(tester, size, scale), isEmpty);
             },
           );

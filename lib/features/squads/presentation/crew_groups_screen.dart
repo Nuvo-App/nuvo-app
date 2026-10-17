@@ -62,6 +62,87 @@ Widget _topBar(BuildContext context, String title, {Widget? trailing}) =>
 
 const double _kSide = NuvoSpacing.lg;
 
+/// Two side-by-side actions that stack when each would get too little room:
+/// a half-width button on a narrow phone squeezes its label down to a few
+/// pixels, so below [_kPairMinWidth] of inner width (or with large text) the
+/// pair becomes two full-width buttons instead.
+const double _kPairMinWidth = 340;
+
+class _ActionPair extends StatelessWidget {
+  const _ActionPair({
+    required this.first,
+    this.second,
+    this.minWidth = _kPairMinWidth,
+  });
+  final double minWidth;
+  final Widget first;
+  final Widget? second;
+
+  @override
+  Widget build(BuildContext context) {
+    final second = this.second;
+    if (second == null) return first;
+    final bigText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (bigText || box.maxWidth < minWidth) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: 8), second],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 10),
+            Expanded(child: second),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The one invite text used by every Share button.
+String _inviteText(CrewGroup g) =>
+    'Join my crew "${g.name}" on Nuvo. Crew code: ${g.joinCode}'
+    '\nhttps://getnuvo.net/c/${g.joinCode}';
+
+/// Opens the share sheet from the tapped button. `context` must be the
+/// button's own (iPad and some iPhones need a source rect for the sheet to
+/// appear). If sharing throws or is unavailable, the invite goes to the
+/// clipboard instead so the tap always does something.
+Future<void> _shareCrew(BuildContext context, CrewGroup g) async {
+  final text = _inviteText(g);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  Rect? origin;
+  try {
+    final box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.attached) {
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      if (rect.width > 0 && rect.height > 0) origin = rect;
+    }
+  } catch (_) {
+    origin = null;
+  }
+  var copied = false;
+  try {
+    final result = await Share.share(
+      text,
+      subject: g.name,
+      sharePositionOrigin: origin,
+    );
+    copied = result.status == ShareResultStatus.unavailable;
+  } catch (_) {
+    copied = true;
+  }
+  if (!copied) return;
+  await Clipboard.setData(ClipboardData(text: text));
+  messenger?.showSnackBar(
+    const SnackBar(content: Text('Invite copied — paste it into a message')),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // /crews — the crews I'm in
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,9 +274,6 @@ class _AddPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final stacked =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.15;
     final start = NuvoPrimaryButton(
       label: 'Start a crew',
       icon: Icons.add_rounded,
@@ -230,18 +308,7 @@ class _AddPanel extends StatelessWidget {
             style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
           ),
           const SizedBox(height: 12),
-          if (stacked) ...[
-            start,
-            const SizedBox(height: 8),
-            join,
-          ] else
-            Row(
-              children: [
-                Expanded(child: start),
-                const SizedBox(width: 10),
-                Expanded(child: join),
-              ],
-            ),
+          _ActionPair(first: start, second: join, minWidth: 380),
           const SizedBox(height: 8),
           Semantics(
             button: true,
@@ -995,9 +1062,6 @@ class _CrewSummaryCard extends StatelessWidget {
           const SizedBox(height: 14),
           Builder(
             builder: (context) {
-              final stacked =
-                  MediaQuery.sizeOf(context).width < 360 ||
-                  MediaQuery.textScalerOf(context).scale(1) > 1.15;
               final addPeople = NuvoPrimaryButton(
                 label: 'Add people',
                 icon: Icons.qr_code_2_rounded,
@@ -1012,19 +1076,7 @@ class _CrewSummaryCard extends StatelessWidget {
                       expand: true,
                       onPressed: busy ? null : onAddRace,
                     );
-              if (addRace == null) return addPeople;
-              return stacked
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [addPeople, const SizedBox(height: 8), addRace],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(child: addPeople),
-                        const SizedBox(width: 10),
-                        Expanded(child: addRace),
-                      ],
-                    );
+              return _ActionPair(first: addPeople, second: addRace);
             },
           ),
         ],
@@ -1366,6 +1418,13 @@ class _CodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
+    // The QR scales with the phone: big enough to scan from across a table on
+    // tall screens, small enough that the buttons stay on screen on short ones.
+    final media = MediaQuery.sizeOf(context);
+    final qrSize = (media.height * 0.2)
+        .clamp(120.0, 200.0)
+        .clamp(0.0, media.width * 0.55)
+        .toDouble();
     return Container(
       key: const ValueKey('crew-code-card'),
       padding: const EdgeInsets.all(16),
@@ -1393,7 +1452,7 @@ class _CodeCard extends StatelessWidget {
                 key: const ValueKey('crew-qr'),
                 data: _link,
                 version: QrVersions.auto,
-                size: 168,
+                size: qrSize,
                 eyeStyle: const QrEyeStyle(
                   eyeShape: QrEyeShape.square,
                   color: NuvoColors.navy,
@@ -1430,35 +1489,28 @@ class _CodeCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NuvoOutlineButton(
-                  label: 'Copy code',
-                  icon: Icons.copy_rounded,
-                  expand: true,
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: group.joinCode));
-                    HapticFeedback.selectionClick();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Crew code copied')),
-                    );
-                  },
-                ),
+          _ActionPair(
+            minWidth: 260,
+            first: NuvoOutlineButton(
+              label: 'Copy code',
+              icon: Icons.copy_rounded,
+              expand: true,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: group.joinCode));
+                HapticFeedback.selectionClick();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Crew code copied')),
+                );
+              },
+            ),
+            second: Builder(
+              builder: (btnContext) => NuvoPrimaryButton(
+                label: 'Share',
+                icon: Icons.ios_share_rounded,
+                expand: true,
+                onPressed: () => _shareCrew(btnContext, group),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: NuvoPrimaryButton(
-                  label: 'Share',
-                  icon: Icons.ios_share_rounded,
-                  expand: true,
-                  onPressed: () => Share.share(
-                    'Join my crew "${group.name}" on Nuvo. Crew code: '
-                    '${group.joinCode}\n$_link',
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -1684,6 +1736,7 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
   bool _seeded = false;
   bool _saving = false;
   bool _leaving = false;
+  bool _deleting = false;
   String? _error;
   String? _saved;
 
@@ -1747,6 +1800,33 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
       if (mounted) {
         setState(() {
           _leaving = false;
+          _error = _messageFor(e);
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteCrew(CrewGroup g) async {
+    final ok = await showNuvoConfirmDialog(
+      context,
+      title: 'Delete ${g.name}?',
+      message:
+          'This removes the crew for everyone: the leaderboard, members and '
+          'crew code stop working. Races stay as they are.',
+      confirmLabel: 'Delete crew',
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      await ref.read(squadControllerProvider.notifier).deleteCrew(g.id);
+      if (mounted) context.go('/crews');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _deleting = false;
           _error = _messageFor(e);
         });
       }
@@ -1861,12 +1941,11 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
                     );
                   },
                 ),
-                IconButton(
-                  tooltip: 'Share',
-                  icon: Icon(Icons.ios_share_rounded, color: c.ink),
-                  onPressed: () => Share.share(
-                    'Join my crew "${g.name}" on Nuvo. Crew code: ${g.joinCode}'
-                    '\nhttps://getnuvo.net/c/${g.joinCode}',
+                Builder(
+                  builder: (btnContext) => IconButton(
+                    tooltip: 'Share',
+                    icon: Icon(Icons.ios_share_rounded, color: c.ink),
+                    onPressed: () => _shareCrew(btnContext, g),
                   ),
                 ),
               ],
@@ -1910,6 +1989,35 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
               ],
             ),
           ),
+          if (g.isOwner) ...[
+            const SizedBox(height: NuvoSpacing.xl),
+            _SettingsSection(
+              title: 'Delete',
+              tone: sem.danger,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Delete removes this crew for everyone. The leaderboard, '
+                    'members and crew code stop working. Races stay as they '
+                    'are.',
+                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+                  ),
+                  const SizedBox(height: 12),
+                  NuvoDangerButton(
+                    key: const ValueKey('crew-delete'),
+                    label: 'Delete crew',
+                    icon: Icons.delete_outline_rounded,
+                    expand: true,
+                    loading: _deleting,
+                    onPressed: (_leaving || _deleting)
+                        ? null
+                        : () => _deleteCrew(g),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

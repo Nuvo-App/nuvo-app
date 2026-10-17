@@ -159,7 +159,7 @@ void main() {
         tester.getSize(find.byType(NuvoOutlineButton).last).height,
       );
       expect(find.text('By continuing, you agree to our'), findsOneWidget);
-      expect(find.text('Terms'), findsOneWidget);
+      expect(find.text('Terms of Service'), findsOneWidget);
       expect(find.text('Privacy Policy'), findsOneWidget);
       final toggle = find.byKey(const ValueKey('auth-mode-toggle'));
       await tester.ensureVisible(toggle);
@@ -413,7 +413,7 @@ void main() {
               login ? 'Log in' : 'Create account',
               'Continue with Apple',
               'Continue with Google',
-              'Terms',
+              'Terms of Service',
               'Privacy Policy',
             ]) {
               final target = find.text(label);

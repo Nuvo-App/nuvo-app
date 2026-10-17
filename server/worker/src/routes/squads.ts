@@ -616,6 +616,25 @@ squadsRouter.patch('/:id', async (c) => {
   return c.json({ ok: true, name });
 });
 
+// DELETE /squads/:id — the owner deletes the crew. Soft delete: the crew
+// disappears for everyone; races stay as they are, just no longer linked to a
+// live crew. Members' races and proofs are untouched.
+squadsRouter.delete('/:id', async (c) => {
+  const userId = c.get('userId');
+  const squad = await getSquad(c.env.DB, c.req.param('id'));
+  if (!squad) return c.json(badRequest('Crew not found'), 404);
+  const myRole = await roleOf(c.env.DB, squad.id, userId);
+  if (!myRole) return c.json(badRequest('Crew not found'), 404);
+  if (myRole !== 'owner') return c.json(badRequest('Only the crew owner can delete the crew'), 403);
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE squads SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').bind(squad.id),
+    c.env.DB.prepare("UPDATE squad_members SET status = 'left', role = 'member' WHERE squad_id = ? AND status = 'active'").bind(
+      squad.id,
+    ),
+  ]);
+  return c.json({ ok: true });
+});
+
 // DELETE /squads/:id/races/:raceId — unlink a race from the crew (owner/admin).
 // Members stay in the race itself; it just stops counting for the crew.
 squadsRouter.delete('/:id/races/:raceId', async (c) => {

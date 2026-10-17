@@ -33,6 +33,8 @@ import 'package:nuvo/features/social/data/invite_models.dart';
 import 'package:nuvo/features/social/data/invite_repository.dart';
 import 'package:nuvo/features/social/social_providers.dart';
 
+import 'helpers/screenshot.dart';
+
 const _me = AuthUser(
   id: 'user-1',
   email: 'akshay@example.com',
@@ -44,13 +46,23 @@ const _me = AuthUser(
   motionTrainingConsent: true,
 );
 
+class _FakeTokenStore extends SecureTokenStore {
+  @override
+  Future<String?> getAccessToken() async => null;
+}
+
 class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
   @override
   Future<RestoreResult> restoreSession() async => const RestoreOk(_me);
 }
 
-Race _race(String id, String title, {String mode = 'photo'}) => Race(
+Race _race(
+  String id,
+  String title, {
+  String mode = 'photo',
+  String proofName = 'Maya Chen',
+}) => Race(
   id: id,
   creatorId: 'user-1',
   title: title,
@@ -65,6 +77,27 @@ Race _race(String id, String title, {String mode = 'photo'}) => Race(
   status: 'active',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  recentProofs: [
+    RaceProof(
+      id: 'p1',
+      userId: 'u2',
+      displayName: proofName,
+      proofType: 'photo',
+      value: 12,
+      note: 'Set of twelve, felt strong',
+      verificationStatus: 'pending',
+      createdAt: '2026-01-02T00:00:00Z',
+    ),
+    const RaceProof(
+      id: 'p2',
+      userId: 'user-1',
+      displayName: 'Akshay Sanjai',
+      proofType: 'photo',
+      value: 20,
+      verificationStatus: 'verified',
+      createdAt: '2026-01-01T12:00:00Z',
+    ),
+  ],
   participants: const [
     RaceParticipant(
       id: 'p1',
@@ -105,6 +138,11 @@ final _races = [
   _race('race-1', 'Pushup Race'),
   _race('race-ai', 'Pushup Race', mode: 'ai'),
   _race(
+    'race-review',
+    'Pushup Race',
+    proofName: 'Alexandria Montgomery-Santiago',
+  ),
+  _race(
     'race-long',
     'First to Complete 1000 Jumping Jacks Before Friday Night',
   ),
@@ -114,6 +152,14 @@ class _StubRaceRepo extends RaceRepository {
   _StubRaceRepo() : super(RaceApi(), SecureTokenStore(), AuthApi());
   @override
   Future<List<Race>> getRaces() => Future.value(_races);
+  @override
+  Future<List<PublicUser>> getCrew() async => const [
+    PublicUser(id: 'u2', displayName: 'Alexandria Montgomery-Santiago', initials: 'AM'),
+    PublicUser(id: 'u5', displayName: 'Sam Okafor', initials: 'SO'),
+    PublicUser(id: 'u6', displayName: 'Priya Nair', initials: 'PN'),
+  ];
+  @override
+  Future<String> createInviteCode(String id) async => 'RACE-42';
   @override
   Future<Race> getRaceDetail(String id) => Future.value(
     _races.firstWhere((r) => r.id == id, orElse: () => _races.first),
@@ -167,7 +213,7 @@ final _surfaces = <String, Widget Function()>{
     ),
   ),
   'proof-review': () =>
-      const ProofReviewScreen(raceId: 'race-1', proofId: 'p1'),
+      const ProofReviewScreen(raceId: 'race-review', proofId: 'p1'),
 };
 
 const _sizes = [
@@ -184,6 +230,7 @@ Widget _wrap(Widget child, {required bool dark, required double scale}) {
       authControllerProvider.overrideWith(
         (ref) => AuthController(_FakeAuthRepo()),
       ),
+      secureTokenStoreProvider.overrideWithValue(_FakeTokenStore()),
       raceRepositoryProvider.overrideWithValue(_StubRaceRepo()),
       raceControllerProvider.overrideWith((ref) => _SeededRaces()),
       inviteRepositoryProvider.overrideWithValue(_StubInviteRepo()),
@@ -260,6 +307,10 @@ List<String> _findCutOff(
 
 void main() {
   setUpAll(() async {
+    if (Platform.environment['SHOTS_DIR']?.isNotEmpty ?? false) {
+      await loadShotFonts();
+      return;
+    }
     final bytes = ByteData.sublistView(
       await File('test/fonts/Manrope-VariableFont_wght.ttf').readAsBytes(),
     );
@@ -317,6 +368,12 @@ void main() {
               );
               for (var i = 0; i < 12; i++) {
                 await tester.pump(const Duration(milliseconds: 200));
+              }
+              if (!dark && scale == 1.0 && inset == 34) {
+                await shot(
+                  tester,
+                  '${entry.key.replaceAll('-', '')}_${w.toInt()}x${h.toInt()}',
+                );
               }
               final tag =
                   '${entry.key} ${w.toInt()}x${h.toInt()} inset=$inset '

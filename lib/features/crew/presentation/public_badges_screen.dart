@@ -8,6 +8,7 @@ import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_back_header.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../profile/data/progression_models.dart' show NuvoBadge;
@@ -97,7 +98,7 @@ class _State extends ConsumerState<PublicBadgesScreen> {
     return Scaffold(
       backgroundColor: c.page,
       body: SafeArea(
-        child: ListView(
+        child: NuvoScrollBottomFade(child: ListView(
           // Same pushed-page clearance as the self collection — the last
           // row rests visibly above the edge even without a bottom inset.
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
@@ -172,7 +173,7 @@ class _State extends ConsumerState<PublicBadgesScreen> {
             else
               NuvoBadgeGrid(badges: earned, onTap: _openDetail),
           ],
-        ),
+        )),
       ),
     );
   }

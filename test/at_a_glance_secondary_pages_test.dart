@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/screenshot.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:nuvo/core/theme/nuvo_responsive.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
@@ -504,6 +505,9 @@ class _SquadRepo implements SquadRepository {
   Future<void> leave(String id) async {}
 
   @override
+  Future<void> deleteCrew(String id) async {}
+
+  @override
   Future<void> rename(String id, String name) async {}
 
   @override
@@ -614,6 +618,7 @@ void main() {
     await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    await loadShotFonts();
   });
 
   for (final entry in _pages.entries) {
@@ -645,6 +650,12 @@ void main() {
               await _settle(tester);
               if (entry.value.prep != null) await entry.value.prep!(tester);
               expect(tester.takeException(), isNull, reason: name);
+              if (!dark && scale == 1.0 && inset == 34) {
+                await shot(
+                  tester,
+                  '${entry.key}_${w.toInt()}x${h.toInt()}',
+                );
+              }
 
               final fade = _hasFade(tester);
               final edge = h - inset;
@@ -674,6 +685,10 @@ void main() {
                 final s = tester.state<ScrollableState>(scrollables.first);
                 if (s.position.maxScrollExtent > 0 &&
                     s.axisDirection == AxisDirection.down) {
+                  s.position.jumpTo(s.position.maxScrollExtent);
+                  await tester.pump(const Duration(milliseconds: 100));
+                  // Lazy lists re-estimate their extent after the first jump
+                  // builds the trailing rows; settle on the true end.
                   s.position.jumpTo(s.position.maxScrollExtent);
                   await tester.pump(const Duration(milliseconds: 100));
                   var maxBottom = 0.0;
