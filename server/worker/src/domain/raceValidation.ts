@@ -396,7 +396,6 @@ export function customConfigFromBody(body: Record<string, unknown>): CustomRaceC
     format === 'first_to_goal' ? null : intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
   const attemptLimit =
     format === 'first_to_goal' ? null : intValue(body, 'attemptLimit', 'attempt_limit');
-  if (format === 'most_in_window' && !endsAt) return { error: 'A finish line is required.' };
   if (format === 'timed_attempt' && !attemptDurationSeconds) {
     return { error: 'Attempt duration is required.' };
   }
@@ -557,15 +556,13 @@ export function validateRaceWindow(
   const end = canonicalInstant(endsAt);
   if (start === 'invalid') return { error: 'Start line is not a valid date.' };
   if (end === 'invalid') return { error: 'Finish line is not a valid date.' };
-  // A cumulative 'most' race is decided at its finish line, so it must name one.
-  if (format === 'most_in_window' && !end) return { error: 'A finish line is required.' };
   // Attempt races used to need none. Older app builds (and titles like 'most
   // pushups in 30 seconds') still omit it, so give them the same default the
   // composer uses instead of refusing: 24h for a timed attempt, 7 days for a
   // best-attempt race. Either way the race is guaranteed to finish.
-  if (!end && (format === 'timed_attempt' || format === 'best_attempt')) {
+  if (!end && (format === 'timed_attempt' || format === 'best_attempt' || format === 'most_in_window')) {
     const base = start && new Date(start).getTime() > now.getTime() ? new Date(start) : now;
-    const hours = format === 'timed_attempt' ? 24 : 24 * 7;
+    const hours = format === 'timed_attempt' ? 24 : 24 * 7; // most_in_window: 7 days
     return {
       startsAt: start,
       endsAt: new Date(base.getTime() + hours * 3600 * 1000).toISOString(),
