@@ -949,7 +949,7 @@ class RaceHero extends StatelessWidget {
                             anchorValue ?? '$progressPercent%',
                             style: AppTextStyles.statLarge(
                               30,
-                              color: NuvoColors.actionBlue,
+                              color: c.accent,
                               weight: FontWeight.w800,
                             ),
                           ),
@@ -988,7 +988,7 @@ class RaceHero extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.labelMedium.copyWith(
-                            color: NuvoColors.actionBlue,
+                            color: c.accent,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -1003,7 +1003,7 @@ class RaceHero extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.labelMedium.copyWith(
-                            color: NuvoColors.actionBlue,
+                            color: c.accent,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -1152,6 +1152,62 @@ class RaceHero extends StatelessWidget {
 /// [RaceProgress] bar. Lower-wins and best-attempt races pass
 /// `hasGoal: false` so no finish ring implies a denominator that
 /// doesn't exist.
+/// Colour grammar for race status pills: green = you lead, blue = you're
+/// in the race and chasing, grey = waiting / not started, gold = finished.
+enum RaceRowTone { leading, chasing, waiting, finished }
+
+/// Small status pill that says WHY a race row is emphasised. Tints adapt to
+/// dark mode (brighter text on a stronger wash).
+class RaceStatusPill extends StatelessWidget {
+  const RaceStatusPill({super.key, required this.label, required this.tone});
+
+  final String label;
+  final RaceRowTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final Color base;
+    final Color text;
+    switch (tone) {
+      case RaceRowTone.leading:
+        base = NuvoColors.success;
+        text = dark ? c.successText : NuvoColors.successOn;
+      case RaceRowTone.chasing:
+        base = NuvoColors.actionBlue;
+        text = dark ? c.accent : const Color(0xFF0E4FD0);
+      case RaceRowTone.finished:
+        base = NuvoColors.gold;
+        text = dark ? c.goldText : const Color(0xFF7A5700);
+      case RaceRowTone.waiting:
+        base = c.inkMuted;
+        text = dark ? c.inkMuted : const Color(0xFF4E5B73);
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 132),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: base.withValues(alpha: dark ? 0.16 : 0.14),
+          borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: text,
+            fontWeight: FontWeight.w800,
+            fontSize: 10.5,
+            letterSpacing: 0.2,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+}
+
 class RaceRow extends StatelessWidget {
   const RaceRow({
     super.key,
@@ -1172,12 +1228,24 @@ class RaceRow extends StatelessWidget {
     this.contextColor,
     this.leading,
     this.raised = false,
+    this.statusLabel,
+    this.statusTone = RaceRowTone.waiting,
     this.rewardArtifact = false,
     this.padding = const EdgeInsets.symmetric(
       horizontal: NuvoSpacing.md,
       vertical: NuvoSpacing.md,
     ),
   });
+
+  /// Plain-language reason this row is emphasised ("You're leading",
+  /// "Waiting for crew"). When set it replaces the rank / "Start line"
+  /// slot with a pill coloured by [statusTone], and the unexplained blue
+  /// progress dot is dropped.
+  final String? statusLabel;
+
+  /// Colour grammar for [statusLabel]: green leading, blue chasing, grey
+  /// waiting / not started, gold finished.
+  final RaceRowTone statusTone;
 
   final String raceTitle;
   final String movementLabel;
@@ -1278,12 +1346,12 @@ class RaceRow extends StatelessWidget {
                 // The 3px left rail — the strip's structural cue instead
                 // of a border: a slice of the same navy the hero carries,
                 // clipped to the strip's rounded corner.
-                const Positioned(
+                Positioned(
                   left: 0,
                   top: 0,
                   bottom: 0,
                   width: 3,
-                  child: ColoredBox(color: NuvoColors.navy),
+                  child: ColoredBox(color: c.ink),
                 ),
               Padding(
                 padding: padding,
@@ -1301,7 +1369,7 @@ class RaceRow extends StatelessWidget {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (hasProof) ...[
+                              if (hasProof && statusLabel == null) ...[
                                 Padding(
                                   padding: const EdgeInsets.only(top: 5),
                                   child: Container(
@@ -1326,7 +1394,12 @@ class RaceRow extends StatelessWidget {
                               const SizedBox(width: NuvoSpacing.sm),
                               Padding(
                                 padding: const EdgeInsets.only(top: 1),
-                                child: hasProof
+                                child: statusLabel != null
+                                    ? RaceStatusPill(
+                                        label: statusLabel!,
+                                        tone: statusTone,
+                                      )
+                                    : hasProof
                                     ? RacePlacement(rank: rank, size: 15)
                                     : Text(
                                         'Start line',
@@ -1349,7 +1422,7 @@ class RaceRow extends StatelessWidget {
                               progressLabel,
                               style: AppTextStyles.statLarge(
                                 13.5,
-                                color: NuvoColors.actionBlue,
+                                color: c.accent,
                                 weight: FontWeight.w800,
                               ),
                               maxLines: 1,
@@ -1392,27 +1465,29 @@ class RaceRow extends StatelessWidget {
                                 // The payout docks at the context line's trailing
                                 // edge — a small ice tag the race carries, not a
                                 // dangling second line of metadata.
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: c.panel,
-                                    borderRadius: BorderRadius.circular(
-                                      NuvoRadii.pill,
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 3,
                                     ),
-                                  ),
-                                  child: Text(
-                                    rewardLabel!,
-                                    style: AppTextStyles.raceRowMeta.copyWith(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      color: NuvoColors.actionBlue,
-                                      letterSpacing: 0.2,
+                                    decoration: BoxDecoration(
+                                      color: c.panel,
+                                      borderRadius: BorderRadius.circular(
+                                        NuvoRadii.pill,
+                                      ),
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    child: Text(
+                                      rewardLabel!,
+                                      style: AppTextStyles.raceRowMeta.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: c.accent,
+                                        letterSpacing: 0.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1432,7 +1507,7 @@ class RaceRow extends StatelessWidget {
                             Text(
                               rewardLabel!,
                               style: AppTextStyles.raceRowMeta.copyWith(
-                                color: NuvoColors.actionBlue,
+                                color: c.accent,
                                 fontWeight: FontWeight.w800,
                               ),
                               maxLines: 1,
@@ -1802,9 +1877,9 @@ class RaceFinishedSummary extends StatelessWidget {
                 // A win record is the payoff — a quiet gold mark, not a
                 // banner, so the summary communicates results at a glance.
                 if (wonCount > 0) ...[
-                  const Icon(
+                  Icon(
                     Icons.emoji_events_rounded,
-                    color: NuvoColors.gold,
+                    color: context.themeColors.goldText,
                     size: 18,
                   ),
                   const SizedBox(width: NuvoSpacing.sm),

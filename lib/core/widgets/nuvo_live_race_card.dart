@@ -71,13 +71,11 @@ class NuvoLiveRaceCard extends StatelessWidget {
     return list;
   }
 
-  NuvoLiveStanding? get _me =>
-      standings.where((p) => p.isMe).firstOrNull;
+  NuvoLiveStanding? get _me => standings.where((p) => p.isMe).firstOrNull;
 
   bool get _ending {
     final ends = endsAt;
-    return ends != null &&
-        ends.difference(DateTime.now()).inSeconds <= 0;
+    return ends != null && ends.difference(DateTime.now()).inSeconds <= 0;
   }
 
   String? get _timeLeft {
@@ -103,9 +101,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
     }
     if (identical(me, leader)) {
       final gap = me.score - r[1].score;
-      return gap == 0
-          ? 'You and ${r[1].name} level'
-          : 'You lead by $gap';
+      return gap == 0 ? 'You and ${r[1].name} level' : 'You lead by $gap';
     }
     final gap = leader.score - me.score;
     return gap == 0
@@ -161,9 +157,18 @@ class NuvoLiveRaceCard extends StatelessWidget {
         const SizedBox(height: 8),
         Row(
           children: [
-            _watchAction(),
-            const Spacer(),
-            ?trailing,
+            _watchAction(context),
+            // The trailing reaction bar wraps; give it the leftover width
+            // (right-aligned) instead of letting it demand its full width.
+            if (trailing != null)
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: trailing!,
+                ),
+              )
+            else
+              const Spacer(),
           ],
         ),
       ],
@@ -173,10 +178,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
   /// Two-person race: names over big scores, then a thin tug-of-war bar —
   /// their share vs mine. When I'm in the race I sit on the right (blue);
   /// spectator races are navy-vs-quiet.
-  Widget _headToHead(
-    BuildContext context,
-    List<NuvoLiveStanding> ranked,
-  ) {
+  Widget _headToHead(BuildContext context, List<NuvoLiveStanding> ranked) {
     final c = context.themeColors;
     final meIdx = ranked.indexWhere((p) => p.isMe);
     final left = meIdx >= 0 ? ranked[1 - meIdx] : ranked[0];
@@ -236,7 +238,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
               : TextAlign.start,
           style: AppTextStyles.number(
             24,
-            color: p.isMe ? NuvoColors.blue : c.ink,
+            color: p.isMe ? c.accent : c.ink,
             weight: FontWeight.w900,
           ),
         ),
@@ -280,10 +282,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   /// 3+ racers (or ranks missing): the ranked matchup line — "Noah 41 ·
   /// You 39 · Maya 12". Mine reads blue.
-  Widget _matchupBlock(
-    BuildContext context,
-    List<NuvoLiveStanding> ranked,
-  ) {
+  Widget _matchupBlock(BuildContext context, List<NuvoLiveStanding> ranked) {
     final c = context.themeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,7 +325,11 @@ class NuvoLiveRaceCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 7),
+            // Title and countdown split what is left 3:1, so neither can push
+            // the row past its width at 320px / large text sizes: the title
+            // ellipsizes, the countdown scales down only when it must.
             Expanded(
+              flex: 3,
               child: Text(
                 title,
                 maxLines: 1,
@@ -339,7 +342,15 @@ class NuvoLiveRaceCard extends StatelessWidget {
             ),
             if (_timeLeft != null) ...[
               const SizedBox(width: 8),
-              _timeText(context),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _timeText(context),
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -348,7 +359,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
           children: [
             Expanded(child: _matchupLine(context, r, size: 12.5)),
             const SizedBox(width: 8),
-            _watchAction(),
+            _watchAction(context),
             if (trailing != null) ...[
               const SizedBox(width: 8),
               Flexible(child: trailing!),
@@ -387,7 +398,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
     return Text(
       _timeLeft!,
       style: AppTextStyles.labelMedium.copyWith(
-        color: ending ? NuvoColors.danger : c.inkMuted,
+        color: ending ? c.dangerText : c.inkMuted,
         fontWeight: FontWeight.w800,
       ),
     );
@@ -414,7 +425,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
           ),
         );
       }
-      final color = p.isMe ? NuvoColors.blue : c.ink;
+      final color = p.isMe ? c.accent : c.ink;
       spans.addAll([
         TextSpan(
           text: p.isMe ? 'You' : p.name,
@@ -441,21 +452,21 @@ class NuvoLiveRaceCard extends StatelessWidget {
     );
   }
 
-  Widget _watchAction() {
+  Widget _watchAction(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           'Watch',
           style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.blue,
+            color: context.themeColors.accent,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(width: 3),
-        const Icon(
+        Icon(
           Icons.arrow_forward_rounded,
-          color: NuvoColors.blue,
+          color: context.themeColors.accent,
           size: 15,
         ),
       ],
@@ -496,11 +507,14 @@ class _LivePulseDotState extends State<_LivePulseDot>
   }
 
   void _breathe() {
-    _pulse.forward().then((_) {
-      if (mounted) return _pulse.reverse();
-    }).then((_) {
-      if (mounted && ++_breathCount < _breaths) _breathe();
-    });
+    _pulse
+        .forward()
+        .then((_) {
+          if (mounted) return _pulse.reverse();
+        })
+        .then((_) {
+          if (mounted && ++_breathCount < _breaths) _breathe();
+        });
   }
 
   @override

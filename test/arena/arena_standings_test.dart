@@ -231,72 +231,55 @@ void main() {
 
     for (final w in widths.entries) {
       for (final r in racerCounts.entries) {
-        testWidgets('${w.key} / ${r.key}: activity starts at or below the '
-            'dock, then scrolls fully clear', (tester) async {
+        testWidgets('${w.key} / ${r.key}: standings start at or below the '
+            'dock, then scroll fully clear', (tester) async {
           await _pump(tester, _snapshot(r.value), size: w.value);
           expect(tester.takeException(), isNull);
 
           final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-          final raLabel = find.text('Recent activity');
-          if (raLabel.evaluate().isNotEmpty) {
+          expect(find.text('Recent activity'), findsNothing);
+          final lbLabel = find.text('Leaderboard');
+          if (lbLabel.evaluate().isNotEmpty) {
             expect(
-              tester.getTopLeft(raLabel).dy,
+              tester.getTopLeft(lbLabel).dy,
               greaterThanOrEqualTo(navTop),
-              reason:
-                  '${w.key}/${r.key}: nothing from the next section peeks '
-                  'above the dock at rest',
+              reason: '${w.key}/${r.key}: standings stay below the fold',
             );
           }
 
-          // Scroll: the section reveals and its last row clears the dock.
-          final lastRow = find.text('activity row 3');
-          await tester.scrollUntilVisible(
-            lastRow,
-            200,
-            scrollable: find.byType(Scrollable).first,
-          );
+          await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
           await tester.pumpAndSettle();
+          expect(find.text('Leaderboard'), findsOneWidget);
           expect(
-            tester.getTopLeft(raLabel).dy,
+            tester.getTopLeft(find.text('Leaderboard')).dy,
             lessThan(navTop),
-            reason: '${w.key}/${r.key}: Recent activity reveals on scroll',
-          );
-          expect(
-            tester.getBottomLeft(lastRow).dy,
-            lessThan(navTop),
-            reason: '${w.key}/${r.key}: last row clears the dock',
+            reason: '${w.key}/${r.key}: standings reveal on scroll',
           );
         });
       }
     }
   });
 
-  testWidgets('final activity row scrolls fully above the floating dock', (
+  testWidgets('the last standings row scrolls fully above the dock', (
     tester,
   ) async {
     await _pump(tester, _snapshot(const [
-      ArenaMiniLeaderboardRow(
-        label: 'You',
-        value: '39 / 50',
-        isCurrentUser: true,
-      ),
+      ArenaMiniLeaderboardRow(label: 'Noah W.', value: '41 / 50'),
+      ArenaMiniLeaderboardRow(label: 'Lena O.', value: '30 / 50'),
+      ArenaMiniLeaderboardRow(label: 'Theo M.', value: '22 / 50'),
+      ArenaMiniLeaderboardRow(label: 'Zed Q.', value: '5 / 50'),
     ]));
 
     final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-    final lastRow = find.text('activity row 3');
-    await tester.scrollUntilVisible(
-      lastRow,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
     await tester.pumpAndSettle();
-
     expect(
-      tester.getBottomLeft(lastRow).dy,
+      tester.getBottomLeft(find.text('Zed Q.')).dy,
       lessThan(navTop),
       reason: 'the last content row must clear the dock, not hide behind it',
     );
   });
+
 
   testWidgets('hero stays inside its share of the usable viewport', (
     tester,
@@ -312,9 +295,12 @@ void main() {
     final card = tester.getSize(find.byType(PageView).first).height;
     final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
     final usable = navTop - 47;
+    // The first-screen contract (header + hero + action row fill the visible
+    // area; standings begin below the fold) lets the hero own a little more of
+    // the page than the old 44% cap. It must still be a card, not the page.
     expect(
       card / usable,
-      lessThan(0.44),
+      lessThan(0.50),
       reason:
           'hero anchors the page instead of owning half of it '
           '(measured ${(card / usable * 100).toStringAsFixed(1)}%)',

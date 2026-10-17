@@ -70,7 +70,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     final screen = Scaffold(
       backgroundColor: context.themeColors.page,
       body: RefreshIndicator(
-        color: NuvoColors.blue,
+        color: context.themeColors.accent,
         backgroundColor: context.themeColors.surface,
         onRefresh: () => ref.read(raceControllerProvider.notifier).loadRaces(),
         child: CustomScrollView(
@@ -397,15 +397,6 @@ class _CappedRaceList extends StatelessWidget {
   Widget build(BuildContext context) {
     final visible = expanded ? races : races.take(cap).toList();
     final hasMore = races.length > cap;
-    // A race is an object only once it has real motion behind it — a race
-    // on the start line is still information, and stays flat on the field.
-    bool hasMotion(Race race) =>
-        raceProgressPercent(
-          race,
-          userId != null ? race.participantFor(userId!) : null,
-        ) >
-        0;
-
     // The active-races field — a middle plane between the hero and the
     // canvas. Ice tint groups the section; no navy edge, no shadow —
     // grouping is the plane's whole job. OverflowBox bleeds it past the
@@ -419,14 +410,13 @@ class _CappedRaceList extends StatelessWidget {
         fit: OverflowBoxFit.deferToChild,
         maxWidth:
             constraints.maxWidth + _CompeteScreenState._fieldBleed * 2,
-        child: _buildField(context, hasMotion, visible, hasMore),
+        child: _buildField(context, visible, hasMore),
       ),
     );
   }
 
   Widget _buildField(
     BuildContext context,
-    bool Function(Race) hasMotion,
     List<Race> visible,
     bool hasMore,
   ) {
@@ -479,16 +469,15 @@ class _CappedRaceList extends StatelessWidget {
             ),
           ),
           const SizedBox(height: NuvoSpacing.xs),
-          // Two tiers on one field: races with motion rise off the plane as
-          // white objects; start-line races stay flat. A hairline separates
-          // every strip — embedded rows on a shared field, not a card list.
+          // Every row is flat; the only emphasis is the status pill, which
+          // says why (see [competeRowStatus]). A hairline separates strips.
           for (var i = 0; i < visible.length; i++) ...[
             if (i > 0) ...[
               const SizedBox(height: NuvoSpacing.xs),
               Divider(height: 1, thickness: 1, color: c.divider),
               const SizedBox(height: NuvoSpacing.xs),
             ],
-            _buildRow(context, visible[i], i + 1, raised: hasMotion(visible[i])),
+            _buildRow(context, visible[i], i + 1),
           ],
         ],
       ),
@@ -498,10 +487,10 @@ class _CappedRaceList extends StatelessWidget {
   Widget _buildRow(
     BuildContext context,
     Race race,
-    int index, {
-    bool raised = false,
-  }) {
+    int index,
+  ) {
     final c = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
     final rank = rankForUser(race, userId);
@@ -547,11 +536,11 @@ class _CappedRaceList extends StatelessWidget {
           label: 'You',
           color: leading ? NuvoColors.success : NuvoColors.actionBlue,
           isViewer: true,
-          haloColor: leading && !completed ? NuvoColors.success : null,
         ),
       ];
     }
     final contextNote = pct > 0 ? _raceRowContext(race, userId) : null;
+    final status = competeRowStatus(race, userId);
 
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
@@ -565,12 +554,14 @@ class _CappedRaceList extends StatelessWidget {
       trackMarkers: markers,
       hasGoal: geo.hasGoal,
       goalReached: completed,
+      statusLabel: status?.label,
+      statusTone: status?.tone ?? RaceRowTone.waiting,
       contextNote: contextNote,
       contextColor: contextNote == null
           ? null
           : leading
-              ? NuvoColors.success
-              : NuvoColors.actionBlue,
+              ? (dark ? c.successText : NuvoColors.success)
+              : (dark ? c.accent : NuvoColors.actionBlue),
       // Finishing pays +25 — deterministic from the server award table.
       // On the field it docks as a tag on the context line, not a third
       // text line.
@@ -578,7 +569,6 @@ class _CappedRaceList extends StatelessWidget {
       rewardLabel: myPart != null && !completed
           ? 'Finish · +$kXpFinish XP'
           : null,
-      raised: raised,
       onTap: () => onOpen(race),
     );
   }
@@ -635,6 +625,7 @@ class _SummaryExpansionList extends StatelessWidget {
 
   Widget _buildRow(BuildContext context, Race race, int index) {
     final c = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
     final rank = rankForUser(race, userId);
@@ -662,6 +653,7 @@ class _SummaryExpansionList extends StatelessWidget {
             .firstOrNull;
     final leading = rank == 1 || (race.viewerContext?.isLeading ?? false);
     final contextNote = pct > 0 ? _raceRowContext(race, userId) : null;
+    final status = competeRowStatus(race, userId);
 
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
@@ -686,17 +678,18 @@ class _SummaryExpansionList extends StatelessWidget {
                 color:
                     leading ? NuvoColors.success : NuvoColors.actionBlue,
                 isViewer: true,
-                haloColor: leading ? NuvoColors.success : null,
               ),
             ],
       hasGoal: geo.hasGoal,
       goalReached: raceIsCompleted(race),
+      statusLabel: status?.label,
+      statusTone: status?.tone ?? RaceRowTone.waiting,
       contextNote: contextNote,
       contextColor: contextNote == null
           ? null
           : leading
-              ? NuvoColors.success
-              : NuvoColors.actionBlue,
+              ? (dark ? c.successText : NuvoColors.success)
+              : (dark ? c.accent : NuvoColors.actionBlue),
       rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
       onTap: () => onOpen(race),
     );
@@ -917,7 +910,7 @@ class _QuickStartTile extends StatelessWidget {
               style: AppTextStyles.raceRowMeta.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
-                color: NuvoColors.blue,
+                color: context.themeColors.accent,
                 letterSpacing: 0.2,
               ),
               maxLines: 1,
@@ -1002,6 +995,78 @@ class _EmptyState extends StatelessWidget {
 /// The one-line stakes under a quick row — what the next proof changes.
 /// Server verdicts first, then the honest "to pass" gap computed from
 /// canonical standings; never fabricated.
+// ── Row status grammar ────────────────────────────────────────────────────────
+//
+// WHY ROWS USED TO LOOK "COLORED IN" (original rule, now removed):
+//   * `raised: hasMotion(race)` — any race where the viewer had progress > 0
+//     became a white raised strip with a navy left rail and shadow, while
+//     start-line races stayed flat. Nothing said what the lift meant.
+//   * `haloColor: success` on the "You" marker whenever rank == 1.
+//   * a bare blue dot before the title whenever progress > 0.
+//
+// NEW RULE: rows are flat. The only emphasis is a [RaceStatusPill] that says
+// why, in one colour grammar used by Your races, See all and Waiting for crew:
+//   green = you're leading, blue = you're in it and chasing,
+//   grey  = waiting / not started, gold = finished.
+
+class CompeteRowStatus {
+  const CompeteRowStatus(this.label, this.tone);
+  final String label;
+  final RaceRowTone tone;
+}
+
+String _ordinalOf(int n) {
+  if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+  return switch (n % 10) {
+    1 => '${n}st',
+    2 => '${n}nd',
+    3 => '${n}rd',
+    _ => '${n}th',
+  };
+}
+
+String _startsInLabel(int seconds) {
+  if (seconds < 60) return 'Starts in <1m';
+  final m = seconds ~/ 60;
+  if (m < 60) return 'Starts in ${m}m';
+  final h = m ~/ 60;
+  if (h < 24) return 'Starts in ${h}h';
+  return 'Starts in ${h ~/ 24}d';
+}
+
+/// The one status every Compete race row carries. Always non-null for a
+/// race the viewer is in, so no row is ever emphasised without a reason.
+CompeteRowStatus? competeRowStatus(Race race, String? userId) {
+  final myPart = userId != null ? race.participantFor(userId) : null;
+  final rank = rankForUser(race, userId);
+  if (raceIsCompleted(race)) {
+    return CompeteRowStatus(
+      rank == 1 ? 'You won' : 'Finished',
+      RaceRowTone.finished,
+    );
+  }
+  final vc = race.viewerContext;
+  final startsIn = vc?.startsInSeconds;
+  if (startsIn != null && startsIn > 0) {
+    return CompeteRowStatus(_startsInLabel(startsIn), RaceRowTone.waiting);
+  }
+  if (race.participantCount <= 1) {
+    return const CompeteRowStatus('Waiting for crew', RaceRowTone.waiting);
+  }
+  final pct = raceProgressPercent(race, myPart);
+  final anyoneMoving = race.participants.any((p) => p.progressValue > 0);
+  if (pct == 0 && !anyoneMoving) {
+    return const CompeteRowStatus('At the start line', RaceRowTone.waiting);
+  }
+  if (rank == 1 || (vc?.isLeading ?? false)) {
+    return const CompeteRowStatus("You're leading", RaceRowTone.leading);
+  }
+  if (rank != null) {
+    return CompeteRowStatus("You're ${_ordinalOf(rank)}", RaceRowTone.chasing);
+  }
+  return const CompeteRowStatus('In the race', RaceRowTone.chasing);
+}
+
 String? _raceRowContext(Race race, String? uid) {
   final vc = race.viewerContext;
   final rival = raceNearestRival(race, uid);

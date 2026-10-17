@@ -332,7 +332,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
+                          color: context.themeColors.dangerText,
                         ),
                       ),
                     ],
@@ -465,7 +465,7 @@ class _InviteCodeCard extends StatelessWidget {
               ),
             ),
           ),
-          const Icon(Icons.key_rounded, color: NuvoColors.blue, size: 20),
+          Icon(Icons.key_rounded, color: context.themeColors.accent, size: 20),
         ],
       ),
     );
@@ -492,7 +492,7 @@ class _InlineState extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: NuvoColors.warning, size: 18),
+          Icon(icon, color: context.themeColors.warningText, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -506,7 +506,7 @@ class _InlineState extends StatelessWidget {
               child: Text(
                 actionLabel!,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.blue,
+                  color: context.themeColors.accent,
                   fontWeight: FontWeight.w800,
                 ),
               ),

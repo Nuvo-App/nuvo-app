@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -264,7 +265,7 @@ class _RacePreview extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text('You’re invited to a race',
                           style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)
-                              .copyWith(color: NuvoColors.blue)),
+                              .copyWith(color: context.blueInk)),
                       const SizedBox(height: 8),
                       Text(c.title, style: AppTextStyles.displaySmall),
                       const SizedBox(height: 16),
@@ -296,7 +297,7 @@ class _RacePreview extends StatelessWidget {
                   ).nuvoEnter(),
                   const Spacer(),
                   if (error != null) ...[
-                    Text(error!, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
+                    Text(error!, style: AppTextStyles.bodySmall.copyWith(color: context.dangerInk)),
                     const SizedBox(height: 12),
                   ],
                   NuvoPrimaryButton(
@@ -388,7 +389,7 @@ class _PersonPreview extends StatelessWidget {
                   if (error != null) ...[
                     Text(error!,
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
+                        style: AppTextStyles.bodySmall.copyWith(color: context.dangerInk)),
                     const SizedBox(height: 12),
                   ],
                   NuvoPrimaryButton(

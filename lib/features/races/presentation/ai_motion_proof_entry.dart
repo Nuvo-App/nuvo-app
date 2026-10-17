@@ -94,9 +94,9 @@ class CameraPrimerSheet extends StatelessWidget {
                   color: c.panel,
                   border: Border.all(color: c.ink, width: 1.6),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.accessibility_new_rounded,
-                  color: NuvoColors.blue,
+                  color: context.themeColors.accent,
                   size: 28,
                 ),
               ),
@@ -136,7 +136,7 @@ class CameraPrimerSheet extends StatelessWidget {
                   Expanded(
                     child: Column(
                       children: [
-                        Icon(fact.icon, color: NuvoColors.blue, size: 22),
+                        Icon(fact.icon, color: context.themeColors.accent, size: 22),
                         const SizedBox(height: 6),
                         Text(
                           fact.label,

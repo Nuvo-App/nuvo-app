@@ -237,6 +237,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.byType(NuvoToggle).first);
+      await tester.pumpAndSettle();
       // Light by default; the whole app re-themes on toggle.
       expect(find.text('Light'), findsOneWidget);
       await tester.tap(find.byType(NuvoToggle).first);

@@ -29,7 +29,6 @@ import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/badges_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
-import '../features/move/presentation/move_screen.dart';
 import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/data/race_models.dart' show RaceCreatePrefill;
 import '../features/races/presentation/race_composer_screen.dart';
@@ -77,12 +76,19 @@ Page<void> _detailPage(GoRouterState state, Widget child) =>
 Page<void> _tabPage(GoRouterState state, Widget child) =>
     NoTransitionPage<void>(key: state.pageKey, child: child);
 
+/// Redirect target for the retired `/move` (Verify) route.
+@visibleForTesting
+String moveRedirect(Uri uri) {
+  final race = uri.queryParameters['race'];
+  if (race == null || race.isEmpty) return '/arena';
+  return '/race/${Uri.encodeComponent(race)}/proof';
+}
+
 /// The screen behind each shell destination — keyed by the canonical
 /// destination path so route → screen is declared exactly once.
-Widget _tabScreenFor(String path, {String? raceId}) {
+Widget _tabScreenFor(String path) {
   final screen = switch (path) {
     '/compete' => const CompeteScreen(),
-    '/move' => MoveScreen(preselectedRaceId: raceId),
     '/pass' => const PassScreen(),
     '/profile' => const ProfileScreen(),
     _ => const ArenaScreen(),
@@ -241,7 +247,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // ── Main shell (bottom nav) ────────────────────────────────────────────
-      // StatefulShellRoute gives each of the five destinations its own
+      // StatefulShellRoute gives each of the four destinations its own
       // branch Navigator, so tab switches preserve each screen's mounted
       // state (scroll position, selections, ephemeral UI) instead of
       // rebuilding it. NuvoTabStack is the branch container — it keeps all
@@ -266,18 +272,19 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: d.path,
                   pageBuilder: (_, state) =>
-                      _tabPage(
-                        state,
-                        _tabScreenFor(
-                          d.path,
-                          raceId: state.uri.queryParameters['race'],
-                        ),
-                      ),
+                      _tabPage(state, _tabScreenFor(d.path)),
                 ),
               ],
             ),
         ],
       ),
+
+      // ── Retired Verify tab ────────────────────────────────────────────────
+      // There is no Verify page any more; proof starts from Race Detail or
+      // the proof routes. Old links and bookmarks keep working:
+      // /move?race=<id> → that race's proof entry (SubmitProofScreen picks
+      // the AI Motion Proof path itself), plain /move → Arena.
+      GoRoute(path: '/move', redirect: (_, state) => moveRedirect(state.uri)),
 
       // ── Detail / standalone ───────────────────────────────────────────────
       GoRoute(

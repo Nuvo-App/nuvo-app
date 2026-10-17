@@ -43,7 +43,7 @@ class _MotionContributionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
@@ -57,7 +57,7 @@ class _MotionContributionScreenState
                       child: Container(
                         height: 3,
                         decoration: BoxDecoration(
-                          color: i <= 2 ? NuvoColors.blue : NuvoColors.border,
+                          color: i <= 2 ? NuvoColors.blue : context.themeColors.border,
                           borderRadius: BorderRadius.circular(99),
                         ),
                       ),
@@ -87,7 +87,7 @@ class _MotionContributionScreenState
                                     .copyWith(
                                       fontSize: 32,
                                       letterSpacing: -0.9,
-                                      color: NuvoColors.navy,
+                                      color: context.themeColors.ink,
                                     ),
                                 delay: const Duration(milliseconds: 150),
                                 duration: const Duration(
@@ -101,7 +101,7 @@ class _MotionContributionScreenState
                                 'motion models.',
                                 textAlign: TextAlign.center,
                                 style: AppTextStyles.bodyLarge.copyWith(
-                                  color: NuvoColors.muted,
+                                  color: context.themeColors.inkMuted,
                                   height: 1.45,
                                 ),
                               ).animate(delay: 400.ms).fadeIn(
@@ -220,12 +220,12 @@ class _MotionContributionScreenState
                   onPressed: _saving ? null : () => _choose(false),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    foregroundColor: NuvoColors.navy,
+                    foregroundColor: context.themeColors.ink,
                   ),
                   child: Text(
                     'Not now',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: NuvoColors.navy,
+                      color: context.themeColors.ink,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -184,7 +184,7 @@ Future<void> _pumpShell(
   addTearDown(tester.view.resetPadding);
   addTearDown(tester.view.resetViewPadding);
 
-  const tabs = ['arena', 'compete', 'move', 'pass', 'profile'];
+  const tabs = ['arena', 'compete', 'pass', 'profile'];
   final router = GoRouter(
     initialLocation: initialLocation,
     routes: [
@@ -242,7 +242,6 @@ double _scrollOffset(WidgetTester tester, String tag) {
 const _tabMap = <String, (String marker, IconData icon)>{
   'Arena': ('arena-tab', Icons.stadium_outlined),
   'Compete': ('compete-tab', Icons.emoji_events_outlined),
-  'Verify': ('move-tab', Icons.gpp_good_outlined),
   'Crew': ('pass-tab', Icons.group_outlined),
   'Profile': ('profile-tab', Icons.person_outline),
 };
@@ -255,7 +254,7 @@ void _expectSelected(WidgetTester tester, String label) {
     reason: '$label must show its own page',
   );
   // Selection reads through Nuvo blue on the nav label for every
-  // destination — including Verify, whose icon stays white on its circle.
+  // destination.
   expect(
     tester.widget<Text>(find.text(label)).style?.color,
     NuvoColors.blue,
@@ -277,7 +276,7 @@ void main() {
 
   testWidgets('body and nav agree across a full tab tour', (tester) async {
     await _pumpShell(tester);
-    for (final label in ['Crew', 'Compete', 'Profile', 'Verify', 'Arena']) {
+    for (final label in ['Crew', 'Compete', 'Profile', 'Arena']) {
       await tester.tap(find.text(label));
       await tester.pumpAndSettle();
       _expectSelected(tester, label);
@@ -285,8 +284,8 @@ void main() {
   });
 
   testWidgets('deep links select the correct destination', (tester) async {
-    await _pumpShell(tester, initialLocation: '/move');
-    _expectSelected(tester, 'Verify');
+    await _pumpShell(tester, initialLocation: '/profile');
+    _expectSelected(tester, 'Profile');
 
     await _pumpShell(tester, initialLocation: '/pass');
     _expectSelected(tester, 'Crew');
@@ -378,7 +377,7 @@ void main() {
   ) async {
     await _pumpShell(tester);
 
-    // Arena (index 0) → Crew (index 3): Crew arrives from the right.
+    // Arena (index 0) → Crew (index 2): Crew arrives from the right.
     await tester.tap(find.text('Crew'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -457,7 +456,7 @@ void main() {
     await tester.tap(find.text('Crew'));
     await tester.pumpAndSettle();
 
-    final icon = tester.widget<Icon>(find.byIcon(Icons.group_outlined));
+    final icon = tester.widget<Icon>(find.byIcon(Icons.group));
     expect(
       icon.color,
       NuvoColors.blue,

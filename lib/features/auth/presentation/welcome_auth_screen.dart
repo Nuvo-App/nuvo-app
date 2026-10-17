@@ -233,7 +233,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                       ? 'Ready to start\nyour first race?'
                       : 'Welcome back.',
                   style: AppTextStyles.displayMedium.copyWith(
-                    color: NuvoColors.navy,
+                    color: context.themeColors.ink,
                     fontSize: constraints.maxWidth < 360 ? 30 : 36,
                     height: 1.08,
                     letterSpacing: -1.1,
@@ -247,7 +247,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                       ? 'Create an account to save your races, invite your crew, and keep your progress.'
                       : 'Log in to keep your races, progress, and crew synced.',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.muted,
+                    color: context.themeColors.inkMuted,
                   ),
                 ),
                 SizedBox(height: compact ? 24 : 28),
@@ -299,8 +299,8 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                           ),
                           TextSpan(
                             text: isSignup ? 'Log in' : 'Sign up',
-                            style: const TextStyle(
-                              color: NuvoColors.blue,
+                            style: TextStyle(
+                              color: context.themeColors.accent,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -308,7 +308,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                       ),
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                     ),
                   ),
@@ -323,7 +323,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
     );
     if (widget.embedded) return content;
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(child: content),
     );
   }
@@ -365,11 +365,11 @@ class _ProviderButton extends StatelessWidget {
           height: 22,
           child: Center(
             child: loading
-                ? const SizedBox.square(
+                ? SizedBox.square(
                     dimension: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: NuvoColors.navy,
+                      color: context.themeColors.ink,
                     ),
                   )
                 : glyph,
@@ -384,7 +384,7 @@ class _ProviderButton extends StatelessWidget {
             liveRegion: true,
             child: Text(
               error!,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.dangerText),
             ),
           ),
         ),
@@ -406,7 +406,7 @@ class _AppleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _ProviderButton(
     label: 'Continue with Apple',
-    glyph: const Icon(Icons.apple, size: 22, color: NuvoColors.navy),
+    glyph: Icon(Icons.apple, size: 22, color: context.themeColors.ink),
     loading: loading,
     error: error,
     onPressed: onPressed,
@@ -445,7 +445,7 @@ class _LegalCopy extends StatelessWidget {
         'By continuing, you agree to our',
         textAlign: TextAlign.center,
         style: AppTextStyles.bodySmall.copyWith(
-          color: NuvoColors.muted,
+          color: context.themeColors.inkMuted,
           fontSize: 12,
         ),
       ),
@@ -453,15 +453,15 @@ class _LegalCopy extends StatelessWidget {
         alignment: WrapAlignment.center,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _link('Terms', 'https://getnuvo.net/terms'),
+          _link(context, 'Terms', 'https://getnuvo.net/terms'),
           Text(
             ' & ',
             style: AppTextStyles.bodySmall.copyWith(
-              color: NuvoColors.muted,
+              color: context.themeColors.inkMuted,
               fontSize: 12,
             ),
           ),
-          _link('Privacy Policy', 'https://getnuvo.net/privacy'),
+          _link(context, 'Privacy Policy', 'https://getnuvo.net/privacy'),
         ],
       ),
     ],
@@ -470,7 +470,7 @@ class _LegalCopy extends StatelessWidget {
   // Inline text links — GestureDetector, never TextButton: the app-level
   // textButtonTheme paints a filled, bordered, shadowed chip behind every
   // TextButton, which is what made the legal links render as mini pills.
-  Widget _link(String label, String url) => GestureDetector(
+  Widget _link(BuildContext context, String label, String url) => GestureDetector(
     behavior: HitTestBehavior.opaque,
     onTap: () => onOpen(url),
     child: Padding(
@@ -478,7 +478,7 @@ class _LegalCopy extends StatelessWidget {
       child: Text(
         label,
         style: AppTextStyles.bodySmall.copyWith(
-          color: NuvoColors.blue,
+          color: context.themeColors.accent,
           fontWeight: FontWeight.w700,
           fontSize: 12,
         ),

@@ -17,7 +17,9 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
+import 'package:nuvo/features/profile/application/activity_controller.dart';
 import 'package:nuvo/features/profile/application/progression_controller.dart';
+import 'package:nuvo/features/profile/presentation/widgets/activity_heatmap.dart';
 import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/data/progression_models.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
@@ -217,6 +219,9 @@ void main() {
             (ref) => AuthController(_FakeAuthRepo()),
           ),
           progressionApiProvider.overrideWithValue(_StubProgressionApi()),
+          profileActivityProvider.overrideWith(
+            (ref) async => const {'2026-01-05': 2, '2026-01-06': 1},
+          ),
           secureTokenStoreProvider.overrideWithValue(_FakeStore()),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -367,9 +372,77 @@ void main() {
         }
 
         // All sections still exist — scrollable, not lost.
+        await tester.drag(scrollable, Offset(0, -height));
+        await tester.pumpAndSettle();
         expect(find.text('Your Nuvo'), findsWidgets);
         expect(find.text('Settings'), findsWidgets);
       });
     });
   }
+
+  // Profile's first viewport: title, identity, level, achievements, record and
+  // the whole heat map including its Less/More key — and nothing of Your Nuvo.
+  for (final (name, width, height) in const [
+    ('390x844', 390.0, 844.0),
+    ('393x852', 393.0, 852.0),
+    ('430x932', 430.0, 932.0),
+  ]) {
+    testWidgets('Profile first viewport $name: heat map key visible, Your Nuvo '
+        'below the fold, scroll reveals it', (tester) async {
+      await pumpInShell(
+        tester,
+        Size(width, height),
+        '/profile',
+        const ProfileScreen(),
+      );
+      expect(tester.takeException(), isNull);
+      final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
+
+      expect(find.text('Profile'), findsWidgets);
+      expect(find.byType(ActivityHeatmap), findsOneWidget);
+      expect(find.text('More'), findsOneWidget);
+      expect(tester.getRect(find.text('More')).bottom, lessThanOrEqualTo(foldY));
+      expect(tester.getRect(find.text('Less')).top, greaterThan(0));
+      // The heat map card ends close to the dock — it fills the viewport.
+      final card = tester.getRect(find.byType(ActivityHeatmap));
+      expect(card.bottom, lessThanOrEqualTo(foldY));
+      expect(card.bottom, greaterThan(foldY - 40));
+      // No level pill under the name.
+      expect(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == '_IdentityCard',
+          ),
+          matching: find.textContaining('LEVEL', findRichText: true),
+        ),
+        findsNothing,
+      );
+
+      // Your Nuvo is not visible at rest: absent or at/below the dock fold.
+      final label = find.text('Your Nuvo');
+      if (label.evaluate().isNotEmpty) {
+        expect(tester.getRect(label).top, greaterThanOrEqualTo(foldY));
+      }
+
+      await tester.drag(find.byType(CustomScrollView), Offset(0, -height));
+      await tester.pumpAndSettle();
+      expect(label, findsOneWidget);
+      expect(tester.getRect(label).bottom, lessThanOrEqualTo(foldY));
+    });
+  }
+
+  testWidgets('Profile first viewport 320x568: scrolls, no overflow, key '
+      'still whole', (tester) async {
+    await pumpInShell(
+      tester,
+      const Size(320, 568),
+      '/profile',
+      const ProfileScreen(),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('More'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

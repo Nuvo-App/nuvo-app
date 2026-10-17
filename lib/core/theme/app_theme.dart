@@ -280,7 +280,49 @@ abstract final class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: chrome.page,
       canvasColor: chrome.page,
+      splashColor: chrome.accent.withValues(alpha: 0.10),
+      highlightColor: chrome.accent.withValues(alpha: 0.06),
+      hoverColor: chrome.accent.withValues(alpha: 0.06),
+      focusColor: chrome.accent.withValues(alpha: 0.12),
       extensions: const [NuvoSemanticColors.dark, NuvoThemeColors.dark],
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: chrome.accent,
+        selectionColor: chrome.accent.withValues(alpha: 0.30),
+        selectionHandleColor: chrome.accent,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? NuvoColors.white
+              : chrome.inkMuted,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? NuvoColors.blue
+              : chrome.track,
+        ),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? NuvoColors.blue
+              : chrome.border,
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? NuvoColors.blue
+              : Colors.transparent,
+        ),
+        checkColor: const WidgetStatePropertyAll(NuvoColors.white),
+        side: BorderSide(color: chrome.inkSubtle, width: 1.5),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? chrome.accent
+              : chrome.inkSubtle,
+        ),
+      ),
       textTheme: inkText,
       cardTheme: base.cardTheme.copyWith(
         color: chrome.surface,
@@ -292,7 +334,7 @@ abstract final class AppTheme {
       appBarTheme: base.appBarTheme.copyWith(
         foregroundColor: chrome.ink,
         titleTextStyle: AppTextStyles.titleLarge.copyWith(color: chrome.ink),
-        iconTheme: const IconThemeData(color: NuvoColors.darkInk),
+        iconTheme: IconThemeData(color: chrome.ink),
         systemOverlayStyle: overlayFor(Brightness.dark),
       ),
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
@@ -302,6 +344,13 @@ abstract final class AppTheme {
         helperStyle: AppTextStyles.bodySmall.copyWith(color: chrome.inkMuted),
         border: _inputBorder(chrome.border),
         enabledBorder: _inputBorder(chrome.border),
+        focusedBorder: _inputBorder(chrome.accent, width: 2),
+        errorBorder: _inputBorder(chrome.dangerText),
+        focusedErrorBorder: _inputBorder(chrome.dangerText, width: 2),
+        errorStyle: AppTextStyles.bodySmall.copyWith(color: chrome.dangerText),
+        floatingLabelStyle: AppTextStyles.labelMedium.copyWith(
+          color: chrome.accent,
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -311,7 +360,7 @@ abstract final class AppTheme {
           disabledForegroundColor: chrome.inkDim,
           padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
           textStyle: AppTextStyles.buttonLabel,
-          side: const BorderSide(color: NuvoColors.darkBorder, width: 2),
+          side: BorderSide(color: chrome.inkShadow, width: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NuvoRadii.button),
           ),
@@ -323,7 +372,7 @@ abstract final class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: chrome.ink,
           backgroundColor: chrome.surface,
-          side: BorderSide(color: chrome.ink, width: 2),
+          side: BorderSide(color: chrome.border, width: 2),
           padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
           textStyle: AppTextStyles.buttonLabel,
           shape: RoundedRectangleBorder(
@@ -335,7 +384,7 @@ abstract final class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: NuvoColors.blue,
+          foregroundColor: chrome.accent,
           backgroundColor: chrome.panel,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           textStyle: AppTextStyles.buttonLabel,
@@ -350,7 +399,11 @@ abstract final class AppTheme {
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: chrome.surface,
         disabledColor: chrome.panel,
+        selectedColor: chrome.panel,
         labelStyle: AppTextStyles.labelMedium.copyWith(color: chrome.inkMuted),
+        secondaryLabelStyle: AppTextStyles.labelMedium.copyWith(
+          color: chrome.accent,
+        ),
         side: const BorderSide(color: NuvoColors.darkBorder, width: 1.25),
       ),
       dividerTheme: const DividerThemeData(
@@ -359,25 +412,30 @@ abstract final class AppTheme {
         space: 1,
       ),
       sliderTheme: base.sliderTheme.copyWith(
+        activeTrackColor: chrome.accent,
+        thumbColor: chrome.accent,
         inactiveTrackColor: chrome.track,
         valueIndicatorColor: chrome.panel,
         valueIndicatorTextStyle: AppTextStyles.labelMedium.copyWith(
           color: chrome.ink,
         ),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: NuvoColors.blue,
-        linearTrackColor: NuvoColors.darkTrack,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: chrome.accent,
+        linearTrackColor: chrome.track,
       ),
       snackBarTheme: base.snackBarTheme.copyWith(
-        backgroundColor: chrome.ink,
-        contentTextStyle: AppTextStyles.bodyMedium.copyWith(
-          color: chrome.page,
+        backgroundColor: chrome.panel,
+        contentTextStyle: AppTextStyles.bodyMedium.copyWith(color: chrome.ink),
+        actionTextColor: chrome.accent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          side: BorderSide(color: chrome.border),
         ),
       ),
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: chrome.surface,
-        modalBackgroundColor: chrome.surface,
+        backgroundColor: chrome.panelLight,
+        modalBackgroundColor: chrome.panelLight,
         dragHandleColor: chrome.border,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -385,7 +443,7 @@ abstract final class AppTheme {
         ),
       ),
       dialogTheme: base.dialogTheme.copyWith(
-        backgroundColor: chrome.surface,
+        backgroundColor: chrome.panelLight,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           side: const BorderSide(color: NuvoColors.darkBorder),

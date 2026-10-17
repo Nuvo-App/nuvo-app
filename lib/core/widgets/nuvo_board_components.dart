@@ -307,7 +307,7 @@ class NuvoBoardLane extends StatelessWidget {
         : 48.0;
     final avatarOuterSize = avatarSize + 8;
     final minHeight = participant.isCurrentUser ? 128.0 : 108.0;
-    final activeColor = participant.isCurrentUser ? NuvoColors.blue : c.ink;
+    final activeColor = participant.isCurrentUser ? c.accent : c.ink;
     final ringColor = participant.isCurrentUser
         ? NuvoColors.blue
         : isLeader
@@ -647,7 +647,7 @@ class NuvoRaceRow extends StatelessWidget {
               '$progressPercent%',
               style: AppTextStyles.labelMedium.copyWith(
                 color: progressPercent >= 100
-                    ? NuvoColors.success
+                    ? c.successText
                     : c.inkMuted,
               ),
             ),

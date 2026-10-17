@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/widgets/nuvo_error_state.dart';
 import 'package:nuvo/core/widgets/pressable_scale.dart';
+import 'package:nuvo/core/widgets/nuvo_motion.dart';
 import 'package:nuvo/core/demo/presentation_demo.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -269,7 +270,7 @@ void main() {
     /// The selector is a fixed region: switching lenses may only change
     /// what's below it. Any tab-conditional widget above the tabs (a live
     /// card, a spacer, different padding) shows up here as a moved Y.
-    testWidgets('tab selector stays pixel-stable across all three tabs',
+    testWidgets('tab selector stays pixel-stable across both tabs',
         (tester) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(demo: true));
@@ -279,15 +280,13 @@ void main() {
           tester.getTopLeft(find.text(label)).dy;
       final peopleY = tabY('People');
       final activityY = tabY('Activity');
-      final racesY = tabY('Races');
 
-      for (final label in ['Activity', 'Races', 'People']) {
+      for (final label in ['Activity', 'People']) {
         await tester.tap(find.text(label));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
         expect(tabY('People'), peopleY);
         expect(tabY('Activity'), activityY);
-        expect(tabY('Races'), racesY);
       }
     });
 
@@ -297,6 +296,37 @@ void main() {
       await _settleDemo(tester);
       expect(find.text('For you'), findsNothing);
       expect(find.text('People'), findsOneWidget);
+    });
+  });
+
+  group('PassScreen activity item density', () {
+    /// Rendered height (at 390 wide) of the "just passed you" Activity item
+    /// before it was compacted. The compact item must be >= 30% smaller.
+    const oldPassedYouItemHeight = 193.0;
+
+    testWidgets('a "just passed you" item is at least 30% more compact',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_buildApp(
+        members: PresentationDemoData.crewMembers(),
+        races: PresentationDemoData.races('user-1'),
+        feed: PresentationDemoData.crewActivity('user-1'),
+      ));
+      await _settleDemo(tester);
+      await tester.tap(find.text('Activity'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final card = find.ancestor(
+        of: find.text('just passed you in Pushup Battle'),
+        matching: find.byType(NuvoPressable),
+      );
+      final height = tester.getSize(card.first).height;
+      expect(height, lessThanOrEqualTo(oldPassedYouItemHeight * 0.70));
+      // Still a real item: avatar + name + headline + score + actions.
+      expect(height, greaterThan(90));
+      expect(tester.takeException(), isNull);
     });
   });
 
@@ -320,20 +350,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('just passed you in Pushup Battle'), findsOneWidget);
-
-      // Races — the full lifecycle shows.
-      await tester.tap(find.text('Races'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('Happening now'), findsOneWidget);
-      expect(find.text('Up next'), findsOneWidget);
-      expect(find.text('Recent'), findsOneWidget);
-      expect(find.text('60 Second Squat Battle'), findsOneWidget);
+      expect(find.text('Races'), findsNothing);
     });
   });
 
-  /// The Crew lenses: People (who I race with + what we are racing now),
-  /// Activity (what happened) and Races (the crew's races across time).
+  /// The Crew lenses: People (who I race with + what we are racing now) and
+  /// Activity (what happened). There is no Races lens.
   group('PassScreen lenses', () {
     Future<void> openLens(WidgetTester tester, String label) async {
       await tester.tap(find.text(label));
@@ -352,13 +374,14 @@ void main() {
 
       expect(find.text('Racing with your crew'), findsOneWidget);
       expect(find.text('Pushup Battle'), findsWidgets);
-      // History and scheduling belong to the Races lens, not People.
+      // History and scheduling are not on the Crew page at all.
       expect(find.text('Recent'), findsNothing);
       expect(find.text('Up next'), findsNothing);
+      expect(find.text('Races'), findsNothing);
     });
 
-    testWidgets('a crew with only finished races says so on People and '
-        'shows the history on Races', (tester) async {
+    testWidgets('a crew with only finished races says so on People',
+        (tester) async {
       _tallViewport(tester);
       final finished = PresentationDemoData.races('user-1')
           .where((r) => r.status == 'completed')
@@ -374,25 +397,23 @@ void main() {
             'from Compete.'),
         findsOneWidget,
       );
-
-      await openLens(tester, 'Races');
-      expect(find.text('Recent'), findsOneWidget);
-      expect(find.textContaining('First To 30 Lunges'), findsWidgets);
+      expect(find.text('Races'), findsNothing);
     });
 
-    testWidgets('the Races lens survives a 320px viewport', (tester) async {
+    testWidgets('both lenses survive a 320px viewport', (tester) async {
       tester.view.physicalSize = const Size(320, 700);
       tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
       addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await tester.pumpWidget(_buildApp(
         members: PresentationDemoData.crewMembers(),
         races: PresentationDemoData.races('user-1'),
+        feed: PresentationDemoData.crewActivity('user-1'),
       ));
       await _settleDemo(tester);
       expect(tester.takeException(), isNull);
 
-      await openLens(tester, 'Races');
-      expect(tester.takeException(), isNull);
       await openLens(tester, 'Activity');
       expect(tester.takeException(), isNull);
       await openLens(tester, 'People');

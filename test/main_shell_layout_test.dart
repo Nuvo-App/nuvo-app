@@ -152,7 +152,7 @@ void main() {
           'iPhones (dock 58 + inset 34)',
     );
 
-    // The shared scroll contract reserves the dock, Verify's rise above its
+    // The shared scroll contract reserves the dock, the breathing strip above its
     // top edge, plus a small section gap — never a second dock's worth of
     // dead space.
     final context = tester.element(
@@ -163,7 +163,7 @@ void main() {
       clearance,
       NuvoBottomNav.navDockHeight +
           34 +
-          NuvoBottomNav.navVerifyRaise +
+          NuvoBottomNav.navTopBreath +
           NuvoBottomNav.navScrollClearance,
     );
     expect(

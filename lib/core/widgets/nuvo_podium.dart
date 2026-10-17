@@ -125,7 +125,7 @@ class _Place extends StatelessWidget {
                 bgColor: nuvoAvatarColorFor(e.avatarSeedId ?? e.name),
                 textColor: NuvoColors.white,
                 borderColor: me
-                    ? NuvoColors.blue
+                    ? context.themeColors.accent
                     : (place <= 3
                         ? _placeColor
                         : context.themeColors.border),
@@ -181,7 +181,7 @@ class _Place extends StatelessWidget {
           textAlign: TextAlign.center,
           style: AppTextStyles.raceRowMeta.copyWith(
             color: me
-                ? NuvoColors.blue
+                ? context.themeColors.accent
                 : (place <= 3
                     ? _placeColor
                     : context.themeColors.inkMuted),

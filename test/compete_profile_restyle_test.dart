@@ -674,6 +674,16 @@ void main() {
           'profile-$name',
         );
         expect(find.text('Profile'), findsOneWidget);
+        // The level lives on the plate only — no pill under the name.
+        expect(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) => w.runtimeType.toString() == '_IdentityCard',
+            ),
+            matching: find.textContaining('LEVEL', findRichText: true),
+          ),
+          findsNothing,
+        );
         // Level is the hero — big number beside the LEVEL label.
         expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
@@ -703,12 +713,41 @@ void main() {
           find.textContaining('140 XP to Level 9', findRichText: true),
         );
         await tester.pumpAndSettle();
-        expect(find.text('XP comes from racing'), findsOneWidget);
+        expect(find.text('Earn XP by racing — every level unlocks something new.'), findsOneWidget);
+        // Four tinted pills carry the four server XP amounts.
+        for (final amount in ['+10', '+25', '+15', '+5']) {
+          expect(find.text(amount), findsOneWidget);
+        }
+        expect(find.text('Next unlock'), findsOneWidget);
+        expect(find.text('Level 8'), findsOneWidget);
         expect(
           find.textContaining('Clap reaction', findRichText: true),
           findsOneWidget,
         );
         expect(find.text('See achievements'), findsOneWidget);
+      });
+    }
+
+    for (final dark in [false, true]) {
+      testWidgets('level sheet at 320x568 text 1.4 dark=$dark', (tester) async {
+        _useViewport(tester, 320, 568);
+        await _pump(
+          tester,
+          _app(
+            dark: dark,
+            textScale: 1.4,
+            races: _manyRaces,
+            home: const ProfileScreen(),
+          ),
+          'profile-sheet-$dark',
+        );
+        await tester.tap(
+          find.textContaining('140 XP to Level 9', findRichText: true),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.text('+10'), findsOneWidget);
+        expect(find.text('+5'), findsOneWidget);
       });
     }
 

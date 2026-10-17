@@ -983,7 +983,9 @@ class _YourProgressCard extends StatelessWidget {
         : chaseCopy;
     final done = remaining <= 0;
     // Green while you hold the lead or have crossed the line, blue otherwise.
-    final accent = (isLeading || done) ? NuvoColors.success : NuvoColors.blue;
+    final accent = (isLeading || done)
+        ? context.themeColors.successText
+        : context.themeColors.accent;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -1025,7 +1027,7 @@ class _YourProgressCard extends StatelessWidget {
                 rankLabel,
                 style: AppTextStyles.statLarge(
                   context.rs(26),
-                  color: isLeading ? NuvoColors.gold : context.themeColors.ink,
+                  color: isLeading ? context.themeColors.goldText : context.themeColors.ink,
                 ),
               ),
             ],
@@ -1225,7 +1227,7 @@ class _RaceSummaryCard extends StatelessWidget {
           Text(
             isComplete ? 'FINISHED' : 'ON-GOING',
             style: AppTextStyles.labelSmall.copyWith(
-              color: isComplete ? NuvoColors.success : NuvoColors.actionBlue,
+              color: isComplete ? context.themeColors.successText : context.themeColors.accent,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.1,
             ),
@@ -1251,7 +1253,7 @@ class _RaceSummaryCard extends StatelessWidget {
                     score,
                     style: AppTextStyles.headlineMedium.copyWith(
                       color: isComplete
-                          ? NuvoColors.success
+                          ? context.themeColors.successText
                           : NuvoColors.actionBlue,
                       fontWeight: FontWeight.w900,
                     ),
@@ -1316,7 +1318,9 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: NuvoColors.actionBlue.withValues(alpha: 0.09),
+        color: NuvoColors.actionBlue.withValues(
+          alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.09,
+        ),
         borderRadius: BorderRadius.circular(NuvoRadii.pill),
         border: Border.all(
           color: NuvoColors.actionBlue.withValues(alpha: 0.22),
@@ -1325,7 +1329,7 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.actionBlue,
+          color: context.themeColors.accent,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -1486,7 +1490,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
             bgColor: nuvoAvatarColorFor(participant.userId),
             textColor: NuvoColors.white,
             borderColor:
-                isCurrentUser ? NuvoColors.blue : context.themeColors.border,
+                isCurrentUser ? context.themeColors.accent : context.themeColors.border,
             borderWidth: isCurrentUser ? 2 : 1.5,
           ),
           const SizedBox(width: 12),
@@ -1517,7 +1521,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
           Text(
             raceProgressLabel(race, participant),
             style: AppTextStyles.raceRowMeta.copyWith(
-              color: isCurrentUser ? NuvoColors.blue : context.themeColors.inkMuted,
+              color: isCurrentUser ? context.themeColors.accent : context.themeColors.inkMuted,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1827,9 +1831,11 @@ class _CheckpointRow extends StatelessWidget {
                     c.marker,
                     style: AppTextStyles.number(
                       12,
-                      color: c.state == _NodeState.todo
-                          ? context.themeColors.inkDim
-                          : Colors.white,
+                      color: switch (c.state) {
+                        _NodeState.todo => context.themeColors.inkMuted,
+                        _NodeState.current => context.themeColors.page,
+                        _NodeState.done => Colors.white,
+                      },
                     ),
                   ),
                 ),
@@ -1917,15 +1923,17 @@ class _CompleteCallout extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: NuvoColors.success.withValues(alpha: 0.08),
+        color: NuvoColors.success.withValues(
+          alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.08,
+        ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: NuvoColors.success.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          const NuvoIcon(
+          NuvoIcon(
             NuvoIconType.checkCircle,
-            color: NuvoColors.success,
+            color: context.themeColors.successText,
             size: 20,
           ),
           const SizedBox(width: 10),
@@ -2051,11 +2059,25 @@ class _FinalStandingRow extends StatelessWidget {
       3 => NuvoColors.bronze,
       _ => NuvoColors.actionBlue,
     };
-    final selectedFill = isCurrentUser ? rankColor : null;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Dark: gold/silver/bronze fills are too light for white text and glare
+    // on a dark card, so the current user's row becomes a soft tint with
+    // normal ink text; rank text uses lifted tones.
+    final textRank = dark
+        ? (standing.rank == 3
+              ? Color.lerp(rankColor, Colors.white, 0.3)!
+              : standing.rank > 3
+              ? context.themeColors.accent
+              : rankColor)
+        : rankColor;
+    final selectedFill = isCurrentUser
+        ? (dark ? rankColor.withValues(alpha: 0.22) : rankColor)
+        : null;
+    final onFill = dark ? context.themeColors.ink : NuvoColors.white;
     final outlineColor = standing.rank <= 3
         ? rankColor
         : isCurrentUser
-        ? NuvoColors.actionBlue
+        ? context.themeColors.accent
         : null;
     final row = Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
@@ -2074,7 +2096,7 @@ class _FinalStandingRow extends StatelessWidget {
             child: Text(
               rankLabel,
               style: AppTextStyles.labelLarge.copyWith(
-                color: selectedFill != null ? NuvoColors.white : rankColor,
+                color: selectedFill != null && !dark ? onFill : textRank,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -2086,7 +2108,7 @@ class _FinalStandingRow extends StatelessWidget {
               style: AppTextStyles.bodyMedium.copyWith(
                 fontWeight: isCurrentUser ? FontWeight.w700 : FontWeight.w500,
                 color: selectedFill != null
-                    ? NuvoColors.white
+                    ? onFill
                     : context.themeColors.ink,
               ),
               maxLines: 1,
@@ -2098,8 +2120,8 @@ class _FinalStandingRow extends StatelessWidget {
               'Lv. ${standing.level}',
               style: AppTextStyles.labelSmall.copyWith(
                 color: selectedFill != null
-                    ? NuvoColors.white
-                    : context.themeColors.inkDim,
+                    ? onFill
+                    : context.themeColors.inkMuted,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -2109,7 +2131,7 @@ class _FinalStandingRow extends StatelessWidget {
             Text(
               raceScoreLabel(race, standing.scoreValue),
               style: AppTextStyles.labelMedium.copyWith(
-                color: selectedFill != null ? NuvoColors.white : rankColor,
+                color: selectedFill != null && !dark ? onFill : textRank,
                 fontWeight: FontWeight.w700,
               ),
             ),

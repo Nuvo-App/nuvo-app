@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -557,13 +558,13 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: context.tintOf(color),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           label,
           style: AppTextStyles.labelMedium.copyWith(
-            color: color,
+            color: context.onTintOf(color),
             fontWeight: FontWeight.w800,
           ),
         ),

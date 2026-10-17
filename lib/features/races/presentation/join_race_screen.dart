@@ -74,7 +74,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child:
             ListView(
@@ -95,7 +95,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                     Text(
                       'Have a crew invite code? Enter it below to join the race.',
                       style: AppTextStyles.bodyLarge.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -115,13 +115,13 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                         decoration: BoxDecoration(
                           color: context.semanticColors.danger.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: NuvoColors.dangerBorder),
+                          border: Border.all(color: context.semanticColors.danger.border),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.info_outline_rounded,
-                              color: NuvoColors.danger,
+                              color: context.themeColors.dangerText,
                               size: 18,
                             ),
                             const SizedBox(width: 8),

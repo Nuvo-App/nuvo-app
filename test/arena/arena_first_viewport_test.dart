@@ -3,19 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
+import 'package:nuvo/core/theme/app_colors.dart';
 import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
 
-/// The intended Arena first composition:
-///   header → YOUR NEXT MOVE → [big card] → actions → LEADERBOARD → (fold)
-/// RECENT ACTIVITY must begin below the first viewport on normal phones, and
-/// the card must gain vertical authority without shrinking the chunky pieces.
+/// The Arena first composition:
+///   header -> Your next move -> [card through its N / M reps progress row]
+///   -> actions -> (fold). The standings (Leaderboard) begin BELOW the visible
+/// area and only appear on scroll; Recent activity no longer exists here.
 void main() {
   Future<void> pumpArena(
     WidgetTester tester,
     Size size, {
     double bottomInset = 34,
+    double textScale = 1.0,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -41,111 +43,98 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+      ProviderScope(
+        child: MaterialApp.router(
+          routerConfig: router,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(textScale),
+            ),
+            child: child!,
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
   }
 
-  // Representative supported phones (logical px, dpr 1).
   const sizes = <String, Size>{
+    'compact (320x568)': Size(320, 568),
     'small iPhone (SE)': Size(375, 667),
-    'standard iPhone': Size(390, 844),
-    'Pro Max iPhone': Size(430, 932),
+    'standard (390x844)': Size(390, 844),
+    'iPhone 393x852': Size(393, 852),
+    'Pro Max (430x932)': Size(430, 932),
     'tall Android': Size(412, 915),
   };
 
   for (final entry in sizes.entries) {
-    testWidgets('${entry.key}: first composition ends on the leaderboard', (
-      tester,
-    ) async {
+    testWidgets('${entry.key}: standings start below the fold; hero is whole',
+        (tester) async {
       final size = entry.value;
-      await pumpArena(tester, size);
-
+      final compact = size.width < 340;
+      await pumpArena(tester, size, bottomInset: compact ? 0 : 34);
       expect(tester.takeException(), isNull);
-      // Sentence case, not all-caps — matches every other screen's section
-      // titles (Compete/Verify/Crew all use plain sectionTitle already).
+
       expect(find.text('Your next move'), findsOneWidget);
-      expect(find.text('Leaderboard'), findsOneWidget);
+      expect(find.text('Recent activity'), findsNothing);
 
-      // The fold is the connected nav bar's top edge — the body extends to
-      // the screen's bottom edge under the bar (extendBody: true), so
-      // anything below the bar's top is out of the first composition.
       final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-
-      // Leaderboard label is within the first composition. On tall phones
-      // it must sit fully above the bar; on short phones it may peek under
-      // the frosted bar at the bottom edge (the old floating dock clipped
-      // the body even higher, so this is strictly more visible than before).
-      final lbY = tester.getTopLeft(find.text('Leaderboard')).dy;
-      if (size.height >= 800) {
+      // Standings label is built lazily; if it exists it must be at/below the
+      // fold. (SliverList builds only what is near the viewport.)
+      final lb = find.text('Leaderboard');
+      if (lb.evaluate().isNotEmpty) {
         expect(
-          lbY,
-          lessThan(foldY),
-          reason: '${entry.key}: leaderboard fully above the nav bar',
-        );
-      } else {
-        expect(
-          lbY,
-          lessThan(size.height),
-          reason: '${entry.key}: leaderboard renders in the first '
-              'composition, possibly peeking under the frosted bar',
+          tester.getTopLeft(lb).dy,
+          greaterThanOrEqualTo(foldY),
+          reason: '${entry.key}: standings label starts at/below the dock',
         );
       }
 
-      // The card carries real height — not a thin info strip. (Deliberately
-      // tighter than it used to be: the hero is now sized to its actual
-      // measured content, not a generous width-based guess, so this floor
-      // is calibrated to the new compact-but-substantial card, not the old
-      // poster-sized one.)
+      // The hero's progress row ("65" + "/ 100 reps") is fully above the dock
+      // on every phone (the 320x568 hero is taller than its slot by design
+      // and may scroll, so only its top is asserted there).
+      final progressFinder = find.textContaining('reps');
+      expect(progressFinder, findsWidgets);
+      expect(tester.getTopLeft(progressFinder.first).dy, lessThan(foldY));
+      if (!compact) {
+        expect(
+          tester.getBottomLeft(progressFinder.first).dy,
+          lessThanOrEqualTo(foldY),
+          reason: '${entry.key}: hero progress row above the dock',
+        );
+      }
+
       final cardBox = tester.getSize(find.byType(PageView).first);
-      if (size.height >= 800) {
-        expect(
-          cardBox.height,
-          greaterThan(250),
-          reason: '${entry.key}: card has vertical authority',
-        );
-      }
-
-      // Chunky action buttons survive (tightened, not shrunk to fit).
+      expect(cardBox.height, greaterThan(250));
       final submitBtn = tester.widget<NuvoPrimaryButton>(
         find.byType(NuvoPrimaryButton),
       );
-      expect(
-        submitBtn.height,
-        greaterThanOrEqualTo(48),
-        reason: '${entry.key}: submit stays comfortably tappable',
-      );
+      expect(submitBtn.height, greaterThanOrEqualTo(48));
 
-      // RECENT ACTIVITY is ordinary scroll content now — no artificial
-      // spacer parks it below the fold. What must hold: once reached, the
-      // section ends fully above the floating dock's top edge, i.e. nothing
-      // interactive lives under the nav.
-      await tester.drag(
-        find.byType(CustomScrollView),
-        const Offset(0, -900),
-      );
+      // Scrolling reveals the standings.
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
       await tester.pumpAndSettle();
-      final raFinder = find.text('Recent activity');
-      if (raFinder.evaluate().isNotEmpty) {
-        expect(
-          tester.getBottomLeft(raFinder).dy,
-          lessThanOrEqualTo(foldY),
-          reason:
-              '${entry.key}: reached activity content clears the dock',
-        );
-      }
+      expect(find.text('Leaderboard'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Leaderboard')).dy,
+        lessThan(foldY),
+        reason: '${entry.key}: standings reachable by scrolling',
+      );
     });
   }
 
+  testWidgets('320x568 at 1.4 text scale renders without overflow', (
+    tester,
+  ) async {
+    await pumpArena(tester, const Size(320, 568), bottomInset: 0, textScale: 1.4);
+    expect(tester.takeException(), isNull);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('card height is content-driven: same density tier gives the same '
       'height regardless of raw width', (tester) async {
-    // The hero's height is no longer a function of screen width at all — it
-    // is measured from the card's actual content, then only adjusted by
-    // vertical DENSITY tier (compact/regular/large, from usable height).
-    // These two fixtures stay in the regular density tier while their raw
-    // widths differ, so they should produce the same height — that's the fix,
-    // not a regression: the old width-proportional formula gave a bigger card
-    // on a wider phone even when nothing about the content needed more room.
     await pumpArena(tester, const Size(390, 844));
     final hStandard = tester.getSize(find.byType(PageView).first).height;
     await pumpArena(tester, const Size(430, 850));
@@ -154,11 +143,8 @@ void main() {
   });
 
   testWidgets(
-    'card height grows only when the density tier actually changes (compact → large)',
+    'card height grows only when the density tier actually changes (compact -> large)',
     (tester) async {
-      // A genuinely short viewport (compact density) vs a genuinely tall one
-      // (large density) — this is where height should differ, not raw width
-      // within the same tier (see the test above).
       await pumpArena(tester, const Size(320, 568), bottomInset: 0);
       final hCompact = tester.getSize(find.byType(PageView).first).height;
       await pumpArena(tester, const Size(430, 980), bottomInset: 0);
@@ -166,4 +152,29 @@ void main() {
       expect(hLarge, greaterThan(hCompact));
     },
   );
+
+  group('dark-mode hero surface', () {
+    double lum(Color c) => c.computeLuminance();
+    double contrast(Color a, Color b) {
+      final l1 = lum(a), l2 = lum(b);
+      final hi = l1 > l2 ? l1 : l2, lo = l1 > l2 ? l2 : l1;
+      return (hi + 0.05) / (lo + 0.05);
+    }
+
+    test('dark hero is lighter than the old surface; light unchanged', () {
+      final dark = arenaHeroSurface(Brightness.dark, NuvoColors.darkSurface);
+      expect(dark, isNot(NuvoColors.darkSurface));
+      expect(lum(dark), greaterThan(lum(NuvoColors.darkSurface)));
+      expect(
+        arenaHeroSurface(Brightness.light, NuvoColors.surface),
+        NuvoColors.surface,
+      );
+    });
+
+    test('text on the dark hero keeps >= 4.5:1', () {
+      final dark = arenaHeroSurface(Brightness.dark, NuvoColors.darkSurface);
+      expect(contrast(NuvoColors.darkInk, dark), greaterThanOrEqualTo(4.5));
+      expect(contrast(NuvoColors.darkInkMuted, dark), greaterThanOrEqualTo(4.5));
+    });
+  });
 }

@@ -365,7 +365,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
               Text(
                 _error!,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.danger,
+                  color: context.themeColors.dangerText,
                 ),
               ),
               const SizedBox(height: 12),
@@ -521,10 +521,12 @@ class _SettingsAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleColor = destructive ? NuvoColors.danger : context.themeColors.ink;
-    final iconColor = destructive ? NuvoColors.danger : context.themeColors.ink;
+    final titleColor = destructive
+        ? context.semanticColors.danger.on
+        : context.themeColors.ink;
+    final iconColor = titleColor;
     final iconBackground = destructive
-        ? NuvoColors.dangerSurface
+        ? context.semanticColors.danger.surface
         : context.themeColors.panelLight;
     return Semantics(
       button: true,
@@ -569,9 +571,9 @@ class _SettingsAction extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
-                color: NuvoColors.paleSlate,
+                color: context.themeColors.inkSubtle,
               ),
             ],
           ),

@@ -530,7 +530,7 @@ class _EditSheetOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final color = isDestructive ? NuvoColors.danger : c.ink;
+    final color = isDestructive ? context.themeColors.dangerText : c.ink;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,

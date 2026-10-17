@@ -19,11 +19,11 @@ void main() {
 
     expect(find.text('Arena'), findsOneWidget);
     expect(find.text('Compete'), findsOneWidget);
-    expect(find.text('Verify'), findsOneWidget);
+    expect(find.text('Verify'), findsNothing);
     expect(find.text('Crew'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
 
-    await tester.tap(find.text('Verify'));
+    await tester.tap(find.text('Crew'));
     expect(selected, 2);
   });
 

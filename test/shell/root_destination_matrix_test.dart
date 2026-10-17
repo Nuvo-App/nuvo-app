@@ -12,9 +12,8 @@
 // Canonical mapping under test:
 //   0 Arena   /arena    → ArenaScreen
 //   1 Compete /compete  → CompeteScreen
-//   2 Verify  /move     → MoveScreen
-//   3 Crew    /pass     → PassScreen
-//   4 Profile /profile  → ProfileScreen
+//   2 Crew    /pass     → PassScreen
+//   3 Profile /profile  → ProfileScreen
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -37,7 +36,6 @@ import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
 import 'package:nuvo/features/crew/application/crew_controller.dart';
 import 'package:nuvo/features/crew/data/crew_api.dart';
 import 'package:nuvo/features/crew/data/crew_repository.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/notifications/application/notification_controller.dart';
 import 'package:nuvo/features/notifications/data/notification_models.dart';
 import 'package:nuvo/features/notifications/data/notification_repository.dart';
@@ -221,7 +219,6 @@ Future<_App> _pumpRealApp(
 final _matrix = <String, (Type screen, String path)>{
   'Arena': (ArenaScreen, '/arena'),
   'Compete': (CompeteScreen, '/compete'),
-  'Verify': (MoveScreen, '/move'),
   'Crew': (PassScreen, '/pass'),
   'Profile': (ProfileScreen, '/profile'),
 };
@@ -303,7 +300,7 @@ void main() {
     tester,
   ) async {
     final app = await _pumpRealApp(tester);
-    for (final label in ['Crew', 'Compete', 'Profile', 'Verify', 'Arena']) {
+    for (final label in ['Crew', 'Compete', 'Profile', 'Arena']) {
       await _tapNav(tester, label);
       _expectDestination(app, tester, label);
     }
@@ -330,7 +327,7 @@ void main() {
     // goBranch(navIndex) land on the wrong screen while every label-level
     // test stays green. Assert the observable contract, not the structure.
     final app = await _pumpRealApp(tester);
-    const taps = ['Compete', 'Verify', 'Crew', 'Arena', 'Profile'];
+    const taps = ['Compete', 'Crew', 'Arena', 'Profile'];
     for (final label in taps) {
       await _tapNav(tester, label);
       _expectDestination(app, tester, label);

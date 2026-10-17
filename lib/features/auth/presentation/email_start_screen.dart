@@ -186,7 +186,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                         ? 'Use your reviewer account password.'
                         : "We'll email you a sign-in code."),
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: _error == null ? NuvoColors.muted : NuvoColors.danger,
+                  color: _error == null ? context.themeColors.inkMuted : context.themeColors.dangerText,
                 ),
               ),
             ),
@@ -213,7 +213,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -241,7 +241,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                             Text(
                               "We'll send a sign-in code for your Nuvo race pass.",
                               style: AppTextStyles.bodyLarge.copyWith(
-                                color: NuvoColors.muted,
+                                color: context.themeColors.inkMuted,
                               ),
                             ),
                             const SizedBox(height: 30),

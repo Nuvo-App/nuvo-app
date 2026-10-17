@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../social/presentation/theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_back_header.dart';
@@ -33,15 +35,23 @@ void _leave(BuildContext context) {
   }
 }
 
+/// NuvoPage does not inset its topBar for the status bar / Dynamic Island, so
+/// the header owns the top safe area itself.
 Widget _topBar(BuildContext context, String title, {Widget? trailing}) =>
-    Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
-      child: NuvoBackHeader(
-        title: title,
-        onBack: () => _leave(context),
-        trailing: trailing,
+    SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            NuvoSpacing.sm, NuvoSpacing.xs, NuvoSpacing.lg, NuvoSpacing.xs),
+        child: NuvoBackHeader(
+          title: title,
+          onBack: () => _leave(context),
+          trailing: trailing,
+        ),
       ),
     );
+
+const double _kSide = NuvoSpacing.lg;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /crews — the crews I'm in
@@ -98,23 +108,30 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
     final groups = squads.groups;
     final error = squads.error;
     final Widget body;
+    Widget? bottomBar;
     if (groups == null && error != null) {
       body = NuvoErrorState(message: error, onRetry: _load);
     } else if (groups == null) {
       body = const Center(child: NuvoLoadingIndicator());
     } else if (groups.isEmpty) {
-      body = Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        child: NuvoEmptyState(
-          icon: Icons.groups_rounded,
-          title: 'Race with a crew',
-          body:
-              'Start a crew, share the code, and every race you bring to it '
-              'lands on one leaderboard.',
-          ctaLabel: 'Start a crew',
-          onCta: _start,
-          secondaryLabel: 'Join with a code',
-          onSecondary: _join,
+      body = LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: box.maxHeight),
+            child: Center(
+              child: NuvoEmptyState(
+                icon: Icons.groups_rounded,
+                title: 'Race with a crew',
+                body: 'Start a crew, share the code, and every race you '
+                    'bring to it lands on one leaderboard.',
+                ctaLabel: 'Start a crew',
+                onCta: _start,
+                secondaryLabel: 'Join with a code',
+                onSecondary: _join,
+                align: TextAlign.center,
+              ),
+            ),
+          ),
         ),
       );
     } else {
@@ -122,28 +139,96 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          padding: const EdgeInsets.fromLTRB(_kSide, NuvoSpacing.md, _kSide, 24),
           children: [
             for (final g in groups) _GroupCard(group: g),
-            const SizedBox(height: 8),
-            NuvoPrimaryButton(
-              label: 'Start a crew',
-              icon: Icons.add_rounded,
-              expand: true,
-              onPressed: _start,
-            ),
-            const SizedBox(height: 10),
-            NuvoOutlineButton(
-              label: 'Join with a code',
-              icon: Icons.login_rounded,
-              expand: true,
-              onPressed: _join,
-            ),
           ],
         ),
       );
+      bottomBar = _ActionBar(onStart: _start, onJoin: _join);
     }
-    return NuvoPage(topBar: _topBar(context, 'Crews'), child: body);
+    return NuvoPage(
+      topBar: _topBar(context, 'Crews'),
+      bottomBar: bottomBar,
+      child: body,
+    );
+  }
+}
+
+/// Thumb-reach actions pinned under the crew list, inside the bottom safe area.
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({required this.onStart, required this.onJoin});
+  final VoidCallback onStart;
+  final VoidCallback onJoin;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final stacked = MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.15;
+    final start = NuvoPrimaryButton(
+      label: 'Start a crew',
+      icon: Icons.add_rounded,
+      expand: true,
+      onPressed: onStart,
+    );
+    final join = NuvoOutlineButton(
+      label: 'Join with a code',
+      icon: Icons.login_rounded,
+      expand: true,
+      onPressed: onJoin,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: c.page,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              _kSide, NuvoSpacing.md, _kSide, NuvoSpacing.md),
+          child: stacked
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [start, const SizedBox(height: 8), join],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: start),
+                    const SizedBox(width: 10),
+                    Expanded(child: join),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small crew-code pill used on list cards and the detail share card.
+class _CodeChip extends StatelessWidget {
+  const _CodeChip({required this.code});
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    if (code.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.panel,
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        border: Border.all(color: c.border),
+      ),
+      child: Text(
+        code,
+        maxLines: 1,
+        style: AppTextStyles.labelMedium
+            .copyWith(color: c.inkMuted, letterSpacing: 1.2),
+      ),
+    );
   }
 }
 
@@ -160,30 +245,32 @@ class _GroupCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Semantics(
         button: true,
-        label: '${group.name}, $people, $races',
+        label: '${group.name}, $people, $races, code ${group.joinCode}',
+        excludeSemantics: true,
         child: Material(
           color: c.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(NuvoRadii.sm),
           child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(NuvoRadii.sm),
             onTap: () => context.push('/crews/${group.id}'),
             child: Container(
-              padding: const EdgeInsets.all(14),
+              constraints: const BoxConstraints(minHeight: 64),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: c.border, width: 1.5),
+                borderRadius: BorderRadius.circular(NuvoRadii.sm),
+                border: Border.all(color: c.border),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: c.panel,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.groups_rounded,
-                        color: NuvoColors.blue),
+                    child: Icon(Icons.groups_rounded,
+                        size: 22, color: context.blueInk),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -197,11 +284,19 @@ class _GroupCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$people · $races',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: c.inkMuted),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              '$people · $races',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: c.inkMuted),
+                            ),
+                            _CodeChip(code: group.joinCode),
+                          ],
                         ),
                       ],
                     ),
@@ -490,30 +585,43 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          padding: const EdgeInsets.fromLTRB(_kSide, NuvoSpacing.md, _kSide, 32),
           children: [
             // Leaderboard first — it is the point of the crew.
-            Text('Crew leaderboard',
-                style: AppTextStyles.titleLarge.copyWith(color: c.ink)),
-            const SizedBox(height: 2),
-            Text(
-              '5 · 3 · 2 points for 1st, 2nd, 3rd in each race. 1 for any proof.',
-              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+            Row(
+              children: [
+                Text('Leaderboard',
+                    style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
+                const SizedBox(width: NuvoSpacing.sm),
+                Expanded(
+                  child: Text('5 · 3 · 2 pts, 1 per proof',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style:
+                          AppTextStyles.bodySmall.copyWith(color: c.inkMuted)),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: NuvoSpacing.md),
             if (detail.races.isEmpty)
               const _InlineNote(
                 icon: Icons.flag_outlined,
-                text: 'No races yet. Bring a race to the crew to start '
-                    'the leaderboard.',
+                text: 'No races yet. Bring a race to start the leaderboard.',
               )
             else if (detail.standings.every((s) => s.points == 0))
               const _InlineNote(
                 icon: Icons.bolt_rounded,
                 text: 'No proof yet. The first proof takes the lead.',
               ),
-            for (final s in detail.standings) _StandingRow(standing: s),
-            const SizedBox(height: 16),
+            if (_showPodium(detail.standings)) ...[
+              _Podium(standings: detail.standings.take(3).toList()),
+              const SizedBox(height: NuvoSpacing.sm),
+              for (final s in detail.standings.skip(3))
+                _StandingRow(standing: s),
+            ] else
+              for (final s in detail.standings) _StandingRow(standing: s),
+            const SizedBox(height: NuvoSpacing.sm),
             NuvoPrimaryButton(
               label: 'Bring a race to the crew',
               icon: Icons.flag_rounded,
@@ -525,15 +633,15 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
               const SizedBox(height: 10),
               Text(_actionError!,
                   style: AppTextStyles.bodyMedium
-                      .copyWith(color: NuvoColors.danger)),
+                      .copyWith(color: context.dangerInk)),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: NuvoSpacing.lg),
             _CodeCard(group: detail.group),
             if (detail.races.isNotEmpty) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: NuvoSpacing.xxl),
               Text('Crew races',
-                  style: AppTextStyles.titleLarge.copyWith(color: c.ink)),
-              const SizedBox(height: 8),
+                  style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
+              const SizedBox(height: NuvoSpacing.xs),
               for (final r in detail.races) _RaceRow(race: r),
             ],
           ],
@@ -541,6 +649,9 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       ),
     );
   }
+
+  static bool _showPodium(List<CrewGroupStanding> s) =>
+      s.length >= 3 && s.any((e) => e.points > 0);
 }
 
 class _InlineNote extends StatelessWidget {
@@ -576,11 +687,12 @@ class _CodeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
       decoration: BoxDecoration(
         color: c.panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border, width: 1.5),
+        borderRadius: BorderRadius.circular(NuvoRadii.sm),
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
@@ -589,16 +701,14 @@ class _CodeCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Crew code',
-                    style: AppTextStyles.labelMedium.copyWith(color: c.inkMuted)),
-                const SizedBox(height: 2),
+                    style:
+                        AppTextStyles.labelMedium.copyWith(color: c.inkMuted)),
                 Text(
                   group.joinCode,
-                  style: AppTextStyles.headlineMedium
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleLarge
                       .copyWith(color: c.ink, letterSpacing: 3),
-                ),
-                Text(
-                  '${group.memberCount} in crew',
-                  style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
                 ),
               ],
             ),
@@ -627,21 +737,103 @@ class _CodeCard extends StatelessWidget {
   }
 }
 
-class _StandingRow extends StatelessWidget {
-  const _StandingRow({required this.standing});
-  final CrewGroupStanding standing;
+Color? _medalFor(int rank) => switch (rank) {
+      1 => NuvoColors.sunshine,
+      2 => const Color(0xFFB8C2D6),
+      3 => NuvoColors.orange,
+      _ => null,
+    };
 
-  Color? _medal() => switch (standing.rank) {
-        1 => NuvoColors.sunshine,
-        2 => const Color(0xFFB8C2D6),
-        3 => NuvoColors.orange,
-        _ => null,
-      };
+/// Top three as a podium: 2nd | 1st | 3rd, the leader on the tallest step.
+class _Podium extends StatelessWidget {
+  const _Podium({required this.standings});
+  final List<CrewGroupStanding> standings;
+
+  @override
+  Widget build(BuildContext context) {
+    final byRank = [standings[1], standings[0], standings[2]];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: NuvoSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final s in byRank) Expanded(child: _PodiumStep(standing: s)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PodiumStep extends StatelessWidget {
+  const _PodiumStep({required this.standing});
+  final CrewGroupStanding standing;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final medal = standing.points > 0 ? _medal() : null;
+    final medal = standing.points > 0 ? _medalFor(standing.rank) : null;
+    final first = standing.rank == 1;
+    final height = switch (standing.rank) { 1 => 64.0, 2 => 48.0, _ => 40.0 };
+    return Semantics(
+      label: 'Rank ${standing.rank}, ${standing.displayName}, '
+          '${standing.points} points',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            NuvoAvatar(
+              initials: standing.initials,
+              size: first ? NuvoAvatarSizes.lg : NuvoAvatarSizes.md,
+              photoUrl: standing.profilePhotoUrl,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              standing.isYou ? 'You' : standing.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.labelLarge.copyWith(color: c.ink),
+            ),
+            Text(
+              '${standing.points} pts',
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              height: height,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: medal ?? c.panel,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(10)),
+                border: standing.isYou
+                    ? Border.all(color: NuvoColors.blue, width: 1.5)
+                    : null,
+              ),
+              child: Text(
+                '${standing.rank}',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: medal != null ? NuvoColors.navy : c.inkMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StandingRow extends StatelessWidget {
+  const _StandingRow({required this.standing});
+  final CrewGroupStanding standing;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final medal = standing.points > 0 ? _medalFor(standing.rank) : null;
     final lead = standing.points > 0 && standing.rank == 1;
     final detail = standing.races == 0
         ? 'No proof yet'
@@ -652,7 +844,8 @@ class _StandingRow extends StatelessWidget {
           '${standing.points} points',
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: standing.isYou ? c.panel : c.surface,
           borderRadius: BorderRadius.circular(12),
@@ -723,19 +916,36 @@ class _RaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final live = race.status == 'active';
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(race.title,
-          style: AppTextStyles.bodyLarge.copyWith(color: c.ink),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        live ? 'Racing now' : 'Finished',
-        style: AppTextStyles.bodySmall
-            .copyWith(color: live ? NuvoColors.success : c.inkMuted),
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: () => context.push('/race/${race.id}'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(race.title,
+                        style: AppTextStyles.bodyLarge.copyWith(color: c.ink),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      live ? 'Racing now' : 'Finished',
+                      style: AppTextStyles.bodySmall.copyWith(
+                          color: live ? context.successInk : c.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
+            ],
+          ),
+        ),
       ),
-      trailing: Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
-      onTap: () => context.push('/race/${race.id}'),
     );
   }
 }

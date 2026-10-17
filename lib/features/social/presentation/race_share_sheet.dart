@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -103,7 +104,7 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
     if (_error) {
       return Column(children: [
         Text("Couldn't create a share link.",
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.danger)),
+            style: AppTextStyles.bodyMedium.copyWith(color: context.dangerInk)),
         const SizedBox(height: 12),
         NuvoSecondaryButton(label: 'Try again', expand: true, onPressed: _mint),
       ]);
@@ -130,13 +131,13 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
               data: invite.url,
               version: QrVersions.auto,
               size: 208,
-              eyeStyle: QrEyeStyle(
+              eyeStyle: const QrEyeStyle(
                 eyeShape: QrEyeShape.square,
-                color: context.themeColors.ink,
+                color: NuvoColors.navy,
               ),
-              dataModuleStyle: QrDataModuleStyle(
+              dataModuleStyle: const QrDataModuleStyle(
                 dataModuleShape: QrDataModuleShape.square,
-                color: context.themeColors.ink,
+                color: NuvoColors.navy,
               ),
             ),
           ),

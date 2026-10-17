@@ -20,7 +20,6 @@ import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
-import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
@@ -164,7 +163,7 @@ class _ProfileMarker extends StatelessWidget {
   final router = GoRouter(
     initialLocation: '/home',
     routes: [
-      GoRoute(path: '/home', builder: (_, _) => home ?? const MoveScreen()),
+      GoRoute(path: '/home', builder: (_, _) => home ?? const SizedBox.shrink()),
       GoRoute(
         path: '/race/:id/proof',
         builder: (_, _) => const _ChooserMarker(),
@@ -191,53 +190,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('canonical verifier entry', () {
-    testWidgets(
-      'A: Verify Start on a camera race goes straight to the verifier',
-      (tester) async {
-        final built = _app(races: [_movementRace()]);
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        expect(find.byKey(const Key('verify-hero-cta')), findsOneWidget);
-        expect(find.text('PROOF-CHOOSER'), findsNothing);
-
-        await tester.tap(find.byKey(const Key('verify-hero-cta')));
-        await tester.pumpAndSettle();
-
-        expect(_path(built.router), '/race/race-move/proof/ai-motion');
-        expect(find.text('CANONICAL-VERIFIER'), findsOneWidget);
-        expect(find.text('PROOF-CHOOSER'), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'non-camera race still goes to the proof chooser, not the verifier',
-      (tester) async {
-        final built = _app(races: [_manualRace()]);
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.byKey(const Key('verify-hero-cta')));
-        await tester.pumpAndSettle();
-
-        expect(_path(built.router), '/race/race-manual/proof');
-        expect(find.text('PROOF-CHOOSER'), findsOneWidget);
-        expect(find.text('CANONICAL-VERIFIER'), findsNothing);
-      },
-    );
-
     testWidgets(
       'G: cancel returns to origin; restarting re-enters the verifier directly',
       (tester) async {

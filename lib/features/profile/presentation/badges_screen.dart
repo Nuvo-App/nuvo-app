@@ -32,6 +32,22 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
   Object? _error;
   bool _mutating = false;
   String _tab = 'All';
+  final Map<String, GlobalKey> _chipKeys = {};
+
+  void _selectTab(String tab) {
+    setState(() => _tab = tab);
+    // Bring the chosen chip fully on screen (it may be half off the edge).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _chipKeys[tab]?.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
 
   int get _slots =>
       ref.read(progressionControllerProvider).valueOrNull?.featuredSlots ?? 1;
@@ -155,7 +171,7 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
             Text(
               '$earned / ${all.length} earned · $featuredCount / $_slots featured',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
+                color: context.themeColors.accent,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -181,30 +197,36 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
               ),
             ),
             const SizedBox(height: NuvoSpacing.md),
-            SizedBox(
-              height: 34 * MediaQuery.textScalerOf(context).scale(1),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
+            // Natural-height row: the chips set its height, so it grows with
+            // text scale. No clip, so the selected chip's offset shadow and
+            // border are never shaved; vertical padding leaves room for them.
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              padding: const EdgeInsets.only(top: 2, bottom: 4, right: 4),
+              child: Row(
                 children: [
                   for (final tab in nuvoAchievementTabs.keys) ...[
                     _TabChip(
+                      key: _chipKeys.putIfAbsent(tab, GlobalKey.new),
                       label: tab,
                       selected: _tab == tab,
-                      onTap: () => setState(() => _tab = tab),
+                      onTap: () => _selectTab(tab),
                     ),
-                    const SizedBox(width: 8),
+                    if (tab != nuvoAchievementTabs.keys.last)
+                      const SizedBox(width: 8),
                   ],
                 ],
               ),
             ),
             const SizedBox(height: NuvoSpacing.lg),
             if (_badges == null && _error == null)
-              const Center(
+              Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: NuvoColors.blue,
+                    color: context.themeColors.accent,
                   ),
                 ),
               )
@@ -224,6 +246,7 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
 
 class _TabChip extends StatelessWidget {
   const _TabChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -328,7 +351,7 @@ class _NextLevelUnlock extends StatelessWidget {
                         ? 'Unlocks at Level ${unlock.level}'
                         : 'Unlocked',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.blue,
+                      color: context.themeColors.accent,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

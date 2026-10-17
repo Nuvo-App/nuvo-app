@@ -2385,7 +2385,7 @@ class _ComposerField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
+          borderSide: BorderSide(color: context.themeColors.accent, width: 2),
         ),
       ),
     );
@@ -2425,7 +2425,7 @@ class _SearchBar extends StatelessWidget {
         border: quiet,
         enabledBorder: quiet,
         focusedBorder: quiet.copyWith(
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.5),
+          borderSide: BorderSide(color: context.themeColors.accent, width: 1.5),
         ),
         errorBorder: quiet,
       ),
@@ -2605,14 +2605,14 @@ class _RecentChip extends StatelessWidget {
             Icon(
               activity.icon,
               size: 14,
-              color: selected ? NuvoColors.actionBlue : c.inkMuted,
+              color: selected ? context.themeColors.accent : c.inkMuted,
             ),
             const SizedBox(width: 6),
             Text(
               activity.title,
               style: AppTextStyles.labelMedium.copyWith(
                 fontSize: 12.5,
-                color: selected ? NuvoColors.actionBlue : c.ink,
+                color: selected ? context.themeColors.accent : c.ink,
               ),
             ),
           ],
@@ -3632,11 +3632,11 @@ class _GoalDisplay extends StatelessWidget {
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
         border: Border.all(color: context.themeColors.border, width: 2),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: NuvoColors.inkNavy,
+            color: context.themeColors.inkShadow,
             blurRadius: 0,
-            offset: Offset(4, 4),
+            offset: const Offset(4, 4),
           ),
         ],
       ),
@@ -3958,7 +3958,7 @@ class _RacerOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? NuvoColors.actionBlue.withValues(alpha: 0.07)
-              : NuvoColors.white,
+              : context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           border: Border.all(
             color: selected ? NuvoColors.actionBlue : context.themeColors.ink,
@@ -4123,7 +4123,7 @@ class _ReviewPage extends StatelessWidget {
                   'Review your race',
                   style: AppTextStyles.labelUppercase(
                     12,
-                  ).copyWith(color: NuvoColors.blue),
+                  ).copyWith(color: context.themeColors.accent),
                 ).animate().fadeIn(duration: 180.ms),
                 const SizedBox(height: 8),
                 NuvoPressable(
@@ -4179,7 +4179,11 @@ class _ReviewPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: NuvoColors.danger.withValues(alpha: 0.08),
+                      color: NuvoColors.danger.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark
+                            ? 0.18
+                            : 0.08,
+                      ),
                       borderRadius: BorderRadius.circular(NuvoRadii.md),
                       border: Border.all(
                         color: NuvoColors.danger.withValues(alpha: 0.28),
@@ -4188,7 +4192,7 @@ class _ReviewPage extends StatelessWidget {
                     child: Text(
                       error!,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.danger,
+                        color: context.themeColors.dangerText,
                       ),
                     ),
                   ),
@@ -4304,7 +4308,7 @@ class _RaceSummaryCard extends StatelessWidget {
                     maxLines: 1,
                     style: AppTextStyles.statLarge(
                       30,
-                      color: NuvoColors.blue,
+                      color: context.themeColors.accent,
                       weight: FontWeight.w900,
                     ),
                   ),
@@ -4348,11 +4352,11 @@ class _RaceSummaryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: c.surface,
                   shape: BoxShape.circle,
-                  border: Border.all(color: NuvoColors.blue, width: 3),
+                  border: Border.all(color: context.themeColors.accent, width: 3),
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.flag_rounded, color: NuvoColors.blue, size: 18),
+              Icon(Icons.flag_rounded, color: context.themeColors.accent, size: 18),
             ],
           ),
           const SizedBox(height: 6),
@@ -4465,7 +4469,7 @@ class _ReviewDetailRow extends StatelessWidget {
               color: context.themeColors.panelLight,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: NuvoColors.blue, size: 17),
+            child: Icon(icon, color: context.themeColors.accent, size: 17),
           ),
           const SizedBox(width: 12),
           Expanded(

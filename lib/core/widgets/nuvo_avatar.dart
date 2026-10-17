@@ -185,7 +185,7 @@ class NuvoCompetitorAvatar extends StatelessWidget {
     final borderColor = switch (role) {
       NuvoCompetitorAvatarRole.currentUser => NuvoColors.blue,
       NuvoCompetitorAvatarRole.leader => NuvoColors.gold,
-      NuvoCompetitorAvatarRole.standard => NuvoColors.white,
+      NuvoCompetitorAvatarRole.standard => context.themeColors.surface,
     };
     final borderWidth = role == NuvoCompetitorAvatarRole.currentUser
         ? 3.0
@@ -213,7 +213,10 @@ class NuvoCompetitorAvatar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: NuvoColors.blue,
                 shape: BoxShape.circle,
-                border: Border.all(color: NuvoColors.white, width: 1.5),
+                border: Border.all(
+                  color: context.themeColors.surface,
+                  width: 1.5,
+                ),
               ),
             ),
           ),
@@ -230,14 +233,14 @@ class NuvoAvatarStack extends StatelessWidget {
     required this.total,
     this.size = 36,
     this.max = 4,
-    this.borderColor = NuvoColors.white,
+    this.borderColor,
   });
 
   final List<({String initials, String? photoUrl})> avatars;
   final int total;
   final double size;
   final int max;
-  final Color borderColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -268,7 +271,7 @@ class NuvoAvatarStack extends StatelessWidget {
                 size: size,
                 bgColor: nuvoAvatarColorFor(avatars[i].initials),
                 textColor: NuvoColors.white,
-                borderColor: borderColor,
+                borderColor: borderColor ?? context.themeColors.surface,
                 borderWidth: ringWidth,
               ),
             ),
@@ -281,7 +284,10 @@ class NuvoAvatarStack extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: context.themeColors.panel,
-                  border: Border.all(color: borderColor, width: ringWidth),
+                  border: Border.all(
+                    color: borderColor ?? context.themeColors.surface,
+                    width: ringWidth,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Text(

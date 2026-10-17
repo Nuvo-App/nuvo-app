@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,30 +34,61 @@ List<DateTime?> heatmapDays(DateTime today, {int weeks = 20}) {
 }
 
 /// Profile heat map — verified proofs per day over the last 20 weeks.
-/// Hidden while loading or if the load fails; never shows invented data.
+/// Hidden if the load fails; never shows invented data. While loading it
+/// holds its place so the first viewport doesn't jump.
+///
+/// [minHeight] is the room the Profile's first viewport leaves for this
+/// section; the card absorbs it (see [ActivityHeatmap]).
 class ActivityHeatmapSection extends ConsumerWidget {
-  const ActivityHeatmapSection({super.key, this.today});
+  const ActivityHeatmapSection({super.key, this.today, this.minHeight = 0});
 
   /// Test hook.
   final DateTime? today;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(profileActivityProvider);
-    return data.maybeWhen(
-      data: (counts) => ActivityHeatmap(counts: counts, today: today),
-      orElse: () => const SizedBox.shrink(),
+    return data.when(
+      data: (counts) =>
+          ActivityHeatmap(counts: counts, today: today, minHeight: minHeight),
+      loading: () => SizedBox(height: minHeight),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
 
+/// Dark-mode fill for heat level 1..4 — the lifted accent blended over the
+/// card with alpha steps wide enough to tell neighbouring levels apart.
+@visibleForTesting
+Color heatmapDarkLevelColor(NuvoThemeColors c, int level) =>
+    c.accent.withValues(alpha: (0.40 + 0.20 * (level - 1)).clamp(0.0, 1.0));
+
+/// The heat map card. Cells are square-ish rounded tiles sized from the
+/// available width (`clamp((width - gaps) / weeks, 4, 18)`). When the
+/// Profile hands it a [minHeight], the cells grow taller than wide up to
+/// [maxCellRatio] to use the room, and whatever is still left is spread
+/// evenly between header, grid and the Less/More key — so the card never
+/// looks stretched and the key always ends the card.
 class ActivityHeatmap extends StatelessWidget {
-  const ActivityHeatmap({super.key, required this.counts, this.today});
+  const ActivityHeatmap({
+    super.key,
+    required this.counts,
+    this.today,
+    this.minHeight = 0,
+  });
 
   final Map<String, int> counts;
   final DateTime? today;
 
+  /// Minimum height of the whole section, including its top gap.
+  final double minHeight;
+
   static const int weeks = 20;
+  static const double maxCellRatio = 1.3;
+  static const double _topGap = 18;
+  static const double _pad = 14;
+  static const double _gap = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -63,108 +96,162 @@ class ActivityHeatmap extends StatelessWidget {
     final days = heatmapDays(today ?? DateTime.now(), weeks: weeks);
     final total = counts.values.fold<int>(0, (a, b) => a + b);
     final activeDays = counts.values.where((v) => v > 0).length;
+    final scaler = MediaQuery.textScalerOf(context);
 
-    Color shade(int level) => level == 0
-        ? c.inkMuted.withValues(alpha: 0.12)
-        : NuvoColors.blue.withValues(alpha: 0.25 + 0.2 * (level - 1));
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Dark: lifted accent over the card with wider alpha steps and a clearly
+    // visible empty cell; light ramp is unchanged.
+    Color shade(int level) => dark
+        ? (level == 0
+              ? c.inkMuted.withValues(alpha: 0.22)
+              : heatmapDarkLevelColor(c, level))
+        : (level == 0
+              ? c.inkMuted.withValues(alpha: 0.12)
+              : NuvoColors.blue.withValues(alpha: 0.25 + 0.2 * (level - 1)));
+
+    // Conservative line-height estimates so the budget never overshoots.
+    final headerH = scaler.scale(16) * 1.5;
+    final keyH = math.max(10.0, scaler.scale(11) * 1.6);
 
     return Semantics(
       label:
           'Activity. $total verified proofs on $activeDays days in the last $weeks weeks.',
       child: Padding(
-        padding: const EdgeInsets.only(top: 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Activity',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: c.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '$total verified proofs',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: c.inkMuted),
-                ),
-              ],
+        padding: const EdgeInsets.only(top: _topGap),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: math.max(0, minHeight - _topGap),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(_pad),
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: c.border.withValues(alpha: 0.35)),
             ),
-            const SizedBox(height: 10),
-            LayoutBuilder(
+            child: LayoutBuilder(
               builder: (context, box) {
-                const gap = 3.0;
-                final cell = ((box.maxWidth - gap * (weeks - 1)) / weeks).clamp(
-                  4.0,
-                  18.0,
+                final cell = ((box.maxWidth - _gap * (weeks - 1)) / weeks)
+                    .clamp(4.0, 18.0);
+                // Height the grid may take: the section's room minus the
+                // card padding, header, key and the two breathing gaps.
+                final budget = minHeight -
+                    _topGap -
+                    _pad * 2 -
+                    headerH -
+                    keyH -
+                    2 * 12;
+                final cellH = ((budget - _gap * 6) / 7).clamp(
+                  cell,
+                  cell * maxCellRatio,
                 );
-                return Row(
+                final radius = math.min(cell, cellH) * 0.28;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (var w = 0; w < weeks; w++)
-                      Column(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Activity',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: c.ink,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            '$total verified proofs',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: c.inkMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        for (var w = 0; w < weeks; w++)
+                          Column(
+                            children: [
+                              for (var d = 0; d < 7; d++)
+                                Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: d < 6 ? _gap : 0,
+                                  ),
+                                  child: Container(
+                                    width: cell,
+                                    height: cellH,
+                                    decoration: BoxDecoration(
+                                      color: () {
+                                        final day = days[w * 7 + d];
+                                        if (day == null) {
+                                          return Colors.transparent;
+                                        }
+                                        return shade(
+                                          heatLevel(counts[_key(day)] ?? 0),
+                                        );
+                                      }(),
+                                      borderRadius: BorderRadius.circular(
+                                        radius,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (var d = 0; d < 7; d++)
+                          Text(
+                            'Less',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(color: c.inkMuted),
+                          ),
+                          const SizedBox(width: 4),
+                          for (var l = 0; l <= 4; l++)
                             Padding(
-                              padding: EdgeInsets.only(bottom: d < 6 ? gap : 0),
+                              padding: const EdgeInsets.only(left: 3),
                               child: Container(
-                                width: cell,
-                                height: cell,
+                                width: 10,
+                                height: 10,
                                 decoration: BoxDecoration(
-                                  color: () {
-                                    final day = days[w * 7 + d];
-                                    if (day == null) return Colors.transparent;
-                                    return shade(
-                                      heatLevel(counts[_key(day)] ?? 0),
-                                    );
-                                  }(),
-                                  borderRadius: BorderRadius.circular(2),
+                                  color: shade(l),
+                                  borderRadius: BorderRadius.circular(3),
                                 ),
                               ),
                             ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'More',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(color: c.inkMuted),
+                          ),
                         ],
                       ),
+                    ),
                   ],
                 );
               },
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  'Less',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: c.inkMuted),
-                ),
-                const SizedBox(width: 4),
-                for (var l = 0; l <= 4; l++)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 3),
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: shade(l),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 4),
-                Text(
-                  'More',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: c.inkMuted),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

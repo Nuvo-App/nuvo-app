@@ -40,6 +40,7 @@ import '../../notifications/presentation/notification_bell.dart';
 
 import '../../social/data/crew_activity.dart';
 import '../../social/domain/nuvo_destination.dart';
+import '../../social/presentation/theme_ink.dart';
 import 'package:go_router/go_router.dart';
 
 class PassScreen extends ConsumerStatefulWidget {
@@ -57,7 +58,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   bool _searchOpen = false;
   String? _searchError;
 
-  /// Crew lenses: 0 People · 1 Activity · 2 Races.
+  /// Crew lenses: 0 People · 1 Activity.
   int _feedTab = 0;
 
   /// Post CTAs in flight (join/rematch) — freezes the chip so a second tap
@@ -239,8 +240,8 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       initials: parts.isEmpty
           ? 'N'
           : parts.length == 1
-              ? parts.first[0].toUpperCase()
-              : '${parts.first[0]}${parts.last[0]}'.toUpperCase(),
+          ? parts.first[0].toUpperCase()
+          : '${parts.first[0]}${parts.last[0]}'.toUpperCase(),
       profilePhotoUrl: actor.profilePhotoUrl,
     );
   }
@@ -257,9 +258,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         .toList();
     // If they're inside an active shared race right now, the sheet leads
     // with it — "Racing now · Pushup Battle" opens the race room.
-    final racingIn = shared
-        .where((r) => r.status == 'active')
-        .firstOrNull;
+    final racingIn = shared.where((r) => r.status == 'active').firstOrNull;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -326,10 +325,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         final overtaken = item.payload['overtakenUserIds'];
         if (overtaken is! List || !overtaken.contains(myId)) return null;
         if (completed) {
-          return _PostAction(
-            label: 'Rematch',
-            onTap: () => _rematch(item),
-          );
+          return _PostAction(label: 'Rematch', onTap: () => _rematch(item));
         }
         return _PostAction(
           label: 'Take it back',
@@ -383,10 +379,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
             onTap: () => _openCrewActivity(item),
           );
         }
-        return _PostAction(
-          label: 'Join race',
-          onTap: () => _joinRace(item),
-        );
+        return _PostAction(label: 'Join race', onTap: () => _joinRace(item));
       case 'race_invite':
         return _PostAction(label: 'Join race', onTap: () => _joinRace(item));
       case 'race_started':
@@ -410,7 +403,8 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   }
 
   Future<void> _joinRace(CrewActivityItem item, {String? raceId}) async {
-    final id = raceId ??
+    final id =
+        raceId ??
         item.raceId ??
         (item.destination is RaceDestination
             ? (item.destination as RaceDestination).raceId
@@ -434,8 +428,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     final id = item.raceId;
     if (id == null || !_ctaBusy.add(item.id)) return;
     try {
-      final race =
-          await ref.read(raceControllerProvider.notifier).rematchRace(id);
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .rematchRace(id);
       if (mounted) context.push('/race/${race.id}');
     } catch (_) {
       if (mounted) {
@@ -480,47 +475,28 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     final crewIds = {for (final m in crew) m.id};
     final allRaces = ref.watch(raceControllerProvider).races;
     final racesById = {for (final r in allRaces) r.id: r};
-    final sharedRaces = allRaces
-        .where(
-          (r) => r.status == 'active' && crewIds.any(r.isParticipant),
-        )
-        .toList()
-      ..sort((a, b) {
-        int crewCount(Race r) =>
-            r.participants.where((p) => crewIds.contains(p.userId)).length;
-        return crewCount(b).compareTo(crewCount(a));
-      });
-    final finishedRaces = allRaces
-        .where(
-          (r) => r.status == 'completed' && crewIds.any(r.isParticipant),
-        )
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    // The Races tab's time hierarchy — LIVE → ACTIVE → UP NEXT → RECENT —
-    // reads the same canonical truth as the feed: `race_live` items are the
+    final sharedRaces =
+        allRaces
+            .where((r) => r.status == 'active' && crewIds.any(r.isParticipant))
+            .toList()
+          ..sort((a, b) {
+            int crewCount(Race r) =>
+                r.participants.where((p) => crewIds.contains(p.userId)).length;
+            return crewCount(b).compareTo(crewCount(a));
+          });
+    // People's racing-now group — LIVE → ACTIVE — reads the same canonical truth as the feed: `race_live` items are the
     // server's live spectator payload (they also surface in For you), and
     // 'scheduled' is the server's effective status for a future start line.
     // A race already rendering as a live card is skipped from Active — one
     // race, one presentation.
-    final liveItems = activityState.items
-        .where((i) => i.live != null)
-        .toList();
+    final liveItems = activityState.items.where((i) => i.live != null).toList();
     final liveRaceIds = {
       for (final i in liveItems)
         if (i.raceId != null) i.raceId!,
     };
-    final activeRaces =
-        sharedRaces.where((r) => !liveRaceIds.contains(r.id)).toList();
-    final upcomingRaces = allRaces
-        .where(
-          (r) =>
-              r.status == 'scheduled' &&
-              crewIds.any(r.isParticipant),
-        )
-        .toList()
-      ..sort(
-        (a, b) => (a.startLineAt ?? '').compareTo(b.startLineAt ?? ''),
-      );
+    final activeRaces = sharedRaces
+        .where((r) => !liveRaceIds.contains(r.id))
+        .toList();
     // Racing beats Active — a member inside an active shared race gets the
     // "Racing" pill; presence alone gets "Active".
     final racingIds = <String>{
@@ -588,16 +564,18 @@ class _PassScreenState extends ConsumerState<PassScreen> {
             children: [
               // ── Header ───────────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NuvoSpacing.pageHorizontal,
+                ),
                 child: _CrewHeader(
-                subtitle: crew.isEmpty
-                    ? 'Find people to race with.'
-                    : 'Your people, all in one place',
-                onMyCode: () => context.push('/my-nuvo'),
-                searchOpen: _searchOpen,
-                onToggleSearch: () =>
-                    setState(() => _searchOpen = !_searchOpen),
-              ),
+                  subtitle: crew.isEmpty
+                      ? 'Find people to race with.'
+                      : 'Your people, all in one place',
+                  onMyCode: () => context.push('/my-nuvo'),
+                  searchOpen: _searchOpen,
+                  onToggleSearch: () =>
+                      setState(() => _searchOpen = !_searchOpen),
+                ),
               ),
 
               // ── Search expands inline from the header icon — a tool that
@@ -605,7 +583,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               if (_searchOpen) ...[
                 const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NuvoSpacing.pageHorizontal,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -625,7 +605,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 if (_results.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
                     child: _SearchResultList(
                       results: _results,
                       crewState: crewState,
@@ -636,7 +618,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 ] else if (_searchError != null && !_searching) ...[
                   const SizedBox(height: 16),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
                     child: NuvoPressable(
                       onTap: () => _onSearchChanged(_searchController.text),
                       haptic: false,
@@ -647,7 +631,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     !_searching) ...[
                   const SizedBox(height: 16),
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
                     child: _EmptyNote(text: 'No matching Nuvo members found.'),
                   ),
                 ],
@@ -657,13 +643,17 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               // ── Loading ──────────────────────────────────────────────────
               if (passLoading)
                 const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: NuvoSpacing.pageHorizontal,
+                  ),
                   child: _CrewSkeleton(),
                 )
               // ── Error ────────────────────────────────────────────────────
               else if (passError != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NuvoSpacing.pageHorizontal,
+                  ),
                   child: NuvoErrorState(
                     message: passError,
                     onRetry: _refreshAll,
@@ -672,8 +662,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               // ── Content ──────────────────────────────────────────────────
               else ...[
                 // The lens switch leads the page: People (who I race with and
-                // what we are racing right now), Activity (what happened) and
-                // Races (the crew's races across time).
+                // what we are racing right now) and Activity (what happened).
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: NuvoSpacing.pageHorizontal,
@@ -681,20 +670,19 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   child: _CrewTabs(
                     selected: _feedTab,
                     onSelect: (i) => setState(() => _feedTab = i),
-                    counts: [
-                      requests.length,
-                      null,
-                      liveItems.length +
-                          activeRaces.length +
-                          upcomingRaces.length,
-                    ],
+                    counts: [requests.length, null],
                   ),
                 ),
                 const SizedBox(height: 16),
 
                 if (crewState.error != null && crew.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 0, NuvoSpacing.pageHorizontal, 14),
+                    padding: const EdgeInsets.fromLTRB(
+                      NuvoSpacing.pageHorizontal,
+                      0,
+                      NuvoSpacing.pageHorizontal,
+                      14,
+                    ),
                     child: NuvoErrorState(
                       message: crewState.error!,
                       onRetry: () => ref
@@ -704,7 +692,12 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   ),
                 if (activityState.error != null && feedItems.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 0, NuvoSpacing.pageHorizontal, 14),
+                    padding: const EdgeInsets.fromLTRB(
+                      NuvoSpacing.pageHorizontal,
+                      0,
+                      NuvoSpacing.pageHorizontal,
+                      14,
+                    ),
                     child: NuvoErrorState(
                       message: activityState.error!,
                       onRetry: () => ref
@@ -802,15 +795,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     padding: const EdgeInsets.symmetric(
                       horizontal: NuvoSpacing.pageHorizontal,
                     ),
-                    child: _RacesTab(
+                    child: _CrewRacesNow(
                       liveItems: liveItems,
                       ongoing: activeRaces,
-                      upcoming: const [],
-                      finished: const [],
-                      happeningLabel: 'Racing with your crew',
-                      emptyNote:
-                          'No races running with your crew right now. Start '
-                          'one from Compete.',
                       myId: myId,
                       crewIds: crewIds,
                       reactingIds: activityState.reactingItemIds,
@@ -821,7 +808,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   ),
                 ]
                 // ── Activity — what the crew has done.
-                else if (_feedTab == 1)
+                else
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: NuvoSpacing.pageHorizontal,
@@ -839,25 +826,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                       onPerson: (i) => _tapFeedPerson(i, crew),
                       onReact: _react,
                       actionFor: (i) => _actionFor(i, myId, racesById),
-                    ),
-                  )
-                // ── Races — the crew's races across time.
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.pageHorizontal,
-                    ),
-                    child: _RacesTab(
-                      liveItems: liveItems,
-                      ongoing: activeRaces,
-                      upcoming: upcomingRaces,
-                      finished: finishedRaces,
-                      myId: myId,
-                      crewIds: crewIds,
-                      reactingIds: activityState.reactingItemIds,
-                      onOpen: (r) => context.push('/race/${r.id}'),
-                      onOpenLive: _openCrewActivity,
-                      onReact: _react,
                     ),
                   ),
               ],
@@ -1052,9 +1020,9 @@ _FeedWeight _feedWeightOf(CrewActivityItem item, int level) {
 double _feedGapAfter(_FeedWeight cur, _FeedWeight next) {
   if (cur == _FeedWeight.micro && next == _FeedWeight.micro) return 0;
   return switch ((cur, next)) {
-    (_FeedWeight.micro, _) => 12.0,
-    (_, _FeedWeight.micro) => 10.0,
-    _ => 12.0,
+    (_FeedWeight.micro, _) => 8.0,
+    (_, _FeedWeight.micro) => 6.0,
+    _ => 8.0,
   };
 }
 
@@ -1066,14 +1034,15 @@ Widget _feedSpacer(BuildContext context, _FeedWeight cur, _FeedWeight next) {
   if (cur == _FeedWeight.post && next == _FeedWeight.post) {
     return Column(
       children: [
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
         Container(height: 1, color: context.themeColors.divider),
-        const SizedBox(height: 11),
+        const SizedBox(height: 5),
       ],
     );
   }
   return SizedBox(height: _feedGapAfter(cur, next));
 }
+
 /// Shared by the chronological feed and the For-you relevance surface.
 Widget _feedTile(
   CrewActivityItem item, {
@@ -1139,8 +1108,7 @@ class _CrewHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
   static String _initialsFor(String name) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
     if (parts.isEmpty) return 'N';
     if (parts.length == 1) return parts.first[0].toUpperCase();
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
@@ -1168,8 +1136,8 @@ class _CrewHeroCard extends StatelessWidget {
     final left = me == null
         ? leader
         : (leader.userId == myId
-            ? (ranked.length > 1 ? ranked[1] : null)
-            : leader);
+              ? (ranked.length > 1 ? ranked[1] : null)
+              : leader);
     final right = me ?? (ranked.length > 1 ? ranked[1] : null);
 
     // The consequence line — plain words, colored by what it means for me.
@@ -1216,10 +1184,7 @@ class _CrewHeroCard extends StatelessWidget {
                 if (finished)
                   Text(
                     'FINISHED',
-                    style: AppTextStyles.labelUppercase(
-                      10,
-                      color: c.inkSubtle,
-                    ),
+                    style: AppTextStyles.labelUppercase(10, color: c.inkSubtle),
                   )
                 else ...[
                   Container(
@@ -1235,7 +1200,7 @@ class _CrewHeroCard extends StatelessWidget {
                     'LIVE',
                     style: AppTextStyles.labelUppercase(
                       10,
-                      color: NuvoColors.danger,
+                      color: context.dangerInk,
                     ),
                   ),
                 ],
@@ -1263,10 +1228,7 @@ class _CrewHeroCard extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 14),
                     child: Text(
                       'VS',
-                      style: AppTextStyles.labelUppercase(
-                        10,
-                        color: c.inkDim,
-                      ),
+                      style: AppTextStyles.labelUppercase(10, color: c.inkDim),
                     ),
                   ),
                 if (right != null)
@@ -1303,15 +1265,15 @@ class _CrewHeroCard extends StatelessWidget {
                 Text(
                   finished ? 'See result' : 'See race',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.blue,
+                    color: context.blueInk,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(
+                Icon(
                   Icons.arrow_forward_rounded,
                   size: 15,
-                  color: NuvoColors.blue,
+                  color: context.blueInk,
                 ),
               ],
             ),
@@ -1341,8 +1303,7 @@ class _CrewHeroCard extends StatelessWidget {
         return (text: 'You took it', color: NuvoColors.gold);
       }
       return (
-        text:
-            '${_firstName(leader.displayName)} took it · you placed #$rank',
+        text: '${_firstName(leader.displayName)} took it · you placed #$rank',
         color: muted,
       );
     }
@@ -1360,8 +1321,8 @@ class _CrewHeroCard extends StatelessWidget {
     final leading = ctx?.isLeading ?? leader.userId == myId;
     // The rival sits left — tied/gap are measured against them, never
     // against my own score.
-    final tied = ctx?.isTied ??
-        (left != null && left.progressValue == me.progressValue);
+    final tied =
+        ctx?.isTied ?? (left != null && left.progressValue == me.progressValue);
     final gap =
         ctx?.gapToLeader?.abs() ??
         (left != null ? (left.progressValue - me.progressValue).abs() : 0);
@@ -1416,7 +1377,7 @@ class _HeroDuel extends StatelessWidget {
       child: Text(
         isMe ? 'You' : _CrewHeroCard._firstName(participant.displayName),
         style: AppTextStyles.labelSmall.copyWith(
-          color: isMe ? NuvoColors.blue : c.inkMuted,
+          color: isMe ? context.blueInk : c.inkMuted,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.3,
         ),
@@ -1425,8 +1386,9 @@ class _HeroDuel extends StatelessWidget {
       ),
     );
     return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -1439,7 +1401,7 @@ class _HeroDuel extends StatelessWidget {
           '${participant.progressValue}',
           style: AppTextStyles.number(
             30,
-            color: isMe ? NuvoColors.blue : c.ink,
+            color: isMe ? context.blueInk : c.ink,
             weight: FontWeight.w900,
           ),
         ),
@@ -1536,6 +1498,10 @@ class _MicroActivityRow extends StatelessWidget {
 /// embed) → bare reactions and the one action the post earns.
 /// [prominent] — moments that land on me — upgrades the action to its
 /// blue pill (`Take it back`, `Rematch`) and nothing else.
+/// Minimum tap height of a post's reaction chips and action — the visuals
+/// are smaller, the hit area is not.
+const double _kPostHitHeight = 40;
+
 class _SocialPostCard extends StatelessWidget {
   const _SocialPostCard({
     required this.item,
@@ -1638,15 +1604,13 @@ class _SocialPostCard extends StatelessWidget {
               ?.rank;
         }
         if (score == null) return null;
-        final metric =
-            race?.metric != null ? ' ${race!.metric!.toUpperCase()}' : '';
+        final metric = race?.metric != null
+            ? ' ${race!.metric!.toUpperCase()}'
+            : '';
         return _EarnedFact(
           lines: [
             if (rank == 1) '🏆 1ST' else '$score$metric',
-            if (rank == 1)
-              '$score$metric'
-            else if (rank != null)
-              '#$rank',
+            if (rank == 1) '$score$metric' else if (rank != null) '#$rank',
           ],
           // A first place earns gold on the earned line — nowhere else.
           accent: rank == 1 ? NuvoColors.gold : null,
@@ -1666,14 +1630,13 @@ class _SocialPostCard extends StatelessWidget {
         );
       case 'race_finished':
       case 'winner_determined':
-        final score = (item.payload['score'] as num?)?.toInt() ??
+        final score =
+            (item.payload['score'] as num?)?.toInt() ??
             (item.payload['topScore'] as num?)?.toInt();
         final mine = item.payload['winnerUserId'] == myId;
         return _EarnedFact(
-          lines: [
-            if (mine) '🏆 YOU WON',
-            if (score != null) 'Top score $score',
-          ]..removeWhere((s) => s.isEmpty),
+          lines: [if (mine) '🏆 YOU WON', if (score != null) 'Top score $score']
+            ..removeWhere((s) => s.isEmpty),
           accent: mine ? NuvoColors.gold : null,
         );
       case 'race_created':
@@ -1728,97 +1691,113 @@ class _SocialPostCard extends StatelessWidget {
     // [prominent] earns two things: a soft tonal band the whole post lives
     // inside (a territory, not a container — no border, no shadow) and the
     // action's blue pill.
-    final body = Column(
+    final body = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            NuvoPressable(
-              onTap: onPerson,
-              scale: 0.94,
-              haptic: false,
-              child: NuvoAvatar(
-                initials: notificationInitials(item.actor?.displayName),
-                photoUrl: item.actor?.profilePhotoUrl,
-                size: 36,
-                bgColor: nuvoAvatarColorFor(item.id),
-                textColor: NuvoColors.white,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: NuvoPressable(
-                onTap: onPerson,
-                haptic: false,
-                child: Text(
-                  item.actor?.displayName ?? 'Nuvo member',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: c.ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              notificationRelativeTime(item.occurredAt),
-              style: AppTextStyles.bodySmall.copyWith(
-                color: c.inkMuted,
-              ),
-            ),
-            if (!item.read)
-              Container(
-                margin: const EdgeInsets.only(left: 6),
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: NuvoColors.blue,
-                  shape: BoxShape.circle,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.only(left: 45),
-          child: Text(
-            _headline(),
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: c.ink,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
-            ),
+        NuvoPressable(
+          onTap: onPerson,
+          scale: 0.94,
+          haptic: false,
+          child: NuvoAvatar(
+            initials: notificationInitials(item.actor?.displayName),
+            photoUrl: item.actor?.profilePhotoUrl,
+            size: 32,
+            bgColor: nuvoAvatarColorFor(item.id),
+            textColor: NuvoColors.white,
           ),
         ),
-        if (artifact != null) ...[
-          const SizedBox(height: 8),
-          Padding(padding: const EdgeInsets.only(left: 45), child: artifact),
-        ],
-        if (item.isReactionable || action != null) ...[
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.only(left: 45),
-            child: Row(
-              children: [
-                if (item.isReactionable)
-                  _ReactionBar(
-                    item: item,
-                    busy: busy,
-                    onReact: onReact,
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: NuvoPressable(
+                      onTap: onPerson,
+                      haptic: false,
+                      child: Text(
+                        item.actor?.displayName ?? 'Nuvo member',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: c.ink,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
                   ),
-                const Spacer(),
-                if (action != null)
-                  _PostActionButton(
-                    action: action!,
-                    busy: actionBusy,
-                    strong: prominent,
+                  const SizedBox(width: 8),
+                  Text(
+                    notificationRelativeTime(item.occurredAt),
+                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
                   ),
-              ],
-            ),
+                  if (!item.read)
+                    Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: NuvoColors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
+              Text(
+                _headline(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: c.ink,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+              if (artifact != null) ...[const SizedBox(height: 3), artifact],
+              if (item.isReactionable || action != null)
+                Row(
+                  children: [
+                    if (item.isReactionable)
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: _ReactionBar(
+                            item: item,
+                            busy: busy,
+                            onReact: onReact,
+                            hitHeight: _kPostHitHeight,
+                          ),
+                        ),
+                      ),
+                    // The action gets the other half of the row, right-aligned,
+                    // and scales down only when the row is genuinely too
+                    // narrow (320px at large text) — it never overflows.
+                    if (action != null)
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: _PostActionButton(
+                              action: action!,
+                              busy: actionBusy,
+                              strong: prominent,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                  ],
+                ),
+            ],
           ),
-        ],
+        ),
       ],
     );
 
@@ -1832,21 +1811,15 @@ class _SocialPostCard extends StatelessWidget {
       child: prominent
           ? Container(
               width: double.infinity,
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
+              margin: const EdgeInsets.symmetric(vertical: 1),
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
               decoration: BoxDecoration(
                 color: _bandColor(context),
                 borderRadius: BorderRadius.circular(NuvoRadii.sm),
               ),
               child: body,
             )
-          : Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: body,
-            ),
+          : Padding(padding: const EdgeInsets.only(top: 6), child: body),
     );
   }
 }
@@ -1875,61 +1848,67 @@ class _PostMatchup extends StatelessWidget {
     final c = context.themeColors;
     final l = leftScore <= 0 ? 1 : leftScore;
     final r = rightScore <= 0 ? 1 : rightScore;
-    Widget side(
-      String name,
-      int score,
-      CrossAxisAlignment align,
-      Color scoreColor,
-    ) =>
+    TextStyle label(Color color) => AppTextStyles.labelSmall.copyWith(
+      color: color,
+      fontWeight: FontWeight.w800,
+    );
+    // One row: "Noah 41 [split bar] 39 You" — the score is the object. The
+    // NAME is what gives way (ellipsis) when space runs out; scores never do.
+    Widget side({
+      required String name,
+      required int score,
+      required Color scoreColor,
+      required bool scoreFirst,
+    }) {
+      final nameText = Flexible(
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: label(c.inkMuted),
+        ),
+      );
+      final scoreText = Text(
+        '$score',
+        maxLines: 1,
+        style: AppTextStyles.number(
+          16,
+          color: scoreColor,
+          weight: FontWeight.w900,
+        ),
+      );
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: scoreFirst
+            ? [scoreText, const SizedBox(width: 4), nameText]
+            : [nameText, const SizedBox(width: 4), scoreText],
+      );
+    }
+
+    return Row(
+      children: [
+        Flexible(
+          flex: 2,
+          child: side(
+            name: leftName,
+            score: leftScore,
+            scoreColor: c.ink,
+            scoreFirst: false,
+          ),
+        ),
+        const SizedBox(width: 8),
         Expanded(
-          child: Column(
-            crossAxisAlignment: align,
-            children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: c.inkMuted,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.4,
-                ),
-              ),
-              Text(
-                '$score',
-                style: AppTextStyles.number(
-                  19,
-                  color: scoreColor,
-                  weight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        );
-    return Padding(
-      padding: const EdgeInsets.only(left: 45),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              side(leftName, leftScore, CrossAxisAlignment.start, c.ink),
-              const SizedBox(width: 10),
-              side(
-                rightName,
-                rightScore,
-                CrossAxisAlignment.end,
-                rightIsMe ? NuvoColors.blue : c.ink,
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          ClipRRect(
+          flex: 3,
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: SizedBox(
               height: 4,
               child: Row(
                 children: [
-                  Expanded(flex: l, child: ColoredBox(color: c.track)),
+                  Expanded(
+                    flex: l,
+                    child: ColoredBox(color: c.track),
+                  ),
                   Expanded(
                     flex: r,
                     child: ColoredBox(
@@ -1942,8 +1921,18 @@ class _PostMatchup extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 2,
+          child: side(
+            name: rightName,
+            score: rightScore,
+            scoreColor: rightIsMe ? context.blueInk : c.ink,
+            scoreFirst: true,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1964,23 +1953,26 @@ class _EarnedFact extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return Padding(
-      padding: const EdgeInsets.only(left: 45),
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var i = 0; i < lines.length; i++)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
+              padding: EdgeInsets.zero,
               child: Text(
                 lines[i],
                 maxLines: 2,
-                style: (i == 0
-                        ? AppTextStyles.titleMedium
-                        : AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted))
-                    .copyWith(
-                  color: i == 0 ? (accent ?? c.ink) : c.inkMuted,
-                  fontWeight: FontWeight.w800,
-                ),
+                style:
+                    (i == 0
+                            ? AppTextStyles.titleMedium
+                            : AppTextStyles.bodySmall.copyWith(
+                                color: context.themeColors.inkMuted,
+                              ))
+                        .copyWith(
+                          color: i == 0 ? (accent ?? c.ink) : c.inkMuted,
+                          fontWeight: FontWeight.w800,
+                        ),
               ),
             ),
         ],
@@ -2008,29 +2000,39 @@ class _PostActionButton extends StatelessWidget {
     final label = Text(
       busy ? '…' : action.label,
       style: AppTextStyles.labelMedium.copyWith(
-        color: strong ? NuvoColors.white : NuvoColors.blue,
+        color: strong ? NuvoColors.white : context.blueInk,
         fontWeight: FontWeight.w800,
       ),
     );
+    // The visual stays small; the tap area is a full [_kPostHitHeight] row.
     if (!strong) {
       return NuvoPressable(
         onTap: busy ? null : action.onTap,
         haptic: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-          child: label,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: _kPostHitHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Center(widthFactor: 1, child: label),
+          ),
         ),
       );
     }
     return PressableScale(
       onTap: busy ? null : action.onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: NuvoColors.blue,
-          borderRadius: BorderRadius.circular(999),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: _kPostHitHeight),
+        child: Center(
+          widthFactor: 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: NuvoColors.blue,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: label,
+          ),
         ),
-        child: label,
       ),
     );
   }
@@ -2049,8 +2051,7 @@ class _PostContext extends StatelessWidget {
     final c = context.themeColors;
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(left: 45),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: c.panel,
         borderRadius: BorderRadius.circular(NuvoRadii.sm),
@@ -2094,7 +2095,7 @@ class _CrewTabs extends StatelessWidget {
   /// "People 2" means there are two requests waiting.
   final List<int?> counts;
 
-  static const _labels = ['People', 'Activity', 'Races'];
+  static const _labels = ['People', 'Activity'];
 
   @override
   Widget build(BuildContext context) {
@@ -2133,38 +2134,38 @@ class _CrewTabs extends StatelessWidget {
                   child: MediaQuery.withClampedTextScaling(
                     maxScaleFactor: 1.15,
                     child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutCubic,
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: selected == i
-                                ? context.themeColors.ink
-                                : context.themeColors.inkMuted,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          child: Text(
-                            _labels[i],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      if (i < counts.length && (counts[i] ?? 0) > 0) ...[
-                        const SizedBox(width: 5),
-                        Text(
-                          '${counts[i]}',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: selected == i
-                                ? NuvoColors.blue
-                                : context.themeColors.inkDim,
-                            fontWeight: FontWeight.w800,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: selected == i
+                                  ? context.themeColors.ink
+                                  : context.themeColors.inkMuted,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            child: Text(
+                              _labels[i],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
+                        if (i < counts.length && (counts[i] ?? 0) > 0) ...[
+                          const SizedBox(width: 5),
+                          Text(
+                            '${counts[i]}',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: selected == i
+                                  ? context.blueInk
+                                  : context.themeColors.inkDim,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
                     ),
                   ),
                 ),
@@ -2177,40 +2178,26 @@ class _CrewTabs extends StatelessWidget {
   }
 }
 
-/// The Races lens — a time hierarchy over the races my crew is competing
-/// in: LIVE → HAPPENING NOW → UP NEXT → RECENT. Live races render the same
-/// canonical `_LiveRaceCard` the feed uses (same `race_live` payload, same
-/// truth) and are deduped out of Active; every section collapses entirely
-/// when it has nothing to say.
-class _RacesTab extends StatelessWidget {
-  const _RacesTab({
+/// The races running with my crew right now, shown under People: LIVE →
+/// racing now. Live races render the same canonical `_LiveRaceCard` the feed
+/// uses (same `race_live` payload, same truth) and are deduped out of the
+/// active group; each section collapses entirely when it has nothing to say.
+class _CrewRacesNow extends StatelessWidget {
+  const _CrewRacesNow({
     required this.liveItems,
     required this.ongoing,
-    required this.upcoming,
-    required this.finished,
     required this.myId,
     required this.crewIds,
     required this.reactingIds,
     required this.onOpen,
     required this.onOpenLive,
     required this.onReact,
-    this.happeningLabel = 'Happening now',
-    this.emptyNote =
-        'No shared races yet — start one with your crew from Compete.',
   });
-
-  /// Heading over the active-races group.
-  final String happeningLabel;
-
-  /// Shown when there is nothing to list.
-  final String emptyNote;
 
   /// Feed items carrying a `race_live` spectator payload — the live state
   /// is projected first.
   final List<CrewActivityItem> liveItems;
   final List<Race> ongoing;
-  final List<Race> upcoming;
-  final List<Race> finished;
   final String myId;
   final Set<String> crewIds;
   final Set<String> reactingIds;
@@ -2220,13 +2207,14 @@ class _RacesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (liveItems.isEmpty &&
-        ongoing.isEmpty &&
-        upcoming.isEmpty &&
-        finished.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: _EmptyNote(text: emptyNote),
+    if (liveItems.isEmpty && ongoing.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: _EmptyNote(
+          text:
+              'No races running with your crew right now. Start one from '
+              'Compete.',
+        ),
       );
     }
     return Column(
@@ -2254,7 +2242,7 @@ class _RacesTab extends StatelessWidget {
         // cards: standings slice, progress, who's in. Not title/date rows.
         if (ongoing.isNotEmpty) ...[
           if (liveItems.isNotEmpty) const SizedBox(height: 6),
-          _SectionLabel(label: happeningLabel),
+          const _SectionLabel(label: 'Racing with your crew'),
           const SizedBox(height: 8),
           for (final race in ongoing.take(3)) ...[
             _ActiveRaceCard(
@@ -2265,39 +2253,6 @@ class _RacesTab extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
-        ],
-
-        // ── Up next — scheduled races with a real start line.
-        if (upcoming.isNotEmpty) ...[
-          if (liveItems.isNotEmpty || ongoing.isNotEmpty)
-            const SizedBox(height: 6),
-          const _SectionLabel(label: 'Up next'),
-          const SizedBox(height: 8),
-          _PeopleSurface(
-            children: [
-              for (var i = 0; i < upcoming.length && i < 4; i++)
-                _UpNextRaceRow(
-                  race: upcoming[i],
-                  crewIds: crewIds,
-                  isLast: i == upcoming.length - 1 || i == 3,
-                  onTap: () => onOpen(upcoming[i]),
-                ),
-            ],
-          ),
-        ],
-
-        // ── Recent — settled races read as people/outcomes, not titles.
-        if (finished.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          const _SectionLabel(label: 'Recent'),
-          const SizedBox(height: 4),
-          for (var i = 0; i < finished.length && i < 6; i++)
-            _FinishedRaceRow(
-              race: finished[i],
-              myId: myId,
-              isLast: i == finished.length - 1 || i == 5,
-              onTap: () => onOpen(finished[i]),
-            ),
         ],
       ],
     );
@@ -2321,10 +2276,7 @@ class _LiveSectionLabel extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          'Live now',
-          style: AppTextStyles.sectionTitle,
-        ),
+        Text('Live now', style: AppTextStyles.sectionTitle),
       ],
     );
   }
@@ -2354,8 +2306,7 @@ class _ActiveRaceCard extends StatelessWidget {
     if (me != null && top.every((p) => p.userId != myId)) {
       top.add(me);
     }
-    final crewCount =
-        standings.where((p) => crewIds.contains(p.userId)).length;
+    final crewCount = standings.where((p) => crewIds.contains(p.userId)).length;
     final myRank = rankForUser(race, myId);
     // Canonical lane geometry — the same marks as Verify's queue: my bead
     // fills the lane, the nearest rival is a navy dot, the goal is a ring.
@@ -2363,11 +2314,8 @@ class _ActiveRaceCard extends StatelessWidget {
     final nearest = raceNearestRival(race, myId);
     final nearestMark = nearest == null
         ? null
-        : geo.rivals
-            .where((r) => r.racer.userId == nearest.userId)
-            .firstOrNull;
-    final showLane =
-        geo.hasGoal || geo.viewer != null || nearestMark != null;
+        : geo.rivals.where((r) => r.racer.userId == nearest.userId).firstOrNull;
+    final showLane = geo.hasGoal || geo.viewer != null || nearestMark != null;
     String? daysLeft;
     final finish = DateTime.tryParse(race.finishLineAt ?? '');
     if (finish != null) {
@@ -2406,7 +2354,7 @@ class _ActiveRaceCard extends StatelessWidget {
                     style: AppTextStyles.placementLabel(
                       size: 12,
                       color: myRank == 1
-                          ? NuvoColors.success
+                          ? context.successInk
                           : context.themeColors.inkSubtle,
                     ),
                   ),
@@ -2440,7 +2388,9 @@ class _ActiveRaceCard extends StatelessWidget {
                         style: TextStyle(color: context.themeColors.inkMuted),
                       ),
                     TextSpan(
-                      text: top[i].userId == myId ? 'You' : top[i].displayName.split(' ').first,
+                      text: top[i].userId == myId
+                          ? 'You'
+                          : top[i].displayName.split(' ').first,
                       style: TextStyle(
                         color: context.themeColors.ink,
                         fontWeight: top[i].userId == myId
@@ -2452,7 +2402,7 @@ class _ActiveRaceCard extends StatelessWidget {
                       text: ' ${raceScoreLabel(race, top[i].progressValue)}',
                       style: TextStyle(
                         color: top[i].userId == myId
-                            ? NuvoColors.blue
+                            ? context.blueInk
                             : context.themeColors.ink,
                         fontWeight: FontWeight.w800,
                       ),
@@ -2462,7 +2412,9 @@ class _ActiveRaceCard extends StatelessWidget {
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.themeColors.inkMuted,
+              ),
             ),
             if (showLane) ...[
               const SizedBox(height: 9),
@@ -2505,9 +2457,9 @@ class _ActiveRaceCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.arrow_forward_rounded,
-                  color: NuvoColors.blue,
+                  color: context.blueInk,
                   size: 16,
                 ),
               ],
@@ -2529,241 +2481,6 @@ String _ordinal(int n) {
   };
 }
 
-/// A scheduled shared race — who I'm meeting and when, one compact line.
-class _UpNextRaceRow extends StatelessWidget {
-  const _UpNextRaceRow({
-    required this.race,
-    required this.crewIds,
-    required this.isLast,
-    required this.onTap,
-  });
-
-  final Race race;
-  final Set<String> crewIds;
-  final bool isLast;
-  final VoidCallback onTap;
-
-  String _startsIn() {
-    final start = DateTime.tryParse(race.startLineAt ?? '');
-    if (start == null) return 'Starting soon';
-    final diff = start.difference(DateTime.now());
-    if (diff.inMinutes <= 0) return 'Starting soon';
-    if (diff.inHours < 1) return 'Starts in ${diff.inMinutes}m';
-    if (diff.inDays < 1) {
-      return 'Starts in ${diff.inHours}h ${diff.inMinutes % 60}m';
-    }
-    return 'Starts in ${diff.inDays}d';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Mini avatar cluster — the crew faces in this race.
-    final crewIn = race.participants
-        .where((p) => crewIds.contains(p.userId))
-        .take(3)
-        .toList();
-    return Column(
-      children: [
-        NuvoPressable(
-          onTap: onTap,
-          haptic: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: crewIn.isEmpty ? 0 : 20.0 + (crewIn.length - 1) * 14,
-                  height: 24,
-                  child: Stack(
-                    children: [
-                      for (var i = 0; i < crewIn.length; i++)
-                        Positioned(
-                          left: i * 14.0,
-                          child: NuvoAvatar(
-                            initials: _rowInitials(crewIn[i].displayName),
-                            photoUrl: crewIn[i].profilePhotoUrl,
-                            size: 24,
-                            bgColor:
-                                nuvoAvatarColorFor(crewIn[i].userId),
-                            textColor: NuvoColors.white,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (crewIn.isNotEmpty) const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        race.displayTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: context.themeColors.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        [
-                          _startsIn(),
-                          '${race.participants.length} joined',
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeColors.inkMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: context.themeColors.inkMuted,
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: context.themeColors.divider),
-      ],
-    );
-  }
-
-  static String _rowInitials(String name) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    if (parts.isEmpty) return 'N';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-}
-
-/// A settled shared race — people first: the winner's face and outcome
-/// lead, my placement is the subline, the race is context. Not a title +
-/// date row.
-class _FinishedRaceRow extends StatelessWidget {
-  const _FinishedRaceRow({
-    required this.race,
-    required this.myId,
-    required this.isLast,
-    required this.onTap,
-  });
-
-  final Race race;
-  final String myId;
-  final bool isLast;
-  final VoidCallback onTap;
-
-  static String _initialsFor(String name) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    if (parts.isEmpty) return 'N';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final standings = race.finalStandings;
-    final winner = standings.where((s) => s.rank == 1).firstOrNull;
-    final runnerUp = standings.where((s) => s.rank == 2).firstOrNull;
-    final mine = standings.where((s) => s.userId == myId).firstOrNull;
-    final iWon = mine?.rank == 1;
-    final resultLine = mine == null
-        ? null
-        : iWon
-            ? race.displayTitle
-            : 'You finished #${mine.rank} · ${race.displayTitle}';
-    final outcome = winner == null
-        ? race.displayTitle
-        : iWon
-            ? (runnerUp != null
-                ? 'You beat ${runnerUp.displayName.split(' ').first}'
-                : 'You won ${race.displayTitle}')
-            : mine?.rank == 2
-                ? '${winner.displayName.split(' ').first} beat you'
-                : '${winner.displayName.split(' ').first} won · ${race.displayTitle}';
-    return Column(
-      children: [
-        NuvoPressable(
-          onTap: onTap,
-          haptic: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            child: Row(
-              children: [
-                if (winner != null) ...[
-                  NuvoAvatar(
-                    initials: _initialsFor(winner.displayName),
-                    photoUrl: winner.profilePhotoUrl,
-                    size: 28,
-                    bgColor: nuvoAvatarColorFor(winner.userId),
-                    textColor: NuvoColors.white,
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        iWon ? '🏆 $outcome' : outcome,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: context.themeColors.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        [
-                          ?resultLine,
-                          notificationRelativeTime(
-                            DateTime.tryParse(race.updatedAt)?.toUtc() ??
-                                DateTime.now().toUtc(),
-                          ),
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: iWon
-                              ? NuvoColors.success
-                              : context.themeColors.inkMuted,
-                          fontWeight:
-                              iWon ? FontWeight.w700 : FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: context.themeColors.inkMuted,
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast)
-          // Past the 28px avatar + gap — the separator aligns to the text
-          // column, the leading column's edge, not the page edge.
-          Divider(
-            height: 1,
-            indent: 38,
-            color: context.themeColors.divider,
-          ),
-      ],
-    );
-  }
-}
-
 /// The reaction strip — 🔥 👏 💪 chips with aggregate counts. Mine is
 /// highlighted; tapping toggles it. Tactile: each chip scales on press and
 /// pops with a light haptic (fired by the caller).
@@ -2772,21 +2489,26 @@ class _ReactionBar extends StatelessWidget {
     required this.item,
     required this.busy,
     required this.onReact,
+    this.hitHeight = 0,
   });
 
   final CrewActivityItem item;
   final bool busy;
   final ValueChanged<String> onReact;
 
+  /// Minimum tap height per chip (0 = chip's own size).
+  final double hitHeight;
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         for (final code in kReactionEmojis)
           Padding(
-            padding: const EdgeInsets.only(right: 9),
+            padding: EdgeInsets.only(right: hitHeight > 0 ? 2 : 9),
             child: _ReactionChip(
+              hitHeight: hitHeight,
               glyph: kReactionGlyphs[code]!,
               count: item.reactions[code] ?? 0,
               mine: item.myReaction == code,
@@ -2806,8 +2528,10 @@ class _ReactionChip extends StatelessWidget {
     required this.mine,
     required this.enabled,
     required this.onTap,
+    this.hitHeight = 0,
   });
 
+  final double hitHeight;
   final String glyph;
   final int count;
   final bool mine;
@@ -2823,41 +2547,47 @@ class _ReactionChip extends StatelessWidget {
     final c = context.themeColors;
     return PressableScale(
       onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutBack,
-        padding: EdgeInsets.symmetric(
-          horizontal: mine ? 8 : 3,
-          vertical: mine ? 4 : 3,
-        ),
-        decoration: mine
-            ? BoxDecoration(
-                color: c.panel,
-                borderRadius: BorderRadius.circular(999),
-              )
-            : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The glyph pops when canonical state flips mine on — a full
-            // pop on add, a quieter half-pop on remove.
-            NuvoPop(
-              trigger: mine,
-              intensity: mine ? 1.0 : 0.5,
-              child: Text(glyph, style: const TextStyle(fontSize: 13)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: hitHeight),
+        child: Center(
+          widthFactor: 1,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutBack,
+            padding: EdgeInsets.symmetric(
+              horizontal: mine ? 8 : 3,
+              vertical: mine ? 4 : 3,
             ),
-            if (count > 0) ...[
-              const SizedBox(width: 4),
-              NuvoNumberFlow(
-                value: count,
-                duration: const Duration(milliseconds: 220),
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: mine ? NuvoColors.blue : c.inkMuted,
-                  fontWeight: FontWeight.w800,
+            decoration: mine
+                ? BoxDecoration(
+                    color: c.panel,
+                    borderRadius: BorderRadius.circular(999),
+                  )
+                : null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // The glyph pops when canonical state flips mine on — a full
+                // pop on add, a quieter half-pop on remove.
+                NuvoPop(
+                  trigger: mine,
+                  intensity: mine ? 1.0 : 0.5,
+                  child: Text(glyph, style: const TextStyle(fontSize: 13)),
                 ),
-              ),
-            ],
-          ],
+                if (count > 0) ...[
+                  const SizedBox(width: 4),
+                  NuvoNumberFlow(
+                    value: count,
+                    duration: const Duration(milliseconds: 220),
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: mine ? context.blueInk : c.inkMuted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2935,8 +2665,14 @@ class _CrewHeader extends StatelessWidget {
         // ── Page identity ──────────────────────────────────────────────
         Row(
           children: [
-            Text('Crew', style: AppTextStyles.screenTitle),
-            const Spacer(),
+            Expanded(
+              child: Text(
+                'Crew',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.screenTitle,
+              ),
+            ),
             Semantics(
               button: true,
               label: searchOpen ? 'Close search' : 'Find people',
@@ -2946,11 +2682,9 @@ class _CrewHeader extends StatelessWidget {
                   width: 44,
                   height: 44,
                   child: Icon(
-                    searchOpen
-                        ? Icons.close_rounded
-                        : Icons.search_rounded,
+                    searchOpen ? Icons.close_rounded : Icons.search_rounded,
                     color: searchOpen
-                        ? NuvoColors.blue
+                        ? context.blueInk
                         : context.themeColors.ink,
                     size: 24,
                   ),
@@ -2981,7 +2715,9 @@ class _CrewHeader extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkMuted),
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: context.themeColors.inkMuted,
+          ),
         ),
       ],
     );
@@ -3028,8 +2764,8 @@ class _PeopleStrip extends StatelessWidget {
     final meInitials = meParts.isEmpty
         ? 'N'
         : meParts.length == 1
-            ? meParts.first[0].toUpperCase()
-            : '${meParts[0][0]}${meParts[1][0]}'.toUpperCase();
+        ? meParts.first[0].toUpperCase()
+        : '${meParts[0][0]}${meParts[1][0]}'.toUpperCase();
     return SizedBox(
       height: 78,
       child: ListView(
@@ -3052,11 +2788,10 @@ class _PeopleStrip extends StatelessWidget {
               status: racingIds.contains(m.id)
                   ? _StripStatus.racing
                   : hotIds.contains(m.id)
-                      ? _StripStatus.hot
-                      : crewPresenceFor(m.lastActiveAt) ==
-                              CrewPresence.active
-                          ? _StripStatus.active
-                          : null,
+                  ? _StripStatus.hot
+                  : crewPresenceFor(m.lastActiveAt) == CrewPresence.active
+                  ? _StripStatus.active
+                  : null,
               onTap: () => onPerson(m),
               avatar: NuvoAvatar(
                 initials: m.initials,
@@ -3130,25 +2865,25 @@ class _StripTile extends StatelessWidget {
             child: MediaQuery.withClampedTextScaling(
               maxScaleFactor: 1.0,
               child: Column(
-              children: [
-                SizedBox(width: 44, height: 44, child: Center(child: avatar)),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: context.themeColors.ink,
-                    fontWeight: FontWeight.w600,
+                children: [
+                  SizedBox(width: 44, height: 44, child: Center(child: avatar)),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: context.themeColors.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                if (status != null) ...[
-                  const SizedBox(height: 2),
-                  _StatusPill(status: status!),
+                  if (status != null) ...[
+                    const SizedBox(height: 2),
+                    _StatusPill(status: status!),
+                  ],
                 ],
-              ],
-            ),
+              ),
             ),
           ),
         ),
@@ -3169,13 +2904,9 @@ class _StatusPill extends StatelessWidget {
     final hot = status == _StripStatus.hot;
     final sem = context.semanticColors;
     final (dot, word, ink) = switch (status) {
-      _StripStatus.racing => (NuvoColors.blue, 'Racing', NuvoColors.blue),
+      _StripStatus.racing => (NuvoColors.blue, 'Racing', context.blueInk),
       _StripStatus.hot => (NuvoColors.warning, '🔥', sem.warning.on),
-      _StripStatus.active => (
-          NuvoColors.success,
-          'Active',
-          sem.success.on,
-        ),
+      _StripStatus.active => (NuvoColors.success, 'Active', sem.success.on),
     };
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -3286,7 +3017,7 @@ class _ActionRow extends StatelessWidget {
                   Text(
                     actionLabel!,
                     style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.blue,
+                      color: context.blueInk,
                       fontWeight: FontWeight.w800,
                     ),
                   )
@@ -3329,7 +3060,7 @@ class _ScanButton extends StatelessWidget {
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            color: NuvoColors.white,
+            color: context.themeColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.md),
             border: Border.all(color: context.themeColors.border, width: 2),
           ),
@@ -3553,7 +3284,7 @@ class _RequestGroupLabel extends StatelessWidget {
           Text(
             '$count',
             style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.blue,
+              color: context.blueInk,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -3602,10 +3333,7 @@ class _IncomingRequestRow extends StatelessWidget {
               ),
             ),
           ),
-          _MiniAction(
-            label: 'Decline',
-            onTap: busy ? null : onDecline,
-          ),
+          _MiniAction(label: 'Decline', onTap: busy ? null : onDecline),
           const SizedBox(width: 4),
           _MiniAction(
             label: 'Accept',
@@ -3700,10 +3428,7 @@ class _MiniAction extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: filled ? 12 : 8,
-          vertical: 6,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: filled ? 12 : 8, vertical: 6),
         decoration: filled
             ? BoxDecoration(
                 color: NuvoColors.blue,
@@ -3713,9 +3438,7 @@ class _MiniAction extends StatelessWidget {
         child: Text(
           label,
           style: AppTextStyles.labelSmall.copyWith(
-            color: filled
-                ? NuvoColors.white
-                : context.themeColors.inkMuted,
+            color: filled ? NuvoColors.white : context.themeColors.inkMuted,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -3766,7 +3489,8 @@ class _SearchResultList extends StatelessWidget {
     return _UserRow(
       user: user,
       subtitle: subtitle,
-      added: status == CrewConnectionStatus.connected ||
+      added:
+          status == CrewConnectionStatus.connected ||
           status == CrewConnectionStatus.pendingOutgoing,
       loading: busy,
       actionLabel: switch (status) {
@@ -3799,7 +3523,12 @@ class _SocialField extends StatelessWidget {
     // full width, so the ice bleeds edge-to-edge and the page inset lives
     // inside.
     return Container(
-      padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 16, NuvoSpacing.pageHorizontal, 40),
+      padding: const EdgeInsets.fromLTRB(
+        NuvoSpacing.pageHorizontal,
+        16,
+        NuvoSpacing.pageHorizontal,
+        40,
+      ),
       decoration: BoxDecoration(
         color: context.themeColors.panelLight,
         // A designed edge, not a symmetric cookie-cut: the left corner
@@ -3855,7 +3584,9 @@ class _EmptyNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkMuted),
+      style: AppTextStyles.bodyMedium.copyWith(
+        color: context.themeColors.inkMuted,
+      ),
     );
   }
 }
@@ -3868,16 +3599,16 @@ class _CrewSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget bar(double height, {double widthFactor = 1}) => FractionallySizedBox(
-          widthFactor: widthFactor,
-          alignment: Alignment.centerLeft,
-          child: Container(
-            height: height,
-            decoration: BoxDecoration(
-              color: context.themeColors.panel,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
+      widthFactor: widthFactor,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: context.themeColors.panel,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
     return Column(
       children: [
         for (var i = 0; i < 3; i++)
@@ -3962,10 +3693,9 @@ class _PersonSheetState extends State<_PersonSheet> {
   Widget build(BuildContext context) {
     final member = widget.member;
     final first = member.displayName.split(' ').first;
-    final finished = widget.sharedRaces
-        .where((r) => r.status == 'completed')
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final finished =
+        widget.sharedRaces.where((r) => r.status == 'completed').toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     var mine = 0;
     var theirs = 0;
     for (final r in finished) {
@@ -4010,13 +3740,18 @@ class _PersonSheetState extends State<_PersonSheet> {
           '${bm > bt
               ? 'You lead $bm–$bt'
               : bt > bm
-                  ? '$first leads $bt–$bm'
-                  : 'Tied $bm–$bt'}';
+              ? '$first leads $bt–$bm'
+              : 'Tied $bm–$bt'}';
     }
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 4, NuvoSpacing.pageHorizontal, 20),
+        padding: const EdgeInsets.fromLTRB(
+          NuvoSpacing.pageHorizontal,
+          4,
+          NuvoSpacing.pageHorizontal,
+          20,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -4073,7 +3808,7 @@ class _PersonSheetState extends State<_PersonSheet> {
                         child: Text(
                           'Lv. ${member.level}',
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: NuvoColors.blue,
+                            color: context.blueInk,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -4121,9 +3856,9 @@ class _PersonSheetState extends State<_PersonSheet> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Icon(
+                              Icon(
                                 Icons.arrow_forward_rounded,
-                                color: NuvoColors.blue,
+                                color: context.blueInk,
                                 size: 15,
                               ),
                             ],
@@ -4136,9 +3871,7 @@ class _PersonSheetState extends State<_PersonSheet> {
                       widget.sharedRaces.isEmpty
                           ? 'No races together yet'
                           : '${widget.sharedRaces.length} '
-                              '${widget.sharedRaces.length == 1
-                                  ? 'race'
-                                  : 'races'} together',
+                                '${widget.sharedRaces.length == 1 ? 'race' : 'races'} together',
                       style: AppTextStyles.labelMedium.copyWith(
                         color: context.themeColors.inkMuted,
                       ),
@@ -4180,7 +3913,7 @@ class _PersonSheetState extends State<_PersonSheet> {
                   child: Text(
                     _showBack ? 'About $first ↻' : 'Your matchup ↻',
                     style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.blue,
+                      color: context.blueInk,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -4275,9 +4008,7 @@ class _PersonRivalryFace extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final racing = racingIn;
-    final myP = racing?.participants
-        .where((p) => p.userId == myId)
-        .firstOrNull;
+    final myP = racing?.participants.where((p) => p.userId == myId).firstOrNull;
     final theirP = racing?.participants
         .where((p) => p.userId == member.id)
         .firstOrNull;
@@ -4335,7 +4066,7 @@ class _PersonRivalryFace extends StatelessWidget {
                 sharedCount == 0
                     ? 'NO RACES TOGETHER YET'
                     : '$sharedCount '
-                        '${sharedCount == 1 ? 'RACE' : 'RACES'} TOGETHER',
+                          '${sharedCount == 1 ? 'RACE' : 'RACES'} TOGETHER',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: c.inkMuted,
                   fontWeight: FontWeight.w800,
@@ -4398,9 +4129,9 @@ class _PersonRivalryFace extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(
+                  Icon(
                     Icons.arrow_forward_rounded,
-                    color: NuvoColors.blue,
+                    color: context.blueInk,
                     size: 16,
                   ),
                 ],
@@ -4567,10 +4298,7 @@ class _PersonRecentRow extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              '${race.displayTitle} · ${notificationRelativeTime(
-                DateTime.tryParse(race.updatedAt)?.toUtc() ??
-                    DateTime.now().toUtc(),
-              )}',
+              '${race.displayTitle} · ${notificationRelativeTime(DateTime.tryParse(race.updatedAt)?.toUtc() ?? DateTime.now().toUtc())}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.labelSmall.copyWith(color: c.inkMuted),

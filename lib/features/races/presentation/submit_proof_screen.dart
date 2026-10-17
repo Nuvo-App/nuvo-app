@@ -748,7 +748,7 @@ class _StaticPreVerifyCue extends StatelessWidget {
       height: 78,
       child: Row(
         children: [
-          const Icon(Icons.videocam_outlined, color: NuvoColors.blue, size: 30),
+          Icon(Icons.videocam_outlined, color: context.themeColors.accent, size: 30),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
@@ -863,9 +863,9 @@ class _SetupLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(
+        Icon(
           Icons.check_circle_rounded,
-          color: NuvoColors.blue,
+          color: context.themeColors.accent,
           size: 17,
         ),
         const SizedBox(width: 8),
@@ -970,7 +970,7 @@ class _ManualLogCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               error!,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.dangerText),
             ),
           ],
         ],
@@ -1036,7 +1036,7 @@ class _EvidenceTile extends StatelessWidget {
                       Text(
                         'required',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
+                          color: context.themeColors.dangerText,
                         ),
                       ),
                     ],

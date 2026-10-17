@@ -581,4 +581,117 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('grid rhythm + filter chips', () {
+    // Row-to-row gap (bottom of a tile's status line -> top of the next
+    // row's badge) measured on the ORIGINAL grid (fixed childAspectRatio
+    // 0.72 + 26px mainAxisSpacing) at 390 wide, text scale 1.0.
+    const oldRowGap = 75.63;
+
+    Future<double> measureGap(WidgetTester tester, double w) async {
+      _useViewport(tester, w, 844);
+      await tester.pumpWidget(
+        _wrap(
+          Scaffold(
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: NuvoBadgeGrid(badges: _all43),
+            ),
+          ),
+          badges: _all43,
+        ),
+      );
+      await _settle(tester);
+      final tile0 = find
+          .ancestor(
+            of: find.byType(NuvoAchievementBadge).at(0),
+            matching: find.byType(PressableScale),
+          )
+          .first;
+      var textBottom = 0.0;
+      for (final e in find
+          .descendant(of: tile0, matching: find.byType(Text))
+          .evaluate()) {
+        final r = tester.getRect(find.byWidget(e.widget));
+        if (r.bottom > textBottom) textBottom = r.bottom;
+      }
+      final nextBadgeTop =
+          tester.getRect(find.byType(NuvoAchievementBadge).at(3)).top;
+      // Row alignment: tiles in a row share the same top.
+      expect(
+        tester.getRect(find.byType(NuvoAchievementBadge).at(1)).top,
+        tester.getRect(find.byType(NuvoAchievementBadge).at(0)).top,
+      );
+      expect(tester.takeException(), isNull);
+      return nextBadgeTop - textBottom;
+    }
+
+    testWidgets('row gap is at most 55% of the old gap', (tester) async {
+      final gap = await measureGap(tester, 390);
+      // ignore: avoid_print
+      print('row gap now: $gap (old: $oldRowGap)');
+      expect(gap, lessThanOrEqualTo(oldRowGap * 0.55));
+      expect(gap, greaterThan(4), reason: 'rows must not touch');
+    });
+
+    for (final (sizeName, w, h) in _sizes) {
+      for (final scale in [1.0, 1.4]) {
+        for (final dark in [false, true]) {
+          testWidgets('"All" chip fully visible $sizeName ts$scale dark=$dark',
+              (tester) async {
+            _useViewport(tester, w, h);
+            await tester.pumpWidget(
+              _wrap(
+                const BadgesScreen(),
+                badges: _all43,
+                textScale: scale,
+                dark: dark,
+              ),
+            );
+            await _settle(tester);
+            final chip = tester.getRect(find
+                .ancestor(
+                  of: find.text('All'),
+                  matching: find.byType(PressableScale),
+                )
+                .first);
+            final label = tester.getRect(find.text('All'));
+            expect(chip.left, greaterThanOrEqualTo(0));
+            expect(chip.right, lessThanOrEqualTo(w));
+            expect(label.left, greaterThanOrEqualTo(chip.left));
+            expect(label.right, lessThanOrEqualTo(chip.right));
+            // Chip is not clipped vertically by the row.
+            final row = tester.getRect(find
+                .ancestor(
+                  of: find.text('All'),
+                  matching: find.byType(ListView),
+                )
+                .first);
+            expect(chip.top, greaterThanOrEqualTo(row.top - 0.5));
+            expect(chip.bottom, lessThanOrEqualTo(row.bottom + 0.5));
+            expect(tester.takeException(), isNull);
+          });
+        }
+      }
+    }
+
+    testWidgets('selected off-screen chip scrolls into view', (tester) async {
+      _useViewport(tester, 320, 568);
+      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
+      await _settle(tester);
+      final special = find.text('Special');
+      await tester.ensureVisible(special);
+      await tester.tap(special);
+      await _settle(tester);
+      final r = tester.getRect(special);
+      expect(r.right, lessThanOrEqualTo(320));
+      expect(r.left, greaterThanOrEqualTo(0));
+      // And back to All (scroll the row back first, as a user would).
+      await tester.ensureVisible(find.text('All'));
+      await _settle(tester);
+      await tester.tap(find.text('All'));
+      await _settle(tester);
+      expect(tester.getRect(find.text('All')).left, greaterThanOrEqualTo(0));
+    });
+  });
 }

@@ -68,7 +68,21 @@ class NuvoPill extends StatelessWidget {
     final bg = onDark
         ? color.withValues(alpha: 0.18)
         : color.withValues(alpha: 0.09);
-    final text = onDark ? NuvoColors.white : color;
+    final tc = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final text = onDark
+        ? NuvoColors.white
+        : !dark
+        ? color
+        : color == NuvoColors.blue
+        ? tc.accent
+        : color == NuvoColors.success
+        ? tc.successText
+        : color == NuvoColors.danger
+        ? tc.dangerText
+        : color == NuvoColors.warning
+        ? tc.warningText
+        : color;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -477,7 +491,7 @@ class NuvoStatTile extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.headlineMedium.copyWith(
-              color: NuvoColors.blue,
+              color: context.themeColors.accent,
             ),
           ),
           const SizedBox(height: 3),
@@ -695,7 +709,7 @@ class NuvoTextInput extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
+              borderSide: BorderSide(color: c.accent, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
@@ -711,7 +725,7 @@ class NuvoTextInput extends StatelessWidget {
               color: c.inkMuted,
             ),
             errorStyle: AppTextStyles.bodySmall.copyWith(
-              color: NuvoColors.danger,
+              color: c.dangerText,
             ),
           ),
         ),
@@ -785,7 +799,7 @@ class NuvoSearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
+          borderSide: BorderSide(color: c.accent, width: 2),
         ),
       ),
     );

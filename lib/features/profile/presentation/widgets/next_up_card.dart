@@ -49,15 +49,15 @@ class NextUpCard extends StatelessWidget {
                     Text(
                       'Race toward it',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.blue,
+                        color: context.themeColors.accent,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(width: 2),
-                    const Icon(
+                    Icon(
                       Icons.arrow_forward_rounded,
                       size: 13,
-                      color: NuvoColors.blue,
+                      color: context.themeColors.accent,
                     ),
                   ],
                 ),
@@ -139,7 +139,7 @@ class NextUpCard extends StatelessWidget {
                             NuvoProgressBar(
                               value: next.goalProgress,
                               height: 10,
-                              color: NuvoColors.blue,
+                              color: context.themeColors.accent,
                               trackColor: c.track,
                             ),
                           ],

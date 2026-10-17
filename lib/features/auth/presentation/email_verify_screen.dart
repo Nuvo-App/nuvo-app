@@ -160,7 +160,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -189,7 +189,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                             Text(
                               'Enter the 6-digit code we sent to ${widget.email}.',
                               style: AppTextStyles.bodyLarge.copyWith(
-                                color: NuvoColors.muted,
+                                color: context.themeColors.inkMuted,
                               ),
                             ),
                             const SizedBox(height: 32),
@@ -199,7 +199,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                               Text(
                                 _error!,
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.danger,
+                                  color: context.themeColors.dangerText,
                                 ),
                               ),
                             ],
@@ -208,7 +208,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                               child: Text(
                                 "Didn't get a code?",
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.muted,
+                                  color: context.themeColors.inkMuted,
                                 ),
                               ),
                             ),
@@ -228,8 +228,8 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color:
                                         (_resending || _resendCooldownLeft > 0)
-                                        ? NuvoColors.muted
-                                        : NuvoColors.blue,
+                                        ? context.themeColors.inkMuted
+                                        : context.themeColors.accent,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),

@@ -104,7 +104,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 .where(
                   (r) =>
                       r.winnerUserId == uid ||
-                      r.finalStandings.any((s) => s.userId == uid && s.rank == 1),
+                      r.finalStandings.any(
+                        (s) => s.userId == uid && s.rank == 1,
+                      ),
                 )
                 .length;
       winRate = finishedRaces.isEmpty
@@ -115,7 +117,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final screen = Scaffold(
       backgroundColor: c.page,
       body: RefreshIndicator(
-        color: NuvoColors.blue,
+        color: context.themeColors.accent,
         backgroundColor: c.surface,
         onRefresh: () => Future.wait([
           // Races reload only when the record is derived from the list.
@@ -128,13 +130,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
+            // Top block: title → identity → level → achievements → record,
+            // then the heat map, which absorbs whatever room is left so the
+            // first viewport (above the dock) ends on its Less/More key.
             SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
+                padding: const EdgeInsets.fromLTRB(
                   NuvoSpacing.pageHorizontal,
                   32,
                   NuvoSpacing.pageHorizontal,
-                  NuvoBottomNav.bottomPadding(context),
+                  0,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,10 +154,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                     // Identity — the person, not the account. Settings and
                     // everything administrative live one tap away.
-                    _IdentityCard(
-                      user: user,
-                      level: progression?.level,
-                    ).nuvoEnter(),
+                    _IdentityCard(user: user).nuvoEnter(),
                     const SizedBox(height: NuvoSpacing.lg),
 
                     // Level — the progression that belongs to the person,
@@ -167,17 +169,51 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // goal and the next unlock live behind it.
                     _AchievementsRow(progression: progression),
 
-                    // The record — racing now, wins, win rate — then the
-                    // activity heat map.
+                    // The record — racing now, wins, win rate.
                     const SizedBox(height: NuvoSpacing.xl),
                     _StatsStrip(
                       activeCount: activeCount,
                       wins: wins,
                       winRate: winRate,
                     ),
-                    const ActivityHeatmapSection(),
-                    const SizedBox(height: NuvoSpacing.xl),
-
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: NuvoSpacing.pageHorizontal,
+              ),
+              sliver: SliverLayoutBuilder(
+                builder: (context, sc) {
+                  // Room left between the end of the record strip and the
+                  // top of the dock, measured at rest. Short screens get
+                  // 0 and the section keeps its natural height (scroll).
+                  final room =
+                      sc.viewportMainAxisExtent -
+                      sc.precedingScrollExtent -
+                      MediaQuery.paddingOf(context).bottom -
+                      NuvoBottomNav.navTopBreath;
+                  return SliverToBoxAdapter(
+                    child: ActivityHeatmapSection(
+                      minHeight: math.max(0.0, room),
+                    ),
+                  );
+                },
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  NuvoSpacing.pageHorizontal,
+                  // Calm space so Your Nuvo always starts below the fold.
+                  NuvoSpacing.xl,
+                  NuvoSpacing.pageHorizontal,
+                  NuvoBottomNav.bottomPadding(context),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     // Your Nuvo — the things that are mine and how the app
                     // feels. Account, privacy and legal live in Settings.
                     const _SectionLabel(label: 'Your Nuvo'),
@@ -194,8 +230,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           icon: Icons.notifications_outlined,
                           label: 'Notifications',
                           subtitle: 'Race and crew updates',
-                          onTap: () =>
-                              context.push('/settings/notifications'),
+                          onTap: () => context.push('/settings/notifications'),
                         ),
                         const _AppearanceRow(),
                         _AccountRow(
@@ -238,18 +273,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 
-/// Who I am on Nuvo: avatar, name, handle and level. The user is the hero —
+/// Who I am on Nuvo: avatar, name and handle. The user is the hero —
 /// this lives directly on the page, no card around it. Sharing the identity
 /// is the "My code" row under Your Nuvo.
 class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.user, this.level});
+  const _IdentityCard({required this.user});
 
   final AuthUser? user;
-
-  /// The person's Nuvo level — identity metadata, shown as a quiet blue
-  /// line under the handle. Null while progression is still loading; the
-  /// line simply isn't claimed until the server answers.
-  final int? level;
 
   @override
   Widget build(BuildContext context) {
@@ -354,30 +384,6 @@ class _IdentityCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  if (level != null) ...[
-                    const SizedBox(height: 6),
-                    // The level is status, not helper text — an ice badge
-                    // under the name, the same figure the leaderboard sees.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.panelLight,
-                        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                      ),
-                      child: Text(
-                        'LEVEL $level',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.blue,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -451,10 +457,13 @@ class _LevelTrack extends ConsumerWidget {
     // Near the threshold the payoff turns gold — level-up is the one gold
     // moment in the progression loop, so the last stretch previews it.
     final nearNext = p.progress >= 0.9;
-    final xpColor = nearNext ? NuvoColors.gold : NuvoColors.blue;
+    final xpColor = nearNext
+        ? context.themeColors.goldText
+        : context.themeColors.accent;
     return Semantics(
       button: true,
-      label: 'Level ${p.level}. ${p.xpToNext} XP to level ${p.level + 1}. '
+      label:
+          'Level ${p.level}. ${p.xpToNext} XP to level ${p.level + 1}. '
           'Tap to see what levels unlock.',
       child: NuvoPressable(
         onTap: () => _showLevelExplainer(context, p),
@@ -475,43 +484,48 @@ class _LevelTrack extends ConsumerWidget {
               // LEVEL header row — the level figure on the left, the XP
               // fraction on the right, sharing one baseline.
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'LEVEL ',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: c.ink,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'LEVEL ',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: c.ink,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                            ),
                           ),
-                        ),
-                        // The level number is the anchor — the same figure
-                        // the leaderboard sees.
-                        TextSpan(
-                          text: '${p.level}',
-                          style: AppTextStyles.statLarge(
-                            24,
-                            color: NuvoColors.blue,
-                            weight: FontWeight.w900,
+                          // The level number is the anchor — the same figure
+                          // the leaderboard sees.
+                          TextSpan(
+                            text: '${p.level}',
+                            style: AppTextStyles.statLarge(
+                              24,
+                              color: context.themeColors.accent,
+                              weight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const Spacer(),
-                  Text(
-                    '${p.currentLevelXp} / ${p.nextLevelXp} XP',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: c.inkSubtle,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '${p.currentLevelXp} / ${p.nextLevelXp} XP',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: c.inkSubtle,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -550,8 +564,95 @@ class _LevelTrack extends ConsumerWidget {
   }
 }
 
-/// What the level means — how XP is earned and what the next level unlocks.
-/// Numbers mirror the server's XP economy (worker `XP_AWARDS`).
+// Mild, readable tints for the XP-source pills: (fill base, text on light,
+// text on dark). One hue per amount; never saturated.
+const _kXpSources = <(String, String, Color, Color, Color)>[
+  (
+    '+10',
+    'Accepted proof',
+    Color(0xFF3B82F6),
+    Color(0xFF1D4ED8),
+    Color(0xFF93C5FD),
+  ),
+  (
+    '+25',
+    'Finish a race',
+    Color(0xFF22C55E),
+    Color(0xFF15803D),
+    Color(0xFF86EFAC),
+  ),
+  (
+    '+15',
+    'Win a race',
+    Color(0xFFF59E0B),
+    Color(0xFF92400E),
+    Color(0xFFFCD34D),
+  ),
+  (
+    '+5',
+    'Personal best',
+    Color(0xFF8B5CF6),
+    Color(0xFF6D28D9),
+    Color(0xFFC4B5FD),
+  ),
+];
+
+class _XpSourceRow extends StatelessWidget {
+  const _XpSourceRow({
+    required this.amount,
+    required this.label,
+    required this.base,
+    required this.textLight,
+    required this.textDark,
+  });
+
+  final String amount;
+  final String label;
+  final Color base;
+  final Color textLight;
+  final Color textDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Container(
+          constraints: const BoxConstraints(minWidth: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: base.withValues(alpha: dark ? 0.22 : 0.16),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            amount,
+            maxLines: 1,
+            style: AppTextStyles.labelLarge.copyWith(
+              color: dark ? textDark : textLight,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: c.ink,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// What the level means — XP progress, how XP is earned and what the next
+/// level unlocks. Numbers mirror the server's XP economy (worker
+/// `XP_AWARDS`): +10 accepted proof, +25 finish, +15 win, +5 personal best.
 void _showLevelExplainer(BuildContext context, NuvoProgression p) {
   final c = context.themeColors;
   final next = p.nextUnlock;
@@ -563,54 +664,84 @@ void _showLevelExplainer(BuildContext context, NuvoProgression p) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (sheetContext) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Level ${p.level}',
-              style: AppTextStyles.titleLarge.copyWith(
-                color: c.ink,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${p.xpToNext} XP to Level ${p.level + 1}',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: NuvoSpacing.lg),
-            Text(
-              'XP comes from racing',
-              style: AppTextStyles.labelLarge.copyWith(
-                color: c.ink,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            for (final line in const [
-              '+10 for every accepted proof',
-              '+25 for finishing a race',
-              '+15 for winning one',
-              '+5 for a personal best',
-            ])
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  line,
-                  style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+            // Header — level and the XP still owed, with a slim bar.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Level ${p.level}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      color: c.ink,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    '${p.xpToNext} XP to Level ${p.level + 1}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.themeColors.accent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: p.progress.clamp(0.0, 1.0).toDouble(),
+                minHeight: 6,
+                backgroundColor: c.inkMuted.withValues(alpha: 0.16),
+                valueColor: AlwaysStoppedAnimation(context.themeColors.accent),
               ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Earn XP by racing — every level unlocks something new.',
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+            ),
+            const SizedBox(height: NuvoSpacing.lg),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: c.panelLight,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: c.border.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < _kXpSources.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    _XpSourceRow(
+                      amount: _kXpSources[i].$1,
+                      label: _kXpSources[i].$2,
+                      base: _kXpSources[i].$3,
+                      textLight: _kXpSources[i].$4,
+                      textDark: _kXpSources[i].$5,
+                    ),
+                  ],
+                ],
+              ),
+            ),
             const SizedBox(height: NuvoSpacing.lg),
             Text(
-              next == null
-                  ? 'You have everything this level unlocks'
-                  : 'Level ${next.level} unlocks',
+              next == null ? 'Everything unlocked so far' : 'Next unlock',
               style: AppTextStyles.labelLarge.copyWith(
                 color: c.ink,
                 fontWeight: FontWeight.w800,
@@ -618,32 +749,49 @@ void _showLevelExplainer(BuildContext context, NuvoProgression p) {
             ),
             if (next != null) ...[
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  _NextUnlockArtifact(unlock: next),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          next.name,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: c.ink,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        if ((next.description ?? '').isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.panelLight,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: c.border.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    _NextUnlockArtifact(unlock: next),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            next.description!,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: c.inkMuted,
+                            next.name,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: c.ink,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                      ],
+                          if ((next.description ?? '').isNotEmpty)
+                            Text(
+                              next.description!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: c.inkMuted,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Level ${next.level}',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: context.themeColors.accent,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
             const SizedBox(height: NuvoSpacing.xl),
@@ -873,13 +1021,7 @@ class _ProgressionSkeleton extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            bar(90, 22),
-            const Spacer(),
-            bar(70, 12),
-          ],
-        ),
+        Row(children: [bar(90, 22), const Spacer(), bar(70, 12)]),
         const SizedBox(height: 10),
         Container(
           height: 12,
@@ -949,7 +1091,8 @@ class _AchievementsRow extends StatelessWidget {
     final featured = p.featuredBadges.take(3).toList();
     return Semantics(
       button: true,
-      label: 'Achievements, ${p.achievementsEarned} of '
+      label:
+          'Achievements, ${p.achievementsEarned} of '
           '${p.achievementsTotal} earned. Tap to see all.',
       child: NuvoPressable(
         onTap: () => context.push('/profile/badges'),
@@ -1030,10 +1173,14 @@ class _StatsStrip extends StatelessWidget {
         _HeaderStat(
           value: activeCount,
           label: 'RACING',
-          color: NuvoColors.blue,
+          color: context.themeColors.accent,
         ),
         _HeaderDivider(),
-        _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
+        _HeaderStat(
+          value: wins,
+          label: 'WINS',
+          color: context.themeColors.goldText,
+        ),
         _HeaderDivider(),
         _HeaderStat(
           value: winRate,
@@ -1414,7 +1561,7 @@ class _AccountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final color = isDanger ? NuvoColors.danger : c.ink;
+    final color = isDanger ? context.themeColors.dangerText : c.ink;
     final bg = isDanger
         ? NuvoColors.danger.withValues(alpha: 0.10)
         : c.panelLight;

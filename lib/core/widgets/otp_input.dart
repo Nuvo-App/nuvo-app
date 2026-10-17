@@ -104,14 +104,14 @@ class _OtpInputState extends State<OtpInput> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  borderSide: const BorderSide(
-                    color: NuvoColors.blue,
+                  borderSide: BorderSide(
+                    color: context.themeColors.accent,
                     width: 1.8,
                   ),
                 ),
                 errorBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  borderSide: const BorderSide(color: NuvoColors.danger),
+                  borderSide: BorderSide(color: context.themeColors.dangerText),
                 ),
               ),
             ),

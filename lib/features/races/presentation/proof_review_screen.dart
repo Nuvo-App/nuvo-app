@@ -431,7 +431,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                         decoration: BoxDecoration(
                           color: context.semanticColors.danger.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: NuvoColors.dangerBorder),
+                          border: Border.all(color: context.semanticColors.danger.border),
                         ),
                         child: Text(
                           _error!,
@@ -545,7 +545,7 @@ class _MoveSummaryCard extends StatelessWidget {
               NuvoPill(
                 label: proof.proofType == 'ai_motion' ? 'Verified' : 'Manual',
                 color: proof.proofType == 'ai_motion'
-                    ? NuvoColors.blue
+                    ? context.themeColors.accent
                     : context.themeColors.inkMuted,
               ),
               const Spacer(),
@@ -567,7 +567,7 @@ class _MoveSummaryCard extends StatelessWidget {
             Text(
               valueLabel,
               style: AppTextStyles.headlineMedium.copyWith(
-                color: NuvoColors.blue,
+                color: context.themeColors.accent,
               ),
             ),
           ],

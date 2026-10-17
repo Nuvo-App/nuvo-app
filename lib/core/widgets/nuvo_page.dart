@@ -178,7 +178,9 @@ class NuvoSectionHeader extends StatelessWidget {
             haptic: false,
             child: Text(
               'See all',
-              style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.blue),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: context.themeColors.accent,
+              ),
             ),
           ),
       ],
