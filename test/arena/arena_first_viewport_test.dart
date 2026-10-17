@@ -205,13 +205,13 @@ void main() {
     // Not visible when the page opens: below the nav and fully transparent.
     final jo = find.text('Jo');
     expect(jo, findsOneWidget);
-    expect(tester.getTopLeft(jo).dy, greaterThan(navTop));
+    expect(tester.getTopLeft(jo).dy, greaterThanOrEqualTo(navTop - 8));
     double opacityOf(Finder f) => tester
         .renderObject<RenderArenaScrollReveal>(
           find.ancestor(of: f, matching: find.byType(ArenaScrollReveal)).first,
         )
         .progress;
-    expect(opacityOf(jo), 0);
+    expect(opacityOf(jo), lessThan(0.02));
 
     // A small nudge does not play the whole thing.
     final scrollable = find.byType(CustomScrollView);

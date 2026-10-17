@@ -177,9 +177,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               }
             }
             final micro = _heroModeFor(heroHeight) == _HeroMode.micro;
-            final podiumHeight = math.min(
-              300.0,
-              math.max(podiumMin, avail - chromeFor(micro) - heroHeight),
+            // The podium takes everything the hero leaves, down to the fold
+            // (just the caret below it), so the first screen has no dead air.
+            final podiumHeight = math.max(
+              podiumMin,
+              avail - chromeFor(micro) - heroHeight,
             );
             final scroller = RefreshIndicator(
               color: context.themeColors.accent,
@@ -345,7 +347,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               NuvoSpacing.pageHorizontal,
                               0,
                               NuvoSpacing.pageHorizontal,
-                              bottomPad,
+                              hasRest ? 0 : bottomPad,
                             ),
                             child: hasPodium
                                 ? Column(
@@ -387,7 +389,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             NuvoSpacing.pageHorizontal,
                             0,
                             NuvoSpacing.pageHorizontal,
-                            bottomPad,
+                            // Room under the last row so it can finish fading in.
+                            bottomPad +
+                                ArenaRestList.tailRoom(media.textScaler),
                           ),
                           child: ArenaRestList(
                             entries: podiumData.rest,

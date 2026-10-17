@@ -68,7 +68,7 @@ class ArenaPodium extends StatefulWidget {
   static const double _otherAvatar = 36;
   static const double _minBlock = 56;
 
-  /// Height of the label stack above a block (crown, avatar, name, score).
+  /// Height of the label stack above a block (avatar, name, score).
   static double labelsHeight(TextScaler scaler) =>
       _winnerAvatar + 2 + scaler.scale(13) * 1.25 + scaler.scale(15) * 1.25 + 4;
 
@@ -232,16 +232,6 @@ class _PodiumColumn extends StatelessWidget {
                     borderColor: entry.isMe ? c.accent : c.border,
                     borderWidth: entry.isMe ? 3 : 1.5,
                   ),
-                  if (winner)
-                    const Positioned(
-                      top: -9,
-                      right: -9,
-                      child: Icon(
-                        Icons.emoji_events_rounded,
-                        size: 18,
-                        color: arenaPodiumGold,
-                      ),
-                    ),
                 ],
               ),
               const SizedBox(height: 2),

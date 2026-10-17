@@ -21,16 +21,17 @@ import 'package:nuvo/features/races/presentation/race_controller.dart';
 class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
   @override
-  Future<RestoreResult> restoreSession() async =>
-      RestoreOk(const AuthUser(
-    id: 'user-1',
-    email: 'test@getnuvo.net',
-    fullName: 'Test User',
-    username: 'testuser',
-    onboardingComplete: true,
-    hasMemberPass: true,
-    termsAccepted: true,
-  ));
+  Future<RestoreResult> restoreSession() async => RestoreOk(
+    const AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 }
 
 class _StubRaceRepo extends RaceRepository {
@@ -195,6 +196,9 @@ void main() {
     testWidgets('quick starts section renders its tiles', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
       await tester.pumpAndSettle();
+      // Quick starts sit below the fold until the page is scrolled.
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+      await tester.pumpAndSettle();
       expect(find.text('Quick starts'), findsOneWidget);
       // 5 quick start tiles.
       expect(find.text('Pushups'), findsOneWidget);
@@ -218,6 +222,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       // The narrowest tile still shows its full preset line.
       expect(find.text('First to 100'), findsOneWidget);
@@ -354,9 +360,7 @@ void main() {
       expect(find.text('See all'), findsOneWidget);
     });
 
-    testWidgets('100 races: 3 capped rows + See all', (
-      tester,
-    ) async {
+    testWidgets('100 races: 3 capped rows + See all', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(100))));
       await tester.pumpAndSettle();
       expect(find.byType(NuvoFeaturedRaceCard), findsNothing);

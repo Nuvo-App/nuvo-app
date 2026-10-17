@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -81,6 +83,16 @@ class _ArenaRestArrowState extends State<ArenaRestArrow>
 /// places appear one after another, driven by how far the viewer has scrolled
 /// (not by a timer that fires on the first nudge).
 class ArenaRestList extends StatelessWidget {
+  /// Approximate height of one row, used to size the reveal and the tail.
+  static double rowHeight(TextScaler s) =>
+      24 + math.max(34.0, s.scale(16) * 1.4) + 4;
+
+  /// Extra scroll room under the last row so it reaches full opacity.
+  static double tailRoom(TextScaler s) => rowHeight(s) * (revealRows - 1);
+
+  /// How many row-heights a row takes to fade from nothing to full.
+  static const double revealRows = 2.4;
+
   const ArenaRestList({
     super.key,
     required this.entries,
@@ -164,8 +176,11 @@ class RenderArenaScrollReveal extends RenderProxyBox {
     if (!attached || !hasSize) return 0;
     final top = localToGlobal(Offset.zero).dy;
     final line = screenHeight - foldInset;
-    final t = ((line - top) / size.height).clamp(0.0, 1.0);
-    return Curves.easeOut.transform(t);
+    final t = ((line - top) / (size.height * ArenaRestList.revealRows)).clamp(
+      0.0,
+      1.0,
+    );
+    return Curves.easeInOut.transform(t);
   }
 
   @override

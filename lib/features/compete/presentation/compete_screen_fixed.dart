@@ -193,6 +193,23 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                   // would only manufacture a dead zone between the last fitting
                   // row and the tiles below it.
                   if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
+                    SliverLayoutBuilder(
+                      builder: (context, sc) {
+                        // Quick starts live below the fold: when the races end
+                        // inside the viewport, the gap carries them to the nav's
+                        // top edge so nothing of them shows until you scroll.
+                        final remaining =
+                            sc.viewportMainAxisExtent -
+                            sc.precedingScrollExtent -
+                            MediaQuery.paddingOf(context).bottom;
+                        return SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: remaining > 0 ? remaining + 4 : 0,
+                          ),
+                        );
+                      },
+                    ),
+                  if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         NuvoSpacing.pageHorizontal,
