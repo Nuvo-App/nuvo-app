@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/nuvo_flags.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
@@ -892,6 +893,28 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                           ],
                         ),
                       ],
+
+                      // ── Crews — the group race entry: start or join a
+                      // crew and race on one shared leaderboard.
+                      ValueListenableBuilder<bool>(
+                        valueListenable: NuvoFlags.crews,
+                        builder: (context, crewsOn, _) => crewsOn
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: _PeopleSurface(
+                                  children: [
+                                    _ActionRow(
+                                      icon: Icons.groups_rounded,
+                                      title: 'Crews',
+                                      subtitle: 'Race together on one leaderboard',
+                                      onTap: () => context.push('/crews'),
+                                      isLast: true,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
 
                       // ── Requests — people knocking, compressed to
                       // utility weight: one surface, single-line rows,

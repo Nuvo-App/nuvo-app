@@ -22,6 +22,7 @@ import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
 import { progressionRouter } from './routes/progression';
 import { crewRouter } from './routes/crew';
+import { squadsRouter } from './routes/squads';
 import { reportsRouter } from './routes/reports';
 import { invitesRouter } from './routes/invites';
 import { notificationsRouter } from './routes/notifications';
@@ -70,6 +71,8 @@ app.use(
 // ── App config (public; flip in the Cloudflare dashboard, no deploy) ──────────
 // custom_motion: Teach Nuvo / custom camera movements visible in the app.
 // clip_settle_factor: optional walk-in/out clip tuning (1.0-2.0).
+// crews: crew groups (/squads) exist on this worker. Older workers omit it, so
+// the app keeps the Crews entry hidden until the backend actually has them.
 app.get('/config', async (c) => {
   const env = c.env as unknown as Record<string, string | undefined>;
   const settle = Number(env.CLIP_SETTLE_FACTOR);
@@ -96,6 +99,7 @@ app.get('/config', async (c) => {
   }
   return c.json({
     custom_motion: customMotion,
+    crews: true,
     ...(Number.isFinite(settle) && settle >= 1 && settle <= 2
       ? { clip_settle_factor: settle }
       : {}),
@@ -344,6 +348,7 @@ app.route('/progression', progressionRouter);
 // ── Social routes ─────────────────────────────────────────────────────────────
 app.route('/users', usersRouter);
 app.route('/crew', crewRouter);
+app.route('/squads', squadsRouter);
 app.route('/invites', invitesRouter);
 app.route('/notifications', notificationsRouter);
 app.route('/reactions', reactionsRouter);

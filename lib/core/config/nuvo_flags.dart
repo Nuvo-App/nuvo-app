@@ -15,6 +15,10 @@ class NuvoFlags {
   /// Teach Nuvo / custom camera-counted movements. Off until the worker says on.
   static final ValueNotifier<bool> customMotion = ValueNotifier<bool>(false);
 
+  /// Crew groups. Off until the worker advertises them, so a build that
+  /// ships before (or after a rollback of) the backend never shows a dead entry.
+  static final ValueNotifier<bool> crews = ValueNotifier<bool>(false);
+
   static bool get customMotionOn => customMotion.value;
 
   /// [token] (optional access token) lets the server turn the feature on for
@@ -35,6 +39,7 @@ class NuvoFlags {
       final body = jsonDecode(res.body);
       if (body is! Map) return;
       customMotion.value = body['custom_motion'] == true;
+      crews.value = body['crews'] == true;
       final settle = body['clip_settle_factor'];
       if (settle is num && settle >= 1.0 && settle <= 2.0) {
         clip.clipSettleFactor = settle.toDouble();

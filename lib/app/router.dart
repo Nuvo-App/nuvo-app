@@ -50,6 +50,7 @@ import '../features/notifications/presentation/notification_prefs_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/social/presentation/add_crew_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
+import '../features/squads/presentation/crew_groups_screen.dart';
 import '../features/social/presentation/my_nuvo_screen.dart';
 import '../features/social/presentation/qr_scan_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
@@ -155,6 +156,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/crew/add',
         pageBuilder: (_, state) => _authPage(state, const AddCrewScreen()),
+      ),
+      GoRoute(
+        path: '/crews',
+        pageBuilder: (_, state) => _authPage(state, const CrewGroupsScreen()),
+      ),
+      GoRoute(
+        path: '/crews/:id',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          CrewGroupDetailScreen(groupId: state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: '/my-nuvo',
