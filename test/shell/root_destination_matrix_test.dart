@@ -60,15 +60,17 @@ class _AuthRepo extends AuthRepository {
   _AuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'user-1',
-        email: 'test@getnuvo.net',
-        fullName: 'Test User',
-        username: 'testuser',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 }
 
 class _RaceRepo extends RaceRepository {
@@ -97,7 +99,8 @@ class _CrewRepo implements CrewRepository {
   Future<List<CrewSearchResult>> search(String query) async => const [];
 
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
   @override
   Future<ConnectOutcome> add(String userId) async => ConnectOutcome.active;
   @override
@@ -187,9 +190,7 @@ Future<_App> _pumpRealApp(
       // A guide-eligible account landing on /arena is redirected to /compete —
       // legitimate product behavior, not a mapping bug. Complete the guide so
       // this test exercises destination mapping only.
-      firstRaceGuideProvider.overrideWith(
-        (ref) => FirstRaceGuideStep.complete,
-      ),
+      firstRaceGuideProvider.overrideWith((ref) => FirstRaceGuideStep.complete),
       ...extraOverrides,
     ],
   );
@@ -199,10 +200,7 @@ Future<_App> _pumpRealApp(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp.router(
-        theme: AppTheme.light(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
     ),
   );
   // /splash → restore → SplashScreen hands off on its own timer; drive the
@@ -224,12 +222,18 @@ final _matrix = <String, (Type screen, String path)>{
 };
 
 Finder _navLabel(String label) => find.descendant(
-      of: find.byKey(TrackSideLayoutKeys.navigationRow),
-      matching: find.text(label),
-    );
+  of: find.byKey(TrackSideLayoutKeys.navigationRow),
+  matching: find.text(label),
+);
 
 Future<void> _tapNav(WidgetTester tester, String label) async {
-  await tester.tap(_navLabel(label));
+  await tester.tap(
+    find.byKey(
+      ValueKey(
+        'nuvo-nav-slot-${['Arena', 'Compete', 'Crew', 'Profile'].indexOf(label)}',
+      ),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -254,7 +258,7 @@ void _expectDestination(_App app, WidgetTester tester, String label) {
   // 2. Highlight: the destination's nav label reads through Nuvo blue.
   expect(
     tester.widget<Text>(_navLabel(label)).style?.color,
-    NuvoColors.blue,
+    NuvoColors.page,
     reason: '$label must be the highlighted nav destination',
   );
 

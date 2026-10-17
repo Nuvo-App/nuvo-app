@@ -141,15 +141,15 @@ void main() {
     // the regression guard for the compact dock contract.
     expect(
       navBox.size.height,
-      NuvoBottomNav.navDockHeight + 34,
-      reason: 'nav renders dock height + safe inset, nothing else',
+      NuvoBottomNav.navDockHeight + NuvoBottomNav.navDockGap + 34,
+      reason: 'nav renders bar + gap + safe inset, nothing else',
     );
     expect(
       navBox.size.height,
-      lessThan(100),
+      lessThan(120),
       reason:
-          'compact dock: total footprint stays under ~100px on modern '
-          'iPhones (dock 58 + inset 34)',
+          'compact dock: total footprint stays under ~120px on modern '
+          'iPhones (bar 64 + gap 10 + inset 34)',
     );
 
     // The shared scroll contract reserves the dock, the breathing strip above its
@@ -162,13 +162,14 @@ void main() {
     expect(
       clearance,
       NuvoBottomNav.navDockHeight +
+          NuvoBottomNav.navDockGap +
           34 +
           NuvoBottomNav.navTopBreath +
           NuvoBottomNav.navScrollClearance,
     );
     expect(
       clearance,
-      lessThan(115),
+      lessThan(135),
       reason:
           'screens reserve the full obstruction + a small gap, not a '
           'shelf',

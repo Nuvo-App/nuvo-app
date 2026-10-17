@@ -49,7 +49,7 @@ void main() {
     expect(find.text('Arena'), findsWidgets);
     expect(find.text('Your next move'), findsOneWidget);
     expect(find.text('First to 100 Pushups'), findsOneWidget);
-    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.text('Leaderboard'), findsNothing);
     expect(find.text('Submit proof'), findsWidgets);
     expect(find.text('Start'), findsNothing);
     // Quick actions: one text primary + two icon-only secondaries in a row.
@@ -71,7 +71,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('First to 100 Pushups'), findsOneWidget);
-    expect(find.text('65'), findsOneWidget);
+    expect(find.text('65'), findsWidgets);
   });
 
   testWidgets('Recent activity is gone from Arena (it lives on Crew)', (

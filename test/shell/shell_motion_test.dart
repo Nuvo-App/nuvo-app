@@ -42,15 +42,17 @@ class _AuthRepo extends AuthRepository {
   _AuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'user-1',
-        email: 'test@getnuvo.net',
-        fullName: 'Test User',
-        username: 'testuser',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 }
 
 class _RaceRepo extends RaceRepository {
@@ -79,7 +81,8 @@ class _CrewRepo implements CrewRepository {
   Future<List<CrewSearchResult>> search(String query) async => const [];
 
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
   @override
   Future<ConnectOutcome> add(String userId) async => ConnectOutcome.active;
   @override
@@ -246,6 +249,12 @@ const _tabMap = <String, (String marker, IconData icon)>{
   'Profile': ('profile-tab', Icons.person_outline),
 };
 
+Finder _slot(String label) => find.byKey(
+  ValueKey(
+    'nuvo-nav-slot-${['Arena', 'Compete', 'Crew', 'Profile'].indexOf(label)}',
+  ),
+);
+
 void _expectSelected(WidgetTester tester, String label) {
   final (marker, _) = _tabMap[label]!;
   expect(
@@ -257,7 +266,7 @@ void _expectSelected(WidgetTester tester, String label) {
   // destination.
   expect(
     tester.widget<Text>(find.text(label)).style?.color,
-    NuvoColors.blue,
+    NuvoColors.page,
     reason: '$label must be the highlighted nav destination',
   );
 }
@@ -268,7 +277,7 @@ void main() {
   ) async {
     await _pumpShell(tester);
     for (final label in _tabMap.keys) {
-      await tester.tap(find.text(label));
+      await tester.tap(_slot(label));
       await tester.pumpAndSettle();
       _expectSelected(tester, label);
     }
@@ -277,7 +286,7 @@ void main() {
   testWidgets('body and nav agree across a full tab tour', (tester) async {
     await _pumpShell(tester);
     for (final label in ['Crew', 'Compete', 'Profile', 'Arena']) {
-      await tester.tap(find.text(label));
+      await tester.tap(_slot(label));
       await tester.pumpAndSettle();
       _expectSelected(tester, label);
     }
@@ -310,9 +319,9 @@ void main() {
     expect(find.text('taps-arena:1'), findsOneWidget);
 
     // Arena → Crew → Arena.
-    await tester.tap(find.text('Crew'));
+    await tester.tap(_slot('Crew'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Arena'));
+    await tester.tap(_slot('Arena'));
     await tester.pumpAndSettle();
 
     expect(
@@ -331,7 +340,7 @@ void main() {
     tester,
   ) async {
     await _pumpShell(tester);
-    await tester.tap(find.text('Crew'));
+    await tester.tap(_slot('Crew'));
     await tester.pumpAndSettle();
 
     // The Crew tab is live; Arena is still mounted but offstage.
@@ -378,7 +387,7 @@ void main() {
     await _pumpShell(tester);
 
     // Arena (index 0) → Crew (index 2): Crew arrives from the right.
-    await tester.tap(find.text('Crew'));
+    await tester.tap(_slot('Crew'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -416,7 +425,8 @@ void main() {
     expect(
       dxOf('pass'),
       greaterThan(0),
-      reason: 'moving to a rightward tab slides the new screen in '
+      reason:
+          'moving to a rightward tab slides the new screen in '
           'from the right (positive dx, easing to zero)',
     );
 
@@ -437,11 +447,11 @@ void main() {
   ) async {
     await _pumpShell(tester);
 
-    await tester.tap(find.text('Crew'));
+    await tester.tap(_slot('Crew'));
     await tester.pump(const Duration(milliseconds: 60));
-    await tester.tap(find.text('Compete'));
+    await tester.tap(_slot('Compete'));
     await tester.pump(const Duration(milliseconds: 60));
-    await tester.tap(find.text('Profile'));
+    await tester.tap(_slot('Profile'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -453,14 +463,14 @@ void main() {
     tester,
   ) async {
     await _pumpShell(tester);
-    await tester.tap(find.text('Crew'));
+    await tester.tap(_slot('Crew'));
     await tester.pumpAndSettle();
 
     final icon = tester.widget<Icon>(find.byIcon(Icons.group));
     expect(
       icon.color,
-      NuvoColors.blue,
-      reason: 'the active destination settles on Nuvo blue',
+      NuvoColors.page,
+      reason: 'the selected icon sits on the dark pill',
     );
   });
 }

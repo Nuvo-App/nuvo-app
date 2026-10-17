@@ -59,42 +59,31 @@ void main() {
   for (final dark in [false, true]) {
     for (final scale in [1.0, 1.4]) {
       testWidgets(
-        'dock: 4 equal 44pt+ cells, no overflow (dark=$dark, scale=$scale)',
+        'dock: 4 slots, 44pt+ targets, no overflow (dark=$dark, scale=$scale)',
         (tester) async {
           final taps = await _pumpDock(tester, dark: dark, scale: scale);
           expect(tester.takeException(), isNull);
-          final rects = [
-            for (final d in nuvoDestinations)
-              tester.getRect(
-                find
-                    .ancestor(
-                      of: find.text(d.label),
-                      matching: find.byType(Expanded),
-                    )
-                    .first,
-              ),
-          ];
-          for (final r in rects) {
-            expect(r.width, closeTo(rects.first.width, 0.5));
+          for (var i = 0; i < 4; i++) {
+            final r = tester.getRect(find.byKey(ValueKey('nuvo-nav-slot-$i')));
             expect(r.width, greaterThanOrEqualTo(44));
             expect(r.height, greaterThanOrEqualTo(44));
           }
-          await tester.tap(find.text('Crew'));
-          await tester.tap(find.text('Profile'));
+          await tester.tap(find.byKey(const ValueKey('nuvo-nav-slot-2')));
+          await tester.tap(find.byKey(const ValueKey('nuvo-nav-slot-3')));
           expect(taps, [2, 3]);
         },
       );
     }
   }
 
-  testWidgets('exactly one selected indicator, on the current tab', (
+  testWidgets('exactly one selected pill, labelled, on the current tab', (
     tester,
   ) async {
     for (var i = 0; i < 4; i++) {
       await _pumpDock(tester, current: i);
       expect(find.byKey(const ValueKey('nuvo-nav-indicator')), findsOneWidget);
-      final label = tester.widget<Text>(find.text(nuvoDestinations[i].label));
-      expect(label.style?.fontWeight, FontWeight.w800);
+      expect(find.text(nuvoDestinations[i].label), findsOneWidget);
+      expect(find.byType(Text), findsOneWidget);
     }
   });
 
@@ -110,10 +99,7 @@ void main() {
       final router = GoRouter(
         initialLocation: '/move?race=r1',
         routes: [
-          GoRoute(
-            path: '/move',
-            redirect: (_, s) => moveRedirect(s.uri),
-          ),
+          GoRoute(path: '/move', redirect: (_, s) => moveRedirect(s.uri)),
           GoRoute(path: '/arena', builder: (_, _) => const Text('arena')),
           GoRoute(
             path: '/race/:id/proof',

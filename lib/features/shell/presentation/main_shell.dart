@@ -240,7 +240,6 @@ class _MainShellState extends ConsumerState<MainShell>
       rowKey: TrackSideLayoutKeys.navigationRow,
       currentIndex: currentIndex,
       onTap: _onTapTab,
-      isDark: false,
     );
 
     return Scaffold(
@@ -283,6 +282,7 @@ class _DockOcclusion extends StatelessWidget {
       child: Container(
         key: const ValueKey('nuvo-dock-occlusion'),
         height: MediaQuery.paddingOf(context).bottom +
+            NuvoBottomNav.navDockGap +
             NuvoBottomNav.navTopBreath,
         color: context.themeColors.page,
       ),
