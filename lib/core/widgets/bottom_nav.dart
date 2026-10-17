@@ -271,7 +271,9 @@ class _NavSlotState extends State<_NavSlot> {
           curve: Curves.easeOutCubic,
           builder: (context, t, _) {
             final width = slot + (pillWidth - slot) * t;
-            final fg = Color.lerp(colors.inkMuted, colors.page, t)!;
+            // The selected pill is Nuvo's electric blue in both themes, with a
+            // white icon + label (white on #1264FF is 4.9:1).
+            final fg = Color.lerp(colors.inkMuted, NuvoColors.white, t)!;
             return SizedBox(
               height: NuvoBottomNav.navDockHeight,
               width: width.clamp(slot, double.infinity),
@@ -285,7 +287,7 @@ class _NavSlotState extends State<_NavSlot> {
                     height: slot,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: colors.ink.withValues(alpha: t),
+                      color: NuvoColors.blue.withValues(alpha: t),
                       borderRadius: BorderRadius.circular(slot / 2),
                     ),
                     child: ClipRect(

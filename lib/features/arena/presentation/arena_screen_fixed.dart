@@ -47,6 +47,7 @@ class ArenaScreen extends ConsumerStatefulWidget {
 class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   final PageController _boardsController = PageController(viewportFraction: 1);
   int _boardPage = 0;
+  bool _moreBelow = false;
 
   @override
   void dispose() {
@@ -177,7 +178,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               300.0,
               math.max(podiumMin, avail - chromeFor(micro) - heroHeight),
             );
-            return RefreshIndicator(
+            final scroller = RefreshIndicator(
               color: context.themeColors.accent,
               backgroundColor: context.themeColors.surface,
               onRefresh: widget.preview
@@ -360,6 +361,58 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                     ),
                   ],
                 ],
+              ),
+            );
+            // When even the micro composition can't fit (very short phones),
+            // the page scrolls: a soft fade ending at the nav's top edge keeps
+            // anything passing under the nav from being sliced.
+            return NotificationListener<ScrollMetricsNotification>(
+              onNotification: (n) {
+                final more =
+                    n.metrics.axis == Axis.vertical &&
+                    n.metrics.extentAfter > 0.5;
+                if (more != _moreBelow) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) setState(() => _moreBelow = more);
+                  });
+                }
+                return false;
+              },
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  if (n.depth == 0 && n.metrics.axis == Axis.vertical) {
+                    final more = n.metrics.extentAfter > 0.5;
+                    if (more != _moreBelow) setState(() => _moreBelow = more);
+                  }
+                  return false;
+                },
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: scroller),
+                    if (_moreBelow)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: bottomPad,
+                        height: 28,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const ValueKey('nuvo-bottom-fade'),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  context.themeColors.page.withValues(alpha: 0),
+                                  context.themeColors.page,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             );
           },

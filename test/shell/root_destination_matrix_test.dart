@@ -255,10 +255,11 @@ void _expectDestination(_App app, WidgetTester tester, String label) {
     );
   }
 
-  // 2. Highlight: the destination's nav label reads through Nuvo blue.
+  // 2. Highlight: the selected destination sits in Nuvo's electric-blue pill
+  // with a white label.
   expect(
     tester.widget<Text>(_navLabel(label)).style?.color,
-    NuvoColors.page,
+    NuvoColors.white,
     reason: '$label must be the highlighted nav destination',
   );
 

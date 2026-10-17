@@ -548,291 +548,332 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       backgroundColor: context.themeColors.page,
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
-          onRefresh: _refreshAll,
-          child: ListView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            // Horizontal inset moves inside the sections — the social
-            // field bleeds edge-to-edge while content keeps the 20 inset.
-            padding: EdgeInsets.fromLTRB(
-              0,
-              20,
-              0,
-              NuvoBottomNav.bottomPadding(context),
-            ),
-            children: [
-              // ── Header ───────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NuvoSpacing.pageHorizontal,
-                ),
-                child: _CrewHeader(
-                  subtitle: crew.isEmpty
-                      ? 'Find people to race with.'
-                      : 'Your people, all in one place',
-                  onMyCode: () => context.push('/my-nuvo'),
-                  searchOpen: _searchOpen,
-                  onToggleSearch: () =>
-                      setState(() => _searchOpen = !_searchOpen),
-                ),
-              ),
-
-              // ── Search expands inline from the header icon — a tool that
-              // opens when needed, not a section competing with the people.
-              if (_searchOpen) ...[
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NuvoSpacing.pageHorizontal,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: RefreshIndicator(
+                onRefresh: _refreshAll,
+                child: ListView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: NuvoSearchField(
-                          controller: _searchController,
-                          hint: 'Username or member ID',
-                          searching: _searching,
-                          autofocus: true,
-                          onChanged: _onSearchChanged,
+                  // Horizontal inset moves inside the sections — the social
+                  // field bleeds edge-to-edge while content keeps the 20 inset.
+                  padding: EdgeInsets.fromLTRB(
+                    0,
+                    20,
+                    0,
+                    NuvoBottomNav.bottomPadding(context),
+                  ),
+                  children: [
+                    // ── Header ───────────────────────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NuvoSpacing.pageHorizontal,
+                      ),
+                      child: _CrewHeader(
+                        subtitle: crew.isEmpty
+                            ? 'Find people to race with.'
+                            : 'Your people, all in one place',
+                        onMyCode: () => context.push('/my-nuvo'),
+                        searchOpen: _searchOpen,
+                        onToggleSearch: () =>
+                            setState(() => _searchOpen = !_searchOpen),
+                      ),
+                    ),
+
+                    // ── Search expands inline from the header icon — a tool that
+                    // opens when needed, not a section competing with the people.
+                    if (_searchOpen) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NuvoSpacing.pageHorizontal,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: NuvoSearchField(
+                                controller: _searchController,
+                                hint: 'Username or member ID',
+                                searching: _searching,
+                                autofocus: true,
+                                onChanged: _onSearchChanged,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _ScanButton(onTap: () => context.push('/scan')),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      _ScanButton(onTap: () => context.push('/scan')),
+                      if (_results.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NuvoSpacing.pageHorizontal,
+                          ),
+                          child: _SearchResultList(
+                            results: _results,
+                            crewState: crewState,
+                            onAdd: _addCrew,
+                            onAccept: _acceptRequest,
+                          ),
+                        ),
+                      ] else if (_searchError != null && !_searching) ...[
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NuvoSpacing.pageHorizontal,
+                          ),
+                          child: NuvoPressable(
+                            onTap: () =>
+                                _onSearchChanged(_searchController.text),
+                            haptic: false,
+                            child: _EmptyNote(text: _searchError!),
+                          ),
+                        ),
+                      ] else if (_searchController.text.trim().length >= 2 &&
+                          !_searching) ...[
+                        const SizedBox(height: 16),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: NuvoSpacing.pageHorizontal,
+                          ),
+                          child: _EmptyNote(
+                            text: 'No matching Nuvo members found.',
+                          ),
+                        ),
+                      ],
                     ],
-                  ),
-                ),
-                if (_results.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.pageHorizontal,
-                    ),
-                    child: _SearchResultList(
-                      results: _results,
-                      crewState: crewState,
-                      onAdd: _addCrew,
-                      onAccept: _acceptRequest,
-                    ),
-                  ),
-                ] else if (_searchError != null && !_searching) ...[
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.pageHorizontal,
-                    ),
-                    child: NuvoPressable(
-                      onTap: () => _onSearchChanged(_searchController.text),
-                      haptic: false,
-                      child: _EmptyNote(text: _searchError!),
-                    ),
-                  ),
-                ] else if (_searchController.text.trim().length >= 2 &&
-                    !_searching) ...[
-                  const SizedBox(height: 16),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.pageHorizontal,
-                    ),
-                    child: _EmptyNote(text: 'No matching Nuvo members found.'),
-                  ),
-                ],
-              ],
-              const SizedBox(height: 14),
+                    const SizedBox(height: 14),
 
-              // ── Loading ──────────────────────────────────────────────────
-              if (passLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: NuvoSpacing.pageHorizontal,
-                  ),
-                  child: _CrewSkeleton(),
-                )
-              // ── Error ────────────────────────────────────────────────────
-              else if (passError != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NuvoSpacing.pageHorizontal,
-                  ),
-                  child: NuvoErrorState(
-                    message: passError,
-                    onRetry: _refreshAll,
-                  ),
-                )
-              // ── Content ──────────────────────────────────────────────────
-              else ...[
-                // The lens switch leads the page: People (who I race with and
-                // what we are racing right now) and Activity (what happened).
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NuvoSpacing.pageHorizontal,
-                  ),
-                  child: _CrewTabs(
-                    selected: _feedTab,
-                    onSelect: (i) => setState(() => _feedTab = i),
-                    counts: [requests.length, null],
-                  ),
-                ),
-                const SizedBox(height: 16),
+                    // ── Loading ──────────────────────────────────────────────────
+                    if (passLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: NuvoSpacing.pageHorizontal,
+                        ),
+                        child: _CrewSkeleton(),
+                      )
+                    // ── Error ────────────────────────────────────────────────────
+                    else if (passError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NuvoSpacing.pageHorizontal,
+                        ),
+                        child: NuvoErrorState(
+                          message: passError,
+                          onRetry: _refreshAll,
+                        ),
+                      )
+                    // ── Content ──────────────────────────────────────────────────
+                    else ...[
+                      // The lens switch leads the page: People (who I race with and
+                      // what we are racing right now) and Activity (what happened).
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NuvoSpacing.pageHorizontal,
+                        ),
+                        child: _CrewTabs(
+                          selected: _feedTab,
+                          onSelect: (i) => setState(() => _feedTab = i),
+                          counts: [requests.length, null],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
 
-                if (crewState.error != null && crew.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      NuvoSpacing.pageHorizontal,
-                      0,
-                      NuvoSpacing.pageHorizontal,
-                      14,
-                    ),
-                    child: NuvoErrorState(
-                      message: crewState.error!,
-                      onRetry: () => ref
-                          .read(crewControllerProvider.notifier)
-                          .load(force: true),
-                    ),
-                  ),
-                if (activityState.error != null && feedItems.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      NuvoSpacing.pageHorizontal,
-                      0,
-                      NuvoSpacing.pageHorizontal,
-                      14,
-                    ),
-                    child: NuvoErrorState(
-                      message: activityState.error!,
-                      onRetry: () => ref
-                          .read(crewActivityProvider.notifier)
-                          .load(force: true),
-                    ),
-                  ),
-
-                // ── People — the crews entry, the people, their asks, and
-                // the races running with them right now.
-                if (_feedTab == 0) ...[
-                  _SocialField(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Race together on one leaderboard — start or join a
-                        // crew. Only when the server has crews switched on.
-                        ValueListenableBuilder<bool>(
-                          valueListenable: NuvoFlags.crews,
-                          builder: (context, crewsOn, _) => crewsOn
-                              ? Padding(
-                                  padding: const EdgeInsets.only(bottom: 16),
-                                  child: _PeopleSurface(
-                                    children: [
-                                      _ActionRow(
-                                        icon: Icons.groups_rounded,
-                                        leading: const NuvoCrewIcon(size: 26, semanticLabel: null),
-                                        title: 'Crews',
-                                        subtitle:
-                                            'Race together on one leaderboard',
-                                        onTap: () => context.push('/crews'),
-                                        isLast: true,
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
+                      if (crewState.error != null && crew.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            NuvoSpacing.pageHorizontal,
+                            0,
+                            NuvoSpacing.pageHorizontal,
+                            14,
+                          ),
+                          child: NuvoErrorState(
+                            message: crewState.error!,
+                            onRetry: () => ref
+                                .read(crewControllerProvider.notifier)
+                                .load(force: true),
+                          ),
+                        ),
+                      if (activityState.error != null && feedItems.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            NuvoSpacing.pageHorizontal,
+                            0,
+                            NuvoSpacing.pageHorizontal,
+                            14,
+                          ),
+                          child: NuvoErrorState(
+                            message: activityState.error!,
+                            onRetry: () => ref
+                                .read(crewActivityProvider.notifier)
+                                .load(force: true),
+                          ),
                         ),
 
-                        // The people — You, the faces ordered by who's
-                        // around, Add. Status pills carry the one thing
-                        // worth knowing under each person.
-                        _PeopleStrip(
-                          me: profile,
-                          members: crewOrdered,
-                          racingIds: racingIds,
-                          hotIds: hotIds,
-                          onYou: () => context.push('/my-nuvo'),
-                          onPerson: _openPerson,
-                          onAdd: () => context.push('/crew/add'),
-                        ),
-
-                        // Empty crew — the two things that fill it: find
-                        // people, share your code.
-                        if (crew.isEmpty) ...[
-                          const SizedBox(height: 18),
-                          _PeopleSurface(
+                      // ── People — the crews entry, the people, their asks, and
+                      // the races running with them right now.
+                      if (_feedTab == 0) ...[
+                        _SocialField(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _ActionRow(
-                                icon: Icons.person_search_rounded,
-                                title: 'Find people',
-                                subtitle: 'Name, @username or member code',
-                                onTap: () => context.push('/crew/add'),
+                              // Race together on one leaderboard — start or join a
+                              // crew. Only when the server has crews switched on.
+                              ValueListenableBuilder<bool>(
+                                valueListenable: NuvoFlags.crews,
+                                builder: (context, crewsOn, _) => crewsOn
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 16,
+                                        ),
+                                        child: _PeopleSurface(
+                                          children: [
+                                            _ActionRow(
+                                              icon: Icons.groups_rounded,
+                                              leading: const NuvoCrewIcon(
+                                                size: 26,
+                                                semanticLabel: null,
+                                              ),
+                                              title: 'Crews',
+                                              subtitle:
+                                                  'Race together on one leaderboard',
+                                              onTap: () =>
+                                                  context.push('/crews'),
+                                              isLast: true,
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
-                              _ActionRow(
-                                icon: Icons.qr_code_rounded,
-                                title: 'Your member code',
-                                subtitle: profile.memberId,
-                                actionLabel: 'My Nuvo',
-                                onTap: () => context.push('/my-nuvo'),
-                                isLast: true,
+
+                              // The people — You, the faces ordered by who's
+                              // around, Add. Status pills carry the one thing
+                              // worth knowing under each person.
+                              _PeopleStrip(
+                                me: profile,
+                                members: crewOrdered,
+                                racingIds: racingIds,
+                                hotIds: hotIds,
+                                onYou: () => context.push('/my-nuvo'),
+                                onPerson: _openPerson,
+                                onAdd: () => context.push('/crew/add'),
                               ),
+
+                              // Empty crew — the two things that fill it: find
+                              // people, share your code.
+                              if (crew.isEmpty) ...[
+                                const SizedBox(height: 18),
+                                _PeopleSurface(
+                                  children: [
+                                    _ActionRow(
+                                      icon: Icons.person_search_rounded,
+                                      title: 'Find people',
+                                      subtitle:
+                                          'Name, @username or member code',
+                                      onTap: () => context.push('/crew/add'),
+                                    ),
+                                    _ActionRow(
+                                      icon: Icons.qr_code_rounded,
+                                      title: 'Your member code',
+                                      subtitle: profile.memberId,
+                                      actionLabel: 'My Nuvo',
+                                      onTap: () => context.push('/my-nuvo'),
+                                      isLast: true,
+                                    ),
+                                  ],
+                                ),
+                              ],
+
+                              // Requests — people knocking, at utility weight.
+                              // Incoming first: an ask aimed at me outranks one I
+                              // sent.
+                              if (requests.isNotEmpty ||
+                                  outgoing.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _RequestSurface(
+                                  incoming: requests,
+                                  outgoing: outgoing,
+                                  pending: pending,
+                                  onAccept: _acceptRequest,
+                                  onDecline: _declineRequest,
+                                  onCancel: _cancelRequest,
+                                ),
+                              ],
                             ],
                           ),
-                        ],
-
-                        // Requests — people knocking, at utility weight.
-                        // Incoming first: an ask aimed at me outranks one I
-                        // sent.
-                        if (requests.isNotEmpty || outgoing.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          _RequestSurface(
-                            incoming: requests,
-                            outgoing: outgoing,
-                            pending: pending,
-                            onAccept: _acceptRequest,
-                            onDecline: _declineRequest,
-                            onCancel: _cancelRequest,
+                        ),
+                        const SizedBox(height: 20),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NuvoSpacing.pageHorizontal,
                           ),
-                        ],
+                          child: _CrewRacesNow(
+                            liveItems: liveItems,
+                            ongoing: activeRaces,
+                            myId: myId,
+                            crewIds: crewIds,
+                            reactingIds: activityState.reactingItemIds,
+                            onOpen: (r) => context.push('/race/${r.id}'),
+                            onOpenLive: _openCrewActivity,
+                            onReact: _react,
+                          ),
+                        ),
+                      ]
+                      // ── Activity — what the crew has done.
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NuvoSpacing.pageHorizontal,
+                          ),
+                          child: _FeedColumn(
+                            items: feedItems,
+                            reactingIds: activityState.reactingItemIds,
+                            crew: crew,
+                            myId: myId,
+                            racesById: racesById,
+                            busyIds: _ctaBusy,
+                            emptyNote:
+                                'Race, finish, set a personal best — your crew\'s moves land here.',
+                            onTap: _openCrewActivity,
+                            onPerson: (i) => _tapFeedPerson(i, crew),
+                            onReact: _react,
+                            actionFor: (i) => _actionFor(i, myId, racesById),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            // Soft fade so rows scrolling toward the dock ease out instead
+            // of being sliced by it.
+            Positioned(
+              left: 0,
+              right: 0,
+              // Ends at the dock's top edge (the body runs under the dock).
+              bottom: MediaQuery.paddingOf(context).bottom,
+              height: 28,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey('nuvo-bottom-fade'),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        context.themeColors.page.withValues(alpha: 0),
+                        context.themeColors.page,
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.pageHorizontal,
-                    ),
-                    child: _CrewRacesNow(
-                      liveItems: liveItems,
-                      ongoing: activeRaces,
-                      myId: myId,
-                      crewIds: crewIds,
-                      reactingIds: activityState.reactingItemIds,
-                      onOpen: (r) => context.push('/race/${r.id}'),
-                      onOpenLive: _openCrewActivity,
-                      onReact: _react,
-                    ),
-                  ),
-                ]
-                // ── Activity — what the crew has done.
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NuvoSpacing.pageHorizontal,
-                    ),
-                    child: _FeedColumn(
-                      items: feedItems,
-                      reactingIds: activityState.reactingItemIds,
-                      crew: crew,
-                      myId: myId,
-                      racesById: racesById,
-                      busyIds: _ctaBusy,
-                      emptyNote:
-                          'Race, finish, set a personal best — your crew\'s moves land here.',
-                      onTap: _openCrewActivity,
-                      onPerson: (i) => _tapFeedPerson(i, crew),
-                      onReact: _react,
-                      actionFor: (i) => _actionFor(i, myId, racesById),
-                    ),
-                  ),
-              ],
-            ],
-          ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1890,7 +1931,7 @@ class _PostMatchup extends StatelessWidget {
     return Row(
       children: [
         Flexible(
-          flex: 2,
+          flex: 3,
           child: side(
             name: leftName,
             score: leftScore,
@@ -1900,7 +1941,7 @@ class _PostMatchup extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          flex: 3,
+          flex: 2,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: SizedBox(
@@ -1926,7 +1967,7 @@ class _PostMatchup extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Flexible(
-          flex: 2,
+          flex: 3,
           child: side(
             name: rightName,
             score: rightScore,
@@ -2412,7 +2453,7 @@ class _ActiveRaceCard extends StatelessWidget {
                   ],
                 ],
               ),
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodySmall.copyWith(
                 color: context.themeColors.inkMuted,
@@ -2861,7 +2902,7 @@ class _StripTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(right: 12),
           child: SizedBox(
-            width: 50,
+            width: 58,
             // Fixed-height rail — a 50px tile can't absorb scaled type, so
             // name + status pill are pinned (they ellipsize, never grow).
             child: MediaQuery.withClampedTextScaling(
@@ -2910,12 +2951,13 @@ class _StatusPill extends StatelessWidget {
       _StripStatus.hot => (NuvoColors.warning, '🔥', sem.warning.on),
       _StripStatus.active => (NuvoColors.success, 'Active', sem.success.on),
     };
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (hot)
-          Flexible(
-            child: Text(
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hot)
+            Text(
               word,
               maxLines: 1,
               overflow: TextOverflow.clip,
@@ -2923,17 +2965,15 @@ class _StatusPill extends StatelessWidget {
                 color: ink,
                 fontWeight: FontWeight.w700,
               ),
+            )
+          else ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
             ),
-          )
-        else ...[
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 3),
-          Flexible(
-            child: Text(
+            const SizedBox(width: 3),
+            Text(
               word,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -2942,9 +2982,9 @@ class _StatusPill extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -2990,7 +3030,8 @@ class _ActionRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(NuvoRadii.md),
                   ),
                   alignment: Alignment.center,
-                  child: leading ??
+                  child:
+                      leading ??
                       Icon(icon, color: context.themeColors.ink, size: 20),
                 ),
                 const SizedBox(width: 12),

@@ -99,101 +99,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       backgroundColor: c.page,
       body: SafeArea(
-        child: ListView(
-          // Pushed pages reserve real breathing room below the last row.
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
-          children: [
-            NuvoBackHeader(
-              title: 'Settings',
-              onBack: () => safePopOrGo(context, '/profile'),
-            ),
-            const SizedBox(height: NuvoSpacing.lg),
+        child: NuvoFadeScroll(
+          child: ListView(
+            // Pushed pages reserve real breathing room below the last row.
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
+            children: [
+              NuvoBackHeader(
+                title: 'Settings',
+                onBack: () => safePopOrGo(context, '/profile'),
+              ),
+              const SizedBox(height: NuvoSpacing.lg),
 
-            // Gated tools only — this group doesn't exist for normal
-            // accounts. Presentation/demo controls stay behind the existing
-            // account gates.
-            if (canReplayDemo || canTogglePresentation || kDebugMode) ...[
-              const _SectionLabel(label: 'App'),
+              // Gated tools only — this group doesn't exist for normal
+              // accounts. Presentation/demo controls stay behind the existing
+              // account gates.
+              if (canReplayDemo || canTogglePresentation || kDebugMode) ...[
+                const _SectionLabel(label: 'App'),
+                const SizedBox(height: NuvoSpacing.md),
+                _ProfileActionGroup(
+                  children: [
+                    if (canReplayDemo)
+                      _AccountRow(
+                        icon: Icons.replay_rounded,
+                        label: 'Replay the guide',
+                        onTap: _replayDemo,
+                      ),
+                    if (canTogglePresentation)
+                      _PresentationModeRow(
+                        enabled: presentationModeToggleEnabled,
+                        onChanged: _setPresentationMode,
+                      ),
+                    if (kDebugMode)
+                      _AccountRow(
+                        icon: Icons.tune_rounded,
+                        label: 'Rive Calibration',
+                        onTap: () => context.push('/dev/rive-calibration'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: NuvoSpacing.xl),
+              ],
+
+              // Privacy & Data — the server-backed training-consent control.
+              // Same choice as onboarding; toggling writes through to the
+              // account.
+              const _SectionLabel(label: 'Privacy & Data'),
+              const SizedBox(height: NuvoSpacing.md),
+              const _ProfileActionGroup(children: [_MotionConsentRow()]),
+              const SizedBox(height: NuvoSpacing.xl),
+
+              // Account — session actions. Destructive red belongs to Delete
+              // alone; Sign out is a normal action, not a danger.
+              const _SectionLabel(label: 'Account'),
               const SizedBox(height: NuvoSpacing.md),
               _ProfileActionGroup(
                 children: [
-                  if (canReplayDemo)
-                    _AccountRow(
-                      icon: Icons.replay_rounded,
-                      label: 'Replay the guide',
-                      onTap: _replayDemo,
-                    ),
-                  if (canTogglePresentation)
-                    _PresentationModeRow(
-                      enabled: presentationModeToggleEnabled,
-                      onChanged: _setPresentationMode,
-                    ),
-                  if (kDebugMode)
-                    _AccountRow(
-                      icon: Icons.tune_rounded,
-                      label: 'Rive Calibration',
-                      onTap: () => context.push('/dev/rive-calibration'),
-                    ),
+                  _AccountRow(
+                    icon: Icons.person_outline_rounded,
+                    label: 'Edit profile',
+                    subtitle: 'Photo, name, username',
+                    onTap: () => context.push('/profile/edit'),
+                  ),
+                  _AccountRow(
+                    icon: Icons.logout_rounded,
+                    label: 'Sign out',
+                    isAction: true,
+                    onTap: () =>
+                        ref.read(authControllerProvider.notifier).logout(),
+                  ),
+                  _AccountRow(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete account',
+                    isDanger: true,
+                    onTap: _confirmDeleteAccount,
+                  ),
                 ],
               ),
               const SizedBox(height: NuvoSpacing.xl),
+
+              // Legal
+              const _SectionLabel(label: 'Legal'),
+              const SizedBox(height: NuvoSpacing.md),
+              _ProfileActionGroup(
+                children: [
+                  _AccountRow(
+                    icon: Icons.policy_rounded,
+                    label: 'Privacy Policy',
+                    onTap: () => _openUrl(_kPrivacyUrl),
+                  ),
+                  _AccountRow(
+                    icon: Icons.description_rounded,
+                    label: 'Terms of Service',
+                    onTap: () => _openUrl(_kTermsUrl),
+                  ),
+                ],
+              ),
             ],
-
-            // Privacy & Data — the server-backed training-consent control.
-            // Same choice as onboarding; toggling writes through to the
-            // account.
-            const _SectionLabel(label: 'Privacy & Data'),
-            const SizedBox(height: NuvoSpacing.md),
-            const _ProfileActionGroup(children: [_MotionConsentRow()]),
-            const SizedBox(height: NuvoSpacing.xl),
-
-            // Account — session actions. Destructive red belongs to Delete
-            // alone; Sign out is a normal action, not a danger.
-            const _SectionLabel(label: 'Account'),
-            const SizedBox(height: NuvoSpacing.md),
-            _ProfileActionGroup(
-              children: [
-                _AccountRow(
-                  icon: Icons.person_outline_rounded,
-                  label: 'Edit profile',
-                  subtitle: 'Photo, name, username',
-                  onTap: () => context.push('/profile/edit'),
-                ),
-                _AccountRow(
-                  icon: Icons.logout_rounded,
-                  label: 'Sign out',
-                  isAction: true,
-                  onTap: () =>
-                      ref.read(authControllerProvider.notifier).logout(),
-                ),
-                _AccountRow(
-                  icon: Icons.delete_outline_rounded,
-                  label: 'Delete account',
-                  isDanger: true,
-                  onTap: _confirmDeleteAccount,
-                ),
-              ],
-            ),
-            const SizedBox(height: NuvoSpacing.xl),
-
-            // Legal
-            const _SectionLabel(label: 'Legal'),
-            const SizedBox(height: NuvoSpacing.md),
-            _ProfileActionGroup(
-              children: [
-                _AccountRow(
-                  icon: Icons.policy_rounded,
-                  label: 'Privacy Policy',
-                  onTap: () => _openUrl(_kPrivacyUrl),
-                ),
-                _AccountRow(
-                  icon: Icons.description_rounded,
-                  label: 'Terms of Service',
-                  onTap: () => _openUrl(_kTermsUrl),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -7,6 +7,7 @@ import 'theme_ink.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -72,7 +73,9 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
       return;
     }
     try {
-      final invite = await ref.read(inviteRepositoryProvider).mintMyCrewInvite();
+      final invite = await ref
+          .read(inviteRepositoryProvider)
+          .mintMyCrewInvite();
       if (mounted) setState(() => _invite = invite);
     } catch (_) {
       if (mounted) setState(() => _error = true);
@@ -83,37 +86,54 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Shell owns the drag handle (theme showDragHandle) — sheet
-            // content starts below it.
-            const SizedBox(height: 18),
-            Text('My code', style: AppTextStyles.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              'Let someone scan this to add you to their crew.',
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
-            ),
-            const SizedBox(height: 20),
-            _content(),
-          ],
+      child: NuvoScrollBottomFade(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Shell owns the drag handle (theme showDragHandle) — sheet
+              // content starts below it.
+              const SizedBox(height: 18),
+              Text('My code', style: AppTextStyles.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                'Let someone scan this to add you to their crew.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.themeColors.inkSubtle,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _content(),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _content() {
+    // Short phones / large text: shrink the code so the sheet fits whole.
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    final qrSize =
+        (MediaQuery.sizeOf(context).height * 0.9 - (340 + 140 * (scale - 1)))
+            .clamp(140.0, 208.0);
     if (_error) {
-      return Column(children: [
-        Text("Couldn't create your code.",
-            style: AppTextStyles.bodyMedium.copyWith(color: context.dangerInk)),
-        const SizedBox(height: 12),
-        NuvoSecondaryButton(label: 'Try again', expand: true, onPressed: _mint),
-      ]);
+      return Column(
+        children: [
+          Text(
+            "Couldn't create your code.",
+            style: AppTextStyles.bodyMedium.copyWith(color: context.dangerInk),
+          ),
+          const SizedBox(height: 12),
+          NuvoSecondaryButton(
+            label: 'Try again',
+            expand: true,
+            onPressed: _mint,
+          ),
+        ],
+      );
     }
     final invite = _invite;
     if (invite == null) {
@@ -140,28 +160,38 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
                 ),
               ],
             ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              QrImageView(
-                data: invite.url,
-                version: QrVersions.auto,
-                size: 208,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: NuvoColors.navy,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                QrImageView(
+                  data: invite.url,
+                  version: QrVersions.auto,
+                  size: qrSize,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: NuvoColors.navy,
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: NuvoColors.navy,
+                  ),
                 ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: NuvoColors.navy,
+                const SizedBox(height: 10),
+                Text(
+                  widget.displayName,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: NuvoColors.navy,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(widget.displayName,
-                  style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy)),
-              if (widget.memberId != null)
-                Text(widget.memberId!,
-                    style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted)
-                        .copyWith(color: NuvoColors.textMuted)),
-            ]),
+                if (widget.memberId != null)
+                  Text(
+                    widget.memberId!,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: NuvoColors.muted)
+                        .copyWith(color: NuvoColors.textMuted),
+                  ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),

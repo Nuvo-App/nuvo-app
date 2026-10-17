@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -43,7 +44,11 @@ Widget _topBar(BuildContext context, String title, {Widget? trailing}) =>
       bottom: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-            NuvoSpacing.sm, NuvoSpacing.xs, NuvoSpacing.lg, NuvoSpacing.xs),
+          NuvoSpacing.sm,
+          NuvoSpacing.xs,
+          NuvoSpacing.lg,
+          NuvoSpacing.xs,
+        ),
         child: NuvoBackHeader(
           title: title,
           onBack: () => _leave(context),
@@ -124,7 +129,8 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
                 icon: Icons.groups_rounded,
                 leading: const NuvoCrewIcon(size: 28, semanticLabel: null),
                 title: 'Race with a crew',
-                body: 'Start a crew, share the code, and every race you '
+                body:
+                    'Start a crew, share the code, and every race you '
                     'bring to it lands on one leaderboard.',
                 ctaLabel: 'Start a crew',
                 onCta: _start,
@@ -139,12 +145,17 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
     } else {
       body = RefreshIndicator(
         onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(_kSide, NuvoSpacing.md, _kSide, 24),
-          children: [
-            for (final g in groups) _GroupCard(group: g),
-          ],
+        child: NuvoFadeScroll(
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              _kSide,
+              NuvoSpacing.md,
+              _kSide,
+              24,
+            ),
+            children: [for (final g in groups) _GroupCard(group: g)],
+          ),
         ),
       );
       bottomBar = _ActionBar(onStart: _start, onJoin: _join);
@@ -166,7 +177,8 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final stacked = MediaQuery.sizeOf(context).width < 360 ||
+    final stacked =
+        MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.15;
     final start = NuvoPrimaryButton(
       label: 'Start a crew',
@@ -189,7 +201,11 @@ class _ActionBar extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
-              _kSide, NuvoSpacing.md, _kSide, NuvoSpacing.md),
+            _kSide,
+            NuvoSpacing.md,
+            _kSide,
+            NuvoSpacing.md,
+          ),
           child: stacked
               ? Column(
                   mainAxisSize: MainAxisSize.min,
@@ -227,8 +243,10 @@ class _CodeChip extends StatelessWidget {
       child: Text(
         code,
         maxLines: 1,
-        style: AppTextStyles.labelMedium
-            .copyWith(color: c.inkMuted, letterSpacing: 1.2),
+        style: AppTextStyles.labelMedium.copyWith(
+          color: c.inkMuted,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -241,7 +259,8 @@ class _GroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final races = '${group.raceCount} ${group.raceCount == 1 ? 'race' : 'races'}';
+    final races =
+        '${group.raceCount} ${group.raceCount == 1 ? 'race' : 'races'}';
     final people = '${group.memberCount} in crew';
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -281,8 +300,9 @@ class _GroupCard extends StatelessWidget {
                       children: [
                         Text(
                           group.name,
-                          style: AppTextStyles.titleMedium
-                              .copyWith(color: c.ink),
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: c.ink,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -294,8 +314,9 @@ class _GroupCard extends StatelessWidget {
                           children: [
                             Text(
                               '$people · $races',
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: c.inkMuted),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: c.inkMuted,
+                              ),
                             ),
                             _CodeChip(code: group.joinCode),
                           ],
@@ -345,9 +366,11 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
     if (_busy) return;
     final text = _controller.text.trim();
     if (_isCreate ? text.length < 2 : text.isEmpty) {
-      setState(() => _error = _isCreate
-          ? 'Give your crew a name (2 characters or more).'
-          : 'Enter the crew code.');
+      setState(
+        () => _error = _isCreate
+            ? 'Give your crew a name (2 characters or more).'
+            : 'Enter the crew code.',
+      );
       return;
     }
     setState(() {
@@ -469,10 +492,12 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
     final mine = ref
         .read(raceControllerProvider)
         .races
-        .where((r) =>
-            r.creatorId == me.id &&
-            r.status == 'active' &&
-            !linked.contains(r.id))
+        .where(
+          (r) =>
+              r.creatorId == me.id &&
+              r.status == 'active' &&
+              !linked.contains(r.id),
+        )
         .toList();
 
     if (mine.isEmpty) {
@@ -491,8 +516,10 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             children: [
-              Text('Bring a race to the crew',
-                  style: AppTextStyles.titleLarge.copyWith(color: c.ink)),
+              Text(
+                'Bring a race to the crew',
+                style: AppTextStyles.titleLarge.copyWith(color: c.ink),
+              ),
               const SizedBox(height: 4),
               Text(
                 'Everyone in the crew is added to the race.',
@@ -585,68 +612,85 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       ),
       child: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(_kSide, NuvoSpacing.md, _kSide, 32),
-          children: [
-            // Leaderboard first — it is the point of the crew.
-            Row(
-              children: [
-                Text('Leaderboard',
-                    style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
-                const SizedBox(width: NuvoSpacing.sm),
-                Expanded(
-                  child: Text('5 · 3 · 2 pts, 1 per proof',
+        child: NuvoFadeScroll(
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              _kSide,
+              NuvoSpacing.md,
+              _kSide,
+              32 + MediaQuery.viewPaddingOf(context).bottom,
+            ),
+            children: [
+              // Leaderboard first — it is the point of the crew.
+              Row(
+                children: [
+                  Text(
+                    'Leaderboard',
+                    style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+                  ),
+                  const SizedBox(width: NuvoSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      '5 · 3 · 2 pts, 1 per proof',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.end,
-                      style:
-                          AppTextStyles.bodySmall.copyWith(color: c.inkMuted)),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: c.inkMuted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: NuvoSpacing.md),
+              if (detail.races.isEmpty)
+                const _InlineNote(
+                  icon: Icons.flag_outlined,
+                  text: 'No races yet. Bring a race to start the leaderboard.',
+                )
+              else if (detail.standings.every((s) => s.points == 0))
+                const _InlineNote(
+                  icon: Icons.bolt_rounded,
+                  text: 'No proof yet. The first proof takes the lead.',
+                ),
+              if (_showPodium(detail.standings)) ...[
+                _Podium(standings: detail.standings.take(3).toList()),
+                const SizedBox(height: NuvoSpacing.sm),
+                for (final s in detail.standings.skip(3))
+                  _StandingRow(standing: s),
+              ] else
+                for (final s in detail.standings) _StandingRow(standing: s),
+              const SizedBox(height: NuvoSpacing.sm),
+              NuvoPrimaryButton(
+                label: 'Bring a race to the crew',
+                icon: Icons.flag_rounded,
+                expand: true,
+                loading: _busy,
+                onPressed: _bringRace,
+              ),
+              if (_actionError != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _actionError!,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.dangerInk,
+                  ),
                 ),
               ],
-            ),
-            const SizedBox(height: NuvoSpacing.md),
-            if (detail.races.isEmpty)
-              const _InlineNote(
-                icon: Icons.flag_outlined,
-                text: 'No races yet. Bring a race to start the leaderboard.',
-              )
-            else if (detail.standings.every((s) => s.points == 0))
-              const _InlineNote(
-                icon: Icons.bolt_rounded,
-                text: 'No proof yet. The first proof takes the lead.',
-              ),
-            if (_showPodium(detail.standings)) ...[
-              _Podium(standings: detail.standings.take(3).toList()),
-              const SizedBox(height: NuvoSpacing.sm),
-              for (final s in detail.standings.skip(3))
-                _StandingRow(standing: s),
-            ] else
-              for (final s in detail.standings) _StandingRow(standing: s),
-            const SizedBox(height: NuvoSpacing.sm),
-            NuvoPrimaryButton(
-              label: 'Bring a race to the crew',
-              icon: Icons.flag_rounded,
-              expand: true,
-              loading: _busy,
-              onPressed: _bringRace,
-            ),
-            if (_actionError != null) ...[
-              const SizedBox(height: 10),
-              Text(_actionError!,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: context.dangerInk)),
+              const SizedBox(height: NuvoSpacing.lg),
+              _CodeCard(group: detail.group),
+              if (detail.races.isNotEmpty) ...[
+                const SizedBox(height: NuvoSpacing.xxl),
+                Text(
+                  'Crew races',
+                  style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+                ),
+                const SizedBox(height: NuvoSpacing.xs),
+                for (final r in detail.races) _RaceRow(race: r),
+              ],
             ],
-            const SizedBox(height: NuvoSpacing.lg),
-            _CodeCard(group: detail.group),
-            if (detail.races.isNotEmpty) ...[
-              const SizedBox(height: NuvoSpacing.xxl),
-              Text('Crew races',
-                  style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
-              const SizedBox(height: NuvoSpacing.xs),
-              for (final r in detail.races) _RaceRow(race: r),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -672,8 +716,10 @@ class _InlineNote extends StatelessWidget {
           Icon(icon, size: 18, color: c.inkSubtle),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text,
-                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted)),
+            child: Text(
+              text,
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+            ),
           ),
         ],
       ),
@@ -702,15 +748,18 @@ class _CodeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Crew code',
-                    style:
-                        AppTextStyles.labelMedium.copyWith(color: c.inkMuted)),
+                Text(
+                  'Crew code',
+                  style: AppTextStyles.labelMedium.copyWith(color: c.inkMuted),
+                ),
                 Text(
                   group.joinCode,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleLarge
-                      .copyWith(color: c.ink, letterSpacing: 3),
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: c.ink,
+                    letterSpacing: 3,
+                  ),
                 ),
               ],
             ),
@@ -721,9 +770,9 @@ class _CodeCard extends StatelessWidget {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: group.joinCode));
               HapticFeedback.selectionClick();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Crew code copied')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Crew code copied')));
             },
           ),
           IconButton(
@@ -740,11 +789,11 @@ class _CodeCard extends StatelessWidget {
 }
 
 Color? _medalFor(int rank) => switch (rank) {
-      1 => NuvoColors.sunshine,
-      2 => const Color(0xFFB8C2D6),
-      3 => NuvoColors.orange,
-      _ => null,
-    };
+  1 => NuvoColors.sunshine,
+  2 => const Color(0xFFB8C2D6),
+  3 => NuvoColors.orange,
+  _ => null,
+};
 
 /// Top three as a podium: 2nd | 1st | 3rd, the leader on the tallest step.
 class _Podium extends StatelessWidget {
@@ -775,9 +824,14 @@ class _PodiumStep extends StatelessWidget {
     final c = context.themeColors;
     final medal = standing.points > 0 ? _medalFor(standing.rank) : null;
     final first = standing.rank == 1;
-    final height = switch (standing.rank) { 1 => 64.0, 2 => 48.0, _ => 40.0 };
+    final height = switch (standing.rank) {
+      1 => 64.0,
+      2 => 48.0,
+      _ => 40.0,
+    };
     return Semantics(
-      label: 'Rank ${standing.rank}, ${standing.displayName}, '
+      label:
+          'Rank ${standing.rank}, ${standing.displayName}, '
           '${standing.points} points',
       excludeSemantics: true,
       child: Padding(
@@ -808,8 +862,9 @@ class _PodiumStep extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: medal ?? c.panel,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(10)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(10),
+                ),
                 border: standing.isYou
                     ? Border.all(color: NuvoColors.blue, width: 1.5)
                     : null,
@@ -840,9 +895,10 @@ class _StandingRow extends StatelessWidget {
     final detail = standing.races == 0
         ? 'No proof yet'
         : '${standing.races} ${standing.races == 1 ? 'race' : 'races'}'
-            '${standing.wins > 0 ? ' · ${standing.wins} ${standing.wins == 1 ? 'win' : 'wins'}' : ''}';
+              '${standing.wins > 0 ? ' · ${standing.wins} ${standing.wins == 1 ? 'win' : 'wins'}' : ''}';
     return Semantics(
-      label: 'Rank ${standing.rank}, ${standing.displayName}, '
+      label:
+          'Rank ${standing.rank}, ${standing.displayName}, '
           '${standing.points} points',
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -892,17 +948,22 @@ class _StandingRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(detail,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: c.inkMuted)),
+                  Text(
+                    detail,
+                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+                  ),
                 ],
               ),
             ),
-            Text('${standing.points}',
-                style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
+            Text(
+              '${standing.points}',
+              style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+            ),
             const SizedBox(width: 3),
-            Text('pts',
-                style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted)),
+            Text(
+              'pts',
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+            ),
           ],
         ),
       ),
@@ -931,14 +992,17 @@ class _RaceRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(race.title,
-                        style: AppTextStyles.bodyLarge.copyWith(color: c.ink),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      race.title,
+                      style: AppTextStyles.bodyLarge.copyWith(color: c.ink),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     Text(
                       live ? 'Racing now' : 'Finished',
                       style: AppTextStyles.bodySmall.copyWith(
-                          color: live ? context.successInk : c.inkMuted),
+                        color: live ? context.successInk : c.inkMuted,
+                      ),
                     ),
                   ],
                 ),

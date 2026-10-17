@@ -17,6 +17,7 @@ import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_back_header.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_icons.dart';
@@ -39,6 +40,9 @@ part 'settings_screen.dart';
 
 const _kPrivacyUrl = 'https://getnuvo.net/privacy';
 const _kTermsUrl = 'https://getnuvo.net/terms';
+
+/// Height of the soft fade that ends at the floating nav's top edge.
+const double _kBottomFadeHeight = 28;
 
 /// Profile — "who am I on Nuvo, and what have I done?"
 ///
@@ -116,137 +120,178 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final screen = Scaffold(
       backgroundColor: c.page,
-      body: RefreshIndicator(
-        color: context.themeColors.accent,
-        backgroundColor: c.surface,
-        onRefresh: () => Future.wait([
-          // Races reload only when the record is derived from the list.
-          if (serverRecord == null)
-            ref.read(raceControllerProvider.notifier).loadRaces(),
-          ref.read(progressionControllerProvider.notifier).load(),
-        ]),
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: RefreshIndicator(
+              color: context.themeColors.accent,
+              backgroundColor: c.surface,
+              onRefresh: () => Future.wait([
+                // Races reload only when the record is derived from the list.
+                if (serverRecord == null)
+                  ref.read(raceControllerProvider.notifier).loadRaces(),
+                ref.read(progressionControllerProvider.notifier).load(),
+              ]),
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                slivers: [
+                  // Top block: title → identity → level → achievements → record,
+                  // then the heat map, which absorbs whatever room is left so the
+                  // first viewport (above the dock) ends on its Less/More key.
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        NuvoSpacing.pageHorizontal,
+                        32,
+                        NuvoSpacing.pageHorizontal,
+                        0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Profile',
+                            style: AppTextStyles.screenTitle.copyWith(
+                              color: c.ink,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: NuvoSpacing.lg),
+
+                          // Identity — the person, not the account. Settings and
+                          // everything administrative live one tap away.
+                          _IdentityCard(user: user).nuvoEnter(),
+                          const SizedBox(height: NuvoSpacing.lg),
+
+                          // Level — the progression that belongs to the person,
+                          // not any one race. Tap it for what the level means.
+                          _LevelTrack(
+                            key: FirstRaceGuideKeys.profileProgress,
+                            state: progressionAsync,
+                          ).nuvoEnter(),
+                          const SizedBox(height: NuvoSpacing.lg),
+
+                          // Achievements are one row — the collection, the next
+                          // goal and the next unlock live behind it.
+                          _AchievementsRow(progression: progression),
+
+                          // The record — racing now, wins, win rate.
+                          const SizedBox(height: NuvoSpacing.xl),
+                          _StatsStrip(
+                            activeCount: activeCount,
+                            wins: wins,
+                            winRate: winRate,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, sc) {
+                        // Room left between the end of the record strip and the
+                        // top of the dock, measured at rest. Short screens get
+                        // 0 and the section keeps its natural height (scroll).
+                        final room =
+                            sc.viewportMainAxisExtent -
+                            sc.precedingScrollExtent -
+                            MediaQuery.paddingOf(context).bottom -
+                            NuvoBottomNav.navTopBreath -
+                            _kBottomFadeHeight;
+                        return SliverToBoxAdapter(
+                          child: ActivityHeatmapSection(
+                            minHeight: math.max(0.0, room),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SliverLayoutBuilder(
+                    builder: (context, sc) {
+                      // Calm space so Your Nuvo always starts below the fold: when
+                      // the heat map ends inside the viewport, push the section to
+                      // the viewport's bottom edge so none of it shows half-cut.
+                      final remaining =
+                          sc.viewportMainAxisExtent - sc.precedingScrollExtent;
+                      final gap = remaining > 0
+                          ? math.max(NuvoSpacing.xl, remaining + 2)
+                          : NuvoSpacing.xl;
+                      return SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            NuvoSpacing.pageHorizontal,
+                            gap,
+                            NuvoSpacing.pageHorizontal,
+                            NuvoBottomNav.bottomPadding(context),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Your Nuvo — the things that are mine and how the app
+                              // feels. Account, privacy and legal live in Settings.
+                              const _SectionLabel(label: 'Your Nuvo'),
+                              const SizedBox(height: NuvoSpacing.md),
+                              _ProfileActionGroup(
+                                children: [
+                                  _AccountRow(
+                                    icon: Icons.qr_code_2_rounded,
+                                    label: 'My code',
+                                    subtitle: 'Your code and pass link',
+                                    onTap: () => context.push('/my-nuvo'),
+                                  ),
+                                  _AccountRow(
+                                    icon: Icons.notifications_outlined,
+                                    label: 'Notifications',
+                                    subtitle: 'Race and crew updates',
+                                    onTap: () =>
+                                        context.push('/settings/notifications'),
+                                  ),
+                                  const _AppearanceRow(),
+                                  _AccountRow(
+                                    icon: Icons.settings_outlined,
+                                    label: 'Settings',
+                                    subtitle: 'Account, privacy and legal',
+                                    onTap: () => context.push('/settings'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-          slivers: [
-            // Top block: title → identity → level → achievements → record,
-            // then the heat map, which absorbs whatever room is left so the
-            // first viewport (above the dock) ends on its Less/More key.
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  NuvoSpacing.pageHorizontal,
-                  32,
-                  NuvoSpacing.pageHorizontal,
-                  0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Profile',
-                      style: AppTextStyles.screenTitle.copyWith(color: c.ink),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: NuvoSpacing.lg),
-
-                    // Identity — the person, not the account. Settings and
-                    // everything administrative live one tap away.
-                    _IdentityCard(user: user).nuvoEnter(),
-                    const SizedBox(height: NuvoSpacing.lg),
-
-                    // Level — the progression that belongs to the person,
-                    // not any one race. Tap it for what the level means.
-                    _LevelTrack(
-                      key: FirstRaceGuideKeys.profileProgress,
-                      state: progressionAsync,
-                    ).nuvoEnter(),
-                    const SizedBox(height: NuvoSpacing.lg),
-
-                    // Achievements are one row — the collection, the next
-                    // goal and the next unlock live behind it.
-                    _AchievementsRow(progression: progression),
-
-                    // The record — racing now, wins, win rate.
-                    const SizedBox(height: NuvoSpacing.xl),
-                    _StatsStrip(
-                      activeCount: activeCount,
-                      wins: wins,
-                      winRate: winRate,
-                    ),
-                  ],
+          // Soft fade ending at the nav's top edge: anything scrolling
+          // under the floating nav eases out instead of being sliced.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: MediaQuery.paddingOf(context).bottom,
+            height: _kBottomFadeHeight,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                key: const ValueKey('nuvo-bottom-fade'),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [c.page.withValues(alpha: 0), c.page],
+                  ),
                 ),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: NuvoSpacing.pageHorizontal,
-              ),
-              sliver: SliverLayoutBuilder(
-                builder: (context, sc) {
-                  // Room left between the end of the record strip and the
-                  // top of the dock, measured at rest. Short screens get
-                  // 0 and the section keeps its natural height (scroll).
-                  final room =
-                      sc.viewportMainAxisExtent -
-                      sc.precedingScrollExtent -
-                      MediaQuery.paddingOf(context).bottom -
-                      NuvoBottomNav.navTopBreath;
-                  return SliverToBoxAdapter(
-                    child: ActivityHeatmapSection(
-                      minHeight: math.max(0.0, room),
-                    ),
-                  );
-                },
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  NuvoSpacing.pageHorizontal,
-                  // Calm space so Your Nuvo always starts below the fold.
-                  NuvoSpacing.xl,
-                  NuvoSpacing.pageHorizontal,
-                  NuvoBottomNav.bottomPadding(context),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Your Nuvo — the things that are mine and how the app
-                    // feels. Account, privacy and legal live in Settings.
-                    const _SectionLabel(label: 'Your Nuvo'),
-                    const SizedBox(height: NuvoSpacing.md),
-                    _ProfileActionGroup(
-                      children: [
-                        _AccountRow(
-                          icon: Icons.qr_code_2_rounded,
-                          label: 'My code',
-                          subtitle: 'Your code and pass link',
-                          onTap: () => context.push('/my-nuvo'),
-                        ),
-                        _AccountRow(
-                          icon: Icons.notifications_outlined,
-                          label: 'Notifications',
-                          subtitle: 'Race and crew updates',
-                          onTap: () => context.push('/settings/notifications'),
-                        ),
-                        const _AppearanceRow(),
-                        _AccountRow(
-                          icon: Icons.settings_outlined,
-                          label: 'Settings',
-                          subtitle: 'Account, privacy and legal',
-                          onTap: () => context.push('/settings'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
 

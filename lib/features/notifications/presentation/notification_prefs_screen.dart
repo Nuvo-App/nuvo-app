@@ -1,5 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,8 +17,9 @@ import '../../../core/widgets/nuvo_toggle.dart';
 import '../application/push_service.dart';
 import '../data/notification_prefs.dart';
 
-final notificationPrefsApiProvider =
-    Provider<NotificationPrefsApi>((_) => NotificationPrefsApi());
+final notificationPrefsApiProvider = Provider<NotificationPrefsApi>(
+  (_) => NotificationPrefsApi(),
+);
 
 /// `/settings/notifications` — grouped in-app + push toggles per category.
 ///
@@ -49,8 +51,9 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
   /// toggles below can't deliver — surface the way back to iOS Settings
   /// rather than letting a user flip dead toggles.
   Future<void> _loadOsStatus() async {
-    final status =
-        await ref.read(pushServiceProvider).notificationAuthorizationStatus();
+    final status = await ref
+        .read(pushServiceProvider)
+        .notificationAuthorizationStatus();
     if (mounted) setState(() => _osStatus = status);
   }
 
@@ -67,11 +70,7 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
     }
   }
 
-  Future<void> _toggle(
-    NotificationPref pref, {
-    bool? inApp,
-    bool? push,
-  }) async {
+  Future<void> _toggle(NotificationPref pref, {bool? inApp, bool? push}) async {
     final updated = NotificationPref(
       category: pref.category,
       inApp: inApp ?? pref.inApp,
@@ -112,9 +111,8 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
           child: NuvoBackHeader(
             title: 'Notifications',
-            onBack: () => context.canPop()
-                ? context.pop()
-                : context.go('/profile'),
+            onBack: () =>
+                context.canPop() ? context.pop() : context.go('/profile'),
           ),
         ),
       ),
@@ -140,79 +138,82 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
       groups.putIfAbsent(p.display.group, () => []).add(p);
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
-      children: [
-        Text(
-          'Control in-app and push alerts.',
-          style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+    return NuvoFadeScroll(
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          6,
+          20,
+          32 + MediaQuery.viewPaddingOf(context).bottom,
         ),
-        if (_osStatus == AuthorizationStatus.denied) ...[
-          const SizedBox(height: NuvoSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: Border.all(color: c.border),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.notifications_off_rounded,
-                    size: 18, color: c.inkMuted),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Notifications are off on this device.',
-                    style: AppTextStyles.bodySmall.copyWith(color: c.ink),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      launchUrl(Uri.parse('app-settings:')),
-                  child: const Text('Open Settings'),
-                ),
-              ],
-            ),
+        children: [
+          Text(
+            'Control in-app and push alerts.',
+            style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
           ),
-        ],
-        const SizedBox(height: NuvoSpacing.xl),
-        for (final entry in groups.entries.toList().asMap().entries) ...[
-          _SectionHeader(label: entry.value.key.toUpperCase()),
-          const SizedBox(height: NuvoSpacing.sm),
-          Container(
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: Border.all(color: c.border),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(NuvoRadii.md - 1),
-              child: Column(
+          if (_osStatus == AuthorizationStatus.denied) ...[
+            const SizedBox(height: NuvoSpacing.sm),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+                border: Border.all(color: c.border),
+              ),
+              child: Row(
                 children: [
-                  for (var i = 0; i < entry.value.value.length; i++) ...[
-                    if (i > 0)
-                      Divider(height: 1, thickness: 1, color: c.border),
-                    _PrefRow(
-                      pref: entry.value.value[i],
-                      saving: _saving.contains(
-                        entry.value.value[i].category,
-                      ),
-                      onInApp: (v) =>
-                          _toggle(entry.value.value[i], inApp: v),
-                      onPush: (v) =>
-                          _toggle(entry.value.value[i], push: v),
+                  Icon(
+                    Icons.notifications_off_rounded,
+                    size: 18,
+                    color: c.inkMuted,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Notifications are off on this device.',
+                      style: AppTextStyles.bodySmall.copyWith(color: c.ink),
                     ),
-                  ],
+                  ),
+                  TextButton(
+                    onPressed: () => launchUrl(Uri.parse('app-settings:')),
+                    child: const Text('Open Settings'),
+                  ),
                 ],
               ),
             ),
-          ).nuvoEnter(
-            delay: Duration(milliseconds: 40 * entry.key),
-          ),
+          ],
           const SizedBox(height: NuvoSpacing.xl),
+          for (final entry in groups.entries.toList().asMap().entries) ...[
+            _SectionHeader(label: entry.value.key.toUpperCase()),
+            const SizedBox(height: NuvoSpacing.sm),
+            Container(
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+                border: Border.all(color: c.border),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(NuvoRadii.md - 1),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < entry.value.value.length; i++) ...[
+                      if (i > 0)
+                        Divider(height: 1, thickness: 1, color: c.border),
+                      _PrefRow(
+                        pref: entry.value.value[i],
+                        saving: _saving.contains(entry.value.value[i].category),
+                        onInApp: (v) => _toggle(entry.value.value[i], inApp: v),
+                        onPush: (v) => _toggle(entry.value.value[i], push: v),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ).nuvoEnter(delay: Duration(milliseconds: 40 * entry.key)),
+            const SizedBox(height: NuvoSpacing.xl),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -280,20 +281,18 @@ class _PrefRow extends StatelessWidget {
           Expanded(
             child: Text(
               pref.display.label,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
             ),
           ),
           _ToggleCell(
-            semanticLabel:
-                '${pref.display.label}, app notifications',
+            semanticLabel: '${pref.display.label}, app notifications',
             value: pref.inApp,
             onChanged: saving ? null : onInApp,
           ),
           _ToggleCell(
-            semanticLabel:
-                '${pref.display.label}, push notifications',
+            semanticLabel: '${pref.display.label}, push notifications',
             value: pref.push,
             onChanged: saving ? null : onPush,
           ),

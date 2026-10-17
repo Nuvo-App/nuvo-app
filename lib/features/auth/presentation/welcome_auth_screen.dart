@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import 'auth_controller.dart';
@@ -200,122 +201,124 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
       builder: (context, constraints) {
         final compact = constraints.maxHeight < 600;
         final verticalPadding = compact ? 16.0 : 28.0;
-        return SingleChildScrollView(
-          key: const ValueKey('auth-scroll'),
-          controller: _scrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: verticalPadding,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: (constraints.maxHeight - verticalPadding * 2).clamp(
-                0,
-                double.infinity,
-              ),
+        return NuvoScrollBottomFade(
+          child: SingleChildScrollView(
+            key: const ValueKey('auth-scroll'),
+            controller: _scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: verticalPadding,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (!widget.embedded && context.canPop()) ...[
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: NuvoBackButton(
-                      onPressed: () => safePopOrGo(context, '/welcome'),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: (constraints.maxHeight - verticalPadding * 2).clamp(
+                  0,
+                  double.infinity,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!widget.embedded && context.canPop()) ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: NuvoBackButton(
+                        onPressed: () => safePopOrGo(context, '/welcome'),
+                      ),
                     ),
+                    const SizedBox(height: 20),
+                  ],
+                  NuvoFlipText(
+                    isSignup
+                        ? 'Ready to start\nyour first race?'
+                        : 'Welcome back.',
+                    style: AppTextStyles.displayMedium.copyWith(
+                      color: context.themeColors.ink,
+                      fontSize: constraints.maxWidth < 360 ? 30 : 36,
+                      height: 1.08,
+                      letterSpacing: -1.1,
+                    ),
+                    delay: const Duration(milliseconds: 200),
+                    duration: const Duration(milliseconds: 1500),
                   ),
-                  const SizedBox(height: 20),
-                ],
-                NuvoFlipText(
-                  isSignup
-                      ? 'Ready to start\nyour first race?'
-                      : 'Welcome back.',
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: context.themeColors.ink,
-                    fontSize: constraints.maxWidth < 360 ? 30 : 36,
-                    height: 1.08,
-                    letterSpacing: -1.1,
-                  ),
-                  delay: const Duration(milliseconds: 200),
-                  duration: const Duration(milliseconds: 1500),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isSignup
-                      ? 'Create an account to save your races, invite your crew, and keep your progress.'
-                      : 'Log in to keep your races, progress, and crew synced.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.themeColors.inkMuted,
-                  ),
-                ),
-                SizedBox(height: compact ? 24 : 28),
-                if (isSignup || replayingDemo)
-                  NuvoPrimaryButton(
-                    label: replayingDemo ? 'Continue demo' : 'Create account',
-                    expand: true,
-                    onPressed: replayingDemo
-                        ? _continueDemo
-                        : () => context.push('/auth/email'),
-                  )
-                else
-                  const EmailStartScreen(embedded: true),
-                const SizedBox(height: 12),
-                _AppleButton(
-                  loading: _appleLoading,
-                  error: _appleError,
-                  onPressed: _signInWithApple,
-                ),
-                if (_kGoogleEnabled) ...[
                   const SizedBox(height: 12),
-                  _GoogleButton(
-                    loading: _googleLoading,
-                    error: _googleError,
-                    onPressed: _signInWithGoogle,
-                  ),
-                ],
-                const SizedBox(height: 20),
-                // Plain inline text action — not a fourth auth button. A real
-                // TextButton picks up the app's chip-like textButtonTheme
-                // (gray fill + border + shadow), which read as a disabled
-                // pill; GestureDetector keeps the 44px target invisible.
-                GestureDetector(
-                  key: const ValueKey('auth-mode-toggle'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _toggleMode,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
+                  Text(
+                    isSignup
+                        ? 'Create an account to save your races, invite your crew, and keep your progress.'
+                        : 'Log in to keep your races, progress, and crew synced.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.themeColors.inkMuted,
                     ),
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: isSignup
-                                ? 'Already have an account? '
-                                : "Don't have an account? ",
-                          ),
-                          TextSpan(
-                            text: isSignup ? 'Log in' : 'Sign up',
-                            style: TextStyle(
-                              color: context.themeColors.accent,
-                              fontWeight: FontWeight.w800,
+                  ),
+                  SizedBox(height: compact ? 24 : 28),
+                  if (isSignup || replayingDemo)
+                    NuvoPrimaryButton(
+                      label: replayingDemo ? 'Continue demo' : 'Create account',
+                      expand: true,
+                      onPressed: replayingDemo
+                          ? _continueDemo
+                          : () => context.push('/auth/email'),
+                    )
+                  else
+                    const EmailStartScreen(embedded: true),
+                  const SizedBox(height: 12),
+                  _AppleButton(
+                    loading: _appleLoading,
+                    error: _appleError,
+                    onPressed: _signInWithApple,
+                  ),
+                  if (_kGoogleEnabled) ...[
+                    const SizedBox(height: 12),
+                    _GoogleButton(
+                      loading: _googleLoading,
+                      error: _googleError,
+                      onPressed: _signInWithGoogle,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  // Plain inline text action — not a fourth auth button. A real
+                  // TextButton picks up the app's chip-like textButtonTheme
+                  // (gray fill + border + shadow), which read as a disabled
+                  // pill; GestureDetector keeps the 44px target invisible.
+                  GestureDetector(
+                    key: const ValueKey('auth-mode-toggle'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _toggleMode,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 10,
+                      ),
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: isSignup
+                                  ? 'Already have an account? '
+                                  : "Don't have an account? ",
                             ),
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeColors.inkMuted,
+                            TextSpan(
+                              text: isSignup ? 'Log in' : 'Sign up',
+                              style: TextStyle(
+                                color: context.themeColors.accent,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.themeColors.inkMuted,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                SizedBox(height: compact ? 14 : 22),
-                _LegalCopy(onOpen: _openLegalUrl),
-              ],
+                  SizedBox(height: compact ? 14 : 22),
+                  _LegalCopy(onOpen: _openLegalUrl),
+                ],
+              ),
             ),
           ),
         );
@@ -384,7 +387,9 @@ class _ProviderButton extends StatelessWidget {
             liveRegion: true,
             child: Text(
               error!,
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.dangerText),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.themeColors.dangerText,
+              ),
             ),
           ),
         ),
@@ -470,21 +475,22 @@ class _LegalCopy extends StatelessWidget {
   // Inline text links — GestureDetector, never TextButton: the app-level
   // textButtonTheme paints a filled, bordered, shadowed chip behind every
   // TextButton, which is what made the legal links render as mini pills.
-  Widget _link(BuildContext context, String label, String url) => GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onTap: () => onOpen(url),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
-      child: Text(
-        label,
-        style: AppTextStyles.bodySmall.copyWith(
-          color: context.themeColors.accent,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
+  Widget _link(BuildContext context, String label, String url) =>
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onOpen(url),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+          child: Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.themeColors.accent,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 /// The official Google "G" mark, drawn from the published vector geometry

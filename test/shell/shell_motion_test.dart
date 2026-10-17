@@ -262,11 +262,11 @@ void _expectSelected(WidgetTester tester, String label) {
     findsOneWidget,
     reason: '$label must show its own page',
   );
-  // Selection reads through Nuvo blue on the nav label for every
+  // Selection reads as a white label on Nuvo's electric-blue pill for every
   // destination.
   expect(
     tester.widget<Text>(find.text(label)).style?.color,
-    NuvoColors.page,
+    NuvoColors.white,
     reason: '$label must be the highlighted nav destination',
   );
 }
@@ -469,8 +469,8 @@ void main() {
     final icon = tester.widget<Icon>(find.byIcon(Icons.group));
     expect(
       icon.color,
-      NuvoColors.page,
-      reason: 'the selected icon sits on the dark pill',
+      NuvoColors.white,
+      reason: 'the selected icon is white on the electric-blue pill',
     );
   });
 }

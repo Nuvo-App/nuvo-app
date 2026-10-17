@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:typed_data';
@@ -287,204 +288,222 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           children: [
             Expanded(
               child:
-                  ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: NuvoBackButton(
-                              onPressed: () => safePopOrGo(context, '/profile'),
+                  NuvoFadeScroll(
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: NuvoBackButton(
+                                onPressed: () =>
+                                    safePopOrGo(context, '/profile'),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Edit profile',
-                            style: AppTextStyles.headlineLarge.copyWith(
-                              fontSize: 32,
-                              letterSpacing: -0.9,
+                            const SizedBox(height: 12),
+                            Text(
+                              'Edit profile',
+                              style: AppTextStyles.headlineLarge.copyWith(
+                                fontSize: 32,
+                                letterSpacing: -0.9,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Update your photo, name, and username.',
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              color: c.inkMuted,
+                            const SizedBox(height: 6),
+                            Text(
+                              'Update your photo, name, and username.',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: c.inkMuted,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 24),
+                            const SizedBox(height: 24),
 
-                          // ── The object being edited ──────────────────────
-                          // A signature card (outline + hard shadow) whose
-                          // header IS the identity card — it live-previews
-                          // the name/handle being typed so the user sees
-                          // "I'm editing MY profile", not filling a form.
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                            decoration: BoxDecoration(
-                              color: c.surface,
-                              borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                              border: Border.all(color: c.border, width: 1.5),
-                              boxShadow: AppShadows.hardOffset(c.inkShadow),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    // Photo is part of the identity card —
-                                    // the blue badge is the one affordance.
-                                    Semantics(
-                                      button: true,
-                                      label: hasPhoto
-                                          ? 'Change profile photo'
-                                          : 'Add profile photo',
-                                      child: NuvoPressable(
-                                        haptic: false,
-                                        onTap: _uploading
-                                            ? null
-                                            : _openProfilePhotoSheet,
-                                        child: SizedBox(
-                                          width: 64,
-                                          height: 64,
-                                          child: Stack(
-                                            clipBehavior: Clip.none,
-                                            children: [
-                                              _uploading
-                                                  ? Container(
-                                                      width: 64,
-                                                      height: 64,
+                            // ── The object being edited ──────────────────────
+                            // A signature card (outline + hard shadow) whose
+                            // header IS the identity card — it live-previews
+                            // the name/handle being typed so the user sees
+                            // "I'm editing MY profile", not filling a form.
+                            Container(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                14,
+                                16,
+                                14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: c.surface,
+                                borderRadius: BorderRadius.circular(
+                                  NuvoRadii.lg,
+                                ),
+                                border: Border.all(color: c.border, width: 1.5),
+                                boxShadow: AppShadows.hardOffset(c.inkShadow),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      // Photo is part of the identity card —
+                                      // the blue badge is the one affordance.
+                                      Semantics(
+                                        button: true,
+                                        label: hasPhoto
+                                            ? 'Change profile photo'
+                                            : 'Add profile photo',
+                                        child: NuvoPressable(
+                                          haptic: false,
+                                          onTap: _uploading
+                                              ? null
+                                              : _openProfilePhotoSheet,
+                                          child: SizedBox(
+                                            width: 64,
+                                            height: 64,
+                                            child: Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                _uploading
+                                                    ? Container(
+                                                        width: 64,
+                                                        height: 64,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                              color: c.panel,
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                            ),
+                                                        alignment:
+                                                            Alignment.center,
+                                                        child: const SizedBox(
+                                                          width: 22,
+                                                          height: 22,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth:
+                                                                    2.5,
+                                                                color:
+                                                                    NuvoColors
+                                                                        .blue,
+                                                              ),
+                                                        ),
+                                                      )
+                                                    : NuvoAvatar(
+                                                        initials: initials,
+                                                        localBytes:
+                                                            _pendingImageBytes,
+                                                        photoUrl: photoUrl,
+                                                        size: 64,
+                                                        bgColor: c.panel,
+                                                        textColor: c.ink,
+                                                      ),
+                                                if (!_uploading)
+                                                  Positioned(
+                                                    bottom: -2,
+                                                    right: -2,
+                                                    child: Container(
+                                                      width: 24,
+                                                      height: 24,
                                                       decoration: BoxDecoration(
-                                                        color: c.panel,
+                                                        color: NuvoColors.blue,
                                                         shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: c.surface,
+                                                          width: 2,
+                                                        ),
                                                       ),
                                                       alignment:
                                                           Alignment.center,
-                                                      child: const SizedBox(
-                                                        width: 22,
-                                                        height: 22,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2.5,
-                                                              color: NuvoColors
-                                                                  .blue,
-                                                            ),
+                                                      child: Icon(
+                                                        hasPhoto
+                                                            ? Icons.edit_rounded
+                                                            : Icons
+                                                                  .photo_camera_rounded,
+                                                        color: NuvoColors.white,
+                                                        size: 12,
                                                       ),
-                                                    )
-                                                  : NuvoAvatar(
-                                                      initials: initials,
-                                                      localBytes:
-                                                          _pendingImageBytes,
-                                                      photoUrl: photoUrl,
-                                                      size: 64,
-                                                      bgColor: c.panel,
-                                                      textColor: c.ink,
-                                                    ),
-                                              if (!_uploading)
-                                                Positioned(
-                                                  bottom: -2,
-                                                  right: -2,
-                                                  child: Container(
-                                                    width: 24,
-                                                    height: 24,
-                                                    decoration: BoxDecoration(
-                                                      color: NuvoColors.blue,
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
-                                                        color: c.surface,
-                                                        width: 2,
-                                                      ),
-                                                    ),
-                                                    alignment: Alignment.center,
-                                                    child: Icon(
-                                                      hasPhoto
-                                                          ? Icons.edit_rounded
-                                                          : Icons
-                                                                .photo_camera_rounded,
-                                                      color: NuvoColors.white,
-                                                      size: 12,
                                                     ),
                                                   ),
-                                                ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          ValueListenableBuilder<
-                                            TextEditingValue
-                                          >(
-                                            valueListenable: _nameController,
-                                            builder: (_, value, _) => Text(
-                                              value.text.trim().isEmpty
-                                                  ? 'Your name'
-                                                  : value.text.trim(),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTextStyles.titleLarge
-                                                  .copyWith(
-                                                    color:
-                                                        value.text
-                                                            .trim()
-                                                            .isEmpty
-                                                        ? c.inkSubtle
-                                                        : c.ink,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            ValueListenableBuilder<
+                                              TextEditingValue
+                                            >(
+                                              valueListenable: _nameController,
+                                              builder: (_, value, _) => Text(
+                                                value.text.trim().isEmpty
+                                                    ? 'Your name'
+                                                    : value.text.trim(),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: AppTextStyles.titleLarge
+                                                    .copyWith(
+                                                      color:
+                                                          value.text
+                                                              .trim()
+                                                              .isEmpty
+                                                          ? c.inkSubtle
+                                                          : c.ink,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          ValueListenableBuilder<
-                                            TextEditingValue
-                                          >(
-                                            valueListenable:
-                                                _usernameController,
-                                            builder: (_, value, _) => Text(
-                                              '@${value.text.trim()}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTextStyles.bodySmall
-                                                  .copyWith(
-                                                    color: context
-                                                        .themeColors
-                                                        .inkMuted,
-                                                  )
-                                                  .copyWith(color: c.inkMuted),
+                                            const SizedBox(height: 2),
+                                            ValueListenableBuilder<
+                                              TextEditingValue
+                                            >(
+                                              valueListenable:
+                                                  _usernameController,
+                                              builder: (_, value, _) => Text(
+                                                '@${value.text.trim()}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: AppTextStyles.bodySmall
+                                                    .copyWith(
+                                                      color: context
+                                                          .themeColors
+                                                          .inkMuted,
+                                                    )
+                                                    .copyWith(
+                                                      color: c.inkMuted,
+                                                    ),
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                Divider(color: c.divider, height: 1),
-                                const SizedBox(height: 14),
-                                NuvoTextInput(
-                                  controller: _nameController,
-                                  label: 'Full name',
-                                  hint: 'Your full name',
-                                  errorText: _nameError,
-                                  onChanged: (_) =>
-                                      setState(() => _nameError = null),
-                                ),
-                                const SizedBox(height: 14),
-                                NuvoTextInput(
-                                  controller: _usernameController,
-                                  label: 'Username',
-                                  hint: 'e.g. akshay',
-                                  errorText: _usernameError,
-                                  onChanged: (_) =>
-                                      setState(() => _usernameError = null),
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Divider(color: c.divider, height: 1),
+                                  const SizedBox(height: 14),
+                                  NuvoTextInput(
+                                    controller: _nameController,
+                                    label: 'Full name',
+                                    hint: 'Your full name',
+                                    errorText: _nameError,
+                                    onChanged: (_) =>
+                                        setState(() => _nameError = null),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  NuvoTextInput(
+                                    controller: _usernameController,
+                                    label: 'Username',
+                                    hint: 'e.g. akshay',
+                                    errorText: _usernameError,
+                                    onChanged: (_) =>
+                                        setState(() => _usernameError = null),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       )
                       .animate()
                       .fadeIn(duration: 280.ms, curve: Curves.easeOut)

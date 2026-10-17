@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -60,8 +61,9 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
 
   Future<void> _load() async {
     try {
-      final badges =
-          await ref.read(progressionControllerProvider.notifier).getBadges();
+      final badges = await ref
+          .read(progressionControllerProvider.notifier)
+          .getBadges();
       if (!mounted) return;
       setState(() {
         _badges = badges.where((b) => b.isAchievement).toList();
@@ -83,15 +85,17 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
   Future<void> _toggleFeature(NuvoBadge badge) async {
     if (_mutating || !badge.unlocked) return;
     final current = _badges ?? const <NuvoBadge>[];
-    final featuredIds =
-        current.where((b) => b.featured).map((b) => b.unlockId).toList();
+    final featuredIds = current
+        .where((b) => b.featured)
+        .map((b) => b.unlockId)
+        .toList();
     final next = badge.featured
         ? (featuredIds..remove(badge.unlockId))
         : [...featuredIds, badge.unlockId];
     if (!badge.featured && next.length > _slots) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('You can feature up to $_slots.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('You can feature up to $_slots.')));
       return;
     }
     setState(() => _mutating = true);
@@ -100,12 +104,12 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
           .read(progressionControllerProvider.notifier)
           .setFeatured(next);
       if (!mounted) return;
-      setState(() =>
-          _badges = badges.where((b) => b.isAchievement).toList());
+      setState(() => _badges = badges.where((b) => b.isAchievement).toList());
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _mutating = false);
@@ -151,93 +155,100 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
     return Scaffold(
       backgroundColor: c.page,
       body: SafeArea(
-        child: ListView(
-          // Pushed pages reserve real breathing room below the last tile —
-          // the same clearance Race Detail uses (56). On inset-less devices
-          // (viewPadding.bottom == 0) this padding is the only thing
-          // keeping the final row off the physical screen edge.
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
-          children: [
-            NuvoBackHeader(
-              title: 'Achievements',
-              onBack: () => safePopOrGo(context, '/profile'),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Earned by racing. Feature up to $_slots on your profile.',
-              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$earned / ${all.length} earned · $featuredCount / $_slots featured',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: context.themeColors.accent,
-                fontWeight: FontWeight.w800,
+        child: NuvoFadeScroll(
+          child: ListView(
+            // Pushed pages reserve real breathing room below the last tile —
+            // the same clearance Race Detail uses (56). On inset-less devices
+            // (viewPadding.bottom == 0) this padding is the only thing
+            // keeping the final row off the physical screen edge.
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
+            children: [
+              NuvoBackHeader(
+                title: 'Achievements',
+                onBack: () => safePopOrGo(context, '/profile'),
               ),
-            ),
-            // What's next leads the page: the achievement closest to done,
-            // then the unlock the next level brings.
-            if (nextAchievement != null || nextUnlock != null) ...[
-              const SizedBox(height: NuvoSpacing.xl),
-              if (nextAchievement != null) NextUpCard(next: nextAchievement),
-              if (nextAchievement != null && nextUnlock != null)
-                const SizedBox(height: NuvoSpacing.lg),
-              if (nextUnlock != null)
-                _NextLevelUnlock(
-                  unlock: nextUnlock,
-                  currentLevel: progression?.level ?? 1,
+              const SizedBox(height: 6),
+              Text(
+                'Earned by racing. Feature up to $_slots on your profile.',
+                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$earned / ${all.length} earned · $featuredCount / $_slots featured',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: context.themeColors.accent,
+                  fontWeight: FontWeight.w800,
                 ),
-            ],
-            const SizedBox(height: NuvoSpacing.xl),
-            Text(
-              'All achievements',
-              style: AppTextStyles.sectionTitle.copyWith(
-                color: c.ink,
-                fontWeight: FontWeight.w800,
               ),
-            ),
-            const SizedBox(height: NuvoSpacing.md),
-            // Natural-height row: the chips set its height, so it grows with
-            // text scale. No clip, so the selected chip's offset shadow and
-            // border are never shaved; vertical padding leaves room for them.
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
-              padding: const EdgeInsets.only(top: 2, bottom: 4, right: 4),
-              child: Row(
-                children: [
-                  for (final tab in nuvoAchievementTabs.keys) ...[
-                    _TabChip(
-                      key: _chipKeys.putIfAbsent(tab, GlobalKey.new),
-                      label: tab,
-                      selected: _tab == tab,
-                      onTap: () => _selectTab(tab),
-                    ),
-                    if (tab != nuvoAchievementTabs.keys.last)
-                      const SizedBox(width: 8),
-                  ],
-                ],
+              // What's next leads the page: the achievement closest to done,
+              // then the unlock the next level brings.
+              if (nextAchievement != null || nextUnlock != null) ...[
+                const SizedBox(height: NuvoSpacing.xl),
+                if (nextAchievement != null) NextUpCard(next: nextAchievement),
+                if (nextAchievement != null && nextUnlock != null)
+                  const SizedBox(height: NuvoSpacing.lg),
+                if (nextUnlock != null)
+                  _NextLevelUnlock(
+                    unlock: nextUnlock,
+                    currentLevel: progression?.level ?? 1,
+                  ),
+              ],
+              const SizedBox(height: NuvoSpacing.xl),
+              Text(
+                'All achievements',
+                style: AppTextStyles.sectionTitle.copyWith(
+                  color: c.ink,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: NuvoSpacing.lg),
-            if (_badges == null && _error == null)
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: context.themeColors.accent,
+              const SizedBox(height: NuvoSpacing.md),
+              // Natural-height row: the chips set its height, so it grows with
+              // text scale. No clip, so the selected chip's offset shadow and
+              // border are never shaved; vertical padding leaves room for them.
+              // Horizontal chip row: keep its scroll metrics away from the
+              // page's bottom fade.
+              NotificationListener<ScrollNotification>(
+                onNotification: (_) => true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.only(top: 2, bottom: 4, right: 4),
+                  child: Row(
+                    children: [
+                      for (final tab in nuvoAchievementTabs.keys) ...[
+                        _TabChip(
+                          key: _chipKeys.putIfAbsent(tab, GlobalKey.new),
+                          label: tab,
+                          selected: _tab == tab,
+                          onTap: () => _selectTab(tab),
+                        ),
+                        if (tab != nuvoAchievementTabs.keys.last)
+                          const SizedBox(width: 8),
+                      ],
+                    ],
                   ),
                 ),
-              )
-            else if (_badges == null)
-              NuvoErrorState(
-                message: "Couldn't load your achievements.",
-                onRetry: _load,
-              )
-            else
-              NuvoBadgeGrid(badges: badges, onTap: _openDetail),
-          ],
+              ),
+              const SizedBox(height: NuvoSpacing.lg),
+              if (_badges == null && _error == null)
+                Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: context.themeColors.accent,
+                    ),
+                  ),
+                )
+              else if (_badges == null)
+                NuvoErrorState(
+                  message: "Couldn't load your achievements.",
+                  onRetry: _load,
+                )
+              else
+                NuvoBadgeGrid(badges: badges, onTap: _openDetail),
+            ],
+          ),
         ),
       ),
     );

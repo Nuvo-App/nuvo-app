@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/photo_service.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -381,382 +382,395 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             // ── Scrollable content ───────────────────────────────────────────
             Expanded(
-              child:
-                  SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Step progress (3 steps: race, profile, pass)
-                            Row(
-                              children: [
-                                for (var i = 0; i < 3; i++) ...[
-                                  Expanded(
-                                    child: Container(
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: i <= 1
-                                            ? NuvoColors.blue
-                                            : NuvoColors.border,
-                                        borderRadius: BorderRadius.circular(99),
+              child: NuvoScrollBottomFade(
+                child:
+                    SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Step progress (3 steps: race, profile, pass)
+                              Row(
+                                children: [
+                                  for (var i = 0; i < 3; i++) ...[
+                                    Expanded(
+                                      child: Container(
+                                        height: 3,
+                                        decoration: BoxDecoration(
+                                          color: i <= 1
+                                              ? NuvoColors.blue
+                                              : NuvoColors.border,
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  if (i < 2) const SizedBox(width: 4),
+                                    if (i < 2) const SizedBox(width: 4),
+                                  ],
                                 ],
-                              ],
-                            ),
-                            const SizedBox(height: 24),
+                              ),
+                              const SizedBox(height: 24),
 
-                            NuvoFlipText(
-                              'Build your profile',
-                              style: AppTextStyles.headlineLarge.copyWith(
-                                fontSize: 32,
-                                letterSpacing: -0.9,
-                                color: NuvoColors.navy,
+                              NuvoFlipText(
+                                'Build your profile',
+                                style: AppTextStyles.headlineLarge.copyWith(
+                                  fontSize: 32,
+                                  letterSpacing: -0.9,
+                                  color: NuvoColors.navy,
+                                ),
+                                delay: const Duration(milliseconds: 200),
+                                duration: const Duration(milliseconds: 1300),
                               ),
-                              delay: const Duration(milliseconds: 200),
-                              duration: const Duration(milliseconds: 1300),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'This is how your crew will see you in races.',
-                              style: AppTextStyles.bodyLarge.copyWith(
-                                color: NuvoColors.muted,
+                              const SizedBox(height: 8),
+                              Text(
+                                'This is how your crew will see you in races.',
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
+                              const SizedBox(height: 24),
 
-                            // Live identity preview — the profile their crew
-                            // will see, assembling as they type.
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: NuvoColors.white,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: NuvoColors.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    key: const ValueKey('onboarding-avatar'),
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: _openPhotoSheet,
-                                    child: Stack(
-                                      alignment: Alignment.bottomRight,
-                                      children: [
-                                        Container(
-                                          width: 64,
-                                          height: 64,
-                                          decoration: const BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: NuvoColors.navy,
+                              // Live identity preview — the profile their crew
+                              // will see, assembling as they type.
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: NuvoColors.white,
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: NuvoColors.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      key: const ValueKey('onboarding-avatar'),
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _openPhotoSheet,
+                                      child: Stack(
+                                        alignment: Alignment.bottomRight,
+                                        children: [
+                                          Container(
+                                            width: 64,
+                                            height: 64,
+                                            decoration: const BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: NuvoColors.navy,
+                                            ),
+                                            clipBehavior: Clip.antiAlias,
+                                            alignment: Alignment.center,
+                                            child: _buildAvatarContent(),
                                           ),
-                                          clipBehavior: Clip.antiAlias,
-                                          alignment: Alignment.center,
-                                          child: _buildAvatarContent(),
-                                        ),
-                                        Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: NuvoColors.blue,
-                                            border: Border.all(
-                                              color: NuvoColors.page,
-                                              width: 2,
+                                          Container(
+                                            width: 22,
+                                            height: 22,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: NuvoColors.blue,
+                                              border: Border.all(
+                                                color: NuvoColors.page,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.camera_alt_rounded,
+                                              color: NuvoColors.white,
+                                              size: 12,
                                             ),
                                           ),
-                                          child: const Icon(
-                                            Icons.camera_alt_rounded,
-                                            color: NuvoColors.white,
-                                            size: 12,
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        AnimatedSwitcher(
-                                          duration: const Duration(
-                                            milliseconds: 200,
-                                          ),
-                                          child: Text(
-                                            _nameController.text.trim().isEmpty
-                                                ? 'Your name'
-                                                : _nameController.text.trim(),
-                                            key: ValueKey(
-                                              _nameController.text.trim(),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 200,
                                             ),
+                                            child: Text(
+                                              _nameController.text
+                                                      .trim()
+                                                      .isEmpty
+                                                  ? 'Your name'
+                                                  : _nameController.text.trim(),
+                                              key: ValueKey(
+                                                _nameController.text.trim(),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTextStyles.titleMedium
+                                                  .copyWith(
+                                                    color:
+                                                        _nameController.text
+                                                            .trim()
+                                                            .isEmpty
+                                                        ? NuvoColors.muted
+                                                        : NuvoColors.navy,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            username.isEmpty
+                                                ? '@handle'
+                                                : '@$username',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: AppTextStyles.titleMedium
+                                            style: AppTextStyles.bodyMedium
                                                 .copyWith(
-                                                  color:
-                                                      _nameController.text
-                                                          .trim()
-                                                          .isEmpty
+                                                  color: username.isEmpty
                                                       ? NuvoColors.muted
-                                                      : NuvoColors.navy,
-                                                  fontWeight: FontWeight.w800,
+                                                      : NuvoColors.blue,
+                                                  fontWeight: username.isEmpty
+                                                      ? FontWeight.w500
+                                                      : FontWeight.w700,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (MediaQuery.sizeOf(context).width >=
+                                        360) ...[
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: NuvoColors.blue.withValues(
+                                            alpha: .1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                          border: Border.all(
+                                            color: NuvoColors.blue.withValues(
+                                              alpha: .35,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'LEVEL 1',
+                                          style: AppTextStyles.brandLabel
+                                              .copyWith(
+                                                color: NuvoColors.blue,
+                                                letterSpacing: 1.4,
+                                                fontSize: 10,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ).animate().fadeIn(
+                                delay: const Duration(milliseconds: 350),
+                                duration: const Duration(milliseconds: 400),
+                              ),
+
+                              if (_avatarError != null) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _avatarError!,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: NuvoColors.danger,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_avatarDenied)
+                                      GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => launchUrl(
+                                          Uri.parse('app-settings:'),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 8,
+                                          ),
+                                          child: Text(
+                                            'Open Settings',
+                                            style: AppTextStyles.bodySmall
+                                                .copyWith(
+                                                  color: NuvoColors.blue,
+                                                  fontWeight: FontWeight.w700,
                                                 ),
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          username.isEmpty
-                                              ? '@handle'
-                                              : '@$username',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppTextStyles.bodyMedium
-                                              .copyWith(
-                                                color: username.isEmpty
-                                                    ? NuvoColors.muted
-                                                    : NuvoColors.blue,
-                                                fontWeight: username.isEmpty
-                                                    ? FontWeight.w500
-                                                    : FontWeight.w700,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: NuvoColors.blue.withValues(
-                                        alpha: .1,
                                       ),
-                                      borderRadius: BorderRadius.circular(99),
-                                      border: Border.all(
-                                        color: NuvoColors.blue.withValues(
-                                          alpha: .35,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'LEVEL 1',
-                                      style: AppTextStyles.brandLabel.copyWith(
-                                        color: NuvoColors.blue,
-                                        letterSpacing: 1.4,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+
+                              NuvoTextInput(
+                                controller: _nameController,
+                                label: 'Full name',
+                                hint: 'Your name',
+                                textCapitalization: TextCapitalization.words,
                               ),
-                            ).animate().fadeIn(
-                              delay: const Duration(milliseconds: 350),
-                              duration: const Duration(milliseconds: 400),
-                            ),
+                              const SizedBox(height: 16),
 
-                            if (_avatarError != null) ...[
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
+                              NuvoTextInput(
+                                controller: _usernameController,
+                                label: 'Username',
+                                hint: 'handle',
+                                prefixIcon: Padding(
+                                  padding: const EdgeInsets.only(left: 14),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: 1,
                                     child: Text(
-                                      _avatarError!,
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: NuvoColors.danger,
-                                      ),
+                                      '@',
+                                      style: AppTextStyles.bodyMedium,
                                     ),
-                                  ),
-                                  if (_avatarDenied)
-                                    GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () =>
-                                          launchUrl(Uri.parse('app-settings:')),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                          vertical: 8,
-                                        ),
-                                        child: Text(
-                                          'Open Settings',
-                                          style: AppTextStyles.bodySmall
-                                              .copyWith(
-                                                color: NuvoColors.blue,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                            const SizedBox(height: 24),
-
-                            NuvoTextInput(
-                              controller: _nameController,
-                              label: 'Full name',
-                              hint: 'Your name',
-                              textCapitalization: TextCapitalization.words,
-                            ),
-                            const SizedBox(height: 16),
-
-                            NuvoTextInput(
-                              controller: _usernameController,
-                              label: 'Username',
-                              hint: 'handle',
-                              prefixIcon: Padding(
-                                padding: const EdgeInsets.only(left: 14),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: 1,
-                                  child: Text(
-                                    '@',
-                                    style: AppTextStyles.bodyMedium,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
+                              const SizedBox(height: 8),
 
-                            // Username availability feedback
-                            if (_usernameChecking)
-                              Text(
-                                'Checking availability…',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.muted,
-                                ),
-                              )
-                            else if (_usernameFormatError(
-                                  username.toLowerCase(),
-                                ) !=
-                                null)
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.cancel_rounded,
-                                    color: NuvoColors.danger,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      _usernameFormatError(
-                                        username.toLowerCase(),
-                                      )!,
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: NuvoColors.danger,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else if (username.length >= 3) ...[
-                              Row(
-                                children: [
-                                  Icon(
-                                    _usernameAvailable == true
-                                        ? Icons.check_circle_rounded
-                                        : Icons.cancel_rounded,
-                                    color: _usernameAvailable == true
-                                        ? NuvoColors.success
-                                        : NuvoColors.danger,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      _usernameAvailable == true
-                                          ? '@$username is available'
-                                          : '@$username is taken',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: _usernameAvailable == true
-                                            ? NuvoColors.success
-                                            : NuvoColors.danger,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-
-                            if (_error != null) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                _error!,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.danger,
-                                ),
-                              ),
-                            ],
-
-                            const SizedBox(height: 16),
-
-                            _ConsentRow(
-                              value: _termsAccepted,
-                              onChanged: (v) =>
-                                  setState(() => _termsAccepted = v),
-                              child: RichText(
-                                text: TextSpan(
+                              // Username availability feedback
+                              if (_usernameChecking)
+                                Text(
+                                  'Checking availability…',
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: NuvoColors.muted,
                                   ),
+                                )
+                              else if (_usernameFormatError(
+                                    username.toLowerCase(),
+                                  ) !=
+                                  null)
+                                Row(
                                   children: [
-                                    const TextSpan(text: 'I agree to the '),
-                                    TextSpan(
-                                      text: 'Terms of Service',
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: NuvoColors.blue,
-                                        fontWeight: FontWeight.w700,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                      recognizer: _termsTap,
+                                    const Icon(
+                                      Icons.cancel_rounded,
+                                      color: NuvoColors.danger,
+                                      size: 16,
                                     ),
-                                    const TextSpan(text: ' and '),
-                                    TextSpan(
-                                      text: 'Privacy Policy',
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: NuvoColors.blue,
-                                        fontWeight: FontWeight.w700,
-                                        decoration: TextDecoration.underline,
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _usernameFormatError(
+                                          username.toLowerCase(),
+                                        )!,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: NuvoColors.danger,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                      recognizer: _privacyTap,
                                     ),
-                                    const TextSpan(text: '.'),
+                                  ],
+                                )
+                              else if (username.length >= 3) ...[
+                                Row(
+                                  children: [
+                                    Icon(
+                                      _usernameAvailable == true
+                                          ? Icons.check_circle_rounded
+                                          : Icons.cancel_rounded,
+                                      color: _usernameAvailable == true
+                                          ? NuvoColors.success
+                                          : NuvoColors.danger,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _usernameAvailable == true
+                                            ? '@$username is available'
+                                            : '@$username is taken',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: _usernameAvailable == true
+                                              ? NuvoColors.success
+                                              : NuvoColors.danger,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ),
-                            ),
-                            _ConsentRow(
-                              value: _ageAttested,
-                              onChanged: (v) =>
-                                  setState(() => _ageAttested = v),
-                              child: Text(
-                                'I am at least 13 years old.',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.muted,
+                              ],
+
+                              if (_error != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _error!,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.danger,
+                                  ),
+                                ),
+                              ],
+
+                              const SizedBox(height: 16),
+
+                              _ConsentRow(
+                                value: _termsAccepted,
+                                onChanged: (v) =>
+                                    setState(() => _termsAccepted = v),
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: NuvoColors.muted,
+                                    ),
+                                    children: [
+                                      const TextSpan(text: 'I agree to the '),
+                                      TextSpan(
+                                        text: 'Terms of Service',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: NuvoColors.blue,
+                                          fontWeight: FontWeight.w700,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: _termsTap,
+                                      ),
+                                      const TextSpan(text: ' and '),
+                                      TextSpan(
+                                        text: 'Privacy Policy',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: NuvoColors.blue,
+                                          fontWeight: FontWeight.w700,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: _privacyTap,
+                                      ),
+                                      const TextSpan(text: '.'),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                              _ConsentRow(
+                                value: _ageAttested,
+                                onChanged: (v) =>
+                                    setState(() => _ageAttested = v),
+                                child: Text(
+                                  'I am at least 13 years old.',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.muted,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                        .animate()
+                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                        .slideY(
+                          begin: 0.04,
+                          end: 0,
+                          duration: 320.ms,
+                          curve: Curves.easeOutCubic,
                         ),
-                      )
-                      .animate()
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.04,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
+              ),
             ),
 
             // ── Pinned CTA ───────────────────────────────────────────────────
@@ -801,8 +815,9 @@ class _ConsentRow extends StatelessWidget {
           Checkbox.adaptive(
             value: value,
             fillColor: WidgetStateProperty.resolveWith(
-              (states) =>
-                  states.contains(WidgetState.selected) ? NuvoColors.blue : null,
+              (states) => states.contains(WidgetState.selected)
+                  ? NuvoColors.blue
+                  : null,
             ),
             onChanged: (v) => onChanged(v ?? false),
           ),

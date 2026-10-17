@@ -164,8 +164,8 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     return ext == 'png'
         ? 'image/png'
         : ext == 'webp'
-            ? 'image/webp'
-            : 'image/jpeg';
+        ? 'image/webp'
+        : 'image/jpeg';
   }
 
   Future<void> _pickEvidence() async {
@@ -188,8 +188,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
               _EvidenceSheetOption(
                 icon: Icons.photo_library_rounded,
                 label: 'Choose from photos',
-                onTap: () =>
-                    Navigator.of(sheetCtx).pop(ImageSource.gallery),
+                onTap: () => Navigator.of(sheetCtx).pop(ImageSource.gallery),
               ),
               const SizedBox(height: 8),
               _EvidenceSheetOption(
@@ -229,7 +228,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
-      final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
+      final eligibility = resolveCameraVerification(
+        race,
+        remoteDefinitions: _remoteDefinitions,
+      );
       setState(() {
         _race = race;
         _raceLoading = false;
@@ -286,7 +288,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   }
 
   bool _isPreVerify(Race race) {
-    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
+    final eligibility = resolveCameraVerification(
+      race,
+      remoteDefinitions: _remoteDefinitions,
+    );
     return eligibility.isCameraVerifiable && eligibility.movementType != null;
   }
 
@@ -313,15 +318,17 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: _preVerifyContent(race),
+                return NuvoFadeScroll(
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: _preVerifyContent(race),
+                      ),
                     ),
                   ),
                 );
@@ -373,7 +380,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
     if (_raceError != null || race == null) return [backToRace];
 
-    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
+    final eligibility = resolveCameraVerification(
+      race,
+      remoteDefinitions: _remoteDefinitions,
+    );
     if (!eligibility.isCameraVerifiable) {
       return [
         NuvoPrimaryButton(
@@ -394,9 +404,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         label: 'Begin',
         icon: Icons.camera_alt_rounded,
         expand: true,
-        onPressed: _navigating
-            ? null
-            : () => _beginCameraProof(race),
+        onPressed: _navigating ? null : () => _beginCameraProof(race),
       ),
       const SizedBox(height: 10),
       backToRace,
@@ -473,7 +481,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   // ── Form ─────────────────────────────────────────────────────────────────────
 
   List<Widget> _formContent(Race race) {
-    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
+    final eligibility = resolveCameraVerification(
+      race,
+      remoteDefinitions: _remoteDefinitions,
+    );
 
     // Keep every camera-verifiable movement on the same quiet setup screen.
     if (_isPreVerify(race)) {
@@ -503,7 +514,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         eligibility.isCameraVerifiable
             ? 'Camera counts and verifies automatically.'
             : 'Log your result — a photo proves it counts.',
-        style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+        style: AppTextStyles.bodySmall.copyWith(
+          color: context.themeColors.inkMuted,
+        ),
       ),
 
       const SizedBox(height: 24),
@@ -528,7 +541,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
   /// Dedicated pre-verification movement instruction shown before the camera opens.
   List<Widget> _preVerifyContent(Race race) {
-    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
+    final eligibility = resolveCameraVerification(
+      race,
+      remoteDefinitions: _remoteDefinitions,
+    );
     final movementName =
         eligibility.movementDefinition?.title ?? race.displayTitle;
     final framingLabel =
@@ -548,7 +564,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         const SizedBox(height: 6),
         Text(
           'First to $goalLabel',
-          style: AppTextStyles.titleMedium.copyWith(color: context.themeColors.inkMuted),
+          style: AppTextStyles.titleMedium.copyWith(
+            color: context.themeColors.inkMuted,
+          ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -570,7 +588,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       const SizedBox(height: 6),
       Text(
         'Stand where Nuvo can see your whole body.',
-        style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+        style: AppTextStyles.bodySmall.copyWith(
+          color: context.themeColors.inkMuted,
+        ),
         textAlign: TextAlign.center,
       ),
     ];
@@ -623,17 +643,23 @@ class _MoveCheckCard extends StatelessWidget {
           children: [
             Text(
               'Goal',
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.themeColors.inkMuted,
+              ),
             ),
             const SizedBox(width: 12),
             Text(
               _goalLabel,
-              style: AppTextStyles.titleMedium.copyWith(color: context.themeColors.ink),
+              style: AppTextStyles.titleMedium.copyWith(
+                color: context.themeColors.ink,
+              ),
             ),
             const Spacer(),
             Text(
               _estimatedTime,
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.themeColors.inkMuted,
+              ),
             ),
           ],
         ),
@@ -645,9 +671,7 @@ class _MoveCheckCard extends StatelessWidget {
           height: 160,
           width: double.infinity,
           child: CustomPaint(
-            painter: _FramingGuidePainter(
-              color: context.themeColors.ink,
-            ),
+            painter: _FramingGuidePainter(color: context.themeColors.ink),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -698,12 +722,11 @@ class _PreVerifySetupCard extends ConsumerWidget {
     final remotePreviewJson = movement == null
         ? null
         : ref
-            .watch(motionCatalogProvider)
-            .whenOrNull(
-              data: (snapshot) => snapshot.previewSequenceFor(
-                movement.backendValue,
-              ),
-            );
+              .watch(motionCatalogProvider)
+              .whenOrNull(
+                data: (snapshot) =>
+                    snapshot.previewSequenceFor(movement.backendValue),
+              );
     final showRivePreview =
         movement != null &&
         RiveMovementPreview.supports(
@@ -748,7 +771,11 @@ class _StaticPreVerifyCue extends StatelessWidget {
       height: 78,
       child: Row(
         children: [
-          Icon(Icons.videocam_outlined, color: context.themeColors.accent, size: 30),
+          Icon(
+            Icons.videocam_outlined,
+            color: context.themeColors.accent,
+            size: 30,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
@@ -872,7 +899,9 @@ class _SetupLine extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.themeColors.ink,
+            ),
           ),
         ),
       ],
@@ -970,7 +999,9 @@ class _ManualLogCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               error!,
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.dangerText),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.themeColors.dangerText,
+              ),
             ),
           ],
         ],
@@ -1003,7 +1034,9 @@ class _EvidenceTile extends StatelessWidget {
       children: [
         Text(
           'Proof',
-          style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.themeColors.inkMuted,
+          ),
         ),
         const SizedBox(height: 6),
         InkWell(
@@ -1114,4 +1147,3 @@ class _EvidenceSheetOption extends StatelessWidget {
     );
   }
 }
-

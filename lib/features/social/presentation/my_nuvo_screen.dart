@@ -13,6 +13,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_back_header.dart';
+import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_motion.dart';
@@ -63,7 +64,9 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
       return;
     }
     try {
-      final invite = await ref.read(inviteRepositoryProvider).mintMyCrewInvite();
+      final invite = await ref
+          .read(inviteRepositoryProvider)
+          .mintMyCrewInvite();
       if (mounted) setState(() => _invite = invite);
     } catch (_) {
       if (mounted) setState(() => _error = true);
@@ -77,7 +80,8 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
     final name = user?.fullName ?? user?.email ?? 'Nuvo member';
     final username = user?.username;
     final t = context.themeColors;
-    final code = _invite?.code ??
+    final code =
+        _invite?.code ??
         (username != null && username.isNotEmpty ? '@$username' : null);
     return NuvoPage(
       topBar: SafeArea(
@@ -97,49 +101,62 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
         ),
       ),
       child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 8),
-              _identityHero(name, username, code, user?.profilePhotoUrl, t),
-              const SizedBox(height: 16),
-              _qrCard(t),
-              const SizedBox(height: 16),
-              NuvoPrimaryButton(
-                label: 'Share my Nuvo',
-                icon: Icons.ios_share_rounded,
-                expand: true,
-                height: 52,
-                onPressed: _invite == null
-                    ? null
-                    : () => Share.share(
-                        'Connect with me on Nuvo — ${_invite!.url}'),
-              ),
-              const SizedBox(height: 8),
-              Row(
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // The QR face shrinks so the whole card, its actions and the
+            // caption fit above the fold on short phones / large text.
+            final s = MediaQuery.textScalerOf(context).scale(10) / 10;
+            final raw = box.maxHeight - (335 + 310 * (s - 1));
+            final qr = raw.clamp(80.0, 168.0);
+            final scroll = SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: NuvoCopyButton(
-                      text: _invite?.url ?? '',
-                      height: 46,
-                      enabled: _invite != null,
-                    ),
+                  const SizedBox(height: 8),
+                  _identityHero(name, username, code, user?.profilePhotoUrl, t),
+                  const SizedBox(height: 16),
+                  _qrCard(t, qr),
+                  const SizedBox(height: 16),
+                  NuvoPrimaryButton(
+                    label: 'Share my Nuvo',
+                    icon: Icons.ios_share_rounded,
+                    expand: true,
+                    height: 52,
+                    onPressed: _invite == null
+                        ? null
+                        : () => Share.share(
+                            'Connect with me on Nuvo — ${_invite!.url}',
+                          ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: NuvoSecondaryButton(
-                      label: 'Scan a code',
-                      icon: Icons.qr_code_scanner_rounded,
-                      height: 46,
-                      onPressed: () => context.push('/scan'),
-                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: NuvoCopyButton(
+                          text: _invite?.url ?? '',
+                          height: 46,
+                          enabled: _invite != null,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: NuvoSecondaryButton(
+                          label: 'Scan a code',
+                          icon: Icons.qr_code_scanner_rounded,
+                          height: 46,
+                          onPressed: () => context.push('/scan'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            );
+            // Only when even the smallest QR cannot fit does the page scroll.
+            if (raw >= 80) return scroll;
+            return Stack(children: [scroll, const NuvoBottomFade()]);
+          },
         ),
       ),
     );
@@ -183,7 +200,8 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
                   '@$username',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: context.themeColors.ink)
                       .copyWith(color: t.inkSubtle),
                 ),
               ],
@@ -211,14 +229,22 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
     );
   }
 
-  Widget _qrCard(NuvoThemeColors t) {
+  Widget _qrCard(NuvoThemeColors t, double qrSize) {
     if (_error) {
-      return Column(children: [
-        Text("Couldn't create your code.",
-            style: AppTextStyles.bodyMedium.copyWith(color: context.dangerInk)),
-        const SizedBox(height: 12),
-        NuvoSecondaryButton(label: 'Try again', expand: true, onPressed: _mint),
-      ]);
+      return Column(
+        children: [
+          Text(
+            "Couldn't create your code.",
+            style: AppTextStyles.bodyMedium.copyWith(color: context.dangerInk),
+          ),
+          const SizedBox(height: 12),
+          NuvoSecondaryButton(
+            label: 'Try again',
+            expand: true,
+            onPressed: _mint,
+          ),
+        ],
+      );
     }
     final invite = _invite;
     if (invite == null) {
@@ -244,32 +270,37 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
             ),
           ],
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          QrImageView(
-            data: invite.url,
-            version: QrVersions.auto,
-            size: 168,
-            eyeStyle: const QrEyeStyle(
-              eyeShape: QrEyeShape.square,
-              color: NuvoColors.navy,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            QrImageView(
+              data: invite.url,
+              version: QrVersions.auto,
+              size: qrSize,
+              eyeStyle: const QrEyeStyle(
+                eyeShape: QrEyeShape.square,
+                color: NuvoColors.navy,
+              ),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: NuvoColors.navy,
+              ),
             ),
-            dataModuleStyle: const QrDataModuleStyle(
-              dataModuleShape: QrDataModuleShape.square,
-              color: NuvoColors.navy,
+            const SizedBox(height: 10),
+            Text(
+              'Scan to add me',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: NuvoColors.muted)
+                  .copyWith(color: NuvoColors.textMuted),
             ),
-          ),
-          const SizedBox(height: 10),
-          Text('Scan to add me',
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted)
-                  .copyWith(color: NuvoColors.textMuted)),
-        ]),
+          ],
+        ),
       ),
     );
   }
 
   static String _initials(String name) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
     if (parts.isEmpty) return 'N';
     if (parts.length == 1) return parts.first[0].toUpperCase();
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
@@ -351,7 +382,9 @@ class _CodeChipState extends State<_CodeChip> {
                   _copied ? Icons.check_rounded : Icons.copy_rounded,
                   key: ValueKey(_copied),
                   size: 13,
-                  color: _copied ? context.semanticColors.success.on : t.inkSubtle,
+                  color: _copied
+                      ? context.semanticColors.success.on
+                      : t.inkSubtle,
                 ),
               ),
             ],
