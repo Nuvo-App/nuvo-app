@@ -100,9 +100,7 @@ class ProgressionController
       final json = Map<String, dynamic>.from(data);
       _etag = entry.etag;
       state = AsyncValue.data(
-        NuvoProgression.fromJson(
-          (json['progression'] as Map<String, dynamic>?) ?? const {},
-        ),
+        NuvoProgression.fromBody(json),
       );
     } catch (_) {
       // A bad snapshot is just a cache miss.

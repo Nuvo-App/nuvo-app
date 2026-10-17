@@ -79,26 +79,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = authUser == null ? null : presentedUser(authUser);
     final uid = user?.id;
 
-    final raceState = ref.watch(raceControllerProvider);
     final guide = ref.watch(firstRaceGuideProvider);
-    final activeCount = raceState.races.where(raceIsActive).length;
-    final finishedRaces = raceState.races.where(raceIsCompleted).toList();
-    // Wins come only from server-owned truth: the recorded winner, or a
-    // #1 entry in final standings (covers tied-for-first, where the server
-    // leaves winnerUserId null). A cancelled race's positional rank never
-    // counts as a win.
-    final wins = uid == null
-        ? 0
-        : finishedRaces
-              .where(
-                (r) =>
-                    r.winnerUserId == uid ||
-                    r.finalStandings.any((s) => s.userId == uid && s.rank == 1),
-              )
-              .length;
-    final winRate = finishedRaces.isEmpty
-        ? null
-        : (wins / finishedRaces.length * 100).round();
+    // The record comes from the server (progression.record). Only older
+    // servers / a not-yet-loaded read fall back to the races list.
+    final serverRecord = progression?.record;
+    final int activeCount;
+    final int wins;
+    final int? winRate;
+    if (serverRecord != null) {
+      activeCount = serverRecord.active;
+      wins = serverRecord.wins;
+      winRate = serverRecord.winRatePercent;
+    } else {
+      final raceState = ref.watch(raceControllerProvider);
+      activeCount = raceState.races.where(raceIsActive).length;
+      final finishedRaces = raceState.races.where(raceIsCompleted).toList();
+      // Wins come only from server-owned truth: the recorded winner, or a
+      // #1 entry in final standings (covers tied-for-first, where the server
+      // leaves winnerUserId null). A cancelled race's positional rank never
+      // counts as a win.
+      wins = uid == null
+          ? 0
+          : finishedRaces
+                .where(
+                  (r) =>
+                      r.winnerUserId == uid ||
+                      r.finalStandings.any((s) => s.userId == uid && s.rank == 1),
+                )
+                .length;
+      winRate = finishedRaces.isEmpty
+          ? null
+          : (wins / finishedRaces.length * 100).round();
+    }
 
     final screen = Scaffold(
       backgroundColor: c.page,
@@ -106,7 +118,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         color: NuvoColors.blue,
         backgroundColor: c.surface,
         onRefresh: () => Future.wait([
-          ref.read(raceControllerProvider.notifier).loadRaces(),
+          // Races reload only when the record is derived from the list.
+          if (serverRecord == null)
+            ref.read(raceControllerProvider.notifier).loadRaces(),
           ref.read(progressionControllerProvider.notifier).load(),
         ]),
         child: CustomScrollView(

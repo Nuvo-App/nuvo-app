@@ -134,9 +134,7 @@ class ProgressionApi {
     }
     final json = _decode(res);
     return ProgressionFetch(
-      data: NuvoProgression.fromJson(
-        (json['progression'] as Map<String, dynamic>?) ?? const {},
-      ),
+      data: NuvoProgression.fromBody(json),
       raw: json,
       etag: responseEtag,
     );
