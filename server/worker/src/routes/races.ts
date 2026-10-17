@@ -23,10 +23,11 @@ import {
   customConfigFromBody,
   customRepRateImplausible,
   manualConfigFromBody,
+  validateRaceWindow,
   registryConfigFromBody,
   type RaceConfig,
 } from '../domain/raceValidation';
-import { applyVerifiedSubmission } from '../domain/raceScoring';
+import { applyVerifiedSubmission, maxSubmissionValue } from '../domain/raceScoring';
 import {
   ensureMember,
   ensurePersonId,
@@ -423,6 +424,55 @@ async function recomputeRaceProgressForUser(
   await recomputeRanks(db, race.id, scoreDirectionFor(race));
 }
 
+/**
+ * Re-derive a finished race's winner and final standings from the corrected
+ * scores. Used when a proof is invalidated (veto) and when a late-but-eligible
+ * (grace) proof lands after the race was finalized — in both cases the stored
+ * result must never disagree with the scores it was computed from.
+ */
+async function rederiveEndedRaceResult(
+  db: D1Database,
+  race: RaceRow,
+  moveId: string,
+): Promise<string | null> {
+  const winnerBefore = race.winner_user_id ?? null;
+  const ranked = await rankedScores(db, race.id, scoreDirectionFor(race));
+  const leaders = ranked.filter((r) => r.rank === 1);
+  const winnerAfter = leaders.length === 1 && leaders[0].progress_value > 0 ? leaders[0].user_id : null;
+  if (winnerAfter !== winnerBefore) {
+    await db
+      .prepare('UPDATE races SET winner_user_id = ?, version = COALESCE(version, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(winnerAfter, race.id)
+      .run();
+    // Retire every prior winner award for this race (they're all stale
+    // — only one winner can stand), then record the corrected result.
+    await db
+      .prepare(
+        `UPDATE race_events SET voided_at = CURRENT_TIMESTAMP
+         WHERE race_id = ? AND event_type = 'winner_determined' AND voided_at IS NULL`,
+      )
+      .bind(race.id)
+      .run();
+    if (winnerAfter) {
+      await recordRaceEvents(db, race.id, [
+        {
+          type: 'winner_determined',
+          subjectUserId: winnerAfter,
+          payload: {
+            score: leaders[0].progress_value,
+            rank: 1,
+            tied: false,
+            correctedByProof: moveId,
+            previousWinner: winnerBefore,
+          },
+        },
+      ]);
+    }
+  }
+  await snapshotFinalStandings(db, race.id, scoreDirectionFor(race));
+  return winnerAfter;
+}
+
 interface InvalidationRepair {
   reopened: boolean;
   winnerBefore: string | null;
@@ -469,41 +519,7 @@ async function repairRaceAfterProofInvalidation(
         .run();
       await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
     } else {
-      // The window ended or someone else still finished — the result stands,
-      // but the winner may change. Re-derive from corrected standings.
-      const leaders = ranked.filter((r) => r.rank === 1);
-      winnerAfter = leaders.length === 1 && leaders[0].progress_value > 0 ? leaders[0].user_id : null;
-      if (winnerAfter !== winnerBefore) {
-        await db
-          .prepare('UPDATE races SET winner_user_id = ?, version = COALESCE(version, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .bind(winnerAfter, race.id)
-          .run();
-        // Retire every prior winner award for this race (they're all stale
-        // — only one winner can stand), then record the corrected result.
-        await db
-          .prepare(
-            `UPDATE race_events SET voided_at = CURRENT_TIMESTAMP
-             WHERE race_id = ? AND event_type = 'winner_determined' AND voided_at IS NULL`,
-          )
-          .bind(race.id)
-          .run();
-        if (winnerAfter) {
-          await recordRaceEvents(db, race.id, [
-            {
-              type: 'winner_determined',
-              subjectUserId: winnerAfter,
-              payload: {
-                score: leaders[0].progress_value,
-                rank: 1,
-                tied: false,
-                correctedByProof: move.id,
-                previousWinner: winnerBefore,
-              },
-            },
-          ]);
-        }
-      }
-      await snapshotFinalStandings(db, race.id, scoreDirectionFor(race));
+      winnerAfter = await rederiveEndedRaceResult(db, race, move.id);
     }
   }
   return { reopened, winnerBefore, winnerAfter };
@@ -1330,7 +1346,11 @@ racesRouter.post('/', async (c) => {
   // a stray body.targetValue must never become a made-up finish line.
   const targetValue = custom
     ? custom.targetValue
-    : manual?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
+    : manual
+      ? manual.targetValue
+      : config
+        ? config.targetValue
+        : positiveIntOrNull(body.targetValue) ?? null;
   // Manual races keep the human unit ("pages") in target_unit; the wire metric
   // is always 'reps'.
   const targetUnit = custom?.metric ?? manual?.unit ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
@@ -1342,10 +1362,16 @@ racesRouter.post('/', async (c) => {
   // concept was removed; the column remains compatibility state for races
   // created before the change.
   const visibility = RACE_LAUNCH_VISIBILITY;
-  const startAt = custom?.startsAt ?? manual?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
-  const endAt = custom?.endsAt ?? manual?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
+  const rawStartAt = custom?.startsAt ?? manual?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
+  const rawEndAt = custom?.endsAt ?? manual?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
   const raceFormat = custom?.format ?? manual?.format ?? config?.format ?? raceType;
+  // Finish-line sanity (parseable, after the start line, in the future, and
+  // mandatory for most/best formats) — see validateRaceWindow.
+  const raceWindow = validateRaceWindow(raceFormat, rawStartAt, rawEndAt);
+  if ('error' in raceWindow) return c.json(badRequest(raceWindow.error), 400);
+  const startAt = raceWindow.startsAt;
+  const endAt = raceWindow.endsAt;
   const raceActivityId = custom || manual ? null : config?.activityId ?? normalizeActivityIdLoose(movementType);
   const raceMetric = custom?.metric ?? manual?.metric ?? config?.metric ?? normalizeMetric(stringOrNull(body.metric) ?? targetUnit, activityForId(normalizeActivityIdLoose(movementType)));
   const raceScoringRule = custom?.scoringRule ?? manual?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum';
@@ -1578,6 +1604,7 @@ racesRouter.patch('/:id', async (c) => {
       .bind(race.id)
       .first<{ id: string }>();
     if (
+      race.status === 'completed' || race.status === 'cancelled' ||
       rulesLocked({ startAt: race.start_at, hasVerifiedMoves: Boolean(verified), now: new Date() })
     ) {
       return c.json(
@@ -1605,6 +1632,23 @@ racesRouter.patch('/:id', async (c) => {
       if (jsonKey === 'title' && !parsed) return c.json(badRequest('title is required'), 400);
       updates.push(`${dbKey} = ?`);
       values.push(parsed);
+    }
+  }
+  // A moved start/finish line keeps the same guarantees as creation: valid
+  // dates in canonical form, finish after start and in the future, and no
+  // clearing the finish line of a race that is decided there.
+  if (body.startLineAt !== undefined || body.finishLineAt !== undefined) {
+    const nextStart = body.startLineAt !== undefined ? stringOrNull(body.startLineAt) ?? null : race.start_at;
+    const nextEnd = body.finishLineAt !== undefined ? stringOrNull(body.finishLineAt) ?? null : race.end_at;
+    const checked = validateRaceWindow(race.format ?? race.race_type, nextStart, nextEnd);
+    if ('error' in checked) return c.json(badRequest(checked.error), 400);
+    for (const [jsonKey, dbKey, canonical] of [
+      ['startLineAt', 'start_at', checked.startsAt],
+      ['finishLineAt', 'end_at', checked.endsAt],
+    ] as const) {
+      if (body[jsonKey] === undefined) continue;
+      const i = updates.indexOf(`${dbKey} = ?`);
+      values[i] = canonical;
     }
   }
 
@@ -1648,6 +1692,9 @@ racesRouter.patch('/:id', async (c) => {
     if (!CREATOR_WRITABLE_STATUSES.has(body.status)) {
       return c.json(badRequest('Race status is set by the race itself. You can cancel or archive it.'), 409);
     }
+    if (body.status === 'cancelled' && effectiveRaceStatus(race.status, race.start_at, race.end_at) === 'completed') {
+      return c.json(badRequest('A finished race cannot be cancelled'), 409);
+    }
     updates.push('status = ?');
     values.push(body.status);
   }
@@ -1672,6 +1719,11 @@ async function setRaceStatus(c: Context<AppEnv>, status: string) {
   const race = await getRace(c.env.DB, c.req.param('id') ?? '');
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can change this race'), 403);
+  // A finished race's result stands: the creator cannot cancel it after
+  // seeing they lost (archiving just tidies it away).
+  if (status === 'cancelled' && effectiveRaceStatus(race.status, race.start_at, race.end_at) === 'completed') {
+    return c.json(badRequest('A finished race cannot be cancelled'), 409);
+  }
   await c.env.DB.prepare('UPDATE races SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, race.id).run();
   const updated = await getRace(c.env.DB, race.id);
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
@@ -1958,6 +2010,16 @@ racesRouter.post('/:id/proof', async (c) => {
     if (!media || !mediaObjectKey.startsWith(proofMediaKeyPrefix(race.id))) {
       return c.json(badRequest('Evidence was not uploaded for this race'), 400);
     }
+    // One photo backs one proof: re-submitting the same evidence would count
+    // the same effort twice. A rejected proof's photo may be resubmitted.
+    // (An idempotent retry of the same clientSubmissionId is answered below.)
+    const retryId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
+    const usedMedia = await c.env.DB.prepare(
+      "SELECT id, client_submission_id FROM move_logs WHERE media_object_key = ? AND status != 'rejected' LIMIT 1",
+    ).bind(mediaObjectKey).first<{ id: string; client_submission_id: string | null }>();
+    if (usedMedia && !(retryId && usedMedia.client_submission_id === retryId)) {
+      return c.json(badRequest('This photo was already used for a proof'), 409);
+    }
   }
   // Proof contract: Nuvo is evidence-based. Automated verification (AI Motion
   // Proof) IS the evidence; every self-reported submission carries a photo.
@@ -2005,6 +2067,11 @@ racesRouter.post('/:id/proof', async (c) => {
   const increment = value ?? 0;
   if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
   if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
+  // Per-submission sanity cap by metric: one proof can never carry an absurd
+  // amount (a 1e9-rep claim, or a day of plank in one go on a reps race).
+  if (increment > maxSubmissionValue(scoring.metric, isManualRace)) {
+    return c.json(badRequest('value is too large for a single proof'), 400);
+  }
 
   // Server-side provenance: when the client names the verification session
   // that produced this result, it must be this user's completed session for
@@ -2134,6 +2201,10 @@ racesRouter.post('/:id/proof', async (c) => {
   if (isCustom && aiStatus === 'custom_verified' && customRepRateImplausible(increment, durationMs)) {
     return c.json(badRequest('Custom proof count is not possible in the recorded time.'), 400);
   }
+  if (isAiMotion && !isCustom && aiStatus === 'ai_verified' && scoring.metric === 'reps' &&
+      customRepRateImplausible(increment, durationMs)) {
+    return c.json(badRequest('Proof count is not possible in the recorded time.'), 400);
+  }
   if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
     return c.json(badRequest('Custom proof valid frames cannot exceed analyzed frames.'), 400);
   }
@@ -2213,6 +2284,12 @@ racesRouter.post('/:id/proof', async (c) => {
     }
     try {
       result = await applyMoveProgress(c.env.DB, race, userId, increment, moveId);
+      if (race.status === 'completed' && eligibility === 'grace') {
+        // Late-but-eligible work landed after the result was written: the
+        // winner and final standings must follow the corrected scores.
+        const winnerNow = await rederiveEndedRaceResult(c.env.DB, race, moveId);
+        result.winnerUserId = winnerNow;
+      }
       await c.env.DB.prepare(
         `UPDATE move_logs SET previous_score = ?, new_score = ?, previous_rank = ?, new_rank = ?, race_completed = ?
          WHERE id = ?`
@@ -2478,6 +2555,9 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
     }
     if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') {
       return c.json(badRequest('Race is not active'), 409);
+    }
+    if (!(await isRaceMember(c.env.DB, race.id, move.user_id))) {
+      return c.json(badRequest('Only active race participants can have proof accepted'), 409);
     }
   }
 

@@ -199,13 +199,13 @@ class RaceDraft {
     final name = displayActivityName.toLowerCase();
     return switch (format) {
       RaceFormat.mostInWindow =>
-        'Most verified $name before the finish line wins.',
+        'Most $name — every proof adds to your total. Highest total before the finish line wins.',
       RaceFormat.bestAttempt =>
         lowerWins
             ? 'Lowest score wins — every verified attempt counts.'
             : 'Best single attempt wins — every verified score counts.',
       RaceFormat.timedAttempt =>
-        'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} wins.',
+        'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your best single attempt counts.',
       // "First to 20 verified jumping jacks wins." — the bare figure for
       // reps, the spoken duration for timed goals.
       _ => 'First to $_winValueText verified $name wins.',

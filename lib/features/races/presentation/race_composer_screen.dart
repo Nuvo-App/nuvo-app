@@ -3243,9 +3243,9 @@ class _GoalPageState extends State<_GoalPage> {
 
   String _modeLabel(RaceFormat f) => switch (f) {
     RaceFormat.firstToGoal => 'First to the goal',
-    RaceFormat.mostInWindow => 'Most before time runs out',
-    RaceFormat.bestAttempt => 'Best attempt',
-    RaceFormat.timedAttempt => 'Timed battle',
+    RaceFormat.mostInWindow => 'Most total (adds up)',
+    RaceFormat.bestAttempt => 'Single best attempt',
+    RaceFormat.timedAttempt => 'Timed single attempt',
   };
 
   void _setFormat(RaceFormat f) {
@@ -4050,7 +4050,7 @@ class _ReviewPage extends StatelessWidget {
             ? 'Lowest verified score wins'
             : 'Best verified attempt wins';
       case RaceFormat.mostInWindow:
-        return 'Most verified before the deadline';
+        return 'Highest total when it ends';
       case RaceFormat.timedAttempt:
         return 'Most in '
             '${formatDurationShort(draft.attemptDurationSeconds ?? 60)}';

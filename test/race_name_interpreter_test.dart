@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
+import 'package:nuvo/features/races/domain/race_mode_semantics.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
 import 'package:nuvo/features/races/domain/race_name_interpreter.dart';
@@ -272,13 +273,76 @@ void main() {
     test('"Who can do the most pushups" still resolves the activity', () {
       final i = interpretRaceName('Who can do the most pushups');
       expect(i.activity?.type, MotionActivityType.pushUps);
-      expect(i.format, RaceFormat.bestAttempt);
+      // Rule 1: "most X" adds up — cumulative total, not a best attempt.
+      expect(i.format, RaceFormat.mostInWindow);
     });
 
     test('"let\'s see who can do 50 pushups" falls back to subject+target', () {
       final i = interpretRaceName("let's see who can do 50 pushups");
       expect(i.activity?.type, MotionActivityType.pushUps);
       expect(i.targetValue, 50);
+    });
+  });
+
+  group('cumulative vs single attempt', () {
+    test('"who can do the most pullups in a hour" — cumulative, 1 hour', () {
+      final i = interpretRaceName('who can do the most pullups in a hour');
+      expect(i.format, RaceFormat.mostInWindow);
+      expect(i.format.scoringRuleFor(i.scoreDirection), 'cumulative_sum');
+      expect(i.attemptDurationSeconds, isNull);
+      expect(i.deadline, '1 hour');
+      final at = deadlineUtcFromPhrase(i.deadline)!;
+      final mins = at.difference(DateTime.now().toUtc()).inMinutes;
+      expect(mins, inInclusiveRange(58, 60));
+    });
+
+    test('"most pushups in 30 minutes" — cumulative, 30 minute window', () {
+      final i = interpretRaceName('most pushups in 30 minutes');
+      expect(i.activity?.type, MotionActivityType.pushUps);
+      expect(i.format, RaceFormat.mostInWindow);
+      expect(i.attemptDurationSeconds, isNull);
+      expect(i.deadline, '30 minutes');
+      final mins = deadlineUtcFromPhrase(i.deadline)!
+          .difference(DateTime.now().toUtc())
+          .inMinutes;
+      expect(mins, inInclusiveRange(28, 30));
+    });
+
+    test('very short windows stay a single timed attempt', () {
+      final s = interpretRaceName('most pushups in 30 seconds');
+      expect(s.format, RaceFormat.timedAttempt);
+      expect(s.attemptDurationSeconds, 30);
+      final m = interpretRaceName('most pushups in 2 minutes');
+      expect(m.format, RaceFormat.timedAttempt);
+      expect(m.attemptDurationSeconds, 120);
+    });
+
+    test('"most pushups this week" — cumulative to end of week', () {
+      final i = interpretRaceName('most pushups this week');
+      expect(i.format, RaceFormat.mostInWindow);
+      expect(i.deadline, 'this week');
+      expect(deadlineUtcFromPhrase(i.deadline)!.toLocal().weekday,
+          DateTime.sunday);
+    });
+
+    test('"most pushups" with no window asks for a finish line', () {
+      final i = interpretRaceName('most pushups');
+      expect(i.format, RaceFormat.mostInWindow);
+      expect(i.deadline, isNull);
+      expect(i.assumptions.join(' '), contains('Finish line not stated'));
+    });
+
+    test('explicit single-result words are best attempt', () {
+      expect(interpretRaceName('best plank time').format,
+          RaceFormat.bestAttempt);
+      expect(interpretRaceName('longest wall sit').format,
+          RaceFormat.bestAttempt);
+    });
+
+    test('"first to 100 pushups" is unchanged', () {
+      final i = interpretRaceName('first to 100 pushups');
+      expect(i.format, RaceFormat.firstToGoal);
+      expect(i.targetValue, 100);
     });
   });
 

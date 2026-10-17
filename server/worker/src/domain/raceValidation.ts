@@ -529,3 +529,53 @@ export function customRepRateImplausible(value: number, durationMs: number | nul
   if (durationMs === null) return false;
   return value > 5 + (durationMs / 1000) * 5;
 }
+
+/** Formats decided at the finish line: with no end_at they would never finish. */
+export function formatNeedsFinishLine(format: string | null | undefined): boolean {
+  return format === 'most_in_window' || format === 'best_attempt' || format === 'timed_attempt';
+}
+
+function canonicalInstant(value: string | null | undefined): string | null | 'invalid' {
+  if (value == null || value === '') return null;
+  const t = new Date(value);
+  return Number.isNaN(t.getTime()) ? 'invalid' : t.toISOString();
+}
+
+/**
+ * Race window sanity: dates must parse (and are stored in canonical UTC ISO so
+ * the end_at sweep's string comparison is exact), the finish line must be after
+ * the start line and still in the future, and a "most / best" race MUST have a
+ * finish line — it is decided there, so without one it would never finish.
+ */
+export function validateRaceWindow(
+  format: string | null | undefined,
+  startsAt: string | null | undefined,
+  endsAt: string | null | undefined,
+  now = new Date(),
+): { startsAt: string | null; endsAt: string | null } | { error: string } {
+  const start = canonicalInstant(startsAt);
+  const end = canonicalInstant(endsAt);
+  if (start === 'invalid') return { error: 'Start line is not a valid date.' };
+  if (end === 'invalid') return { error: 'Finish line is not a valid date.' };
+  // A cumulative 'most' race is decided at its finish line, so it must name one.
+  if (format === 'most_in_window' && !end) return { error: 'A finish line is required.' };
+  // Attempt races used to need none. Older app builds (and titles like 'most
+  // pushups in 30 seconds') still omit it, so give them the same default the
+  // composer uses instead of refusing: 24h for a timed attempt, 7 days for a
+  // best-attempt race. Either way the race is guaranteed to finish.
+  if (!end && (format === 'timed_attempt' || format === 'best_attempt')) {
+    const base = start && new Date(start).getTime() > now.getTime() ? new Date(start) : now;
+    const hours = format === 'timed_attempt' ? 24 : 24 * 7;
+    return {
+      startsAt: start,
+      endsAt: new Date(base.getTime() + hours * 3600 * 1000).toISOString(),
+    };
+  }
+  if (end) {
+    if (new Date(end).getTime() <= now.getTime()) return { error: 'Finish line must be in the future.' };
+    if (start && new Date(end).getTime() <= new Date(start).getTime()) {
+      return { error: 'Finish line must be after the start line.' };
+    }
+  }
+  return { startsAt: start, endsAt: end };
+}

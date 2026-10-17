@@ -357,4 +357,30 @@ void main() {
       expect(resolved100.unresolvedFields, isNot(contains(RaceField.target)));
     });
   });
+  group('cumulative vs single attempt', () {
+    test('"most pushups in 30 minutes" drafts a cumulative race with a finish line',
+        () {
+      final r = resolveRaceIntent('most pushups in 30 minutes');
+      expect(r.interpretation.format, RaceFormat.mostInWindow);
+      final draft = draftFromIdea('most pushups in 30 minutes')!;
+      expect(draft.format, RaceFormat.mostInWindow);
+      expect(draft.finishLineAt, isNotNull);
+      expect(draft.attemptDurationSeconds, isNull);
+      expect(draft.winStatement, contains('adds to your total'));
+      expect(draft.winStatement, contains('Highest total'));
+    });
+
+    test('"most pushups in 30 seconds" stays a timed single attempt', () {
+      final draft = draftFromIdea('most pushups in 30 seconds')!;
+      expect(draft.format, RaceFormat.timedAttempt);
+      expect(draft.attemptDurationSeconds, 30);
+    });
+
+    test('format labels read in plain words', () {
+      expect(RaceFormat.mostInWindow.label, 'Most total (adds up)');
+      expect(RaceFormat.bestAttempt.label, 'Single best attempt');
+      expect(RaceFormat.timedAttempt.label, 'Timed single attempt');
+      expect(RaceFormat.firstToGoal.label, 'First to the goal');
+    });
+  });
 }
