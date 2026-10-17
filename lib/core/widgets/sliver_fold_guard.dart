@@ -68,7 +68,7 @@ class RenderSliverFoldFit extends RenderSliver
   static const double maxShrinkShare = 0.4;
 
   /// Largest blank band (share of the viewport) worth leaving to avoid a cut.
-  static const double maxHole = 0.10;
+  static const double maxHole = 0.06;
 
   /// Extra space the gaps were given (negative when tightened). For tests.
   double lastAdjustment = 0;
