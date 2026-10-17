@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
-import 'nuvo_motion.dart';
 
 // ── NuvoPage ──────────────────────────────────────────────────────────────────
 
@@ -148,42 +147,3 @@ class _NuvoLogoMark extends StatelessWidget {
   }
 }
 
-// ── NuvoSectionHeader ─────────────────────────────────────────────────────────
-
-/// Section header with optional "See all" link.
-class NuvoSectionHeader extends StatelessWidget {
-  const NuvoSectionHeader({super.key, required this.title, this.onSeeAll});
-
-  final String title;
-  final VoidCallback? onSeeAll;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 6,
-          height: 20,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 9),
-        Text(title, style: AppTextStyles.titleMedium),
-        const Spacer(),
-        if (onSeeAll != null)
-          NuvoPressable(
-            onTap: onSeeAll,
-            haptic: false,
-            child: Text(
-              'See all',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: context.themeColors.accent,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}

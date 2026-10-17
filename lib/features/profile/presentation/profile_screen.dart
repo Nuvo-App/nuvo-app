@@ -515,7 +515,7 @@ class _LevelTrack extends ConsumerWidget {
       button: true,
       label:
           'Level ${p.level}. ${p.xpToNext} XP to level ${p.level + 1}. '
-          'Tap to see what levels unlock.',
+          'Tap to see what each level earns.',
       child: NuvoPressable(
         onTap: () => _showLevelExplainer(context, p),
         scale: 0.99,
@@ -764,7 +764,7 @@ void _showLevelExplainer(BuildContext context, NuvoProgression p) {
             ),
             const SizedBox(height: 14),
             Text(
-              'Earn XP by racing — every level unlocks something new.',
+              'Earn XP by racing — every level earns something new.',
               style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
             ),
             const SizedBox(height: NuvoSpacing.lg),
@@ -793,7 +793,7 @@ void _showLevelExplainer(BuildContext context, NuvoProgression p) {
             ),
             const SizedBox(height: NuvoSpacing.lg),
             Text(
-              next == null ? 'Everything unlocked so far' : 'Next unlock',
+              next == null ? 'Everything earned so far' : 'Next reward',
               style: AppTextStyles.labelLarge.copyWith(
                 color: c.ink,
                 fontWeight: FontWeight.w800,

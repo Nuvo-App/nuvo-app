@@ -320,7 +320,7 @@ class _NextLevelUnlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'NEXT LEVEL UNLOCK',
+          'NEXT LEVEL REWARD',
           style: AppTextStyles.labelUppercase(
             10,
             color: c.inkSubtle,
@@ -359,8 +359,8 @@ class _NextLevelUnlock extends StatelessWidget {
                   ),
                   Text(
                     unlock.level > currentLevel
-                        ? 'Unlocks at Level ${unlock.level}'
-                        : 'Unlocked',
+                        ? 'Earned at Level ${unlock.level}'
+                        : 'Earned',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: context.themeColors.accent,
                       fontWeight: FontWeight.w700,

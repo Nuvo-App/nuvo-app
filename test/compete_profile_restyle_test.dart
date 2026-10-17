@@ -713,12 +713,12 @@ void main() {
           find.textContaining('140 XP to Level 9', findRichText: true),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Earn XP by racing — every level unlocks something new.'), findsOneWidget);
+        expect(find.text('Earn XP by racing — every level earns something new.'), findsOneWidget);
         // Four tinted pills carry the four server XP amounts.
         for (final amount in ['+10', '+25', '+15', '+5']) {
           expect(find.text(amount), findsOneWidget);
         }
-        expect(find.text('Next unlock'), findsOneWidget);
+        expect(find.text('Next reward'), findsOneWidget);
         expect(find.text('Level 8'), findsOneWidget);
         expect(
           find.textContaining('Clap reaction', findRichText: true),
