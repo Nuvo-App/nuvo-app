@@ -7,6 +7,7 @@ import { readMotionCatalog, readMotionRelease } from '../domain/motionRegistry';
 import { validateMotionVerifierSpec } from '../domain/motionSpec';
 import { declaredPackageAssets, packageAssetKey } from '../domain/motionAssets';
 import { adaptationRecommendation, decideEvaluation, parseEvaluationReport } from '../domain/motionEvaluation';
+import { parseBroadcastRequest, runBroadcast } from '../domain/broadcast';
 import { generateId, hashBytes, hashValue } from '../lib/crypto';
 import {
   MODEL_CHANNELS,
@@ -1246,4 +1247,16 @@ internalRouter.post('/qa/reset', async (c) => {
     appleServiceConfig(c.env),
   );
   return c.json({ ok: true, reset: true, previousUserId: user.id });
+});
+
+// Admin broadcast — one notification to every active user. dryRun defaults to
+// true; a real send needs dryRun:false + broadcastId + expectedCount (must equal
+// the current active-user count). Idempotent per broadcastId; batched by cursor.
+internalRouter.post('/notifications/broadcast', async (c) => {
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const parsed = parseBroadcastRequest(raw);
+  if (!parsed.ok) return c.json({ ok: false, error: parsed.error }, 400);
+  const result = await runBroadcast(c.env, parsed.req);
+  return c.json(result.body, result.status);
 });
