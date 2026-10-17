@@ -190,39 +190,45 @@ void main() {
     );
   }
 
-  testWidgets('viewer outside the top 3 gets a slim chip under the podium', (
+  testWidgets('4th and below open in a sheet; no viewer chip on the podium', (
     tester,
   ) async {
     await pumpArena(tester, const Size(390, 844), snapshot: outside);
     expect(tester.takeException(), isNull);
-    expect(find.text('You \u00b7 5th \u00b7 22'), findsOneWidget);
-    // 4th and below live in the rest board under the fold, not on the podium.
-    expect(find.text('Jo'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.byKey(const ValueKey('arena-rest-board'))).dy,
-      greaterThan(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
+      find.byKey(const ValueKey('arena-podium-viewer-chip')),
+      findsNothing,
     );
-    final chipTop = tester
-        .getTopLeft(find.byKey(const ValueKey('arena-podium-viewer-chip')))
-        .dy;
-    final blockBottom = tester
-        .getBottomLeft(find.byKey(const ValueKey('arena-podium-block-3')))
-        .dy;
-    expect(chipTop, greaterThanOrEqualTo(blockBottom));
-    expect(
-      tester
-          .getBottomLeft(find.byKey(const ValueKey('arena-podium-viewer-chip')))
-          .dy,
-      lessThanOrEqualTo(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
-    );
-
+    expect(find.text('You \u00b7 5th \u00b7 22'), findsNothing);
+    // Closed at rest: nothing of the rest board is on screen.
+    expect(find.byKey(const ValueKey('arena-rest-board')), findsNothing);
     expect(find.byKey(const ValueKey('arena-rest-arrow')), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('arena-rest-arrow')));
     await tester.pumpAndSettle();
+    expect(find.text('Jo'), findsOneWidget);
+    expect(find.text('You'), findsOneWidget);
     expect(
       tester.getBottomLeft(find.byKey(const ValueKey('arena-rest-board'))).dy,
       lessThanOrEqualTo(tester.getTopLeft(find.byType(NuvoBottomNav)).dy),
     );
+
+    await tester.tap(find.byKey(const ValueKey('arena-rest-handle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('arena-rest-board')), findsNothing);
+  });
+
+  testWidgets('swiping up on the podium opens the rest of the leaderboard', (
+    tester,
+  ) async {
+    await pumpArena(tester, const Size(390, 844), snapshot: outside);
+    await tester.fling(
+      find.byKey(const ValueKey('arena-rest-arrow')),
+      const Offset(0, -200),
+      800,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('arena-rest-board')), findsOneWidget);
   });
 
   testWidgets(

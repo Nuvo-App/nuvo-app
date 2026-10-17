@@ -45,17 +45,46 @@ class ArenaScreen extends ConsumerStatefulWidget {
   ConsumerState<ArenaScreen> createState() => _ArenaScreenState();
 }
 
-class _ArenaScreenState extends ConsumerState<ArenaScreen> {
+class _ArenaScreenState extends ConsumerState<ArenaScreen>
+    with SingleTickerProviderStateMixin {
   final PageController _boardsController = PageController(viewportFraction: 1);
-  final ScrollController _scroll = ScrollController();
+  late final AnimationController _reveal;
+  double _sheetHeight = 400;
   int _boardPage = 0;
   bool _moreBelow = false;
 
   @override
+  void initState() {
+    super.initState();
+    _reveal = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+  }
+
+  @override
   void dispose() {
     _boardsController.dispose();
-    _scroll.dispose();
+    _reveal.dispose();
     super.dispose();
+  }
+
+  void _openRest() => _reveal.animateTo(1, curve: Curves.easeOutCubic);
+  void _closeRest() => _reveal.animateTo(0, curve: Curves.easeOutCubic);
+  void _dragRest(double dy) {
+    if (_sheetHeight > 0) {
+      _reveal.value = (_reveal.value - dy / _sheetHeight).clamp(0.0, 1.0);
+    }
+  }
+
+  void _endDragRest(double velocity) {
+    if (velocity < -300) {
+      _openRest();
+    } else if (velocity > 300) {
+      _closeRest();
+    } else {
+      _reveal.value > 0.5 ? _openRest() : _closeRest();
+    }
   }
 
   @override
@@ -119,10 +148,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             final hasPodium =
                 podiumData != null && podiumData.entries.isNotEmpty;
             final podiumMin = hasPodium
-                ? ArenaPodium.minHeight(
-                    media.textScaler,
-                    withChip: podiumData.viewer != null,
-                  )
+                ? ArenaPodium.minHeight(media.textScaler, withChip: false)
                 : 70.0;
             final hasRest = hasPodium && podiumData.rest.isNotEmpty;
             final arrowH = hasRest ? ArenaRestArrow.height : 0.0;
@@ -193,7 +219,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         .read(arenaControllerProvider.notifier)
                         .loadSnapshot(),
               child: CustomScrollView(
-                controller: _scroll,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   if (loading ||
@@ -351,56 +376,38 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               bottomPad,
                             ),
                             child: hasPodium
-                                ? Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ArenaPodium(
-                                        key: ValueKey(
-                                          'arena-podium-${activeBoard.id}',
-                                        ),
-                                        entries: podiumData.entries,
-                                        viewer: podiumData.viewer,
-                                        height: podiumHeight,
-                                        onTap: () =>
-                                            _openBoard(context, activeBoard),
-                                      ),
-                                      if (hasRest)
-                                        ArenaRestArrow(
-                                          onTap: () => _scroll.animateTo(
-                                            math.max(
-                                              0,
-                                              _scroll.position.maxScrollExtent,
-                                            ),
-                                            duration: const Duration(
-                                              milliseconds: 520,
-                                            ),
-                                            curve: Curves.easeOutCubic,
+                                ? GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onVerticalDragUpdate: hasRest
+                                        ? (d) => _dragRest(d.primaryDelta ?? 0)
+                                        : null,
+                                    onVerticalDragEnd: hasRest
+                                        ? (d) => _endDragRest(
+                                            d.primaryVelocity ?? 0,
+                                          )
+                                        : null,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        ArenaPodium(
+                                          key: ValueKey(
+                                            'arena-podium-${activeBoard.id}',
                                           ),
+                                          entries: podiumData.entries,
+                                          height: podiumHeight,
+                                          onTap: () =>
+                                              _openBoard(context, activeBoard),
                                         ),
-                                    ],
+                                        if (hasRest)
+                                          ArenaRestArrow(onTap: _openRest),
+                                      ],
+                                    ),
                                   )
                                 : _EmptyPodium(),
                           ),
                         ],
                       ),
                     ),
-                    if (hasRest)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            NuvoSpacing.pageHorizontal,
-                            0,
-                            NuvoSpacing.pageHorizontal,
-                            bottomPad,
-                          ),
-                          child: ArenaRestBoard(
-                            entries: podiumData.rest,
-                            scroll: _scroll,
-                            revealExtent: math.max(120.0, avail * 0.5),
-                            onTap: () => _openBoard(context, activeBoard),
-                          ),
-                        ),
-                      ),
                   ],
                 ],
               ),
@@ -431,6 +438,29 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 child: Stack(
                   children: [
                     Positioned.fill(child: scroller),
+                    if (hasRest)
+                      Positioned(
+                        left: NuvoSpacing.pageHorizontal,
+                        right: NuvoSpacing.pageHorizontal,
+                        bottom: bottomPad,
+                        child: Builder(
+                          builder: (context) {
+                            _sheetHeight = math.max(
+                              200.0,
+                              avail - _microHeaderHeight - 24,
+                            );
+                            return ArenaRestSheet(
+                              entries: podiumData.rest,
+                              progress: _reveal,
+                              height: _sheetHeight,
+                              onDrag: _dragRest,
+                              onDragEnd: _endDragRest,
+                              onClose: _closeRest,
+                              onTap: () => _openBoard(context, activeBoard!),
+                            );
+                          },
+                        ),
+                      ),
                     if (_moreBelow)
                       Positioned(
                         left: 0,

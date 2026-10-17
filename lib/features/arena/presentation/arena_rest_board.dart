@@ -60,11 +60,11 @@ class _ArenaRestArrowState extends State<ArenaRestArrow>
             child: AnimatedBuilder(
               animation: _bob,
               builder: (context, child) => Transform.translate(
-                offset: Offset(0, 3 * Curves.easeInOut.transform(_bob.value)),
+                offset: Offset(0, -3 * Curves.easeInOut.transform(_bob.value)),
                 child: child,
               ),
               child: Icon(
-                Icons.keyboard_arrow_down_rounded,
+                Icons.keyboard_arrow_up_rounded,
                 size: 32,
                 color: c.inkMuted,
               ),
@@ -76,65 +76,89 @@ class _ArenaRestArrowState extends State<ArenaRestArrow>
   }
 }
 
-/// Racers from 4th onwards. Sits below the fold; as the page scrolls it
-/// unfolds like a curtain — rows slide down into place and fade in.
-class ArenaRestBoard extends StatelessWidget {
-  const ArenaRestBoard({
+/// Racers from 4th onwards. A sheet that rises from the nav's top edge when
+/// the viewer swipes up (or taps the arrow) and closes on a swipe down — the
+/// page itself never scrolls.
+class ArenaRestSheet extends StatelessWidget {
+  const ArenaRestSheet({
     super.key,
     required this.entries,
-    required this.scroll,
-    required this.revealExtent,
+    required this.progress,
+    required this.height,
+    required this.onDrag,
+    required this.onDragEnd,
+    required this.onClose,
     this.onTap,
   });
 
   /// Racers ranked 4th and below, in order.
   final List<ArenaPodiumEntry> entries;
-  final ScrollController scroll;
 
-  /// Scroll distance over which the curtain finishes opening.
-  final double revealExtent;
+  /// 0 = closed (below the fold), 1 = fully open.
+  final Animation<double> progress;
+  final double height;
+  final ValueChanged<double> onDrag;
+  final ValueChanged<double> onDragEnd;
+  final VoidCallback onClose;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final reduce = MediaQuery.disableAnimationsOf(context);
     return AnimatedBuilder(
-      animation: scroll,
-      builder: (context, _) {
-        final offset = scroll.hasClients ? scroll.offset : 0.0;
-        final t = reduce
-            ? 1.0
-            : Curves.easeOutCubic.transform(
-                (offset / revealExtent).clamp(0.0, 1.0),
-              );
-        return Opacity(
-          opacity: 0.25 + 0.75 * t,
-          child: Transform.translate(
-            offset: Offset(0, -24 * (1 - t)),
-            child: Container(
-              key: const ValueKey('arena-rest-board'),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: c.border, width: 2),
-                boxShadow: AppShadows.hardOffset(c.inkShadow),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final (i, e) in entries.indexed) ...[
-                    if (i > 0)
-                      Divider(height: 1, thickness: 1, color: c.divider),
-                    _RestRow(entry: e, onTap: onTap),
-                  ],
-                ],
+      animation: progress,
+      builder: (context, child) => Visibility(
+        visible: progress.value > 0,
+        maintainState: true,
+        child: Transform.translate(
+          offset: Offset(0, (1 - progress.value) * (height + 24)),
+          child: child,
+        ),
+      ),
+      child: Container(
+        key: const ValueKey('arena-rest-board'),
+        height: height,
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.border, width: 2),
+          boxShadow: AppShadows.hardOffset(c.inkShadow),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            GestureDetector(
+              key: const ValueKey('arena-rest-handle'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onClose,
+              onVerticalDragUpdate: (d) => onDrag(d.primaryDelta ?? 0),
+              onVerticalDragEnd: (d) => onDragEnd(d.primaryVelocity ?? 0),
+              child: SizedBox(
+                height: 44,
+                width: double.infinity,
+                child: Center(
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 32,
+                    color: c.inkMuted,
+                  ),
+                ),
               ),
             ),
-          ),
-        );
-      },
+            Divider(height: 1, thickness: 1, color: c.divider),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: entries.length,
+                separatorBuilder: (_, _) =>
+                    Divider(height: 1, thickness: 1, color: c.divider),
+                itemBuilder: (_, i) =>
+                    _RestRow(entry: entries[i], onTap: onTap),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
