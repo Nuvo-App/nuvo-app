@@ -159,6 +159,9 @@ void main() {
     expect(find.text('Dee'), findsOneWidget); // rank 4 row
     expect(find.text('Bring a race to the crew'), findsOneWidget);
     expect(find.text('Crew code'), findsOneWidget);
+    expect(find.byKey(const ValueKey('crew-qr')), findsOneWidget);
+    // The QR card is tall; the crew's races sit below it.
+    await tester.scrollUntilVisible(find.text('Morning push-ups'), 200);
     expect(find.text('Morning push-ups'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

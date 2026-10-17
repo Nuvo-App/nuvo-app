@@ -3,6 +3,7 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateDemoSnapshot, type ArenaBoard, type ArenaSnapshot, type ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
 import { activityForId, normalizeMetric } from '../domain/raceActivities';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import { finalizeRaceIfEnded } from '../domain/raceFinalize';
 import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
@@ -68,10 +69,15 @@ function metricLabel(race: LightRaceRow): string {
   return normalizeMetric(race.metric ?? race.target_unit, activity) ?? activity?.defaultMetric ?? 'reps';
 }
 
+function targetOf(race: LightRaceRow): number | null {
+  return effectiveTargetValue(race.format, race.target_value);
+}
+
 function progressPercent(race: LightRaceRow, participant: LightParticipantRow | undefined): number {
   if (!participant) return 0;
-  if (race.target_value && race.target_value > 0) {
-    return Math.min(100, Math.floor((participant.progress_value / race.target_value) * 100));
+  const target = targetOf(race);
+  if (target) {
+    return Math.min(100, Math.floor((participant.progress_value / target) * 100));
   }
   return Math.min(100, Math.max(0, participant.progress_percent));
 }
@@ -85,10 +91,11 @@ function buildProgressLabel(
     return `${participantCount} ${participantCount === 1 ? 'racer' : 'racers'} on the board`;
   }
   const { progress_value: val, progress_percent: pct } = myParticipant;
-  if (race.target_value) {
-    return `${val} / ${race.target_value} ${metricLabel(race)}`;
+  const target = targetOf(race);
+  if (target) {
+    return `${val} / ${target} ${metricLabel(race)}`;
   }
-  if (pct > 0) return `${val} ${metricLabel(race)}`;
+  if (pct > 0 || val > 0) return `${val} ${metricLabel(race)}`;
   return 'Submit your first proof';
 }
 
@@ -98,10 +105,11 @@ function buildRowSubtitle(
   participantCount: number,
 ): string {
   const racerLabel = `${participantCount} ${participantCount === 1 ? 'racer' : 'racers'}`;
-  if (myParticipant && race.target_value) {
-    return `${myParticipant.progress_value} / ${race.target_value} ${metricLabel(race)} · ${racerLabel}`;
+  const target = targetOf(race);
+  if (myParticipant && target) {
+    return `${myParticipant.progress_value} / ${target} ${metricLabel(race)} · ${racerLabel}`;
   }
-  if (myParticipant && myParticipant.progress_percent > 0) {
+  if (myParticipant && (myParticipant.progress_percent > 0 || myParticipant.progress_value > 0)) {
     return `${myParticipant.progress_value} ${metricLabel(race)} · ${racerLabel}`;
   }
   if (myParticipant && participantCount === 1) {
@@ -381,8 +389,8 @@ function buildRealBoard(
   if (includeMiniLeaderboard && participants.length > 0) {
     miniLeaderboard = participants.slice(0, 5).map((p) => ({
       label: p.user_id === userId ? 'You' : (p.display_name ?? 'Racer'),
-      value: race.target_value
-        ? `${p.progress_value} / ${race.target_value} ${metricLabel(race)}`
+      value: targetOf(race)
+        ? `${p.progress_value} / ${targetOf(race)} ${metricLabel(race)}`
         : `${p.progress_value} ${metricLabel(race)}`,
       isCurrentUser: p.user_id === userId,
       profilePhotoUrl: p.profile_photo_url,

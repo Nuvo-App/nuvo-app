@@ -41,6 +41,7 @@ import { recordRaceEvents, type RaceEventInput } from '../domain/raceEvents';
 import { notifyEvent, notifyLifecycleTransitions, notifyRaceEvents, type LifecycleTransitionLike } from '../domain/notificationPolicy';
 import { scheduleRaceStartingSoon } from '../domain/notificationJobs';
 import { computeViewerContext } from '../domain/raceContext';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import {
   attemptsUsed,
   bindableOpenAttempt,
@@ -256,7 +257,7 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
     metric,
     format,
     scoringRule,
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(format, race.target_value),
     attemptDurationSeconds: race.attempt_duration_seconds ?? null,
     attemptLimit: race.attempt_limit ?? null,
     verificationMethod: 'camera_pose',
@@ -815,7 +816,7 @@ function shapeRaceResponse(
   const viewerContext = computeViewerContext({
     raceId: race.id,
     format: scoring?.format ?? 'first_to_goal',
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(scoring?.format ?? race.format ?? race.race_type, race.target_value),
     startAt: race.start_at,
     endAt: race.end_at,
     storedStatus: race.status,
@@ -856,7 +857,7 @@ function shapeRaceResponse(
     customActivityName: race.custom_activity_name ?? null,
     timezone: race.timezone ?? 'America/New_York',
     recurrence: race.recurrence ?? 'none',
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(race.format ?? race.race_type, race.target_value),
     unit: race.target_unit,
     aiActivityType: isCustomVerifier ? null : race.movement_type,
     targetUnit: race.target_unit,
@@ -2828,7 +2829,7 @@ racesRouter.get('/:id/live', async (c) => {
   const viewerContext = computeViewerContext({
     raceId: race.id,
     format: scoring?.format ?? 'first_to_goal',
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(scoring?.format ?? race.format ?? race.race_type, race.target_value),
     startAt: race.start_at,
     endAt: race.end_at,
     storedStatus: race.status,

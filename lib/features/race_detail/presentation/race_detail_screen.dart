@@ -673,6 +673,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
                 _YourProgressCard(
                   measurementType: raceMeasurementType(race),
                   progressValue: myPart?.progressValue ?? 0,
+                  hasFinishLine: raceHasFinishLine(race),
                   targetValue: race.targetValue!,
                   unit: raceDisplayUnit(race),
                   rankLabel: raceRankLabel(race, user.id),
@@ -954,6 +955,7 @@ class _YourProgressCard extends StatelessWidget {
     required this.targetValue,
     required this.unit,
     required this.rankLabel,
+    this.hasFinishLine = true,
     this.chaseCopy,
     this.leaderGap,
     this.isLeading = false,
@@ -962,6 +964,7 @@ class _YourProgressCard extends StatelessWidget {
   final MotionMeasurementType measurementType;
   final int progressValue;
   final int targetValue;
+  final bool hasFinishLine;
   final String unit;
   final String rankLabel;
   final String? chaseCopy;
@@ -970,7 +973,7 @@ class _YourProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = targetValue <= 0
+    final pct = !hasFinishLine || targetValue <= 0
         ? 0.0
         : (progressValue / targetValue).clamp(0.0, 1.0);
     final remaining = (targetValue - progressValue).clamp(0, targetValue);
@@ -981,7 +984,7 @@ class _YourProgressCard extends StatelessWidget {
         : gap > 0
         ? '$gapText behind the leader'
         : chaseCopy;
-    final done = remaining <= 0;
+    final done = hasFinishLine && remaining <= 0;
     // Green while you hold the lead or have crossed the line, blue otherwise.
     final accent = (isLeading || done)
         ? context.themeColors.successText
@@ -998,7 +1001,7 @@ class _YourProgressCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'YOUR PROGRESS',
+            hasFinishLine ? 'YOUR PROGRESS' : 'YOUR SCORE',
             style: AppTextStyles.eyebrow.copyWith(color: accent),
           ),
           const SizedBox(height: 8),
@@ -1008,12 +1011,14 @@ class _YourProgressCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  formatMotionProgress(
-                    measurementType,
-                    progressValue,
-                    targetValue,
-                    unit,
-                  ),
+                  hasFinishLine
+                      ? formatMotionProgress(
+                          measurementType,
+                          progressValue,
+                          targetValue,
+                          unit,
+                        )
+                      : formatMotionTarget(measurementType, progressValue, unit),
                   style: AppTextStyles.statLarge(
                     context.rs(30),
                     color: accent,
@@ -1032,27 +1037,29 @@ class _YourProgressCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(NuvoRadii.pill),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 8,
-              color: accent,
-              backgroundColor: context.themeColors.track,
+          if (hasFinishLine) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(NuvoRadii.pill),
+              child: LinearProgressIndicator(
+                value: pct,
+                minHeight: 8,
+                color: accent,
+                backgroundColor: context.themeColors.track,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            remaining > 0
-                ? '${formatMotionTarget(measurementType, remaining, unit)} '
-                      'to the finish'
-                : 'Finish line reached',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.themeColors.ink,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 12),
+            Text(
+              remaining > 0
+                  ? '${formatMotionTarget(measurementType, remaining, unit)} '
+                        'to the finish'
+                  : 'Finish line reached',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.themeColors.ink,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+          ],
           if (gapLine != null && gapLine.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(

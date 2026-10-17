@@ -1,5 +1,7 @@
 import type { RaceFormat, RaceScoringRule } from './raceActivities';
 
+import { effectiveTargetValue } from './raceTarget';
+
 export interface ScoreInput {
   format: RaceFormat;
   scoringRule: RaceScoringRule;
@@ -23,7 +25,7 @@ export function applyVerifiedSubmission(input: ScoreInput): ScoreOutput {
     : input.scoringRule === 'minimum_attempt'
       ? (input.previousScore > 0 ? Math.min(input.previousScore, value) : value)
       : input.previousScore + value;
-  const target = input.targetValue && input.targetValue > 0 ? input.targetValue : null;
+  const target = effectiveTargetValue(input.format, input.targetValue);
   const progressPercent = target ? Math.min(100, Math.round((newScore / target) * 100)) : 0;
   const completed = input.format === 'first_to_goal' && Boolean(target && newScore >= target);
   return { newScore, progressPercent, completed };

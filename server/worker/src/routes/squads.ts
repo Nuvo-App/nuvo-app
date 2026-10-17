@@ -7,6 +7,7 @@ import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked } from '../lib/privacy';
 import { ensureMember, ensureProgress, getProfileName, getRace } from '../domain/raceMembership';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import { notifyEvent } from '../domain/notificationPolicy';
 import { computeSquadStandings, type SquadRaceInput } from '../domain/squadStandings';
 
@@ -356,7 +357,7 @@ squadsRouter.get('/:id', async (c) => {
         avatar_url: string | null;
       }>(),
     c.env.DB.prepare(
-      `SELECT r.id, r.title, r.status, r.target_value, r.target_unit, r.score_direction, r.activity_id, sr.created_at
+      `SELECT r.id, r.title, r.status, r.target_value, r.target_unit, r.score_direction, r.activity_id, r.format, r.race_type, sr.created_at
        FROM squad_races sr JOIN races r ON r.id = sr.race_id
        WHERE sr.squad_id = ? AND r.deleted_at IS NULL
        ORDER BY sr.created_at DESC`,
@@ -368,6 +369,8 @@ squadsRouter.get('/:id', async (c) => {
         status: string;
         target_value: number | null;
         target_unit: string | null;
+        format: string | null;
+        race_type: string | null;
         score_direction: string | null;
         activity_id: string | null;
         created_at: string;
@@ -444,7 +447,7 @@ squadsRouter.get('/:id', async (c) => {
       id: r.id,
       title: r.title,
       status: r.status,
-      targetValue: r.target_value,
+      targetValue: effectiveTargetValue(r.format ?? r.race_type, r.target_value),
       targetUnit: r.target_unit,
       activityId: r.activity_id,
     })),

@@ -12,6 +12,7 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/bottom_nav.dart';
+import '../../../core/widgets/live_refresh.dart';
 import '../../../core/widgets/sliver_fold_guard.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -545,7 +546,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       ...liveCrew,
       ...crew.where((m) => liveCrew.every((l) => l.id != m.id)),
     ];
-    return Scaffold(
+    return LiveRefresh(
+      onRefresh: () => unawaited(_refreshAll()),
+      child: Scaffold(
       backgroundColor: context.themeColors.page,
       body: SafeArea(
         bottom: false,
@@ -887,7 +890,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

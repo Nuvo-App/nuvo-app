@@ -3,11 +3,13 @@ import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../social/presentation/theme_ink.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_back_header.dart';
@@ -15,6 +17,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/live_refresh.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
@@ -108,13 +111,14 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
     ref.read(raceControllerProvider.notifier).loadRaces(force: true);
   }
 
+  void _scan() => context.push('/scan');
+
   @override
   Widget build(BuildContext context) {
     final squads = ref.watch(squadControllerProvider);
     final groups = squads.groups;
     final error = squads.error;
     final Widget body;
-    Widget? bottomBar;
     if (groups == null && error != null) {
       body = NuvoErrorState(message: error, onRetry: _load);
     } else if (groups == null) {
@@ -154,25 +158,33 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
               _kSide,
               24,
             ),
-            children: [for (final g in groups) _GroupCard(group: g)],
+            children: [
+              _AddPanel(onStart: _start, onJoin: _join, onScan: _scan),
+              const SizedBox(height: NuvoSpacing.lg),
+              for (final g in groups) _GroupCard(group: g),
+            ],
           ),
         ),
       );
-      bottomBar = _ActionBar(onStart: _start, onJoin: _join);
     }
-    return NuvoPage(
-      topBar: _topBar(context, 'Crews'),
-      bottomBar: bottomBar,
-      child: body,
+    return LiveRefresh(
+      onRefresh: () => ref.read(squadControllerProvider.notifier).refresh(),
+      child: NuvoPage(topBar: _topBar(context, 'Crews'), child: body),
     );
   }
 }
 
-/// Thumb-reach actions pinned under the crew list, inside the bottom safe area.
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({required this.onStart, required this.onJoin});
+/// The one place crews are added: start one, join with a code, or scan a
+/// crew's QR. An outlined card in the app's physical style, above the list.
+class _AddPanel extends StatelessWidget {
+  const _AddPanel({
+    required this.onStart,
+    required this.onJoin,
+    required this.onScan,
+  });
   final VoidCallback onStart;
   final VoidCallback onJoin;
+  final VoidCallback onScan;
 
   @override
   Widget build(BuildContext context) {
@@ -192,33 +204,77 @@ class _ActionBar extends StatelessWidget {
       expand: true,
       onPressed: onJoin,
     );
-    return DecoratedBox(
+    return Container(
+      key: const ValueKey('crew-add-panel'),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: c.page,
-        border: Border(top: BorderSide(color: c.border)),
+        color: c.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(c.inkShadow),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            _kSide,
-            NuvoSpacing.md,
-            _kSide,
-            NuvoSpacing.md,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Add a crew',
+            style: AppTextStyles.titleMedium.copyWith(color: c.ink),
           ),
-          child: stacked
-              ? Column(
+          const SizedBox(height: 2),
+          Text(
+            'Start your own, or pull in with a code or QR.',
+            style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+          ),
+          const SizedBox(height: 12),
+          if (stacked) ...[
+            start,
+            const SizedBox(height: 8),
+            join,
+          ] else
+            Row(
+              children: [
+                Expanded(child: start),
+                const SizedBox(width: 10),
+                Expanded(child: join),
+              ],
+            ),
+          const SizedBox(height: 8),
+          Semantics(
+            button: true,
+            label: 'Scan a crew QR code',
+            excludeSemantics: true,
+            child: InkWell(
+              key: const ValueKey('crew-scan-qr'),
+              borderRadius: BorderRadius.circular(NuvoRadii.sm),
+              onTap: onScan,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.center,
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: [start, const SizedBox(height: 8), join],
-                )
-              : Row(
                   children: [
-                    Expanded(child: start),
-                    const SizedBox(width: 10),
-                    Expanded(child: join),
+                    Icon(
+                      Icons.qr_code_scanner_rounded,
+                      size: 20,
+                      color: c.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Scan a crew QR',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: c.accent,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-        ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -263,69 +319,78 @@ class _GroupCard extends StatelessWidget {
         '${group.raceCount} ${group.raceCount == 1 ? 'race' : 'races'}';
     final people = '${group.memberCount} in crew';
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 14, right: 4),
       child: Semantics(
         button: true,
         label: '${group.name}, $people, $races, code ${group.joinCode}',
         excludeSemantics: true,
-        child: Material(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.sm),
-          child: InkWell(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(NuvoRadii.sm),
-            onTap: () => context.push('/crews/${group.id}'),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 64),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(NuvoRadii.sm),
-                border: Border.all(color: c.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: c.panel,
-                      borderRadius: BorderRadius.circular(10),
+            boxShadow: AppShadows.hardOffset(c.inkShadow),
+          ),
+          child: Material(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.sm),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(NuvoRadii.sm),
+              onTap: () => context.push('/crews/${group.id}'),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 64),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(NuvoRadii.sm),
+                  border: Border.all(color: c.border, width: 2),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: c.panel,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: const NuvoCrewIcon(size: 26, semanticLabel: null),
                     ),
-                    alignment: Alignment.center,
-                    child: const NuvoCrewIcon(size: 26, semanticLabel: null),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          group.name,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: c.ink,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              '$people · $races',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: c.inkMuted,
-                              ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            group.name,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: c.ink,
                             ),
-                            _CodeChip(code: group.joinCode),
-                          ],
-                        ),
-                      ],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                '$people · $races',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: c.inkMuted,
+                                ),
+                              ),
+                              _CodeChip(code: group.joinCode),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
-                ],
+                    Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
+                  ],
+                ),
               ),
             ),
           ),
@@ -399,6 +464,7 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
+    final router = GoRouter.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -410,24 +476,58 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              _isCreate ? 'Start a crew' : 'Join a crew',
-              style: AppTextStyles.titleLarge.copyWith(color: c.ink),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: c.panel,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.border, width: 2),
+                  ),
+                  alignment: Alignment.center,
+                  child: _isCreate
+                      ? const NuvoCrewIcon(size: 28, semanticLabel: null)
+                      : Icon(Icons.login_rounded, color: c.ink),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isCreate ? 'Start a crew' : 'Join a crew',
+                        style: AppTextStyles.titleLarge.copyWith(color: c.ink),
+                      ),
+                      Text(
+                        _isCreate
+                            ? 'Name it, then share the code or QR.'
+                            : 'Type the code or scan the crew QR.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: c.inkMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              _isCreate
-                  ? 'Name it, then share the code with your crew.'
-                  : 'Enter the code your crew shared with you.',
-              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             TextField(
+              key: const ValueKey('crew-input'),
               controller: _controller,
               autofocus: true,
               maxLength: _isCreate ? 40 : 12,
+              textAlign: _isCreate ? TextAlign.start : TextAlign.center,
+              style: _isCreate
+                  ? null
+                  : AppTextStyles.titleLarge.copyWith(
+                      color: c.ink,
+                      letterSpacing: 4,
+                    ),
               textCapitalization: _isCreate
                   ? TextCapitalization.words
                   : TextCapitalization.characters,
@@ -439,13 +539,25 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
                 errorText: _error,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             NuvoPrimaryButton(
               label: _isCreate ? 'Start crew' : 'Join crew',
               expand: true,
               loading: _busy,
               onPressed: _submit,
             ),
+            if (!_isCreate) ...[
+              const SizedBox(height: 10),
+              NuvoOutlineButton(
+                label: 'Scan crew QR',
+                icon: Icons.qr_code_scanner_rounded,
+                expand: true,
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  router.push('/scan');
+                },
+              ),
+            ],
           ],
         ),
       ),
@@ -597,99 +709,105 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       );
     }
 
-    return NuvoPage(
-      topBar: _topBar(
-        context,
-        detail.group.name,
-        trailing: PopupMenuButton<String>(
-          tooltip: 'More',
-          icon: Icon(Icons.more_horiz_rounded, color: c.ink),
-          onSelected: (_) => _leaveCrew(),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'leave', child: Text('Leave crew')),
-          ],
+    return LiveRefresh(
+      onRefresh: () => ref
+          .read(squadControllerProvider.notifier)
+          .refreshDetail(widget.groupId),
+      child: NuvoPage(
+        topBar: _topBar(
+          context,
+          detail.group.name,
+          trailing: PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: Icon(Icons.more_horiz_rounded, color: c.ink),
+            onSelected: (_) => _leaveCrew(),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'leave', child: Text('Leave crew')),
+            ],
+          ),
         ),
-      ),
-      child: RefreshIndicator(
-        onRefresh: _load,
-        child: NuvoFadeScroll(
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              _kSide,
-              NuvoSpacing.md,
-              _kSide,
-              32 + MediaQuery.viewPaddingOf(context).bottom,
-            ),
-            children: [
-              // Leaderboard first — it is the point of the crew.
-              Row(
-                children: [
-                  Text(
-                    'Leaderboard',
-                    style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-                  ),
-                  const SizedBox(width: NuvoSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      '5 · 3 · 2 pts, 1 per proof',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: c.inkMuted,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: NuvoFadeScroll(
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                _kSide,
+                NuvoSpacing.md,
+                _kSide,
+                32 + MediaQuery.viewPaddingOf(context).bottom,
+              ),
+              children: [
+                // Leaderboard first — it is the point of the crew.
+                Row(
+                  children: [
+                    Text(
+                      'Leaderboard',
+                      style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+                    ),
+                    const SizedBox(width: NuvoSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        '5 · 3 · 2 pts, 1 per proof',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: c.inkMuted,
+                        ),
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: NuvoSpacing.md),
+                if (detail.races.isEmpty)
+                  const _InlineNote(
+                    icon: Icons.flag_outlined,
+                    text:
+                        'No races yet. Bring a race to start the leaderboard.',
+                  )
+                else if (detail.standings.every((s) => s.points == 0))
+                  const _InlineNote(
+                    icon: Icons.bolt_rounded,
+                    text: 'No proof yet. The first proof takes the lead.',
+                  ),
+                if (_showPodium(detail.standings)) ...[
+                  _Podium(standings: detail.standings.take(3).toList()),
+                  const SizedBox(height: NuvoSpacing.sm),
+                  for (final s in detail.standings.skip(3))
+                    _StandingRow(standing: s),
+                ] else
+                  for (final s in detail.standings) _StandingRow(standing: s),
+                const SizedBox(height: NuvoSpacing.sm),
+                NuvoPrimaryButton(
+                  label: 'Bring a race to the crew',
+                  icon: Icons.flag_rounded,
+                  expand: true,
+                  loading: _busy,
+                  onPressed: _bringRace,
+                ),
+                if (_actionError != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _actionError!,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.dangerInk,
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: NuvoSpacing.md),
-              if (detail.races.isEmpty)
-                const _InlineNote(
-                  icon: Icons.flag_outlined,
-                  text: 'No races yet. Bring a race to start the leaderboard.',
-                )
-              else if (detail.standings.every((s) => s.points == 0))
-                const _InlineNote(
-                  icon: Icons.bolt_rounded,
-                  text: 'No proof yet. The first proof takes the lead.',
-                ),
-              if (_showPodium(detail.standings)) ...[
-                _Podium(standings: detail.standings.take(3).toList()),
-                const SizedBox(height: NuvoSpacing.sm),
-                for (final s in detail.standings.skip(3))
-                  _StandingRow(standing: s),
-              ] else
-                for (final s in detail.standings) _StandingRow(standing: s),
-              const SizedBox(height: NuvoSpacing.sm),
-              NuvoPrimaryButton(
-                label: 'Bring a race to the crew',
-                icon: Icons.flag_rounded,
-                expand: true,
-                loading: _busy,
-                onPressed: _bringRace,
-              ),
-              if (_actionError != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  _actionError!,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.dangerInk,
+                const SizedBox(height: NuvoSpacing.lg),
+                _CodeCard(group: detail.group),
+                if (detail.races.isNotEmpty) ...[
+                  const SizedBox(height: NuvoSpacing.xxl),
+                  Text(
+                    'Crew races',
+                    style: AppTextStyles.titleMedium.copyWith(color: c.ink),
                   ),
-                ),
+                  const SizedBox(height: NuvoSpacing.xs),
+                  for (final r in detail.races) _RaceRow(race: r),
+                ],
               ],
-              const SizedBox(height: NuvoSpacing.lg),
-              _CodeCard(group: detail.group),
-              if (detail.races.isNotEmpty) ...[
-                const SizedBox(height: NuvoSpacing.xxl),
-                Text(
-                  'Crew races',
-                  style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-                ),
-                const SizedBox(height: NuvoSpacing.xs),
-                for (final r in detail.races) _RaceRow(race: r),
-              ],
-            ],
+            ),
           ),
         ),
       ),
@@ -731,58 +849,210 @@ class _CodeCard extends StatelessWidget {
   const _CodeCard({required this.group});
   final CrewGroup group;
 
+  /// What the QR carries; `NuvoDestination` parses it back to the code.
+  String get _link => 'https://getnuvo.net/c/${group.joinCode}';
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return Container(
-      constraints: const BoxConstraints(minHeight: 56),
-      padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+      key: const ValueKey('crew-code-card'),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: c.panel,
-        borderRadius: BorderRadius.circular(NuvoRadii.sm),
-        border: Border.all(color: c.border),
+        color: c.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(c.inkShadow),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Crew code',
-                  style: AppTextStyles.labelMedium.copyWith(color: c.inkMuted),
+          Text(
+            'Pull in your crew',
+            style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                // Scanners need the white quiet zone in both themes.
+                color: NuvoColors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: c.border, width: 2),
+              ),
+              child: QrImageView(
+                key: const ValueKey('crew-qr'),
+                data: _link,
+                version: QrVersions.auto,
+                size: 168,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: NuvoColors.navy,
                 ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: NuvoColors.navy,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              'Crew code',
+              style: AppTextStyles.labelMedium.copyWith(color: c.inkMuted),
+            ),
+          ),
+          Center(
+            child: Text(
+              group.joinCode,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleLarge.copyWith(
+                color: c.ink,
+                letterSpacing: 4,
+              ),
+            ),
+          ),
+          Center(
+            child: Text(
+              'Scan or enter this code to join',
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NuvoOutlineButton(
+                  label: 'Copy code',
+                  icon: Icons.copy_rounded,
+                  expand: true,
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: group.joinCode));
+                    HapticFeedback.selectionClick();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Crew code copied')),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: NuvoPrimaryButton(
+                  label: 'Share',
+                  icon: Icons.ios_share_rounded,
+                  expand: true,
+                  onPressed: () => Share.share(
+                    'Join my crew "${group.name}" on Nuvo. Crew code: '
+                    '${group.joinCode}\n$_link',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `/crews/join/:code` — where a scanned crew QR or shared link lands. It
+/// confirms before joining; scanning never joins on its own.
+class CrewJoinScreen extends ConsumerStatefulWidget {
+  const CrewJoinScreen({super.key, required this.code});
+  final String code;
+
+  @override
+  ConsumerState<CrewJoinScreen> createState() => _CrewJoinScreenState();
+}
+
+class _CrewJoinScreenState extends ConsumerState<CrewJoinScreen> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _join() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(squadControllerProvider.notifier).join(widget.code);
+      ref.read(raceControllerProvider.notifier).loadRaces(force: true);
+      if (!mounted) return;
+      final joined = ref
+          .read(squadControllerProvider)
+          .groups
+          ?.where((g) => g.joinCode.toUpperCase() == widget.code.toUpperCase())
+          .firstOrNull;
+      if (joined != null) {
+        context.pushReplacement('/crews/${joined.id}');
+      } else {
+        context.pushReplacement('/crews');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = _messageFor(e);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return NuvoPage(
+      topBar: _topBar(context, 'Join a crew'),
+      child: Padding(
+        padding: const EdgeInsets.all(_kSide),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const NuvoCrewIcon(size: 56, semanticLabel: null),
+              const SizedBox(height: 16),
+              Text(
+                'Join this crew?',
+                style: AppTextStyles.titleLarge.copyWith(color: c.ink),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.code,
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: c.ink,
+                  letterSpacing: 4,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'You will join its leaderboard and its running races.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
                 Text(
-                  group.joinCode,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: c.ink,
-                    letterSpacing: 3,
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.dangerInk,
                   ),
                 ),
               ],
-            ),
+              const SizedBox(height: 20),
+              NuvoPrimaryButton(
+                label: 'Join crew',
+                expand: true,
+                loading: _busy,
+                onPressed: _join,
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Copy code',
-            icon: Icon(Icons.copy_rounded, color: c.ink),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: group.joinCode));
-              HapticFeedback.selectionClick();
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Crew code copied')));
-            },
-          ),
-          IconButton(
-            tooltip: 'Pull in your crew',
-            icon: Icon(Icons.ios_share_rounded, color: c.ink),
-            onPressed: () => Share.share(
-              'Join my crew "${group.name}" on Nuvo. Crew code: ${group.joinCode}',
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

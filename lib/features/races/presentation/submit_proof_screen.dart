@@ -938,8 +938,7 @@ class _ManualLogCard extends StatelessWidget {
     final unit = race.unit?.trim().isNotEmpty == true ? race.unit! : 'done';
     // Attempt races track a best score, not progress toward a finish line —
     // the stored target is a scale hint, not a goal to chase.
-    final isAttempt = raceFormatUsesAttempts(race.format);
-    final target = isAttempt ? null : race.targetValue;
+    final target = raceHasFinishLine(race) ? race.targetValue : null;
 
     return Container(
       padding: const EdgeInsets.all(18),

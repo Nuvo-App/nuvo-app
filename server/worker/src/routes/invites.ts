@@ -7,6 +7,7 @@ import { SQLITE_NOW_ISO } from '../lib/time';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked, resolveRaceMemberVisibility } from '../lib/privacy';
 import { transitionCrew } from '../domain/crewLifecycle';
+import { effectiveTargetValue } from '../domain/raceTarget';
 import {
   ensureMember,
   ensureProgress,
@@ -129,7 +130,7 @@ async function raceCard(db: D1Database, viewerUserId: string | undefined, raceId
     id: race.id,
     title: race.title,
     activityId: race.activity_id ?? race.movement_type ?? null,
-    targetValue: race.target_value,
+    targetValue: effectiveTargetValue(race.format ?? race.race_type, race.target_value),
     targetUnit: race.target_unit,
     goalType: race.race_type,
     status: race.status,
