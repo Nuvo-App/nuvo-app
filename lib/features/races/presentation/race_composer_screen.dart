@@ -889,6 +889,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           eyebrow: spec.eyebrow,
           title: spec.title,
           body: spec.body,
+          dim: spec.dim,
         ),
       ],
     );

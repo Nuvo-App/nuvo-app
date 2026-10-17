@@ -912,7 +912,7 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
     super.build(context);
     final example = _examples[_index];
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(22, widget.compact ? 10 : 24, 22, 8),
+      padding: EdgeInsets.fromLTRB(22, widget.compact ? 10 : 24, 22, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -985,6 +985,9 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
                           );
                           return Text(
                             example.metric(progress),
+                            maxLines: 1,
+                            softWrap: false,
+                            textAlign: TextAlign.center,
                             style: AppTextStyles.titleLarge.copyWith(
                               color: NuvoColors.blue,
                               fontWeight: FontWeight.w800,
@@ -1559,8 +1562,8 @@ class _OvertakeSceneFrame extends StatelessWidget {
     final stageWidth = compact ? 316.0 : 344.0;
     final pillHeight = compact ? 26.0 : 30.0;
     final groupHeight = (rowHeight * 3) + (rowGap * 2);
-    final stageHeight = groupHeight + pillHeight + 40;
-    final groupTop = pillHeight + 20.0;
+    final stageHeight = groupHeight + pillHeight + 48;
+    final groupTop = pillHeight + 28.0;
     final firstRow = groupTop;
     final secondRow = firstRow + rowHeight + rowGap;
     final thirdRow = secondRow + rowHeight + rowGap;
@@ -1714,7 +1717,7 @@ class _OvertakeSceneFrame extends StatelessWidget {
           // row's score edge, clear of the centered proof pill.
           if (xpChip > 0)
             Positioned(
-              top: firstRow + 10 - (34 * xpChip),
+              top: firstRow + 10 - (42 * xpChip),
               right: 10,
               child: Opacity(
                 opacity: xpChip.clamp(0.0, 1.0),

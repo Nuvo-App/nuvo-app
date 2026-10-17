@@ -114,12 +114,18 @@ class CoachSpec {
     required this.eyebrow,
     required this.title,
     this.body,
+    this.dim = true,
   });
 
   final GlobalKey targetKey;
   final String eyebrow;
   final String title;
   final String? body;
+
+  /// Whether the screen outside the spotlight recedes. False for the "NEXT"
+  /// retarget onto a continue button: the page's own controls must stay at
+  /// full strength — the user may still be adjusting them.
+  final bool dim;
 }
 
 /// Derives the coach spec for the composer's CURRENT page.
@@ -143,6 +149,7 @@ CoachSpec? composerCoachSpec(
           ? CoachSpec(
               targetKey: FirstRaceGuideKeys.composerNameCta,
               eyebrow: 'NEXT',
+              dim: false,
               title: 'Pick the activity.',
               body: 'Tap Choose activity.',
             )
@@ -156,6 +163,7 @@ CoachSpec? composerCoachSpec(
           ? CoachSpec(
               targetKey: FirstRaceGuideKeys.composerActivityCta,
               eyebrow: 'NEXT',
+              dim: false,
               title: teachMode
                   ? 'Teach it to Nuvo.'
                   : 'Set the finish line.',
@@ -176,6 +184,7 @@ CoachSpec? composerCoachSpec(
           ? CoachSpec(
               targetKey: FirstRaceGuideKeys.composerGoalCta,
               eyebrow: 'NEXT',
+              dim: false,
               title: 'Bring in your crew.',
               body: 'Tap Invite racers.',
             )
@@ -189,6 +198,7 @@ CoachSpec? composerCoachSpec(
           ? CoachSpec(
               targetKey: FirstRaceGuideKeys.composerRacersCta,
               eyebrow: 'NEXT',
+              dim: false,
               title: 'Review your race.',
               body: 'Tap Review race.',
             )
@@ -238,6 +248,11 @@ void completeFirstRaceGuide(WidgetRef ref) {
 /// The user always drives the real app control the bubble points at — the
 /// production tap itself is what advances the guide (the host screen owns the
 /// provider transition; this widget only renders the current step).
+/// How far the spotlight hole and pulse ring extend past the target. Kept
+/// under the gap between neighbouring controls (Start / Join sit ~4pt apart)
+/// so the highlight never swallows the control next door.
+const double _kSpotlightInflate = 3;
+
 class FirstRaceGuideCoach extends ConsumerStatefulWidget {
   const FirstRaceGuideCoach({
     super.key,
@@ -248,7 +263,11 @@ class FirstRaceGuideCoach extends ConsumerStatefulWidget {
     this.body,
     this.actionLabel = 'Skip',
     this.avoidKeys = const [],
+    this.dim = true,
   });
+
+  /// See [CoachSpec.dim].
+  final bool dim;
 
   final FirstRaceGuideStep step;
   final GlobalKey targetKey;
@@ -413,22 +432,23 @@ class _FirstRaceGuideCoachState extends ConsumerState<FirstRaceGuideCoach>
           // Subtle dim with a hole cut around the target — the real control
           // stays fully bright while the rest of the screen recedes. The
           // IgnorePointer keeps every production control tappable.
-          IgnorePointer(
-            child: CustomPaint(
-              painter: _CoachScrimPainter(
-                hole: _targetRect?.inflate(8),
+          if (widget.dim)
+            IgnorePointer(
+              child: CustomPaint(
+                painter: _CoachScrimPainter(
+                  hole: _targetRect?.inflate(_kSpotlightInflate),
+                ),
+                child: const SizedBox.expand(),
               ),
-              child: const SizedBox.expand(),
             ),
-          ),
           // Restrained pulse ring around the spotlight. Positioned must be a
           // direct Stack child — the IgnorePointer lives inside it.
           if (targetRect != null)
             Positioned(
-              left: targetRect.left - 8,
-              top: targetRect.top - 8,
-              width: targetRect.width + 16,
-              height: targetRect.height + 16,
+              left: targetRect.left - _kSpotlightInflate,
+              top: targetRect.top - _kSpotlightInflate,
+              width: targetRect.width + _kSpotlightInflate * 2,
+              height: targetRect.height + _kSpotlightInflate * 2,
               child: IgnorePointer(
                 child: AnimatedBuilder(
                   animation: _pulse,

@@ -47,10 +47,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _avatarDenied = false;
   String? _avatarError;
 
+  late final TapGestureRecognizer _termsTap = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl(_kTermsUrl);
+  late final TapGestureRecognizer _privacyTap = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl(_kPrivacyUrl);
+
+  /// Opens a legal page in the in-app browser (the user keeps their place in
+  /// onboarding), falling back to the system browser. A failure is said out
+  /// loud — a link that silently does nothing reads as "no link at all".
   Future<void> _openLegalUrl(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    var opened = false;
+    for (final mode in const [
+      LaunchMode.inAppBrowserView,
+      LaunchMode.externalApplication,
+    ]) {
+      try {
+        opened = await launchUrl(uri, mode: mode);
+      } catch (_) {
+        opened = false;
+      }
+      if (opened) break;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't open that page. Try again.")),
+      );
     }
   }
 
@@ -114,6 +136,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _debounce?.cancel();
     _nameController.dispose();
     _usernameController.dispose();
+    _termsTap.dispose();
+    _privacyTap.dispose();
     super.dispose();
   }
 
@@ -664,8 +688,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                             ],
 
-                            const SizedBox(height: 20),
-
                             if (_error != null) ...[
                               const SizedBox(height: 12),
                               Text(
@@ -676,100 +698,53 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                             ],
 
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
 
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Checkbox.adaptive(
-                                  value: _termsAccepted,
-                                  fillColor: WidgetStateProperty.resolveWith(
-                                    (states) =>
-                                        states.contains(WidgetState.selected)
-                                        ? NuvoColors.blue
-                                        : null,
+                            _ConsentRow(
+                              value: _termsAccepted,
+                              onChanged: (v) =>
+                                  setState(() => _termsAccepted = v),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.muted,
                                   ),
-                                  onChanged: (value) => setState(
-                                    () => _termsAccepted = value ?? false,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: 8,
-                                      right: 8,
-                                    ),
-                                    child: RichText(
-                                      text: TextSpan(
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: NuvoColors.muted,
-                                        ),
-                                        children: [
-                                          const TextSpan(
-                                            text: 'I agree to the ',
-                                          ),
-                                          TextSpan(
-                                            text: 'Terms of Service',
-                                            style: AppTextStyles.bodySmall
-                                                .copyWith(
-                                                  color: NuvoColors.blue,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                            recognizer: TapGestureRecognizer()
-                                              ..onTap = () =>
-                                                  _openLegalUrl(_kTermsUrl),
-                                          ),
-                                          const TextSpan(text: ' and '),
-                                          TextSpan(
-                                            text: 'Privacy Policy',
-                                            style: AppTextStyles.bodySmall
-                                                .copyWith(
-                                                  color: NuvoColors.blue,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                            recognizer: TapGestureRecognizer()
-                                              ..onTap = () =>
-                                                  _openLegalUrl(_kPrivacyUrl),
-                                          ),
-                                          const TextSpan(text: '.'),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Checkbox.adaptive(
-                                  value: _ageAttested,
-                                  fillColor: WidgetStateProperty.resolveWith(
-                                    (states) =>
-                                        states.contains(WidgetState.selected)
-                                        ? NuvoColors.blue
-                                        : null,
-                                  ),
-                                  onChanged: (value) => setState(
-                                    () => _ageAttested = value ?? false,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: 8,
-                                      right: 8,
-                                    ),
-                                    child: Text(
-                                      'I am at least 13 years old.',
+                                  children: [
+                                    const TextSpan(text: 'I agree to the '),
+                                    TextSpan(
+                                      text: 'Terms of Service',
                                       style: AppTextStyles.bodySmall.copyWith(
-                                        color: NuvoColors.muted,
+                                        color: NuvoColors.blue,
+                                        fontWeight: FontWeight.w700,
+                                        decoration: TextDecoration.underline,
                                       ),
+                                      recognizer: _termsTap,
                                     ),
-                                  ),
+                                    const TextSpan(text: ' and '),
+                                    TextSpan(
+                                      text: 'Privacy Policy',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: NuvoColors.blue,
+                                        fontWeight: FontWeight.w700,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: _privacyTap,
+                                    ),
+                                    const TextSpan(text: '.'),
+                                  ],
                                 ),
-                              ],
+                              ),
+                            ),
+                            _ConsentRow(
+                              value: _ageAttested,
+                              onChanged: (v) =>
+                                  setState(() => _ageAttested = v),
+                              child: Text(
+                                'I am at least 13 years old.',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -797,6 +772,47 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A consent checkbox with its label: the box and the text share one
+/// vertical centre, the whole row is at least 44pt tall, and tapping the
+/// plain text toggles the box (links inside the label keep their own taps).
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({
+    required this.value,
+    required this.onChanged,
+    required this.child,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Checkbox.adaptive(
+            value: value,
+            fillColor: WidgetStateProperty.resolveWith(
+              (states) =>
+                  states.contains(WidgetState.selected) ? NuvoColors.blue : null,
+            ),
+            onChanged: (v) => onChanged(v ?? false),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: child,
+            ),
+          ),
+        ],
       ),
     );
   }
