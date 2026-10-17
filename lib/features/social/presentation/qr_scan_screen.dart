@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 import 'dart:io';
 
@@ -180,15 +181,19 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
           _cameraLayer(),
           _scrim(),
           SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 _topBar(),
                 const Spacer(),
                 if (_toast != null) _toastBanner(),
-                _pasteBar(),
+                // Room for the bottom bar, which is drawn edge to edge below.
+                SizedBox(height: _barHeight),
               ],
             ),
           ),
+          // Solid bar that runs to the very bottom of the screen.
+          Positioned(left: 0, right: 0, bottom: 0, child: _pasteBar()),
         ],
       ),
     );
@@ -240,15 +245,19 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
     }
   }
 
+  double get _barHeight =>
+      72 + MediaQuery.paddingOf(context).bottom + MediaQuery.viewInsetsOf(context).bottom;
+
   Widget _scrim() {
     if (_state != _ScanState.scanning) return const SizedBox.shrink();
-    return Center(
-      child: Container(
-        width: 248,
-        height: 248,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 3),
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _ScanFramePainter(
+            box: 248,
+            radius: 28,
+            dim: Colors.black.withValues(alpha: 0.5),
+          ),
         ),
       ),
     );
@@ -290,28 +299,46 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
   }
 
   Widget _pasteBar() {
+    final c = context.themeColors;
     return Container(
+      key: const ValueKey('scan-bottom-bar'),
       padding: EdgeInsets.fromLTRB(
         16,
-        12,
+        14,
         16,
-        12 + MediaQuery.viewInsetsOf(context).bottom,
+        14 +
+            math.max(
+              MediaQuery.paddingOf(context).bottom,
+              MediaQuery.viewInsetsOf(context).bottom,
+            ),
       ),
-      color: Colors.black.withValues(alpha: 0.55),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: c.border, width: 2)),
+      ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _pasteController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: c.ink),
               decoration: InputDecoration(
                 hintText: 'Or paste a Nuvo link',
-                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                hintStyle: TextStyle(color: c.inkMuted),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.12),
+                fillColor: c.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(color: c.border, width: 2),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: c.border, width: 2),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: c.accent, width: 2),
                 ),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -325,6 +352,49 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
       ),
     );
   }
+}
+
+/// Dims the camera everywhere except the rounded scan box, which keeps a
+/// crisp white outline.
+class _ScanFramePainter extends CustomPainter {
+  const _ScanFramePainter({
+    required this.box,
+    required this.radius,
+    required this.dim,
+  });
+
+  final double box;
+  final double radius;
+  final Color dim;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final hole = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: size.center(Offset.zero),
+        width: box,
+        height: box,
+      ),
+      Radius.circular(radius),
+    );
+    final path = Path.combine(
+      PathOperation.difference,
+      Path()..addRect(Offset.zero & size),
+      Path()..addRRect(hole),
+    );
+    canvas.drawPath(path, Paint()..color = dim);
+    canvas.drawRRect(
+      hole,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = Colors.white.withValues(alpha: 0.95),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ScanFramePainter old) =>
+      old.box != box || old.radius != radius || old.dim != dim;
 }
 
 class _CircleButton extends StatelessWidget {

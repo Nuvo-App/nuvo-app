@@ -170,6 +170,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => _authPage(state, const CrewGroupsScreen()),
       ),
       GoRoute(
+        path: '/crews/:id/settings',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          CrewSettingsScreen(groupId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
         path: '/crews/join/:code',
         pageBuilder: (_, state) => _authPage(
           state,

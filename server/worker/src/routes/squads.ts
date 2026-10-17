@@ -208,7 +208,8 @@ squadsRouter.get('/', async (c) => {
             MAX(s.created_at) AS max_created,
             COALESCE(SUM((SELECT COUNT(*) FROM squad_members m WHERE m.squad_id = s.id AND m.status = 'active')), 0) AS members,
             COALESCE(SUM((SELECT COUNT(*) FROM squad_races r WHERE r.squad_id = s.id)), 0) AS races,
-            MAX((SELECT MAX(m.joined_at) FROM squad_members m WHERE m.squad_id = s.id AND m.status = 'active')) AS max_member_joined
+            MAX((SELECT MAX(m.joined_at) FROM squad_members m WHERE m.squad_id = s.id AND m.status = 'active')) AS max_member_joined,
+            COALESCE(GROUP_CONCAT(s.name, '|'), '') AS names
      FROM squads s
      JOIN squad_members sm ON sm.squad_id = s.id AND sm.user_id = ? AND sm.status = 'active'
      WHERE s.deleted_at IS NULL`,
@@ -221,6 +222,7 @@ squadsRouter.get('/', async (c) => {
       members: number;
       races: number;
       max_member_joined: string | null;
+      names: string | null;
     }>();
   const notModified = conditional(
     c,
@@ -232,6 +234,7 @@ squadsRouter.get('/', async (c) => {
       stamp?.members,
       stamp?.races,
       stamp?.max_member_joined,
+      hashString(stamp?.names ?? ''),
       stalenessBucket(Date.now(), 60_000),
     ),
   );
@@ -382,6 +385,7 @@ squadsRouter.get('/:id', async (c) => {
       stamp?.members,
       stamp?.max_joined,
       stamp?.roles ? stamp.roles.length + ':' + hashString(stamp.roles) : '',
+      hashString(squad.name),
       stamp?.races,
       stamp?.max_version,
       stamp?.max_race_updated,
@@ -570,6 +574,23 @@ squadsRouter.post('/:id/races', async (c) => {
   }
 
   return c.json({ ok: true, raceId: race.id, added, memberCount: members.results.length });
+});
+
+// PATCH /squads/:id { name } — owner or admin renames the crew.
+squadsRouter.patch('/:id', async (c) => {
+  const userId = c.get('userId');
+  const squad = await getSquad(c.env.DB, c.req.param('id'));
+  if (!squad) return c.json(badRequest('Crew not found'), 404);
+  const myRole = await roleOf(c.env.DB, squad.id, userId);
+  if (!myRole) return c.json(badRequest('Crew not found'), 404);
+  if (myRole === 'member') return c.json(badRequest('Only crew admins can rename the crew'), 403);
+  const body = await readJson(c);
+  const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
+  if (name.length < 2 || name.length > 40) {
+    return c.json(badRequest('Crew name must be 2-40 characters'), 400);
+  }
+  await c.env.DB.prepare('UPDATE squads SET name = ? WHERE id = ?').bind(name, squad.id).run();
+  return c.json({ ok: true, name });
 });
 
 // DELETE /squads/:id/races/:raceId — unlink a race from the crew (owner/admin).

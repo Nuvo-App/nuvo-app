@@ -139,12 +139,10 @@ class _ArenaPodiumState extends State<ArenaPodium>
             final fade = Curves.easeOut.transform(raw.clamp(0.0, 1.0));
             return Align(
               alignment: Alignment.bottomCenter,
+              // No racer for this place yet: leave the spot empty — no
+              // placeholder block.
               child: entry == null
-                  ? _OpenBlock(
-                      rank: rank,
-                      height: math.max(0, blockMax * frac * raw),
-                      fade: fade,
-                    )
+                  ? const SizedBox.shrink()
                   : _PodiumColumn(
                       entry: entry,
                       blockHeight: math.max(0, blockMax * frac * raw),
@@ -301,81 +299,6 @@ class _Numeral extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _OpenBlock extends StatelessWidget {
-  const _OpenBlock({
-    required this.rank,
-    required this.height,
-    required this.fade,
-  });
-  final int rank;
-  final double height;
-  final double fade;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return CustomPaint(
-      painter: _DashedTopRect(color: c.inkSubtle),
-      child: SizedBox(
-        key: ValueKey('arena-podium-open-$rank'),
-        height: height,
-        width: double.infinity,
-        child: Opacity(
-          opacity: fade,
-          child: ClipRect(
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Text(
-                    'Open',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: c.inkMuted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashedTopRect extends CustomPainter {
-  _DashedTopRect({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.height < 2) return;
-    final path = Path()
-      ..moveTo(0, size.height)
-      ..lineTo(0, 14)
-      ..arcToPoint(const Offset(14, 0), radius: const Radius.circular(14))
-      ..lineTo(size.width - 14, 0)
-      ..arcToPoint(Offset(size.width, 14), radius: const Radius.circular(14))
-      ..lineTo(size.width, size.height);
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    for (final metric in path.computeMetrics()) {
-      var d = 0.0;
-      while (d < metric.length) {
-        canvas.drawPath(metric.extractPath(d, d + 6), paint);
-        d += 11;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedTopRect old) => old.color != color;
 }
 
 class _ViewerChip extends StatelessWidget {

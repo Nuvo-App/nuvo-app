@@ -228,12 +228,13 @@ void main() {
   });
 
   testWidgets(
-    'fewer than 3 racers: dashed Open placeholders for empty places',
+    'fewer than 3 racers: empty places stay empty',
     (tester) async {
       await pumpArena(tester, const Size(390, 844), snapshot: duo);
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('arena-podium-open-3')), findsOneWidget);
-      expect(find.text('Open'), findsOneWidget);
+      // An empty place stays empty: no dashed placeholder, no "Open" label.
+      expect(find.byKey(const ValueKey('arena-podium-open-3')), findsNothing);
+      expect(find.text('Open'), findsNothing);
       expect(
         find.byKey(const ValueKey('arena-podium-block-1')),
         findsOneWidget,

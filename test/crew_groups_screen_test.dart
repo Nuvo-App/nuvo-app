@@ -74,6 +74,9 @@ class _Repo implements SquadRepository {
   Future<void> leave(String id) async {}
 
   @override
+  Future<void> rename(String id, String name) async {}
+
+  @override
   Future<void> setRole(String id, String userId, String role) async {}
 
   @override
@@ -163,25 +166,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('detail: podium, leaderboard, code, races; clears inset',
+  testWidgets('detail: races first (each its own card), members second, QR sheet',
       (tester) async {
     await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), const []);
     expect(tester.getTopLeft(find.byType(NuvoBackHeader)).dy,
         greaterThanOrEqualTo(59));
-    expect(find.text('Leaderboard'), findsOneWidget);
-    expect(find.text('Ava Long'), findsOneWidget);
-    expect(find.text('You'), findsOneWidget); // podium step for me
-    expect(find.text('Dee'), findsOneWidget); // rank 4 row
-    // Structure: summary card, then Leaderboard | Members | Races.
+    // No crew-wide leaderboard any more: races lead, members follow.
+    expect(find.text('Leaderboard'), findsNothing);
     expect(find.byKey(const ValueKey('crew-summary')), findsOneWidget);
     expect(find.text('Add people'), findsOneWidget);
     expect(find.text('Add race'), findsOneWidget); // I own this crew
+    // The Races tab is the default and lists each race as its own card.
+    expect(find.text('Races 1'), findsOneWidget);
+    expect(find.text('Morning push-ups'), findsOneWidget);
+    expect(find.text('Tap a race to see its leaderboard.'), findsOneWidget);
     await tester.tap(find.text('Members 4'));
     await tester.pumpAndSettle();
     expect(find.text('Owner'), findsWidgets);
-    await tester.tap(find.text('Races 1'));
-    await tester.pumpAndSettle();
-    expect(find.text('Morning push-ups'), findsOneWidget);
+    expect(find.text('Ava Long'), findsOneWidget);
     // Add people opens the QR + code sheet.
     await tester.tap(find.text('Add people').first);
     await tester.pumpAndSettle();
@@ -202,7 +204,7 @@ void main() {
     await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), const [],
         dark: true);
     expect(tester.takeException(), isNull);
-    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.text('Races 1'), findsOneWidget);
   });
 
   group('crew icon', () {

@@ -251,3 +251,27 @@ test('join enforces the per-user crew cap; reactivation counts, already-active d
   assert.equal((await call(db, 'outsider', 'POST', '/squads/join', { code: 'CODE0' })).status, 200);
   assert.equal((await call(db, 'outsider', 'POST', '/squads/join', { code: 'JOINME' })).status, 409);
 });
+
+test('rename: owner/admin ok, member 403, outsider 404, name validated, ETags change', async () => {
+  const db = seed();
+  const list0 = await call(db, 'mem', 'GET', '/squads');
+  const listTag = list0.res.headers.get('etag');
+  const det0 = await call(db, 'mem', 'GET', '/squads/s1');
+  const detTag = det0.res.headers.get('etag');
+
+  assert.equal((await call(db, 'mem', 'PATCH', '/squads/s1', { name: 'Nope' })).status, 403);
+  assert.equal((await call(db, 'outsider', 'PATCH', '/squads/s1', { name: 'Nope' })).status, 404);
+  assert.equal((await call(db, 'owner', 'PATCH', '/squads/s1', { name: 'A' })).status, 400);
+  assert.equal((await call(db, 'owner', 'PATCH', '/squads/s1', { name: 'x'.repeat(41) })).status, 400);
+
+  const ok = await call(db, 'admin', 'PATCH', '/squads/s1', { name: '  Sunrise   Crew ' });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.name, 'Sunrise Crew');
+
+  const det1 = await call(db, 'mem', 'GET', '/squads/s1', null, { 'if-none-match': detTag });
+  assert.equal(det1.status, 200);
+  assert.equal(det1.json.squad.name, 'Sunrise Crew');
+  const list1 = await call(db, 'mem', 'GET', '/squads', null, { 'if-none-match': listTag });
+  assert.equal(list1.status, 200);
+  assert.equal(list1.json.squads[0].name, 'Sunrise Crew');
+});

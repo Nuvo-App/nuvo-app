@@ -409,6 +409,15 @@ class SquadController extends StateNotifier<SquadState> {
     return added;
   }
 
+  /// Owner / admin: rename the crew; the list and the open crew update at once.
+  Future<void> rename(String id, String name) async {
+    await _repo.rename(id, name);
+    _invalidateDetail(id);
+    _invalidateList();
+    await loadDetail(id, force: true);
+    unawaited(load(force: true));
+  }
+
   /// Owner only: make a member an admin, or take it back.
   Future<void> setRole(String id, String userId, String role) async {
     await _repo.setRole(id, userId, role);

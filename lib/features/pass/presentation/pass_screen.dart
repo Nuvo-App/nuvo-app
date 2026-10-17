@@ -2110,8 +2110,9 @@ class _PostContext extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.panel,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.sm),
+        border: Border.all(color: c.border, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2668,7 +2669,8 @@ class _ReactionChip extends StatelessWidget {
             ),
             decoration: mine
                 ? BoxDecoration(
-                    color: c.panel,
+                    // "You" is highlighted in gold, not a pale blue.
+                    color: NuvoColors.gold.withValues(alpha: 0.28),
                     borderRadius: BorderRadius.circular(999),
                   )
                 : null,
@@ -3911,8 +3913,11 @@ class _PersonSheetState extends State<_PersonSheet> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: context.themeColors.panelLight,
+                          color: context.themeColors.surface,
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: context.themeColors.border,
+                          ),
                         ),
                         child: Text(
                           'Lv. ${member.level}',
@@ -4196,8 +4201,9 @@ class _PersonRivalryFace extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: c.panel,
+                color: c.surface,
                 borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: c.border, width: 1.5),
               ),
               child: Row(
                 children: [
