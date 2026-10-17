@@ -256,7 +256,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       // straddles the screen edge at rest. It is a short scroll away.
                       final remaining =
                           sc.viewportMainAxisExtent - sc.precedingScrollExtent;
-                      final gap = remaining > 0
+                      // Only hide it below the fold when real content (the heat
+                      // map) fills the screen above it. If that content is
+                      // missing or short (no activity yet, still loading, a
+                      // failed load), a big blank band would just look empty,
+                      // so Your Nuvo flows in naturally instead.
+                      final hasRoomToHide =
+                          remaining > 0 &&
+                          remaining < sc.viewportMainAxisExtent * 0.3;
+                      final gap = hasRoomToHide
                           ? math.max(NuvoSpacing.xl, remaining + 2)
                           : NuvoSpacing.xl;
                       return SliverToBoxAdapter(
