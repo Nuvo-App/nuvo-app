@@ -117,6 +117,8 @@ void main() {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
+      // bySemanticsLabel needs the semantics tree switched on.
+      final semantics = tester.ensureSemantics();
 
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_pushupRace())));
       await tester.pump(const Duration(milliseconds: 100));
@@ -134,6 +136,7 @@ void main() {
         ),
         findsOneWidget,
       );
+      semantics.dispose();
     });
   });
 }

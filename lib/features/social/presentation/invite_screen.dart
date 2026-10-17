@@ -256,6 +256,7 @@ class _RacePreview extends StatelessWidget {
         ? '${c.targetValue}${c.targetUnit != null ? ' ${c.targetUnit}' : ''}'
         : null;
     return SafeArea(
+      top: false,
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
@@ -351,6 +352,7 @@ class _PersonPreview extends StatelessWidget {
     final c = card;
     if (c == null) return const Center(child: Text('Profile not found'));
     return SafeArea(
+      top: false,
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),

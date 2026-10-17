@@ -312,14 +312,20 @@ class _NavSlotState extends State<_NavSlot> {
                                       padding: const EdgeInsets.only(left: gap),
                                       child: SizedBox(
                                         width: labelWidth,
-                                        child: Text(
-                                          d.label,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.ellipsis,
-                                          textScaler: widget.textScaler,
-                                          style: widget.labelStyle.copyWith(
-                                            color: fg,
+                                        // Scale down (never clip) when the
+                                        // pill is narrower than the label —
+                                        // 320pt wide at large text.
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            d.label,
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            textScaler: widget.textScaler,
+                                            style: widget.labelStyle.copyWith(
+                                              color: fg,
+                                            ),
                                           ),
                                         ),
                                       ),

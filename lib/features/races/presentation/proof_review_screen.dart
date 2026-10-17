@@ -12,6 +12,7 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
@@ -344,7 +345,8 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     return Scaffold(
       backgroundColor: context.themeColors.page,
       body: SafeArea(
-        child:
+        child: NuvoFadeScroll(
+          child:
             ListView(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
@@ -487,6 +489,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                 .animate()
                 .fadeIn(duration: 220.ms, curve: Curves.easeOut)
                 .slideY(begin: 0.03, end: 0, duration: 260.ms),
+        ),
       ),
     );
   }
@@ -538,17 +541,20 @@ class _MoveSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // Wrap, not Row: a long racer name drops under the pills instead
+          // of overflowing or truncating on a narrow phone.
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               NuvoPill(label: _statusLabel, color: _statusColor(context)),
-              const SizedBox(width: 6),
               NuvoPill(
                 label: proof.proofType == 'ai_motion' ? 'Verified' : 'Manual',
                 color: proof.proofType == 'ai_motion'
                     ? context.themeColors.accent
                     : context.themeColors.inkMuted,
               ),
-              const Spacer(),
               Text(
                 proof.displayName,
                 style: AppTextStyles.labelMedium.copyWith(

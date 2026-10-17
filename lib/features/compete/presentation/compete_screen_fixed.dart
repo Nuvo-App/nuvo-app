@@ -48,21 +48,47 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
   bool _waitingExpanded = false;
   bool _finishedExpanded = false;
 
-  /// How many races the field lists before "show more": as many as the first
-  /// screen has room for (so it fills without cutting a row), between 2 and 6.
-  int _racesCapFor(BuildContext context, bool hasWaiting, bool hasFinished) {
-    // Phones fit to their screen; wider surfaces keep the classic three.
-    if (MediaQuery.sizeOf(context).width > 500) return 3;
-    final scale = MediaQuery.textScalerOf(context).scale(1);
-    final room =
+  /// How many races the field lists before "show more", and how much extra
+  /// breathing room each row gets: as many rows as the first screen has room
+  /// for (so it fills without cutting a row), at least one. Row, header and
+  /// summary heights grow with the text scale; the fold sits above the nav.
+  ({int cap, double rowGap}) _racesFit(
+    BuildContext context,
+    bool hasWaiting,
+    bool hasFinished,
+    int raceCount,
+  ) {
+    // Wider surfaces (tablets) keep the classic three.
+    if (MediaQuery.sizeOf(context).width > 500) return (cap: 3, rowGap: 0);
+    final s = MediaQuery.textScalerOf(context).scale(1);
+    final line =
         MediaQuery.sizeOf(context).height -
-        NuvoBottomNav.bottomPadding(context) -
-        MediaQuery.paddingOf(context).top -
-        (150 * scale) - // header + gap
-        (hasWaiting ? 96 * scale : 0) -
-        (hasFinished ? 96 * scale : 0) -
-        40; // field padding
-    return (room / (92 * scale)).floor().clamp(2, 6);
+        NuvoBottomNav.bottomPadding(context) +
+        10;
+    // Where the first row starts: status bar, header, gap, field title.
+    final top =
+        MediaQuery.paddingOf(context).top + 192 + 66.7 * (s - 1);
+    final rowH = 72 + 40 * s;
+    const stride = 9.0; // divider + its spacing
+    const fieldFoot = 8.0;
+    final summaryH = 49 + 30 * (s - 1);
+    final below =
+        (hasWaiting ? 24 + summaryH : 0) + (hasFinished ? 24 + summaryH : 0);
+    double used(int n) =>
+        top + n * rowH + (n - 1) * stride + fieldFoot + below;
+    var n = 1;
+    while (n < 6 && used(n + 1) <= line) {
+      n++;
+    }
+    // Spare room after the rows shows up as air between them (bounded),
+    // after the gaps between sections have taken their share.
+    final shown = raceCount < n ? raceCount : n;
+    var gap = 0.0;
+    if (shown > 1) {
+      final spare = line - used(shown) - 48;
+      gap = (spare / (2 * (shown - 1))).clamp(0.0, 10.0);
+    }
+    return (cap: n, rowGap: gap);
   }
 
   /// The field body bleeds 10px past the page gutter — a region, not a card
@@ -147,10 +173,11 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                               races: inMotion,
                               userId: uid,
                               expanded: _racesExpanded,
-                              cap: _racesCapFor(
+                              fit: _racesFit(
                                 context,
                                 waiting.isNotEmpty,
                                 finished.isNotEmpty,
+                                inMotion.length,
                               ),
                               onToggleExpand: () => setState(
                                 () => _racesExpanded = !_racesExpanded,
@@ -434,7 +461,7 @@ class _CappedRaceList extends StatelessWidget {
     required this.races,
     required this.userId,
     required this.expanded,
-    required this.cap,
+    required this.fit,
     required this.onToggleExpand,
     required this.onOpen,
   });
@@ -442,12 +469,13 @@ class _CappedRaceList extends StatelessWidget {
   final List<Race> races;
   final String? userId;
   final bool expanded;
-  final int cap;
+  final ({int cap, double rowGap}) fit;
   final VoidCallback onToggleExpand;
   final ValueChanged<Race> onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final cap = fit.cap;
     final visible = expanded ? races : races.take(cap).toList();
     final hasMore = races.length > cap;
     // The active-races field — a middle plane between the hero and the
@@ -525,9 +553,9 @@ class _CappedRaceList extends StatelessWidget {
           // says why (see [competeRowStatus]). A hairline separates strips.
           for (var i = 0; i < visible.length; i++) ...[
             if (i > 0) ...[
-              const SizedBox(height: NuvoSpacing.xs),
+              SizedBox(height: NuvoSpacing.xs + (expanded ? 0 : fit.rowGap)),
               Divider(height: 1, thickness: 1, color: c.divider),
-              const SizedBox(height: NuvoSpacing.xs),
+              SizedBox(height: NuvoSpacing.xs + (expanded ? 0 : fit.rowGap)),
             ],
             _buildRow(context, visible[i], i + 1),
           ],

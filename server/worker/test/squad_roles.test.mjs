@@ -275,3 +275,20 @@ test('rename: owner/admin ok, member 403, outsider 404, name validated, ETags ch
   assert.equal(list1.status, 200);
   assert.equal(list1.json.squads[0].name, 'Sunrise Crew');
 });
+
+test('delete crew: owner only; crew and memberships disappear', async () => {
+  const db = seed();
+  assert.equal((await call(db, 'admin', 'DELETE', '/squads/s1')).status, 403);
+  assert.equal((await call(db, 'mem', 'DELETE', '/squads/s1')).status, 403);
+  assert.equal((await call(db, 'outsider', 'DELETE', '/squads/s1')).status, 404);
+  const ok = await call(db, 'owner', 'DELETE', '/squads/s1');
+  assert.equal(ok.status, 200);
+  assert.equal((await call(db, 'owner', 'GET', '/squads/s1')).status, 404);
+  assert.equal((await call(db, 'mem', 'GET', '/squads/s1')).status, 404);
+  const listed = await call(db, 'mem', 'GET', '/squads');
+  assert.deepEqual(listed.json.squads, []);
+  // the join code no longer finds the crew
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/join', { code: 'JOINME' })).status, 404);
+  // a second delete is a clean 404
+  assert.equal((await call(db, 'owner', 'DELETE', '/squads/s1')).status, 404);
+});

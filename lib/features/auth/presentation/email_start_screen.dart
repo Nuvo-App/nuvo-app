@@ -7,6 +7,7 @@ import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_legal_footer.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import 'auth_controller.dart';
@@ -269,6 +270,10 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                 loading: _loading,
                 onPressed: _canSubmit ? _submit : null,
               ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: NuvoLegalFooter(),
             ),
           ],
         ),

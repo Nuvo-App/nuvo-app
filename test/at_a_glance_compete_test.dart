@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/screenshot.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
@@ -159,6 +160,7 @@ final _races = [
 const _sizes = [(320.0, 568.0), (375.0, 667.0), (390.0, 844.0), (393.0, 852.0), (430.0, 932.0)];
 
 void main() {
+  setUpAll(loadShotFonts);
   for (final s in _sizes) {
     for (final inset in [0.0, 34.0]) {
       for (final dark in [false, true]) {
@@ -218,6 +220,9 @@ void main() {
             );
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
+            if (!dark && scale == 1.0 && inset == 34) {
+              await shot(tester, 'compete_${s.$1.toInt()}x${s.$2.toInt()}');
+            }
 
             final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
             final fade = find.byKey(const ValueKey('nuvo-bottom-fade'));

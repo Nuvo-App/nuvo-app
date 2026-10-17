@@ -76,7 +76,7 @@ class NuvoMoveLogItem extends StatelessWidget {
                   Text(
                     displayName,
                     style: AppTextStyles.titleMedium.copyWith(fontSize: 14),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),

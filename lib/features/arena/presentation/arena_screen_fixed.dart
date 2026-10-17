@@ -117,8 +117,14 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   );
             final hasPodium =
                 podiumData != null && podiumData.entries.isNotEmpty;
+            // Shortest phones (320x568): compact podium, tighter header/actions.
+            final tiny = viewportHeight < 560;
             final podiumMin = hasPodium
-                ? ArenaPodium.minHeight(media.textScaler, withChip: false)
+                ? ArenaPodium.minHeight(
+                    media.textScaler,
+                    withChip: false,
+                    compact: tiny,
+                  )
                 : 70.0;
             final hasRest = hasPodium && podiumData.rest.isNotEmpty;
             // With a rest list the first screen ends on the caret, which can
@@ -131,20 +137,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             final arrowH = hasRest ? ArenaRestArrow.height : 0.0;
             final dots = boards.length > 1 ? 20.0 : 0.0;
             double chromeFor(bool micro) =>
-                (micro ? _microHeaderHeight : 120.0) +
+                (micro ? (tiny ? _tinyHeaderHeight : _microHeaderHeight) : 120.0) +
                 6 +
                 (micro ? 0 : 28) +
                 dots +
                 arrowH +
                 8 +
-                (micro ? 56 : 64) +
-                12;
-            final usableViewport = avail - 10;
-            final heroBase = switch (usableViewport + podiumMin) {
-              < 640 => 300.0, // compact phones
-              < 880 => 340.0, // standard
-              _ => 400.0, // large
-            };
+                (micro ? (tiny ? 48 : 56) : 64) +
+                (tiny ? 8 : 12);
+            final podiumShare = math.max(podiumMin, math.min(avail * 0.22, 170.0));
             final cardTextWidth =
                 media.size.width - NuvoSpacing.pageHorizontal * 2 - 12 - 40;
             // Pick the richest composition whose measured content fits the room the
@@ -166,11 +167,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   ),
                 );
               }
+              // A richer hero only wins while the podium keeps a share of
+              // the screen — never squeezed to its floor by a tall card.
               final room =
-                  avail - chromeFor(mode == _HeroMode.micro) - podiumMin;
+                  avail - chromeFor(mode.index <= _HeroMode.micro.index) - podiumShare;
               if (mode == _HeroMode.tall) {
-                if (need <= room && math.min(heroBase, room) >= 300) {
-                  heroHeight = math.max(need, math.min(heroBase, room));
+                // Measured content plus a little air, so a font whose metrics
+                // differ slightly from the measurement can't overflow the card.
+                if (need <= room && need >= 300) {
+                  heroHeight = need + math.min(32.0, room - need);
                   break;
                 }
               } else if (mode == _HeroMode.compact) {
@@ -178,11 +183,18 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   heroHeight = math.max(296.0, need);
                   break;
                 }
-              } else {
+              } else if (mode == _HeroMode.micro) {
                 heroHeight = math.max(190.0, need);
+                // Micro stays unless even the podium floor can't fit under
+                // it; then the race path gives way (nano) before the podium
+                // is pushed under the dock.
+                if (heroHeight <= avail - chromeFor(true) - podiumMin) break;
+              } else {
+                final nanoNeed = math.max(150.0, need);
+                if (nanoNeed < 180) heroHeight = nanoNeed;
               }
             }
-            final micro = _heroModeFor(heroHeight) == _HeroMode.micro;
+            final micro = _heroModeFor(heroHeight).index <= _HeroMode.micro.index;
             // The podium takes everything the hero leaves, down to the fold
             // (just the caret below it), so the first screen has no dead air.
             final podiumHeight = math.max(
@@ -265,10 +277,16 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+                            padding: EdgeInsets.fromLTRB(
+                              22,
+                              tiny && micro ? 8 : 18,
+                              22,
+                              0,
+                            ),
                             child: _ArenaHeader(
                               greeting: greeting,
                               compact: micro,
+                              tiny: tiny,
                             ),
                           ),
                           if (isOffline)
@@ -336,6 +354,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             ),
                             child: _QuickActions(
                               compact: micro,
+                              tiny: tiny,
                               onSubmit: activeBoard.isResult
                                   ? null
                                   : () => _handlePrimaryAction(
@@ -347,7 +366,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onJoin: () => context.push('/races/join'),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: tiny ? 8 : 12),
                           Padding(
                             padding: EdgeInsets.fromLTRB(
                               NuvoSpacing.pageHorizontal,
@@ -365,6 +384,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                                         ),
                                         entries: podiumData.entries,
                                         height: podiumHeight,
+                                        compact: tiny,
                                         onTap: () =>
                                             _openBoard(context, activeBoard),
                                       ),
@@ -578,12 +598,17 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
 
 /// Header heights the budget assumes (top pad included).
 const double _microHeaderHeight = 56;
+const double _tinyHeaderHeight = 46;
 
-enum _HeroMode { micro, compact, tall }
+/// [nano] is [micro] without the race path: the last resort on the shortest
+/// phones, where the podium would otherwise be pushed under the dock.
+enum _HeroMode { nano, micro, compact, tall }
 
-_HeroMode _heroModeFor(double height) => height < 250
-    ? _HeroMode.micro
-    : (height >= 300 ? _HeroMode.tall : _HeroMode.compact);
+_HeroMode _heroModeFor(double height) => height < 180
+    ? _HeroMode.nano
+    : (height < 250
+          ? _HeroMode.micro
+          : (height >= 300 ? _HeroMode.tall : _HeroMode.compact));
 
 class _EmptyPodium extends StatelessWidget {
   @override
@@ -604,8 +629,15 @@ class _EmptyPodium extends StatelessWidget {
 }
 
 class _ArenaHeader extends StatelessWidget {
-  const _ArenaHeader({required this.greeting, this.compact = false});
+  const _ArenaHeader({
+    required this.greeting,
+    this.compact = false,
+    this.tiny = false,
+  });
   final String greeting;
+
+  /// Shortest phones: a smaller greeting.
+  final bool tiny;
 
   /// Short phones: title and greeting share one row.
   final bool compact;
@@ -633,6 +665,7 @@ class _ArenaHeader extends StatelessWidget {
                 style: AppTextStyles.titleMedium.copyWith(
                   color: context.themeColors.inkSubtle,
                   fontWeight: FontWeight.w500,
+                  fontSize: tiny ? 14 : null,
                 ),
               ),
             ),
@@ -776,7 +809,8 @@ class _NextMoveHero extends StatelessWidget {
     // floored card on a small phone stays compact.
     final mode = _heroModeFor(heroHeight);
     final tall = mode == _HeroMode.tall;
-    final micro = mode == _HeroMode.micro;
+    final nano = mode == _HeroMode.nano;
+    final micro = mode == _HeroMode.micro || nano;
     final progressFontSize = micro ? 40.0 : (tall ? 66.0 : 56.0);
     final footerAvatars = board.miniLeaderboard
         .map(
@@ -836,15 +870,21 @@ class _NextMoveHero extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Text(
-                              board.title,
-                              maxLines: micro ? 1 : 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.headlineMedium.copyWith(
-                                color: context.themeColors.ink,
-                                fontSize: micro ? 24 : (tall ? 30 : 28),
-                                height: 1.05,
-                                letterSpacing: 0,
+                            child: _fitTitle(
+                              micro,
+                              Text(
+                                board.title,
+                                maxLines: micro ? 1 : 2,
+                                softWrap: !micro,
+                                overflow: micro
+                                    ? TextOverflow.visible
+                                    : TextOverflow.ellipsis,
+                                style: AppTextStyles.headlineMedium.copyWith(
+                                  color: context.themeColors.ink,
+                                  fontSize: micro ? 24 : (tall ? 30 : 28),
+                                  height: 1.05,
+                                  letterSpacing: 0,
+                                ),
                               ),
                             ),
                           ),
@@ -904,6 +944,7 @@ class _NextMoveHero extends StatelessWidget {
                       // chasing, the finish flag — positions from
                       // raceLaneGeometry, so lower-wins/best-attempt races
                       // still get the honest relative lane (no fake goal).
+                      if (!nano)
                       NuvoRacePath(
                         key: ValueKey('progress-${board.id}'),
                         raceId: board.id,
@@ -1000,6 +1041,15 @@ class _NextMoveHero extends StatelessWidget {
   }
 }
 
+/// One-line race names scale down to fit instead of ellipsizing.
+Widget _fitTitle(bool oneLine, Widget title) => oneLine
+    ? FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: title,
+      )
+    : title;
+
 class _RaceDetails extends StatelessWidget {
   const _RaceDetails({required this.board});
   final ArenaBoard board;
@@ -1083,57 +1133,65 @@ class _QuickActions extends StatelessWidget {
     required this.onStart,
     required this.onJoin,
     this.compact = false,
+    this.tiny = false,
   });
   final bool compact;
+  final bool tiny;
   final VoidCallback? onSubmit;
   final VoidCallback onStart;
   final VoidCallback onJoin;
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        // Was 4:2:2 — the two labeled secondaries need a bit more than a
-        // bare icon did to fit icon + text without crowding.
-        flex: 3,
-        child: NuvoPrimaryButton(
-          leadingWidget: const Icon(
-            Icons.camera_alt_outlined,
-            color: NuvoColors.white,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      // Narrow phones: Submit proof keeps most of the row at a readable
+      // size; New / Join drop their glyphs and keep the words.
+      final narrow = box.maxWidth < 300;
+      final h = tiny ? 48.0 : (compact ? 56.0 : 64.0);
+      final gap = narrow ? 6.0 : 8.0;
+      return Row(
+        children: [
+          Expanded(
+            flex: narrow ? 5 : 3,
+            child: NuvoPrimaryButton(
+              leadingWidget: Icon(
+                Icons.camera_alt_outlined,
+                color: NuvoColors.white,
+                size: narrow ? 18 : 24,
+              ),
+              label: 'Submit proof',
+              onPressed: onSubmit,
+              expand: true,
+              height: h,
+              horizontalPadding: narrow ? 10 : 16,
+            ),
           ),
-          label: 'Submit proof',
-          onPressed: onSubmit,
-          expand: true,
-          height: compact ? 56 : 64,
-          horizontalPadding: 16,
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        flex: 2,
-        // Labeled, not icon-only — a bare "+" glyph read as an unclear
-        // secondary action with no text to anchor its meaning.
-        child: NuvoOutlineButton(
-          icon: Icons.add_rounded,
-          label: 'New',
-          onPressed: onStart,
-          expand: true,
-          height: compact ? 56 : 64,
-          horizontalPadding: 8,
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        flex: 2,
-        child: NuvoOutlineButton(
-          icon: Icons.group_add_outlined,
-          label: 'Join',
-          onPressed: onJoin,
-          expand: true,
-          height: compact ? 56 : 64,
-          horizontalPadding: 8,
-        ),
-      ),
-    ],
+          SizedBox(width: gap),
+          Expanded(
+            flex: 2,
+            child: NuvoOutlineButton(
+              icon: narrow ? null : Icons.add_rounded,
+              label: 'New',
+              onPressed: onStart,
+              expand: true,
+              height: h,
+              horizontalPadding: narrow ? 4 : 8,
+            ),
+          ),
+          SizedBox(width: gap),
+          Expanded(
+            flex: 2,
+            child: NuvoOutlineButton(
+              icon: narrow ? null : Icons.group_add_outlined,
+              label: 'Join',
+              onPressed: onJoin,
+              expand: true,
+              height: h,
+              horizontalPadding: narrow ? 4 : 8,
+            ),
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -1394,7 +1452,7 @@ double _heroContentHeight(
   }
 
   final tall = mode == _HeroMode.tall;
-  final micro = mode == _HeroMode.micro;
+  final micro = mode == _HeroMode.micro || mode == _HeroMode.nano;
   final pct = (board.progressPercent ?? 0).clamp(0, 100);
   // The title shares its row with the rank ordinal — measure it against the
   // width it actually gets, or a just-fits one-liner measures as 1 line and
@@ -1432,7 +1490,7 @@ double _heroContentHeight(
   // carousel's 10px shadow pad + 4px card border inset (2px each side —
   // the border lays out inside the child's bounds). The hero's curved
   // course with its caption band is 60 tall.
-  const laneHeight = 60.0;
+  final laneHeight = mode == _HeroMode.nano ? 0.0 : 60.0;
   final hasStakes =
       !micro && board.chaseCopy != null && board.chaseCopy!.isNotEmpty;
   // Measured, not assumed — labelMedium's line-height multiplier makes the

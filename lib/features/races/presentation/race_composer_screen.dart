@@ -4112,7 +4112,8 @@ class _ReviewPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: SingleChildScrollView(
+          child: NuvoFadeScroll(
+            child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4205,7 +4206,7 @@ class _ReviewPage extends StatelessWidget {
                 ],
               ],
             ),
-          ),
+          )),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),

@@ -284,6 +284,10 @@ class SquadApi {
     await _send(() => _client.post(_uri('/$id/leave'), headers: _headers(token)));
   }
 
+  Future<void> deleteCrew(String token, String id) async {
+    await _send(() => _client.delete(_uri('/$id'), headers: _headers(token)));
+  }
+
   Future<void> rename(String token, String id, String name) async {
     await _send(() => _client.patch(
           _uri('/$id'),
@@ -332,6 +336,8 @@ class SquadRepository {
   Future<int> addRace(String id, String raceId) =>
       _withRefresh((t) => _api.addRace(t, id, raceId));
   Future<void> leave(String id) => _withRefresh((t) => _api.leave(t, id));
+  Future<void> deleteCrew(String id) =>
+      _withRefresh((t) => _api.deleteCrew(t, id));
   Future<void> rename(String id, String name) =>
       _withRefresh((t) => _api.rename(t, id, name));
   Future<void> setRole(String id, String userId, String role) =>

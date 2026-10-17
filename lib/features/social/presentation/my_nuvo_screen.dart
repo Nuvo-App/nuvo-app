@@ -100,62 +100,111 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
           ),
         ),
       ),
+      // The top bar already clears the status bar; only the bottom inset
+      // is left for the body.
       child: SafeArea(
+        top: false,
         child: LayoutBuilder(
           builder: (context, box) {
-            // The QR face shrinks so the whole card, its actions and the
-            // caption fit above the fold on short phones / large text.
+            // Everything but the QR card is fixed height; the card takes the
+            // room that is left and scales down to fit it (scaleDown never
+            // enlarges past its natural size), so one screen holds the lot on
+            // any phone. Only when even a small QR cannot fit — short phone,
+            // large text — does the page scroll.
             final s = MediaQuery.textScalerOf(context).scale(10) / 10;
-            final raw = box.maxHeight - (335 + 310 * (s - 1));
-            final qr = raw.clamp(80.0, 168.0);
-            final scroll = SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  _identityHero(name, username, code, user?.profilePhotoUrl, t),
-                  const SizedBox(height: 16),
-                  _qrCard(t, qr),
-                  const SizedBox(height: 16),
-                  NuvoPrimaryButton(
-                    label: 'Share my Nuvo',
-                    icon: Icons.ios_share_rounded,
-                    expand: true,
-                    height: 52,
-                    onPressed: _invite == null
-                        ? null
-                        : () => Share.share(
-                            'Connect with me on Nuvo — ${_invite!.url}',
+            final fits = box.maxHeight >= 440 + 330 * (s - 1);
+            Widget actions() => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                NuvoPrimaryButton(
+                  label: 'Share my Nuvo',
+                  icon: Icons.ios_share_rounded,
+                  expand: true,
+                  height: 52,
+                  onPressed: _invite == null
+                      ? null
+                      : () => Share.share(
+                          'Connect with me on Nuvo — ${_invite!.url}',
+                        ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: NuvoCopyButton(
+                        text: _invite?.url ?? '',
+                        height: 46,
+                        enabled: _invite != null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: NuvoSecondaryButton(
+                        label: 'Scan a code',
+                        icon: Icons.qr_code_scanner_rounded,
+                        height: 46,
+                        onPressed: () => context.push('/scan'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+            final hero = _identityHero(
+              name,
+              username,
+              code,
+              user?.profilePhotoUrl,
+              t,
+            );
+            if (fits) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    hero,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: LayoutBuilder(
+                          builder: (context, room) => Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              // QR never below 140pt; the card's own chrome
+                              // (padding, caption, shadow) is ~80pt.
+                              child: _qrCard(
+                                t,
+                                (room.maxHeight - 80).clamp(140.0, 200.0),
+                              ),
+                            ),
                           ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+                        ),
+                      ),
+                    ),
+                    actions(),
+                  ],
+                ),
+              );
+            }
+            return Stack(
+              children: [
+                SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: NuvoCopyButton(
-                          text: _invite?.url ?? '',
-                          height: 46,
-                          enabled: _invite != null,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: NuvoSecondaryButton(
-                          label: 'Scan a code',
-                          icon: Icons.qr_code_scanner_rounded,
-                          height: 46,
-                          onPressed: () => context.push('/scan'),
-                        ),
-                      ),
+                      hero,
+                      const SizedBox(height: 16),
+                      _qrCard(t, 140),
+                      const SizedBox(height: 16),
+                      actions(),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const NuvoBottomFade(),
+              ],
             );
-            // Only when even the smallest QR cannot fit does the page scroll.
-            if (raw >= 80) return scroll;
-            return Stack(children: [scroll, const NuvoBottomFade()]);
           },
         ),
       ),

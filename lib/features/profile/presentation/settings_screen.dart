@@ -39,29 +39,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ]);
   }
 
-  /// Opens a legal page in the in-app browser, falling back to the system
-  /// browser, and says so out loud if neither works.
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    var opened = false;
-    for (final mode in const [
-      LaunchMode.inAppBrowserView,
-      LaunchMode.externalApplication,
-    ]) {
-      try {
-        opened = await launchUrl(uri, mode: mode);
-      } catch (_) {
-        opened = false;
-      }
-      if (opened) break;
-    }
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't open that page. Try again.")),
-      );
-    }
-  }
-
   Future<void> _confirmDeleteAccount() async {
     final confirmed = await showNuvoConfirmDialog(
       context,
@@ -173,6 +150,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     isDanger: true,
                     onTap: _confirmDeleteAccount,
                   ),
+                  _AccountRow(
+                    icon: Icons.open_in_new_rounded,
+                    label: 'Delete account on the web',
+                    subtitle: 'How account deletion works',
+                    onTap: () =>
+                        openLegalLink(context, LegalLinks.deleteAccountUri),
+                  ),
                 ],
               ),
               const SizedBox(height: NuvoSpacing.xl),
@@ -185,12 +169,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _AccountRow(
                     icon: Icons.policy_rounded,
                     label: 'Privacy Policy',
-                    onTap: () => _openUrl(_kPrivacyUrl),
+                    onTap: () => openLegalLink(context, LegalLinks.privacyUri),
                   ),
                   _AccountRow(
                     icon: Icons.description_rounded,
                     label: 'Terms of Service',
-                    onTap: () => _openUrl(_kTermsUrl),
+                    onTap: () => openLegalLink(context, LegalLinks.termsUri),
+                  ),
+                  _AccountRow(
+                    icon: Icons.groups_rounded,
+                    label: 'Community Guidelines',
+                    onTap: () => openLegalLink(
+                      context,
+                      LegalLinks.communityGuidelinesUri,
+                    ),
                   ),
                 ],
               ),

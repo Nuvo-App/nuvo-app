@@ -7,6 +7,7 @@ import 'package:nuvo/core/widgets/nuvo_live_race_card.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/screenshot.dart';
 import 'package:nuvo/core/widgets/nuvo_error_state.dart';
 import 'package:nuvo/core/widgets/nuvo_icons.dart';
 import 'package:nuvo/core/widgets/pressable_scale.dart';
@@ -142,8 +143,10 @@ class _FakeCrewRepo implements CrewRepository {
     this.searchResults = const [],
     this.searchThrows = false,
     this.members = const [],
+    this.requests = const CrewRequestPage(),
   });
 
+  final CrewRequestPage requests;
   final bool throws;
   final List<CrewSearchResult> searchResults;
   final bool searchThrows;
@@ -159,7 +162,7 @@ class _FakeCrewRepo implements CrewRepository {
   }
 
   @override
-  Future<CrewRequestPage> getRequestPage() async => const CrewRequestPage();
+  Future<CrewRequestPage> getRequestPage() async => requests;
 
   @override
   Future<List<CrewSearchResult>> search(String query) async {
@@ -246,7 +249,12 @@ Future<void> _pump(WidgetTester t, Size size, double inset, Brightness b,
       raceRepositoryProvider.overrideWithValue(
           _PassRaceRepo(races: PresentationDemoData.races('user-1'))),
       crewRepositoryProvider.overrideWithValue(
-          _FakeCrewRepo(members: PresentationDemoData.crewMembers())),
+          _FakeCrewRepo(
+          members: PresentationDemoData.crewMembers(),
+          requests: lens == 2
+              ? PresentationDemoData.crewRequestPage()
+              : const CrewRequestPage(),
+        )),
       crewActivityRepositoryProvider.overrideWithValue(
           _FeedRepo(PresentationDemoData.crewActivity('user-1'))),
       notificationRepositoryProvider.overrideWithValue(_FakeNotifRepo()),
@@ -288,16 +296,20 @@ bool _isName(String t) =>
 bool _isStandingsLine(String t) => t.contains('  ·  ');
 
 void main() {
+  setUpAll(loadShotFonts);
   for (final size in _sizes) {
     for (final inset in [0.0, 34.0]) {
       for (final b in Brightness.values) {
         for (final scale in [1.0, 1.3]) {
-          for (final lens in [0, 1]) {
+          for (final lens in [0, 1, 2]) {
             final name = '${size.width.toInt()}x${size.height.toInt()} '
-                'inset$inset ${b.name} x$scale ${lens == 0 ? "people" : "activity"}';
+                'inset$inset ${b.name} x$scale ${const ["people", "activity", "requests"][lens]}';
             testWidgets('crew at a glance $name', (t) async {
               await _pump(t, size, inset, b, scale, lens);
               expect(t.takeException(), isNull);
+              if (b == Brightness.light && scale == 1.0 && inset == 34) {
+                await shot(t, 'friends_${const ["people", "activity", "requests"][lens]}_${size.width.toInt()}x${size.height.toInt()}');
+              }
               final navTop = t.getTopLeft(find.byType(NuvoBottomNav)).dy;
               final fade = find.byKey(const ValueKey('nuvo-bottom-fade'));
               expect(fade, findsOneWidget);

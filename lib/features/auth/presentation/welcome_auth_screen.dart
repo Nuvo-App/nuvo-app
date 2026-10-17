@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -11,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
+import '../../../core/widgets/nuvo_legal_footer.dart';
 import 'auth_controller.dart';
 import 'email_start_screen.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
@@ -64,13 +64,6 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
             : AuthIntent.signIn;
       }
     });
-  }
-
-  Future<void> _openLegalUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override
@@ -316,7 +309,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                     ),
                   ),
                   SizedBox(height: compact ? 14 : 22),
-                  _LegalCopy(onOpen: _openLegalUrl),
+                  const NuvoLegalFooter(),
                 ],
               ),
             ),
@@ -437,60 +430,6 @@ class _GoogleButton extends StatelessWidget {
     error: error,
     onPressed: onPressed,
   );
-}
-
-class _LegalCopy extends StatelessWidget {
-  const _LegalCopy({required this.onOpen});
-  final Future<void> Function(String) onOpen;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Text(
-        'By continuing, you agree to our',
-        textAlign: TextAlign.center,
-        style: AppTextStyles.bodySmall.copyWith(
-          color: context.themeColors.inkMuted,
-          fontSize: 12,
-        ),
-      ),
-      Wrap(
-        alignment: WrapAlignment.center,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          _link(context, 'Terms', 'https://getnuvo.net/terms'),
-          Text(
-            ' & ',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: context.themeColors.inkMuted,
-              fontSize: 12,
-            ),
-          ),
-          _link(context, 'Privacy Policy', 'https://getnuvo.net/privacy'),
-        ],
-      ),
-    ],
-  );
-
-  // Inline text links — GestureDetector, never TextButton: the app-level
-  // textButtonTheme paints a filled, bordered, shadowed chip behind every
-  // TextButton, which is what made the legal links render as mini pills.
-  Widget _link(BuildContext context, String label, String url) =>
-      GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => onOpen(url),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
-          child: Text(
-            label,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: context.themeColors.accent,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      );
 }
 
 /// The official Google "G" mark, drawn from the published vector geometry

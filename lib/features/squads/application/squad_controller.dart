@@ -409,6 +409,28 @@ class SquadController extends StateNotifier<SquadState> {
     return added;
   }
 
+  /// Owner only: delete the crew for everyone; the list drops it at once.
+  Future<void> deleteCrew(String id) async {
+    await _repo.deleteCrew(id);
+    final account = _account();
+    _invalidateList();
+    _invalidateDetail(id);
+    _detailLoadedAt.remove(id);
+    final current = state.groups;
+    final next = current == null
+        ? null
+        : [
+            for (final g in current)
+              if (g.id != id) g,
+          ];
+    final details = {...state.details}..remove(id);
+    if (mounted) state = state.copyWith(groups: next, details: details);
+    if (account != null && next != null) {
+      unawaited(_store.write(account, _listDomain, _listJson(next)));
+    }
+    unawaited(load(force: true));
+  }
+
   /// Owner / admin: rename the crew; the list and the open crew update at once.
   Future<void> rename(String id, String name) async {
     await _repo.rename(id, name);

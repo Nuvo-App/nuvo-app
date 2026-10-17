@@ -11,8 +11,10 @@ import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/screenshot.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
+import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -78,6 +80,8 @@ class _StubProgressionApi extends ProgressionApi {
         'progress': 0.22,
         'xpToNext': 140,
         'lastSeenLevel': 8,
+        'achievementsEarned': 4,
+        'achievementsTotal': 18,
         'nextUnlock': {
           'unlockId': 'bdg-double-digits',
           'level': 10,
@@ -181,6 +185,7 @@ void expectFoldRespected(
 }
 
 void main() {
+  setUpAll(loadShotFonts);
   const sizes = [
     Size(320, 568),
     Size(375, 667),
@@ -235,6 +240,9 @@ void main() {
                     (ref) async => const {'2026-01-05': 2, '2026-01-06': 1},
                   ),
                   secureTokenStoreProvider.overrideWithValue(_FakeStore()),
+                  // In-memory cache: the file-backed one never settles under
+                  // fake async, which left the level plate on its skeleton.
+                  cacheStoreProvider.overrideWithValue(CacheStore.memory()),
                 ],
                 child: MaterialApp.router(
                   routerConfig: router,
@@ -246,6 +254,9 @@ void main() {
             );
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
+            if (!dark && scale == 1.0 && inset == 34) {
+              await shot(tester, 'profile_${size.width.toInt()}x${size.height.toInt()}');
+            }
 
             final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
             final hasFade =

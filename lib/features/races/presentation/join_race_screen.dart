@@ -80,8 +80,11 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
             ListView(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
-                    NuvoBackButton(
-                      onPressed: () => safePopOrGo(context, '/compete'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: NuvoBackButton(
+                        onPressed: () => safePopOrGo(context, '/compete'),
+                      ),
                     ),
                     const SizedBox(height: 18),
                     Text(
