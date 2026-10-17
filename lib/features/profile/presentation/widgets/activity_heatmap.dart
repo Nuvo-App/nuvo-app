@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_shadows.dart';
 import '../../application/activity_controller.dart';
 
 /// Shade for a day's verified-proof count: 0 = none, 1..4 = light..dark.
@@ -127,7 +128,8 @@ class ActivityHeatmap extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.panelLight,
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: c.border.withValues(alpha: 0.35)),
+              border: Border.all(color: c.border, width: 2),
+              boxShadow: AppShadows.hardOffset(c.inkShadow),
             ),
             child: LayoutBuilder(
               builder: (context, box) {

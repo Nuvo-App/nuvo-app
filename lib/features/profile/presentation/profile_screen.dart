@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_entrance.dart';
@@ -514,14 +515,15 @@ class _LevelTrack extends ConsumerWidget {
         onTap: () => _showLevelExplainer(context, p),
         scale: 0.99,
         haptic: false,
-        // A soft ice plate stages the progression — one quiet support
-        // plane, not a card: no navy edge, no hard offset.
+        // The main progression element wears the app's signature physical
+        // edge: ink outline + hard-offset plate, like buttons and cards.
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           decoration: BoxDecoration(
             color: c.panelLight,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: c.border.withValues(alpha: 0.35)),
+            border: Border.all(color: c.border, width: 2),
+            boxShadow: AppShadows.hardOffset(c.inkShadow),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1148,7 +1150,8 @@ class _AchievementsRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: Border.all(color: c.divider, width: 1),
+            border: Border.all(color: c.border, width: 2),
+            boxShadow: AppShadows.hardOffset(c.inkShadow),
           ),
           child: Row(
             children: [

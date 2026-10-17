@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_responsive.dart';
@@ -468,6 +469,9 @@ class _CappedRaceList extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.panelLight,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        // The main card on Compete: ink outline + hard-offset plate.
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(c.inkShadow),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
