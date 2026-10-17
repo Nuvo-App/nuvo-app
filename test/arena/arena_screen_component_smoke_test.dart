@@ -49,7 +49,7 @@ void main() {
     expect(find.text('Arena'), findsWidgets);
     expect(find.text('Your next move'), findsOneWidget);
     expect(find.text('First to 100 Pushups'), findsOneWidget);
-    expect(find.text('Alex R.'), findsOneWidget); // top 3 on the first screen
+    expect(find.text('Leaderboard'), findsOneWidget);
     expect(find.text('Submit proof'), findsWidgets);
     expect(find.text('Start'), findsNothing);
     // Quick actions: one text primary + two icon-only secondaries in a row.

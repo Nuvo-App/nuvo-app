@@ -146,10 +146,10 @@ void main() {
     );
     expect(
       navBox.size.height,
-      lessThan(90),
+      lessThan(100),
       reason:
           'compact dock: total footprint stays under ~100px on modern '
-          'iPhones (bar 52 + inset 34)',
+          'iPhones (dock 58 + inset 34)',
     );
 
     // The shared scroll contract reserves the dock, the breathing strip above its
@@ -168,7 +168,7 @@ void main() {
     );
     expect(
       clearance,
-      lessThan(110),
+      lessThan(115),
       reason:
           'screens reserve the full obstruction + a small gap, not a '
           'shelf',

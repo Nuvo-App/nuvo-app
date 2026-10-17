@@ -1,5 +1,5 @@
 // Structural composition coverage for Arena's "one product module" fix:
-// hero card → dots → action row → top 3 standings should read as one continuous
+// hero card → dots → action row → Leaderboard should read as one continuous
 // flow with tight, deliberate gaps — not a hero card floating detached from
 // its own controls. This guards the actual regression (a large, unbounded
 // gap between the card and the dots caused by an oversized height estimate)
@@ -28,17 +28,12 @@ Future<void> _pumpArena(WidgetTester tester, Size size) async {
       ShellRoute(
         builder: (c, s, child) => MainShell(child: child),
         routes: [
-          GoRoute(
-            path: '/arena',
-            builder: (c, s) => const ArenaScreen(preview: true),
-          ),
+          GoRoute(path: '/arena', builder: (c, s) => const ArenaScreen(preview: true)),
         ],
       ),
     ],
   );
-  await tester.pumpWidget(
-    ProviderScope(child: MaterialApp.router(routerConfig: router)),
-  );
+  await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
   await tester.pumpAndSettle();
 }
 
@@ -79,23 +74,23 @@ void main() {
     );
 
     testWidgets(
-      '${entry.key}: gap between the action row and the top 3 is tight',
+      '${entry.key}: gap between the action row and Leaderboard is tight',
       (tester) async {
         await _pumpArena(tester, entry.value);
 
         final submitProofBottom = tester
-            .getBottomLeft(
-              find.widgetWithText(NuvoPrimaryButton, 'Submit proof'),
-            )
+            .getBottomLeft(find.widgetWithText(NuvoPrimaryButton, 'Submit proof'))
             .dy;
-        final leaderboardTop = tester.getTopLeft(find.text('You')).dy;
+        final leaderboardTop = tester.getTopLeft(find.text('Leaderboard')).dy;
         final gap = leaderboardTop - submitProofBottom;
 
-        // The top 3 sit right under the actions (the first screen is
-        // header -> hero -> actions -> top 3); never glued, never loose.
+        // The leaderboard is intentionally separated from the action row —
+        // the standings section centers itself in the leftover lower
+        // region. It must never be glued to the buttons (< 20px) nor
+        // drifting arbitrarily far below them.
         expect(
           gap,
-          inInclusiveRange(4.0, 90.0),
+          inInclusiveRange(20.0, 320.0),
           reason:
               '${entry.key}: the leaderboard breathes below the actions — '
               'not glued, not floating loose (measured gap: $gap)',

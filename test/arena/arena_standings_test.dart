@@ -1,12 +1,14 @@
-// Arena standings adapt to field size — the first screen shows the top 3
-// (1-3 places; empty seats simply don't render), ranks 4+ are folded behind
-// the curtain until it is unfolded — and the last row must scroll fully clear
-// of the floating dock.
+// Arena standings adapt to field size — every non-empty board uses the
+// canonical podium (1–3 places, empty seats simply don't render), ranks 4+
+// scroll as rows — and the page's last row must scroll fully clear of the
+// floating dock.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nuvo/core/theme/app_colors.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
+import 'package:nuvo/core/widgets/nuvo_podium.dart';
 import 'package:nuvo/features/arena/data/arena_models.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
@@ -74,8 +76,21 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+/// The removed ice-blue stage geometry (step slabs + floor bands) that used
+/// to sit under solo and head-to-head standings — `panelLight` appears
+/// nowhere else in the Arena tree, so this finder is the stage itself and
+/// must stay empty.
+Finder _iceStagePieces() => find.byWidgetPredicate(
+  (w) =>
+      w is Container &&
+      w.decoration is BoxDecoration &&
+      (w.decoration! as BoxDecoration).color == NuvoColors.panelLight,
+);
+
 void main() {
-  testWidgets('one racer: podium composition, no generic list', (tester) async {
+  testWidgets('one racer: podium composition, no generic list', (
+    tester,
+  ) async {
     await _pump(
       tester,
       _snapshot(const [
@@ -88,14 +103,15 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    expect(find.byType(NuvoPodium), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('39 / 50'), findsOneWidget);
-    expect(find.text('See full leaderboard'), findsNothing);
+    // No stage geometry: the standing is badge + avatar + name + score on
+    // the page — no slab, no floor band, nothing behind it.
+    expect(_iceStagePieces(), findsNothing);
   });
 
-  testWidgets('two racers: podium composition preserves ranking', (
-    tester,
-  ) async {
+  testWidgets('two racers: podium composition preserves ranking', (tester) async {
     await _pump(
       tester,
       _snapshot(const [
@@ -109,16 +125,17 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Noah W.'), findsOneWidget);
+    expect(find.byType(NuvoPodium), findsOneWidget);
+    // Podium slots render first names; the viewer renders as 'You'.
+    expect(find.text('Noah'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('41 / 50'), findsOneWidget);
     expect(find.text('39 / 50'), findsOneWidget);
-    expect(find.text('See full leaderboard'), findsNothing);
+    // Podium stands clean too — no slabs, no shared floor band.
+    expect(_iceStagePieces(), findsNothing);
   });
 
-  testWidgets('four racers: top 3 shown, rank 4 behind the curtain', (
-    tester,
-  ) async {
+  testWidgets('three-plus racers: full podium plus rank rows', (tester) async {
     await _pump(
       tester,
       _snapshot(const [
@@ -134,11 +151,8 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Noah W.'), findsOneWidget);
-    expect(find.text('Lena O.'), findsOneWidget);
-    expect(find.text('Theo M.'), findsNothing);
-    await tester.tap(find.text('See full leaderboard'));
-    await tester.pumpAndSettle();
+    expect(find.byType(NuvoPodium), findsOneWidget);
+    // Rank 4 renders as an ordinary scroll row, not a podium slot.
     expect(find.text('Theo M.'), findsOneWidget);
     expect(find.text('22 / 50'), findsOneWidget);
   });
@@ -180,7 +194,7 @@ void main() {
     expect(find.byType(PageView), findsOneWidget);
   });
 
-  group('first viewport ends on the top 3', () {
+  group('first viewport ends on the leaderboard', () {
     const racerCounts = <String, List<ArenaMiniLeaderboardRow>>{
       '1 racer': [
         ArenaMiniLeaderboardRow(
@@ -197,7 +211,7 @@ void main() {
           isCurrentUser: true,
         ),
       ],
-      '4 racers': [
+      '3+ racers': [
         ArenaMiniLeaderboardRow(label: 'Noah W.', value: '41 / 50'),
         ArenaMiniLeaderboardRow(
           label: 'You',
@@ -217,27 +231,29 @@ void main() {
 
     for (final w in widths.entries) {
       for (final r in racerCounts.entries) {
-        testWidgets('${w.key} / ${r.key}: top 3 above the dock, nothing '
-            'scrolls while folded', (tester) async {
+        testWidgets('${w.key} / ${r.key}: standings start at or below the '
+            'dock, then scroll fully clear', (tester) async {
           await _pump(tester, _snapshot(r.value), size: w.value);
           expect(tester.takeException(), isNull);
 
           final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
           expect(find.text('Recent activity'), findsNothing);
-          final last = r.value.length >= 3 ? 'Lena O.' : r.value.last.label;
+          final lbLabel = find.text('Leaderboard');
+          if (lbLabel.evaluate().isNotEmpty) {
+            expect(
+              tester.getTopLeft(lbLabel).dy,
+              greaterThanOrEqualTo(navTop),
+              reason: '${w.key}/${r.key}: standings stay below the fold',
+            );
+          }
+
+          await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+          await tester.pumpAndSettle();
+          expect(find.text('Leaderboard'), findsOneWidget);
           expect(
-            tester.getBottomLeft(find.text(last)).dy,
-            lessThanOrEqualTo(navTop),
-            reason: '${w.key}/${r.key}: top 3 fully above the dock',
-          );
-          final scrollable = tester.state<ScrollableState>(
-            find.byType(Scrollable).first,
-          );
-          expect(scrollable.position.maxScrollExtent, 0);
-          expect(find.text('Theo M.'), findsNothing);
-          expect(
-            find.text('See full leaderboard'),
-            r.value.length >= 4 ? findsOneWidget : findsNothing,
+            tester.getTopLeft(find.text('Leaderboard')).dy,
+            lessThan(navTop),
+            reason: '${w.key}/${r.key}: standings reveal on scroll',
           );
         });
       }
@@ -247,19 +263,14 @@ void main() {
   testWidgets('the last standings row scrolls fully above the dock', (
     tester,
   ) async {
-    await _pump(
-      tester,
-      _snapshot(const [
-        ArenaMiniLeaderboardRow(label: 'Noah W.', value: '41 / 50'),
-        ArenaMiniLeaderboardRow(label: 'Lena O.', value: '30 / 50'),
-        ArenaMiniLeaderboardRow(label: 'Theo M.', value: '22 / 50'),
-        ArenaMiniLeaderboardRow(label: 'Zed Q.', value: '5 / 50'),
-      ]),
-    );
+    await _pump(tester, _snapshot(const [
+      ArenaMiniLeaderboardRow(label: 'Noah W.', value: '41 / 50'),
+      ArenaMiniLeaderboardRow(label: 'Lena O.', value: '30 / 50'),
+      ArenaMiniLeaderboardRow(label: 'Theo M.', value: '22 / 50'),
+      ArenaMiniLeaderboardRow(label: 'Zed Q.', value: '5 / 50'),
+    ]));
 
     final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-    await tester.tap(find.text('See full leaderboard'));
-    await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(
@@ -269,19 +280,17 @@ void main() {
     );
   });
 
+
   testWidgets('hero stays inside its share of the usable viewport', (
     tester,
   ) async {
-    await _pump(
-      tester,
-      _snapshot(const [
-        ArenaMiniLeaderboardRow(
-          label: 'You',
-          value: '39 / 50',
-          isCurrentUser: true,
-        ),
-      ]),
-    );
+    await _pump(tester, _snapshot(const [
+      ArenaMiniLeaderboardRow(
+        label: 'You',
+        value: '39 / 50',
+        isCurrentUser: true,
+      ),
+    ]));
 
     final card = tester.getSize(find.byType(PageView).first).height;
     final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
