@@ -20,6 +20,13 @@ class _Api extends ProgressionApi {
   bool fail = false;
 
   @override
+  Future<ProgressionFetch> getProgressionConditional(
+    String token, {
+    String? etag,
+  }) async =>
+      ProgressionFetch(data: await getProgression(token));
+
+  @override
   Future<NuvoProgression> getProgression(String token) {
     calls++;
     if (fail) return Future.error(Exception('boom'));

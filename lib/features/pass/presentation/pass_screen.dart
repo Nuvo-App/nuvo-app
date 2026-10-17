@@ -29,6 +29,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
+import '../application/member_pass_provider.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../crew/data/crew_api.dart'
     show ConnectOutcome, CrewConnectionStatus, CrewSearchResult;
@@ -51,12 +52,9 @@ class PassScreen extends ConsumerStatefulWidget {
 class _PassScreenState extends ConsumerState<PassScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
-  PassInfo? _passInfo;
   List<CrewSearchResult> _results = const [];
-  bool _loading = true;
   bool _searching = false;
   bool _searchOpen = false;
-  String? _error;
   String? _searchError;
 
   /// Crew lenses: 0 People · 1 Activity · 2 Races.
@@ -73,7 +71,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     // revalidation after the first frame (providers can't be touched
     // mid-lifecycle) so Racing Together/Right Now never sit stale.
     Future(() => ref.read(raceControllerProvider.notifier).revalidate());
-    _fetch();
+    Future.microtask(
+      () => ref.read(memberPassProvider.notifier).ensureLoaded(),
+    );
   }
 
   @override
@@ -83,50 +83,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     super.dispose();
   }
 
-  Future<void> _fetch() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      if (isPresentationDemoUser(ref.read(authControllerProvider).user)) {
-        if (mounted) {
-          setState(() {
-            _passInfo = presentationDemoPassInfo();
-            _loading = false;
-          });
-        }
-        return;
-      }
-      final pass = await ref
-          .read(authControllerProvider.notifier)
-          .getMemberPass();
-      // Crew + requests are owned by CrewController (docs/agents/18) — it
-      // auto-loads on auth and revalidates on tab focus (MainShell); this
-      // screen only reads it via ref.watch in build().
-      if (mounted) {
-        setState(() {
-          _passInfo = pass;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      // A demo session must never surface a network error — if the session
-      // resolved as presentation mode mid-flight, fixtures win.
-      if (isPresentationDemoUser(ref.read(authControllerProvider).user)) {
-        setState(() {
-          _passInfo = presentationDemoPassInfo();
-          _loading = false;
-        });
-        return;
-      }
-      setState(() {
-        _error = 'Could not load your crew.';
-        _loading = false;
-      });
-    }
-  }
+  /// The member pass is owned by [memberPassProvider] (loaded once per
+  /// account, cached on disk); this is the explicit refresh.
+  Future<void> _fetch() => ref.read(memberPassProvider.notifier).refresh();
 
   /// Pull-to-refresh revalidates everything the page reads — the member pass
   /// plus the canonical crew + notification controllers — not just the pass.
@@ -143,8 +102,8 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     return UserProfile(
       name: user?.fullName ?? user?.email ?? '',
       username: user?.username ?? '',
-      memberId: _passInfo?.memberId ?? '-',
-      passSlug: _passInfo?.passSlug,
+      memberId: ref.read(memberPassProvider).info?.memberId ?? '-',
+      passSlug: ref.read(memberPassProvider).info?.passSlug,
     );
   }
 
@@ -493,6 +452,18 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   Widget build(BuildContext context) {
     final authUser = ref.watch(authControllerProvider).user;
     final user = authUser == null ? null : presentedUser(authUser);
+    final pass = ref.watch(memberPassProvider);
+    final passLoading = pass.loading && pass.info == null;
+    if (passLoading) {
+      // The provider is rebuilt on an account change; (re)start its one load.
+      // ensureLoaded is idempotent, so repeat builds don't refetch.
+      Future.microtask(() {
+        if (mounted) ref.read(memberPassProvider.notifier).ensureLoaded();
+      });
+    }
+    final passError = pass.failed && pass.info == null
+        ? 'Could not load your crew.'
+        : null;
     final profile = _buildProfile(user);
     final crewState = ref.watch(crewControllerProvider);
     final crew = crewState.members;
@@ -684,17 +655,17 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               const SizedBox(height: 14),
 
               // ── Loading ──────────────────────────────────────────────────
-              if (_loading)
+              if (passLoading)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                   child: _CrewSkeleton(),
                 )
               // ── Error ────────────────────────────────────────────────────
-              else if (_error != null)
+              else if (passError != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                   child: NuvoErrorState(
-                    message: _error!,
+                    message: passError,
                     onRetry: _refreshAll,
                   ),
                 )

@@ -94,9 +94,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     // between, or it clips its own content. When even compact won't fit
     // the page scrolls; the card never renders shorter than its content.
     final media = MediaQuery.of(context);
-    final dockTop = media.size.height -
-        NuvoBottomNav.navDockHeight -
-        media.padding.bottom;
+    final dockTop =
+        media.size.height - NuvoBottomNav.navDockHeight - media.padding.bottom;
     final usableViewport =
         dockTop - media.padding.top - 10; // breathing unit above the dock
     final heroBase = switch (usableViewport) {
@@ -119,11 +118,18 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     // header (~110 — Arena + greeting sliver above the list), then in the
     // list: top pad + label + hero gap + [dots] + actions + section beat +
     // leaderboard label + its gap.
-    final fixedElsewhere = 110.0 + 6 + 20 + 8 +
+    final fixedElsewhere =
+        110.0 +
+        6 +
+        20 +
+        8 +
         (boards.length > 1 ? 20 : 0) +
-        8 + 64 + 20 + 20 + 10;
-    final allowance =
-        usableViewport - fixedElsewhere - leaderboardReserve;
+        8 +
+        64 +
+        20 +
+        20 +
+        10;
+    final allowance = usableViewport - fixedElsewhere - leaderboardReserve;
     // Content floor: the shared PageView slot must fit the WORST board in
     // the carousel — a two-line title is ~32px taller than a one-liner and
     // the slot can't grow per page. Measured with TextPainter at the
@@ -135,8 +141,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     // mode flip when compact content pushes the slot past 300.
     final cardTextWidth =
         media.size.width - NuvoSpacing.pageHorizontal * 2 - 12 - 40;
-    var heroHeight =
-        allowance >= 324 ? math.min(heroBase, allowance) : 296.0;
+    var heroHeight = allowance >= 324 ? math.min(heroBase, allowance) : 296.0;
     for (var pass = 0; pass < 2; pass++) {
       var need = 0.0;
       for (final board in boards) {
@@ -567,7 +572,12 @@ class _NextMoveHero extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(20, tall ? 12 : 10, 20, tall ? 8 : 4),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                tall ? 12 : 10,
+                20,
+                tall ? 8 : 4,
+              ),
               // Anchored to the top with a fixed gap before the participant
               // context — not spaceBetween, which used to stretch to fill
               // whatever height the card happened to get and left a large
@@ -664,8 +674,9 @@ class _NextMoveHero extends StatelessWidget {
                         rivalLabel: lane?.rivalLabel,
                         goalLabel: lane?.goalLabel,
                         hasGoal: lane?.hasGoal ?? true,
-                        progressColor:
-                            (lane?.leading ?? false) ? _arenaGreen : _arenaBlue,
+                        progressColor: (lane?.leading ?? false)
+                            ? _arenaGreen
+                            : _arenaBlue,
                         completedColor: _arenaGreen,
                       ),
                       // Stakes — what the next proof changes, straight from
@@ -678,10 +689,9 @@ class _NextMoveHero extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.labelMedium.copyWith(
-                            color:
-                                (lane?.leading ?? false)
-                                    ? _arenaGreen
-                                    : _arenaBlue,
+                            color: (lane?.leading ?? false)
+                                ? _arenaGreen
+                                : _arenaBlue,
                             fontWeight: FontWeight.w700,
                             fontSize: 13.5,
                           ),
@@ -1095,7 +1105,9 @@ class _ActivityStream extends StatelessWidget {
   Widget build(BuildContext context) => items.isEmpty
       ? Text(
           'No updates yet. Your crew activity will appear here.',
-          style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.themeColors.inkSubtle,
+          ),
         )
       : Column(
           children: [
@@ -1128,13 +1140,17 @@ class _ActivityRow extends StatelessWidget {
             item.text,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.ink),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.themeColors.ink,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         Text(
           item.timeLabel,
-          style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle),
+          style: AppTextStyles.labelSmall.copyWith(
+            color: context.themeColors.inkSubtle,
+          ),
         ),
       ],
     ),
@@ -1181,7 +1197,9 @@ class _LoadingState extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             'Loading your arena',
-            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.themeColors.inkSubtle,
+            ),
           ),
         ],
       ),
@@ -1203,7 +1221,9 @@ class _ErrorState extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkSubtle),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.themeColors.inkSubtle,
+            ),
           ),
           const SizedBox(height: 16),
           _ArenaButton(
@@ -1400,10 +1420,10 @@ double _heroContentHeight(
   final rankExtent = board.myRank == null
       ? 0.0
       : 10.0 +
-          measure(
-            raceOrdinal(board.myRank!),
-            AppTextStyles.placementLabel(size: 15),
-          );
+            measure(
+              raceOrdinal(board.myRank!),
+              AppTextStyles.placementLabel(size: 15),
+            );
   final title = measure(
     board.title,
     AppTextStyles.headlineMedium.copyWith(
@@ -1415,10 +1435,7 @@ double _heroContentHeight(
   );
   final progress = measure(
     _progressValue(board.progressLabel, pct),
-    AppTextStyles.displayMedium.copyWith(
-      fontSize: tall ? 66 : 56,
-      height: .85,
-    ),
+    AppTextStyles.displayMedium.copyWith(fontSize: tall ? 66 : 56, height: .85),
   );
   final suffix = measure(
     _progressSuffix(board.progressLabel),
@@ -1430,20 +1447,19 @@ double _heroContentHeight(
   // the border lays out inside the child's bounds). The hero's curved
   // course with its caption band is 60 tall.
   const laneHeight = 60.0;
-  final hasStakes =
-      board.chaseCopy != null && board.chaseCopy!.isNotEmpty;
+  final hasStakes = board.chaseCopy != null && board.chaseCopy!.isNotEmpty;
   // Measured, not assumed — labelMedium's line-height multiplier makes the
   // stakes line ~19-20px at 13.5pt, and the racer row is the taller of the
   // 26px avatar stack and its label.
   final stakes = hasStakes
       ? 4.0 +
-          measure(
-            board.chaseCopy!,
-            AppTextStyles.labelMedium.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 13.5,
-            ),
-          )
+            measure(
+              board.chaseCopy!,
+              AppTextStyles.labelMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+              ),
+            )
       : 0.0;
   final racerRow = math.max(
     26.0,
@@ -1470,41 +1486,40 @@ double _heroContentHeight(
 /// Podium color for the hero's rank numeral — gold on the win, ink
 /// otherwise. Quiet like [RacePlacement], not a badge.
 Color _arenaPlacement(int rank, NuvoThemeColors c) => switch (rank) {
-      1 => NuvoColors.gold,
-      2 => NuvoColors.position2,
-      3 => NuvoColors.position3,
-      _ => c.inkSubtle,
-    };
+  1 => NuvoColors.gold,
+  2 => NuvoColors.position2,
+  3 => NuvoColors.position3,
+  _ => c.inkSubtle,
+};
 
 /// The hero's course data — the canonical fractions + captions that ride
 /// the curved race path. With the authoritative [race] loaded, marks come
 /// from the shared canonical geometry (goal lane vs relative-competition
 /// lane for lower-wins/best-attempt). Without it, "v / t" leaderboard
 /// values still give an honest goal course. Null → the path draws bare.
-({double? viewerFraction, double? rivalFraction, String? viewerLabel,
-    String? rivalLabel, String? goalLabel, bool hasGoal,
-    bool leading})? _heroLane(
-  ArenaBoard board,
-  Race? race,
-  String? viewerId,
-) {
+({
+  double? viewerFraction,
+  double? rivalFraction,
+  String? viewerLabel,
+  String? rivalLabel,
+  String? goalLabel,
+  bool hasGoal,
+  bool leading,
+})?
+_heroLane(ArenaBoard board, Race? race, String? viewerId) {
   final leading = board.myRank == 1;
   if (race != null) {
     final geo = raceLaneGeometry(race, viewerId);
     final rival = raceNearestRival(race, viewerId);
     final rivalMark = rival == null
         ? null
-        : geo.rivals
-            .where((r) => r.racer.userId == rival.userId)
-            .firstOrNull;
+        : geo.rivals.where((r) => r.racer.userId == rival.userId).firstOrNull;
     if (geo.viewer == null && rivalMark == null) return null;
     final me = viewerId == null ? null : race.participantFor(viewerId);
     return (
       viewerFraction: geo.viewer,
       rivalFraction: rivalMark?.fraction,
-      viewerLabel: geo.viewer != null
-          ? 'You ${me?.progressValue ?? 0}'
-          : null,
+      viewerLabel: geo.viewer != null ? 'You ${me?.progressValue ?? 0}' : null,
       rivalLabel: rivalMark != null
           ? '${_firstOf(rival!.displayName)} ${rival.progressValue}'
           : null,
@@ -1518,10 +1533,10 @@ Color _arenaPlacement(int rank, NuvoThemeColors c) => switch (rank) {
 
   // Fallback lane — parse the board's own "v / t" strings so demo and
   // unloaded boards still draw marks instead of an anonymous path.
-  final targetMatch =
-      RegExp(r'/\s*(\d+)').firstMatch(board.progressLabel);
-  final target =
-      targetMatch == null ? null : int.tryParse(targetMatch.group(1)!);
+  final targetMatch = RegExp(r'/\s*(\d+)').firstMatch(board.progressLabel);
+  final target = targetMatch == null
+      ? null
+      : int.tryParse(targetMatch.group(1)!);
   if (target == null || target <= 0) return null;
   (String label, int value, bool isMe)? rivalRow;
   (String label, int value, bool isMe)? viewerRow;

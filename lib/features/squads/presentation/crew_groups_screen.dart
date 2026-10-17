@@ -17,6 +17,7 @@ import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart' show ApiException;
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/presentation/race_controller.dart';
+import '../application/squad_controller.dart';
 import '../data/squad_api.dart';
 
 String _messageFor(Object e) =>
@@ -54,28 +55,19 @@ class CrewGroupsScreen extends ConsumerStatefulWidget {
 }
 
 class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
-  List<CrewGroup>? _groups;
-  String? _error;
-
   @override
   void initState() {
     super.initState();
-    _load();
+    // Deferred: a provider may not be modified while the tree is building.
+    Future(() {
+      if (!mounted) return;
+      final c = ref.read(squadControllerProvider.notifier);
+      c.load();
+      c.revalidate();
+    });
   }
 
-  Future<void> _load() async {
-    try {
-      final groups = await ref.read(squadRepositoryProvider).list();
-      if (mounted) {
-        setState(() {
-          _groups = groups;
-          _error = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = _messageFor(e));
-    }
-  }
+  Future<void> _load() => ref.read(squadControllerProvider.notifier).refresh();
 
   Future<void> _start() async {
     final group = await showModalBottomSheet<CrewGroup>(
@@ -85,7 +77,6 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
       builder: (_) => const _CrewInputSheet(mode: _SheetMode.create),
     );
     if (group == null || !mounted) return;
-    await _load();
     if (mounted) context.push('/crews/${group.id}');
   }
 
@@ -99,15 +90,16 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
     if (joined != true || !mounted) return;
     // Joining pulls me into the crew's running races — refresh race lists too.
     ref.read(raceControllerProvider.notifier).loadRaces(force: true);
-    await _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final groups = _groups;
+    final squads = ref.watch(squadControllerProvider);
+    final groups = squads.groups;
+    final error = squads.error;
     final Widget body;
-    if (groups == null && _error != null) {
-      body = NuvoErrorState(message: _error!, onRetry: _load);
+    if (groups == null && error != null) {
+      body = NuvoErrorState(message: error, onRetry: _load);
     } else if (groups == null) {
       body = const Center(child: NuvoLoadingIndicator());
     } else if (groups.isEmpty) {
@@ -265,13 +257,13 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
       _busy = true;
       _error = null;
     });
-    final repo = ref.read(squadRepositoryProvider);
+    final squads = ref.read(squadControllerProvider.notifier);
     try {
       if (_isCreate) {
-        final group = await repo.create(text);
+        final group = await squads.create(text);
         if (mounted) Navigator.of(context).pop(group);
       } else {
-        await repo.join(text);
+        await squads.join(text);
         if (mounted) Navigator.of(context).pop(true);
       }
     } catch (e) {
@@ -355,34 +347,25 @@ class CrewGroupDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
-  CrewGroupDetail? _detail;
-  String? _error;
   String? _actionError;
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    Future(() {
+      if (!mounted) return;
+      final c = ref.read(squadControllerProvider.notifier);
+      c.loadDetail(widget.groupId);
+      c.revalidateDetail(widget.groupId);
+    });
   }
 
-  Future<void> _load() async {
-    try {
-      final detail =
-          await ref.read(squadRepositoryProvider).detail(widget.groupId);
-      if (mounted) {
-        setState(() {
-          _detail = detail;
-          _error = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = _messageFor(e));
-    }
-  }
+  Future<void> _load() =>
+      ref.read(squadControllerProvider.notifier).refreshDetail(widget.groupId);
 
   Future<void> _bringRace() async {
-    final detail = _detail;
+    final detail = ref.read(squadControllerProvider).details[widget.groupId];
     final me = ref.read(authControllerProvider).user;
     if (detail == null || me == null) return;
     final linked = detail.races.map((r) => r.id).toSet();
@@ -447,9 +430,10 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       _actionError = null;
     });
     try {
-      await ref.read(squadRepositoryProvider).addRace(widget.groupId, picked);
+      await ref
+          .read(squadControllerProvider.notifier)
+          .addRace(widget.groupId, picked);
       ref.read(raceControllerProvider.notifier).loadRaces(force: true);
-      await _load();
     } catch (e) {
       if (mounted) setState(() => _actionError = _messageFor(e));
     } finally {
@@ -466,7 +450,7 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
     );
     if (ok != true) return;
     try {
-      await ref.read(squadRepositoryProvider).leave(widget.groupId);
+      await ref.read(squadControllerProvider.notifier).leave(widget.groupId);
       if (mounted) _leave(context);
     } catch (e) {
       if (mounted) setState(() => _actionError = _messageFor(e));
@@ -475,14 +459,16 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final detail = _detail;
+    final squads = ref.watch(squadControllerProvider);
+    final detail = squads.details[widget.groupId];
+    final error = squads.detailErrors[widget.groupId];
     final c = context.themeColors;
 
     if (detail == null) {
       return NuvoPage(
         topBar: _topBar(context, 'Crew'),
-        child: _error != null
-            ? NuvoErrorState(message: _error!, onRetry: _load)
+        child: error != null
+            ? NuvoErrorState(message: error, onRetry: _load)
             : const Center(child: NuvoLoadingIndicator()),
       );
     }

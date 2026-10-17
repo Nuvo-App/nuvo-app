@@ -20,7 +20,9 @@ import '../../arena/presentation/arena_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../profile/application/progression_controller.dart';
+import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
+import '../../../core/network/conditional.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../ai/motion_v2/motion_v2_models.dart';
@@ -71,7 +73,79 @@ class RaceController extends StateNotifier<RaceState> {
     this.onMutated,
     this.isPresentationDemo = _neverPresentationDemo,
     this.presentationUserId = _emptyPresentationUserId,
+    this.cache,
+    this.accountId = _noAccountId,
   }) : super(const RaceState());
+
+  /// Disk snapshot store + signed-in user id (the cache account key). Both
+  /// optional: without them the controller behaves as a pure in-memory cache.
+  final CacheStore? cache;
+  final String? Function() accountId;
+  static String? _noAccountId() => null;
+  static const _cacheDomain = 'races';
+  static const _cacheMaxAge = Duration(days: 7);
+  static const _maxDetailEntries = 50;
+
+  /// ETag of the last 200 list response; null forces a full fetch.
+  String? _etag;
+  String? _activeAccount;
+
+  /// Per-race detail ETag + the Race it describes (so a 304 can be answered
+  /// without a body). Insertion-ordered; capped at [_maxDetailEntries].
+  final Map<String, ({String etag, Race race})> _detailEntries = {};
+
+  String? _cacheAccount() {
+    final id = accountId();
+    if (cache == null || id == null || !isValidCacheId(id)) return null;
+    if (isPresentationDemo()) return null;
+    return id;
+  }
+
+  /// Show the last on-disk race list immediately (as `refreshing`) and
+  /// restore its ETag. Never awaited before the first frame; discarded if a
+  /// sign-out happened meanwhile.
+  Future<void> hydrate() async {
+    final id = _cacheAccount();
+    if (id == null) return;
+    final generation = _generation;
+    final entry = await cache!.read(id, _cacheDomain, maxAge: _cacheMaxAge);
+    if (entry == null ||
+        !mounted ||
+        generation != _generation ||
+        state.hasData ||
+        accountId() != id) {
+      return;
+    }
+    final List<Race> races;
+    try {
+      races = [
+        for (final r in entry.data as List<dynamic>)
+          Race.fromJson(Map<String, dynamic>.from(r as Map)),
+      ];
+    } catch (_) {
+      return;
+    }
+    if (races.isEmpty) return;
+    _activeAccount = id;
+    _etag = entry.etag;
+    state = RaceState(races: races, refreshing: true);
+  }
+
+  /// A local patch made the list differ from the server's last 200: force a
+  /// full fetch next time and invalidate the (now stale) disk snapshot.
+  void _afterPatch() {
+    _etag = null;
+    _detailEntries.clear();
+    final id = _cacheAccount();
+    if (id != null) cache!.write(id, _cacheDomain, null);
+  }
+
+  /// Lazy staleness (C4): mark the list stale; fetch right away only if a
+  /// screen is watching, otherwise the next revalidate() refetches.
+  void markStale() {
+    _racesLoadedAt = null;
+    if (mounted && hasListeners) loadRaces(force: true);
+  }
 
   final RaceRepository _repo;
 
@@ -206,20 +280,47 @@ class RaceController extends StateNotifier<RaceState> {
 
   Future<void> _fetchRaces() async {
     final generation = _generation;
+    final account = _cacheAccount();
     if (mounted) {
       final haveData = state.hasData;
-      state = RaceState(
-        races: state.races,
-        loading: !haveData,
-        refreshing: haveData,
-      );
+      if (state.loading != !haveData ||
+          state.refreshing != haveData ||
+          state.error != null) {
+        state = RaceState(
+          races: state.races,
+          loading: !haveData,
+          refreshing: haveData,
+        );
+      }
     }
     try {
-      final races = isPresentationDemo()
-          ? PresentationDemoData.races(presentationUserId())
-          : await _repo.getRaces();
+      List<Race>? races;
+      Conditional<List<Race>>? fetched;
+      if (isPresentationDemo()) {
+        races = PresentationDemoData.races(presentationUserId());
+      } else {
+        fetched = await _repo.getRacesConditional(
+          etag: state.hasData ? _etag : null,
+        );
+        races = fetched.data;
+      }
       if (generation != _generation) return; // superseded by a sign-out
       _racesLoadedAt = DateTime.now();
+      if (races == null) {
+        // 304: nothing changed — keep state, just settle the flags. No
+        // sibling nudge: there is nothing new for Arena to discover.
+        _etag = fetched?.etag ?? _etag;
+        if (mounted &&
+            (state.refreshing || state.loading || state.error != null)) {
+          state = RaceState(races: state.races);
+        }
+        return;
+      }
+      _etag = fetched?.etag;
+      if (account != null && fetched?.raw != null) {
+        _activeAccount = account;
+        cache!.write(account, _cacheDomain, fetched!.raw, etag: _etag);
+      }
       if (mounted) {
         state = RaceState(races: races);
         // Arena is a derived view of the same races. A successful read can
@@ -324,6 +425,7 @@ class RaceController extends StateNotifier<RaceState> {
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
     return race;
@@ -369,6 +471,7 @@ class RaceController extends StateNotifier<RaceState> {
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
     return race;
@@ -384,11 +487,45 @@ class RaceController extends StateNotifier<RaceState> {
       if (fixture != null) return fixture;
       throw const ApiException(404, 'This race could not be found.');
     }
-    final race = await _repo.getRaceDetail(id);
+    final generation = _generation;
+    final known = isPresentationDemo() ? null : _detailEntries[id];
+    final Race race;
+    String? pendingEtag;
+    var remember = false;
+    if (isPresentationDemo()) {
+      race = await _repo.getRaceDetail(id);
+    } else {
+      final fetched = await _repo.getRaceDetailConditional(
+        id,
+        etag: known?.etag,
+      );
+      if (fetched.data != null) {
+        race = fetched.data!;
+      } else if (known != null) {
+        race = known.race; // 304
+      } else {
+        race = await _repo.getRaceDetail(id);
+      }
+      if (generation == _generation) {
+        pendingEtag =
+            fetched.etag ?? (fetched.data == null ? known?.etag : null);
+        remember = true;
+      }
+    }
     // The detail response is the freshest view of this race (participants,
     // progress, standings) — fold it into the canonical list so Compete /
     // Arena / Move see it without their own refetch.
     _upsertRace(race, silent: !syncArena);
+    if (remember) {
+      // After the upsert: a non-silent upsert clears all detail entries.
+      _detailEntries.remove(id);
+      if (pendingEtag != null) {
+        _detailEntries[id] = (etag: pendingEtag, race: race);
+        while (_detailEntries.length > _maxDetailEntries) {
+          _detailEntries.remove(_detailEntries.keys.first);
+        }
+      }
+    }
     return race;
   }
 
@@ -434,6 +571,11 @@ class RaceController extends StateNotifier<RaceState> {
 
   void clearRaces() {
     _racesLoadedAt = null;
+    _etag = null;
+    _detailEntries.clear();
+    final account = _activeAccount ?? _cacheAccount();
+    _activeAccount = null;
+    if (account != null) cache?.clearAccount(account);
     // Drop any in-flight load so the next sign-in starts a fresh request
     // instead of awaiting a future tied to the previous session (which could
     // be hung on a stalled socket and wedge the races tab until an app kill).
@@ -466,13 +608,11 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
-    final existing = state.races
-        .where((race) => race.id == raceId)
-        .firstOrNull;
+    final existing = state.races.where((race) => race.id == raceId).firstOrNull;
     // The list isn't always loaded (deep link → race detail → verify), so a
     // miss means fetch the format — never skip attempt binding.
-    final format = existing?.format ??
-        (await _repo.getRaceDetail(raceId)).format;
+    final format =
+        existing?.format ?? (await _repo.getRaceDetail(raceId)).format;
     if (raceFormatUsesAttempts(format)) {
       // Attempt races reject proofs with no open attempt ("Start an attempt
       // first"). Declare one; an already-open attempt binds this submission,
@@ -495,6 +635,7 @@ class RaceController extends StateNotifier<RaceState> {
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
     return race;
@@ -538,6 +679,7 @@ class RaceController extends StateNotifier<RaceState> {
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
     return race;
@@ -593,6 +735,7 @@ class RaceController extends StateNotifier<RaceState> {
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
     return race;
@@ -634,6 +777,7 @@ class RaceController extends StateNotifier<RaceState> {
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
     return race;
@@ -662,6 +806,7 @@ class RaceController extends StateNotifier<RaceState> {
         races: state.races.where((race) => race.id != id).toList(),
       );
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
   }
@@ -673,6 +818,7 @@ class RaceController extends StateNotifier<RaceState> {
         races: state.races.where((race) => race.id != id).toList(),
       );
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
   }
@@ -866,6 +1012,7 @@ class RaceController extends StateNotifier<RaceState> {
     );
     if (!silent) {
       _racesLoadedAt = DateTime.now();
+      _afterPatch();
       onMutated?.call();
     }
   }
@@ -1034,6 +1181,7 @@ class RaceController extends StateNotifier<RaceState> {
     if (!mounted) return;
     state = state.copyWith(races: [race, ...state.races]);
     _racesLoadedAt = DateTime.now();
+    _afterPatch();
     onMutated?.call();
     _presentationDeletionTimers[race.id] = Timer(
       const Duration(minutes: 10),
@@ -1048,6 +1196,7 @@ class RaceController extends StateNotifier<RaceState> {
       races: state.races.where((race) => race.id != id).toList(),
     );
     _racesLoadedAt = DateTime.now();
+    _afterPatch();
     onMutated?.call();
   }
 }
@@ -1071,6 +1220,8 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
       isPresentationDemo: () =>
           isPresentationDemoUser(ref.read(authControllerProvider).user),
       presentationUserId: () => ref.read(authControllerProvider).user?.id ?? '',
+      cache: ref.read(cacheStoreProvider),
+      accountId: () => ref.read(authControllerProvider).user?.id,
       // Any race write immediately revalidates the Arena snapshot (it is
       // derived from races) so a race created in the composer shows up in the
       // Arena without the user navigating there and back. Progression
@@ -1085,14 +1236,22 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
       // Deferred: kicking loadRaces inside the factory lets a synchronous
       // onMutated modify progressionController while this provider is still
       // initializing — Riverpod asserts on that in debug builds.
-      Future(() => controller.loadRaces(force: false));
+      Future(() async {
+        // Concurrent, never awaited: disk I/O must not delay the first fetch.
+        unawaited(controller.hydrate());
+        await controller.loadRaces(force: false);
+      });
     }
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (next.status == AuthStatus.unauthenticated) {
         controller.clearRaces();
       } else if (next.status == AuthStatus.authenticated &&
           prev?.status != AuthStatus.authenticated) {
-        controller.loadRaces(force: false);
+        () async {
+          // Concurrent, never awaited: disk I/O must not delay the first fetch.
+          unawaited(controller.hydrate());
+          await controller.loadRaces(force: false);
+        }();
       }
     });
     return controller;

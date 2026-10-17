@@ -191,7 +191,7 @@ class _FakeNotifRepo implements NotificationRepository {
   final bool throws;
 
   @override
-  Future<NotificationPage> list({String? cursor}) async {
+  Future<NotificationPage> list({String? cursor, String? etag}) async {
     if (throws) throw const ApiException(503, 'Service Unavailable');
     return const NotificationPage(items: [], unreadCount: 0);
   }

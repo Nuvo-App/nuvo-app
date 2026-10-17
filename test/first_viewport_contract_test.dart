@@ -60,6 +60,13 @@ class _FakeStore extends SecureTokenStore {
 
 class _StubProgressionApi extends ProgressionApi {
   @override
+  Future<ProgressionFetch> getProgressionConditional(
+    String token, {
+    String? etag,
+  }) async =>
+      ProgressionFetch(data: await getProgression(token));
+
+  @override
   Future<NuvoProgression> getProgression(String token) async =>
       NuvoProgression.fromJson(const {
         'level': 8,

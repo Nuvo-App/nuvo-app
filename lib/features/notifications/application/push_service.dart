@@ -11,6 +11,7 @@ import '../../arena/presentation/arena_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../profile/application/activity_controller.dart';
+import '../../social/data/crew_activity.dart';
 import '../../profile/application/progression_controller.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../social/application/deep_link_controller.dart';
@@ -172,13 +173,14 @@ class PushService {
         case PushDomain.notifications:
           safe(() => _ref.read(notificationControllerProvider.notifier).markStale());
         case PushDomain.races:
-          safe(() => unawaited(
-              _ref.read(raceControllerProvider.notifier).loadRaces(force: true)));
+          safe(() => _ref.read(raceControllerProvider.notifier).markStale());
         case PushDomain.arena:
           safe(() => _ref.read(arenaControllerProvider.notifier).markStale());
         case PushDomain.crew:
           safe(() => _ref.read(crewControllerProvider.notifier).markStale());
         case PushDomain.activity:
+          // The crew feed, and the profile heat map (a proof lands in both).
+          safe(() => _ref.read(crewActivityProvider.notifier).markStale());
           safe(() => _ref.invalidate(profileActivityProvider));
         case PushDomain.progression:
           safe(() => unawaited(

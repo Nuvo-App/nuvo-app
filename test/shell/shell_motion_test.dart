@@ -111,7 +111,7 @@ class _FeedRepo extends CrewActivityRepository {
 
 class _NotifRepo implements NotificationRepository {
   @override
-  Future<NotificationPage> list({String? cursor}) async =>
+  Future<NotificationPage> list({String? cursor, String? etag}) async =>
       const NotificationPage(items: [], unreadCount: 0);
   @override
   Future<void> markRead(String id) async {}

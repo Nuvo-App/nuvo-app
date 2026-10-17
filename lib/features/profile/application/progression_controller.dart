@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
@@ -20,8 +21,19 @@ class ProgressionController
     this._api,
     this._store, {
     bool Function()? isPresentationDemo,
+    this.cache,
+    this.accountId,
   })  : _isPresentationDemo = isPresentationDemo ?? (() => false),
         super(const AsyncValue.loading());
+
+  // Disk snapshot of the raw /progression body, per signed-in account.
+  final CacheStore? cache;
+  final String? Function()? accountId;
+  static const _cacheDomain = 'progression';
+  static const _cacheMaxAge = Duration(days: 7);
+  String? _etag;
+  String? cacheAccount;
+  bool _hydrated = false;
 
   final ProgressionApi _api;
   final SecureTokenStore _store;
@@ -31,7 +43,7 @@ class ProgressionController
   final bool Function() _isPresentationDemo;
   List<NuvoBadge>? _demoBadges;
 
-  static const _cacheLifetime = Duration(minutes: 5);
+  static const cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
   DateTime? _loadedAt;
   Future<void>? _loadInFlight;
@@ -60,6 +72,53 @@ class ProgressionController
     load(force: true);
   }
 
+  /// Lazy: marks the payload stale; fetches right away only when something is
+  /// listening. Otherwise the next read/revalidate refreshes.
+  void markStale() {
+    _loadedAt = null;
+    if (mounted && hasListeners) load(force: true);
+  }
+
+  String? _validAccount() {
+    if (cache == null) return null;
+    final id = accountId?.call();
+    return id != null && isValidCacheId(id) ? id : null;
+  }
+
+  Future<void> _hydrate(int generation) async {
+    if (_hydrated) return;
+    _hydrated = true;
+    final store = cache;
+    final account = _validAccount();
+    if (store == null || account == null) return;
+    cacheAccount = account;
+    try {
+      final entry = await store.read(account, _cacheDomain, maxAge: _cacheMaxAge);
+      if (!mounted || generation != _generation) return;
+      final data = entry?.data;
+      if (entry == null || data is! Map || state.hasValue) return;
+      final json = Map<String, dynamic>.from(data);
+      _etag = entry.etag;
+      state = AsyncValue.data(
+        NuvoProgression.fromJson(
+          (json['progression'] as Map<String, dynamic>?) ?? const {},
+        ),
+      );
+    } catch (_) {
+      // A bad snapshot is just a cache miss.
+    }
+  }
+
+  /// A mutation changed the server copy: forget the etag and drop the snapshot.
+  void _invalidateCache() {
+    _etag = null;
+    final store = cache;
+    final account = cacheAccount ?? _validAccount();
+    if (store != null && account != null) {
+      store.write(account, _cacheDomain, null);
+    }
+  }
+
   /// Fetch (or refetch) the authoritative progression payload. The server
   /// reconciles XP from canonical race events on read, so this is always
   /// current after race actions — no separate invalidation pipeline needed.
@@ -69,7 +128,7 @@ class ProgressionController
     if (!force &&
         state.hasValue &&
         at != null &&
-        DateTime.now().difference(at) < _cacheLifetime) {
+        DateTime.now().difference(at) < cacheLifetime) {
       return Future.value();
     }
     final inFlight = _loadInFlight;
@@ -95,9 +154,23 @@ class ProgressionController
       return;
     }
     try {
-      final progression = await _api.getProgression(await _token());
+      await _hydrate(generation);
+      if (!mounted || generation != _generation) return;
+      final result = await _api.getProgressionConditional(
+        await _token(),
+        etag: state.hasValue ? _etag : null,
+      );
       if (!mounted || generation != _generation) return;
       _loadedAt = DateTime.now();
+      final progression = result.data;
+      if (result.notModified || progression == null) return; // keep state
+      _etag = result.etag;
+      final store = cache;
+      final account = cacheAccount ?? _validAccount();
+      if (store != null && account != null && result.raw != null) {
+        cacheAccount = account;
+        store.write(account, _cacheDomain, result.raw, etag: result.etag);
+      }
       state = AsyncValue.data(progression);
     } catch (e, st) {
       if (!mounted || generation != _generation) return;
@@ -138,6 +211,7 @@ class ProgressionController
     try {
       final progression = await _api.markLevelSeen(await _token());
       if (!mounted) return;
+      _invalidateCache();
       _loadedAt = DateTime.now();
       state = AsyncValue.data(progression);
     } catch (_) {
@@ -183,6 +257,7 @@ class ProgressionController
       return _demoBadges!;
     }
     final badges = await _api.setFeatured(await _token(), unlockIds);
+    _invalidateCache();
     final current = state.valueOrNull;
     if (mounted && current != null) {
       state = AsyncValue.data(
@@ -233,6 +308,12 @@ class ProgressionController
   }
 
   void clear() {
+    final account = cacheAccount;
+    final store = cache;
+    if (store != null && account != null) store.clearAccount(account);
+    cacheAccount = null;
+    _etag = null;
+    _hydrated = false;
     _loadedAt = null;
     _loadInFlight = null;
     _generation++;
@@ -382,6 +463,8 @@ final progressionControllerProvider =
       ref.watch(secureTokenStoreProvider),
       isPresentationDemo: () =>
           isPresentationDemoUser(ref.read(authControllerProvider).user),
+      cache: ref.watch(cacheStoreProvider),
+      accountId: () => ref.read(authControllerProvider).user?.id,
     );
     // Deferred: a synchronous mutation during the kickoff would modify
     // other providers while this one is still initializing (Riverpod

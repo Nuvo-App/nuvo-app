@@ -22,6 +22,7 @@ import 'ai_motion_models.dart';
 import 'motion_analysis_contract.dart';
 import 'race_models.dart';
 import '../../../core/network/api_base.dart';
+import '../../../core/network/conditional.dart';
 
 class MotionCatalogFetch {
   const MotionCatalogFetch({this.json, this.etag, this.notModified = false});
@@ -462,11 +463,30 @@ class RaceApi {
     return _decode(res);
   }
 
-  Future<List<Race>> getRaces(String token) async {
-    final json = await _get('/races', token);
-    return (json['races'] as List<dynamic>)
-        .map((r) => Race.fromJson(r as Map<String, dynamic>))
-        .toList();
+  Future<Conditional<List<Race>>> getRaces(String token, {String? etag}) async {
+    final res = await _conditionalGet('/races', token, etag);
+    if (res.statusCode == 304) {
+      return Conditional.notModified(etag: res.headers['etag'] ?? etag);
+    }
+    final json = _decode(res);
+    final raw = json['races'] as List<dynamic>;
+    return Conditional(
+      data: raw.map((r) => Race.fromJson(r as Map<String, dynamic>)).toList(),
+      etag: res.headers['etag'],
+      raw: raw,
+    );
+  }
+
+  Future<http.Response> _conditionalGet(
+    String path,
+    String token,
+    String? etag,
+  ) {
+    final headers = _headers(token);
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
+    return _guard(
+      () => _client.get(Uri.parse('$kNuvoApiBase$path'), headers: headers),
+    );
   }
 
   Future<List<PublicUser>> searchUsers(String token, String query) async {
@@ -634,9 +654,22 @@ class RaceApi {
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
-  Future<Race> getRaceDetail(String token, String id) async {
-    final json = await _get('/races/$id', token);
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  Future<Conditional<Race>> getRaceDetail(
+    String token,
+    String id, {
+    String? etag,
+  }) async {
+    final res = await _conditionalGet('/races/$id', token, etag);
+    if (res.statusCode == 304) {
+      return Conditional.notModified(etag: res.headers['etag'] ?? etag);
+    }
+    final json = _decode(res);
+    final raw = json['race'] as Map<String, dynamic>;
+    return Conditional(
+      data: Race.fromJson(raw),
+      etag: res.headers['etag'],
+      raw: raw,
+    );
   }
 
   Future<Race> submitProof(

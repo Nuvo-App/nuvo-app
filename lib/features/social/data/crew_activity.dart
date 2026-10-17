@@ -15,7 +15,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/demo/presentation_demo.dart';
+import '../../../core/cache/cache_store.dart';
 import '../../../core/network/api_base.dart';
+import '../../../core/network/conditional.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -58,16 +60,31 @@ class CrewActivityApi {
   }
 
   Future<List<CrewActivityItem>> getFeed(String token,
-      {int limit = 40, String? cursor}) async {
+          {int limit = 40, String? cursor}) async =>
+      (await getFeedConditional(token, limit: limit, cursor: cursor)).data ??
+      const [];
+
+  /// Conditional GET /crew/feed. A 304 returns [Conditional.notModified];
+  /// servers that send no ETag leave [Conditional.etag] null.
+  Future<Conditional<List<CrewActivityItem>>> getFeedConditional(
+    String token, {
+    int limit = 40,
+    String? cursor,
+    String? etag,
+  }) async {
     final uri = Uri.parse('$kNuvoApiBase/crew/feed').replace(queryParameters: {
       'limit': '$limit',
       'cursor': ?cursor,
     });
-    final res = await _guard(() => _client.get(uri, headers: _headers(token)));
+    final res = await _guard(() => _client.get(uri,
+        headers: {..._headers(token), 'If-None-Match': ?etag}));
+    if (res.statusCode == 304) return Conditional.notModified(etag: etag);
     final json = _decode(res);
-    return (json['items'] as List<dynamic>? ?? [])
-        .map((e) => CrewActivityItem.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return Conditional(
+      data: parseFeedItems(json),
+      etag: res.headers['etag'],
+      raw: json,
+    );
   }
 
   Future<ReactionSummary> react(
@@ -115,6 +132,33 @@ class CrewActivityApi {
       myReaction: json['myReaction'] as String?,
     );
   }
+}
+
+/// Parses a decoded GET /crew/feed body (also used to rehydrate the snapshot).
+List<CrewActivityItem> parseFeedItems(Map<String, dynamic> json) =>
+    (json['items'] as List<dynamic>? ?? [])
+        .map((e) => CrewActivityItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+/// Optional capability: validator-aware feed reads (see CrewConditionalSource).
+abstract interface class CrewActivityConditionalSource {
+  Future<Conditional<List<CrewActivityItem>>> getFeedConditional({
+    int limit,
+    String? etag,
+  });
+}
+
+/// Real repository: [CrewActivityRepository] plus conditional first-page read.
+class CrewActivitySyncRepository extends CrewActivityRepository
+    implements CrewActivityConditionalSource {
+  CrewActivitySyncRepository(super.api, super.store, super.authApi);
+
+  @override
+  Future<Conditional<List<CrewActivityItem>>> getFeedConditional({
+    int limit = 40,
+    String? etag,
+  }) =>
+      _withRefresh((t) => _api.getFeedConditional(t, limit: limit, etag: etag));
 }
 
 /// Token injection + 401 refresh for the activity endpoints (mirrors
@@ -208,7 +252,18 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
     this.onSessionExpired,
     this.isPresentationDemo = _neverPresentationDemo,
     this.demoUserId = _noDemoUser,
+    this.cache,
+    this.accountId = _noAccount,
   }) : super(const CrewActivityState());
+
+  /// Disk snapshot of the first page. Null disables hydration/persistence.
+  final CacheStore? cache;
+  final String? Function() accountId;
+  static String? _noAccount() => null;
+  static const _snapshotDomain = 'crew_feed';
+  static const _snapshotMaxAge = Duration(days: 7);
+  String? _etag;
+  Future<void>? _hydration;
 
   final CrewActivityRepository _repo;
   final VoidCallback? onSessionExpired;
@@ -231,6 +286,44 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
     final at = _loadedAt;
     if (at != null && DateTime.now().difference(at) < _staleWindow) return;
     load(force: true);
+  }
+
+  /// Account id usable for the disk snapshot, or null (no cache, demo, or an
+  /// id that is not a safe path segment).
+  String? _cacheAccount() {
+    if (cache == null || isPresentationDemo()) return null;
+    final id = accountId();
+    return id != null && isValidCacheId(id) ? id : null;
+  }
+
+  Future<void> _hydrate() async {
+    final generation = _generation;
+    final account = _cacheAccount();
+    if (account == null) return;
+    try {
+      final entry =
+          await cache!.read(account, _snapshotDomain, maxAge: _snapshotMaxAge);
+      final data = entry?.data;
+      if (data is! Map<String, dynamic>) return;
+      final items = parseFeedItems(data);
+      // Discard if signed out / switched meanwhile, or a network result won.
+      if (!mounted || generation != _generation || _loadedAt != null) return;
+      if (state.hasData) return;
+      _etag = entry!.etag;
+      state = state.copyWith(items: items, loading: false, refreshing: false);
+    } catch (_) {
+      // A bad snapshot is just a cache miss.
+    }
+  }
+
+  /// Reaction writes change what GET /crew/feed returns: drop the validator
+  /// and the persisted first page so neither is replayed stale.
+  void _invalidateSnapshot() {
+    _etag = null;
+    final account = _cacheAccount();
+    if (account != null) {
+      cache!.write(account, _snapshotDomain, null).catchError((_) {});
+    }
   }
 
   void markStale() {
@@ -258,20 +351,45 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
 
   Future<void> _fetch() async {
     final generation = _generation;
-    final revision = _revision;
     if (!mounted) return;
+    // Give the disk snapshot a brief head start so its etag can be sent, but
+    // never let a slow or stalled read hold back the network.
+    await Future.any([
+      _hydration ??= _hydrate(),
+      Future<void>.delayed(const Duration(milliseconds: 40)),
+    ]);
+    if (!mounted || generation != _generation) return;
+    final revision = _revision;
+    final account = _cacheAccount();
     state =
         state.copyWith(loading: !state.hasData, refreshing: state.hasData);
     try {
-      final items = isPresentationDemo()
-          ? PresentationDemoData.crewActivity(demoUserId())
-          : await _repo.getFeed();
+      final Conditional<List<CrewActivityItem>> fetched;
+      if (isPresentationDemo()) {
+        fetched = Conditional(
+            data: PresentationDemoData.crewActivity(demoUserId()));
+      } else if (_repo case final CrewActivityConditionalSource source) {
+        fetched = await source.getFeedConditional(etag: _etag);
+      } else {
+        fetched = Conditional(data: await _repo.getFeed());
+      }
       if (!mounted || generation != _generation || revision != _revision) {
         return;
       }
       _loadedAt = DateTime.now();
+      if (fetched.notModified) {
+        // Same page: keep state as is, no flicker.
+        state = state.copyWith(loading: false, refreshing: false);
+        return;
+      }
+      _etag = fetched.etag;
       state = state.copyWith(
-          items: items, loading: false, refreshing: false);
+          items: fetched.data, loading: false, refreshing: false);
+      if (account != null && fetched.raw != null) {
+        cache!
+            .write(account, _snapshotDomain, fetched.raw, etag: fetched.etag)
+            .catchError((_) {});
+      }
     } catch (error) {
       if (!mounted || generation != _generation || revision != _revision) {
         return;
@@ -318,6 +436,7 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
               ? await _repo.unreact(item)
               : await _repo.react(item, emoji);
       if (!mounted || generation != _generation) return false;
+      _invalidateSnapshot();
       _replaceItem(
           item.id,
           (i) => i.copyWith(
@@ -364,11 +483,18 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
         items: [for (final i in state.items) i.id == id ? f(i) : i]);
   }
 
-  void clear() {
+  /// Resets in-memory state. [wipeAccountId] (set on sign-out/account switch)
+  /// also deletes that account's disk cache.
+  void clear({String? wipeAccountId}) {
     _generation++;
     _revision++;
     _loadInFlight = null;
     _loadedAt = null;
+    _etag = null;
+    _hydration = null;
+    if (wipeAccountId != null && cache != null) {
+      cache!.clearAccount(wipeAccountId).catchError((_) {});
+    }
     if (mounted) state = const CrewActivityState();
   }
 }
@@ -377,7 +503,7 @@ final _crewActivityApiProvider =
     Provider<CrewActivityApi>((_) => CrewActivityApi());
 
 final crewActivityRepositoryProvider = Provider<CrewActivityRepository>(
-  (ref) => CrewActivityRepository(
+  (ref) => CrewActivitySyncRepository(
     ref.watch(_crewActivityApiProvider),
     ref.watch(secureTokenStoreProvider),
     ref.watch(authApiProvider),
@@ -391,6 +517,8 @@ final crewActivityProvider =
     isPresentationDemo: () =>
         isPresentationDemoUser(ref.read(authControllerProvider).user),
     demoUserId: () => ref.read(authControllerProvider).user?.id ?? '',
+    cache: ref.watch(cacheStoreProvider),
+    accountId: () => ref.read(authControllerProvider).user?.id,
     onSessionExpired: () =>
         ref.read(authControllerProvider.notifier).sessionExpired(),
   );
@@ -400,7 +528,11 @@ final crewActivityProvider =
   }
   ref.listen<AuthState>(authControllerProvider, (prev, next) {
     if (prev?.user?.id != next.user?.id || prev?.status != next.status) {
-      controller.clear();
+      final prevId = prev?.user?.id;
+      controller.clear(
+        wipeAccountId:
+            prevId != null && next.user?.id != prevId ? prevId : null,
+      );
       demo = isPresentationDemoUser(next.user);
       if (next.status == AuthStatus.authenticated) {
         controller.load(force: false);

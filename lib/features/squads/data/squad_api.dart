@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/network/api_base.dart';
+import '../../../core/network/conditional.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -39,6 +40,15 @@ class CrewGroup {
         memberCount: j['memberCount'] as int? ?? 0,
         raceCount: j['raceCount'] as int? ?? 0,
       );
+}
+
+/// Parses a `GET /squads` body (also the persisted snapshot shape).
+List<CrewGroup> parseCrewGroupList(Object? raw) {
+  final map = raw is Map<String, dynamic> ? raw : const <String, dynamic>{};
+  return (map['squads'] as List<dynamic>? ?? [])
+      .whereType<Map<String, dynamic>>()
+      .map(CrewGroup.fromJson)
+      .toList();
 }
 
 class CrewGroupRace {
@@ -139,12 +149,9 @@ class SquadApi {
         'Authorization': 'Bearer $token',
       };
 
-  Future<Map<String, dynamic>> _send(
-    Future<http.Response> Function() send,
-  ) async {
-    final http.Response res;
+  Future<http.Response> _raw(Future<http.Response> Function() send) async {
     try {
-      res = await send().timeout(_timeout);
+      return await send().timeout(_timeout);
     } on TimeoutException {
       throw const ApiException(408, 'The network timed out. Try again.');
     } on SocketException {
@@ -152,6 +159,9 @@ class SquadApi {
     } on http.ClientException {
       throw const ApiException(0, "Can't reach Nuvo. Check your connection.");
     }
+  }
+
+  Map<String, dynamic> _decode(http.Response res) {
     final body = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body);
     final map = body is Map<String, dynamic> ? body : const <String, dynamic>{};
     if (res.statusCode >= 400) {
@@ -160,15 +170,34 @@ class SquadApi {
     return map;
   }
 
+  Future<Map<String, dynamic>> _send(
+    Future<http.Response> Function() send,
+  ) async => _decode(await _raw(send));
+
+  /// Conditional GET: sends `If-None-Match` when [etag] is set; a 304 yields
+  /// [Conditional.notModified]. Servers that send no ETag give `etag: null`.
+  Future<Conditional<T>> _conditional<T>(
+    String path,
+    String token,
+    String? etag,
+    T Function(Map<String, dynamic> json) parse,
+  ) async {
+    final headers = _headers(token);
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
+    final res = await _raw(() => _client.get(_uri(path), headers: headers));
+    if (res.statusCode == 304) return Conditional.notModified(etag: etag);
+    final json = _decode(res);
+    return Conditional(
+      data: parse(json),
+      etag: res.headers['etag'],
+      raw: json,
+    );
+  }
+
   Uri _uri(String path) => Uri.parse('$kNuvoApiBase/squads$path');
 
-  Future<List<CrewGroup>> list(String token) async {
-    final json = await _send(() => _client.get(_uri(''), headers: _headers(token)));
-    return (json['squads'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(CrewGroup.fromJson)
-        .toList();
-  }
+  Future<Conditional<List<CrewGroup>>> list(String token, {String? etag}) =>
+      _conditional('', token, etag, parseCrewGroupList);
 
   Future<CrewGroup> create(String token, String name) async {
     final json = await _send(() => _client.post(
@@ -187,10 +216,11 @@ class SquadApi {
         ));
   }
 
-  Future<CrewGroupDetail> detail(String token, String id) async {
-    final json = await _send(() => _client.get(_uri('/$id'), headers: _headers(token)));
-    return CrewGroupDetail.fromJson(json);
-  }
+  Future<Conditional<CrewGroupDetail>> detail(
+    String token,
+    String id, {
+    String? etag,
+  }) => _conditional('/$id', token, etag, CrewGroupDetail.fromJson);
 
   Future<int> addRace(String token, String id, String raceId) async {
     final json = await _send(() => _client.post(
@@ -214,10 +244,12 @@ class SquadRepository {
   final SecureTokenStore _store;
   final AuthApi _authApi;
 
-  Future<List<CrewGroup>> list() => _withRefresh(_api.list);
+  Future<Conditional<List<CrewGroup>>> list({String? etag}) =>
+      _withRefresh((t) => _api.list(t, etag: etag));
   Future<CrewGroup> create(String name) => _withRefresh((t) => _api.create(t, name));
   Future<void> join(String code) => _withRefresh((t) => _api.join(t, code));
-  Future<CrewGroupDetail> detail(String id) => _withRefresh((t) => _api.detail(t, id));
+  Future<Conditional<CrewGroupDetail>> detail(String id, {String? etag}) =>
+      _withRefresh((t) => _api.detail(t, id, etag: etag));
   Future<int> addRace(String id, String raceId) =>
       _withRefresh((t) => _api.addRace(t, id, raceId));
   Future<void> leave(String id) => _withRefresh((t) => _api.leave(t, id));

@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -59,7 +60,18 @@ class NotificationController extends StateNotifier<NotificationState> {
     this._repo, {
     this.onSessionExpired,
     this.isPresentationDemo = _neverPresentationDemo,
+    this.cache,
+    this.accountId,
   }) : super(const NotificationState());
+
+  // Disk snapshot (first page + cursor), per signed-in account.
+  final CacheStore? cache;
+  final String? Function()? accountId;
+  static const _cacheDomain = 'notifications';
+  static const _cacheMaxAge = Duration(days: 7);
+  String? _etag;
+  String? cacheAccount;
+  bool _hydrated = false;
 
   final NotificationRepository _repo;
   final VoidCallback? onSessionExpired;
@@ -70,7 +82,7 @@ class NotificationController extends StateNotifier<NotificationState> {
   final bool Function() isPresentationDemo;
   static bool _neverPresentationDemo() => false;
 
-  static const _cacheLifetime = Duration(minutes: 5);
+  static const cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
   Future<void>? _loadInFlight;
   DateTime? _loadedAt;
@@ -90,14 +102,70 @@ class NotificationController extends StateNotifier<NotificationState> {
   }
 
   /// Push receipt / opening the bell.
+  ///
+  /// Lazy: only marks the inbox stale; fetches right away just when something
+  /// is listening (bell / inbox on screen). Otherwise the next read refreshes.
   void markStale() {
     _loadedAt = null;
-    if (mounted) load(force: true);
+    if (mounted && hasListeners) load(force: true);
+  }
+
+  String? _validAccount() {
+    if (cache == null) return null;
+    final id = accountId?.call();
+    return id != null && isValidCacheId(id) ? id : null;
+  }
+
+  /// Emits the disk snapshot (if any) without blocking the first frame.
+  Future<void> _hydrate(int generation) async {
+    if (_hydrated) return;
+    _hydrated = true;
+    final store = cache;
+    final account = _validAccount();
+    if (store == null || account == null) return;
+    cacheAccount = account;
+    try {
+      final entry = await store.read(account, _cacheDomain, maxAge: _cacheMaxAge);
+      if (generation != _generation || !mounted) return;
+      final data = entry?.data;
+      if (entry == null || data is! Map || state.hasData) return;
+      final page = NotificationPage.fromJson(Map<String, dynamic>.from(data));
+      _etag = entry.etag;
+      state = NotificationState(
+        items: page.items,
+        unreadCount: page.unreadCount,
+        nextCursor: page.nextCursor,
+        refreshing: true,
+      );
+    } catch (_) {
+      // A bad snapshot is just a cache miss.
+    }
+  }
+
+  void _persist(NotificationPage page, int generation) {
+    final store = cache;
+    final account = cacheAccount ?? _validAccount();
+    final raw = page.raw;
+    if (store == null || account == null || raw == null) return;
+    if (generation != _generation) return;
+    cacheAccount = account;
+    store.write(account, _cacheDomain, raw, etag: page.etag);
+  }
+
+  /// A local patch diverged from the server copy: forget the etag and drop
+  /// the snapshot so a stale 304/hydration can never resurrect old data.
+  void _invalidateCache() {
+    _etag = null;
+    final store = cache;
+    final account = cacheAccount ?? _validAccount();
+    if (store != null && account != null) {
+      store.write(account, _cacheDomain, null);
+    }
   }
 
   Future<void> load({bool force = true}) {
     final at = _loadedAt;
-    if (!force && at != null && DateTime.now().difference(at) < _cacheLifetime) {
+    if (!force && at != null && DateTime.now().difference(at) < cacheLifetime) {
       return Future.value();
     }
     final inFlight = _loadInFlight;
@@ -120,9 +188,20 @@ class NotificationController extends StateNotifier<NotificationState> {
       return;
     }
     try {
-      final page = await _repo.list();
+      await _hydrate(generation);
+      if (generation != _generation) return;
+      final sendEtag = state.hasData ? _etag : null;
+      final page = await _repo.list(etag: sendEtag);
       if (generation != _generation) return; // superseded by a sign-out
       _loadedAt = DateTime.now();
+      if (page.notModified) {
+        if (mounted) {
+          state = state.copyWith(loading: false, refreshing: false, error: null);
+        }
+        return;
+      }
+      _etag = page.etag;
+      _persist(page, generation);
       if (mounted) {
         state = NotificationState(
           items: page.items,
@@ -202,6 +281,7 @@ class NotificationController extends StateNotifier<NotificationState> {
   Future<void> markRead(String id) async {
     final item = state.items.firstWhere((n) => n.id == id, orElse: () => throw StateError('nf'));
     if (item.read) return;
+    _invalidateCache();
     state = state.copyWith(
       items: state.items.map((n) => n.id == id ? n.copyWith(read: true) : n).toList(),
       unreadCount: (state.unreadCount - 1).clamp(0, 1 << 30),
@@ -232,6 +312,7 @@ class NotificationController extends StateNotifier<NotificationState> {
       return n.copyWith(read: true);
     }).toList();
     if (resolved == 0) return;
+    _invalidateCache();
     state = state.copyWith(
       items: items,
       unreadCount: (state.unreadCount - resolved).clamp(0, 1 << 30),
@@ -240,6 +321,7 @@ class NotificationController extends StateNotifier<NotificationState> {
 
   Future<void> markAllRead() async {
     if (state.unreadCount == 0) return;
+    _invalidateCache();
     state = state.copyWith(
       items: state.items.map((n) => n.copyWith(read: true)).toList(),
       unreadCount: 0,
@@ -251,6 +333,12 @@ class NotificationController extends StateNotifier<NotificationState> {
   }
 
   void clear() {
+    final account = cacheAccount;
+    final store = cache;
+    if (store != null && account != null) store.clearAccount(account);
+    cacheAccount = null;
+    _etag = null;
+    _hydrated = false;
     _loadedAt = null;
     _loadInFlight = null;
     _generation++;
@@ -278,6 +366,8 @@ final notificationControllerProvider =
         ref.read(authControllerProvider.notifier).sessionExpired(),
     isPresentationDemo: () =>
         isPresentationDemoUser(ref.read(authControllerProvider).user),
+    cache: ref.watch(cacheStoreProvider),
+    accountId: () => ref.read(authControllerProvider).user?.id,
   );
   // Deferred: a synchronous mutation during the kickoff would modify other
   // providers while this one is still initializing (Riverpod asserts).
