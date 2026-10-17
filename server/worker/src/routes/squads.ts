@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked } from '../lib/privacy';
 import { ensureMember, ensureProgress, getProfileName, getRace } from '../domain/raceMembership';
@@ -157,6 +158,43 @@ squadsRouter.post('/', async (c) => {
 // GET /squads
 squadsRouter.get('/', async (c) => {
   const userId = c.get('userId');
+  // Validator: my membership rows + crew creation/join times + per-crew
+  // member and race counts, bounded by a 60s bucket.
+  const stamp = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n,
+            MAX(sm.joined_at) AS max_joined,
+            MAX(s.created_at) AS max_created,
+            COALESCE(SUM((SELECT COUNT(*) FROM squad_members m WHERE m.squad_id = s.id AND m.status = 'active')), 0) AS members,
+            COALESCE(SUM((SELECT COUNT(*) FROM squad_races r WHERE r.squad_id = s.id)), 0) AS races,
+            MAX((SELECT MAX(m.joined_at) FROM squad_members m WHERE m.squad_id = s.id AND m.status = 'active')) AS max_member_joined
+     FROM squads s
+     JOIN squad_members sm ON sm.squad_id = s.id AND sm.user_id = ? AND sm.status = 'active'
+     WHERE s.deleted_at IS NULL`,
+  )
+    .bind(userId)
+    .first<{
+      n: number;
+      max_joined: string | null;
+      max_created: string | null;
+      members: number;
+      races: number;
+      max_member_joined: string | null;
+    }>();
+  const notModified = conditional(
+    c,
+    weakEtag(
+      'squads',
+      stamp?.n,
+      stamp?.max_joined,
+      stamp?.max_created,
+      stamp?.members,
+      stamp?.races,
+      stamp?.max_member_joined,
+      stalenessBucket(Date.now(), 60_000),
+    ),
+  );
+  if (notModified) return notModified;
+
   const rows = await c.env.DB.prepare(
     `SELECT s.id, s.name, s.join_code, s.owner_id,
             (SELECT COUNT(*) FROM squad_members m WHERE m.squad_id = s.id AND m.status = 'active') AS member_count,
@@ -245,10 +283,60 @@ squadsRouter.post('/join', async (c) => {
 // GET /squads/:id
 squadsRouter.get('/:id', async (c) => {
   const userId = c.get('userId');
-  const squad = await getSquad(c.env.DB, c.req.param('id'));
-  if (!squad || !(await isActiveMember(c.env.DB, squad.id, userId))) {
+  const squadId = c.req.param('id');
+  const [squad, isMember] = await Promise.all([
+    getSquad(c.env.DB, squadId),
+    isActiveMember(c.env.DB, squadId, userId),
+  ]);
+  if (!squad || !isMember) {
     return c.json(badRequest('Crew not found'), 404);
   }
+
+  // Validator: members, linked races, race version/updated_at and progress
+  // updates (standings depend on them), bounded by a 60s bucket.
+  const stamp = await c.env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM squad_members WHERE squad_id = ?1 AND status = 'active') AS members,
+       (SELECT MAX(joined_at) FROM squad_members WHERE squad_id = ?1 AND status = 'active') AS max_joined,
+       (SELECT COUNT(*) FROM squad_races sr JOIN races r ON r.id = sr.race_id
+         WHERE sr.squad_id = ?1 AND r.deleted_at IS NULL) AS races,
+       (SELECT MAX(r.version) FROM squad_races sr JOIN races r ON r.id = sr.race_id
+         WHERE sr.squad_id = ?1 AND r.deleted_at IS NULL) AS max_version,
+       (SELECT MAX(r.updated_at) FROM squad_races sr JOIN races r ON r.id = sr.race_id
+         WHERE sr.squad_id = ?1 AND r.deleted_at IS NULL) AS max_race_updated,
+       (SELECT MAX(rp.updated_at) FROM squad_races sr JOIN race_progress rp ON rp.race_id = sr.race_id
+         WHERE sr.squad_id = ?1) AS max_progress,
+       (SELECT COALESCE(SUM(rp.progress_value), 0) FROM squad_races sr
+         JOIN race_progress rp ON rp.race_id = sr.race_id
+         JOIN squad_members sm ON sm.squad_id = sr.squad_id AND sm.user_id = rp.user_id AND sm.status = 'active'
+         WHERE sr.squad_id = ?1) AS progress_sum`,
+  )
+    .bind(squad.id)
+    .first<{
+      members: number;
+      max_joined: string | null;
+      races: number;
+      max_version: number | null;
+      max_race_updated: string | null;
+      max_progress: string | null;
+      progress_sum: number | null;
+    }>();
+  const notModified = conditional(
+    c,
+    weakEtag(
+      'squad',
+      squad.id,
+      stamp?.members,
+      stamp?.max_joined,
+      stamp?.races,
+      stamp?.max_version,
+      stamp?.max_race_updated,
+      stamp?.max_progress,
+      stamp?.progress_sum,
+      stalenessBucket(Date.now(), 60_000),
+    ),
+  );
+  if (notModified) return notModified;
 
   const [members, races] = await Promise.all([
     c.env.DB.prepare(
@@ -287,28 +375,50 @@ squadsRouter.get('/:id', async (c) => {
   ]);
 
   const memberIds = members.results.map((m) => m.user_id);
-  const raceInputs: SquadRaceInput[] = [];
-  for (const race of races.results) {
-    const scores = await c.env.DB.prepare(
-      `SELECT rm.user_id, rm.joined_at, rp.progress_value, rp.completed_at
-       FROM race_members rm
-       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-       JOIN squad_members sm ON sm.squad_id = ? AND sm.user_id = rm.user_id AND sm.status = 'active'
-       WHERE rm.race_id = ? AND rm.status = 'active'`,
-    )
-      .bind(squad.id, race.id)
-      .all<{ user_id: string; joined_at: string; progress_value: number | null; completed_at: string | null }>();
-    raceInputs.push({
-      raceId: race.id,
-      direction: race.score_direction === 'lower' ? 'lower' : 'higher',
-      scores: scores.results.map((s) => ({
-        user_id: s.user_id,
-        joined_at: s.joined_at,
-        progress_value: s.progress_value ?? 0,
-        completed_at: s.completed_at,
-      })),
-    });
+  // One score query for every crew race (chunked: D1 caps bound parameters at
+  // 100 per statement), grouped by race in JS.
+  type ScoreRow = {
+    race_id: string;
+    user_id: string;
+    joined_at: string;
+    progress_value: number | null;
+    completed_at: string | null;
+  };
+  const raceIds = races.results.map((r) => r.id);
+  const chunks: string[][] = [];
+  for (let i = 0; i < raceIds.length; i += 80) chunks.push(raceIds.slice(i, i + 80));
+  const scoreSets =
+    chunks.length === 0
+      ? []
+      : await c.env.DB.batch<ScoreRow>(
+          chunks.map((ids) =>
+            c.env.DB.prepare(
+              `SELECT rm.race_id, rm.user_id, rm.joined_at, rp.progress_value, rp.completed_at
+               FROM race_members rm
+               LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+               JOIN squad_members sm ON sm.squad_id = ? AND sm.user_id = rm.user_id AND sm.status = 'active'
+               WHERE rm.race_id IN (${ids.map(() => '?').join(',')}) AND rm.status = 'active'`,
+            ).bind(squad.id, ...ids),
+          ),
+        );
+  const scoresByRace = new Map<string, ScoreRow[]>();
+  for (const set of scoreSets) {
+    for (const row of set.results) {
+      const list = scoresByRace.get(row.race_id);
+      if (list) list.push(row);
+      else scoresByRace.set(row.race_id, [row]);
+    }
   }
+  const raceInputs: SquadRaceInput[] = races.results.map((race) => ({
+    raceId: race.id,
+    direction: race.score_direction === 'lower' ? 'lower' : 'higher',
+    scores: (scoresByRace.get(race.id) ?? []).map((s) => ({
+      user_id: s.user_id,
+      joined_at: s.joined_at,
+      progress_value: s.progress_value ?? 0,
+      completed_at: s.completed_at,
+    })),
+  }));
 
   const standings = computeSquadStandings(memberIds, raceInputs);
   const byUser = new Map(members.results.map((m) => [m.user_id, m]));

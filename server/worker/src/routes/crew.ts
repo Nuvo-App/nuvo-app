@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { isBlocked } from '../lib/privacy';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { transitionCrew } from '../domain/crewLifecycle';
 import { deliverNotificationPushes } from '../domain/notifications';
 
@@ -65,6 +66,25 @@ async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
 // GET /crew — active connections
 crewRouter.get('/', async (c) => {
   const userId = c.get('userId');
+  // Validator: connection count/latest change + member profile/level changes,
+  // plus a 60s bucket so lastActiveAt (presence) is never stale > 1 minute.
+  const stamp = await c.env.DB.prepare(
+    `SELECT COUNT(*) as n,
+            MAX(COALESCE(cc.updated_at, cc.created_at)) as cc_at,
+            MAX(p.updated_at) as p_at,
+            MAX(up.updated_at) as up_at
+     FROM crew_connections cc
+     LEFT JOIN profiles p ON p.user_id = cc.crew_user_id
+     LEFT JOIN user_progression up ON up.user_id = cc.crew_user_id
+     WHERE cc.user_id = ? AND cc.status = 'active'`,
+  )
+    .bind(userId)
+    .first<{ n: number; cc_at: string | null; p_at: string | null; up_at: string | null }>();
+  const notModified = conditional(
+    c,
+    weakEtag('crew', stamp?.n, stamp?.cc_at, stamp?.p_at, stamp?.up_at, stalenessBucket(Date.now(), 60_000)),
+  );
+  if (notModified) return notModified;
   const rows = await c.env.DB.prepare(
     `${CREW_USER_SELECT} WHERE cc.user_id = ? AND cc.status = 'active' ORDER BY cc.created_at DESC`,
   )
@@ -172,6 +192,60 @@ crewRouter.get('/feed', async (c) => {
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 40), 1), 80);
   const cursor = c.req.query('cursor');
   const db = c.env.DB;
+
+  // Validator over the same scope as the queries below (see eventQuery /
+  // noteQuery WHERE clauses), plus a 60s bucket.
+  const [evStamp, noteStamp] = await Promise.all([
+    db
+      .prepare(
+        `WITH scoped AS (
+           SELECT re.id, re.created_at FROM race_events re
+           JOIN races r ON r.id = re.race_id
+           WHERE (re.race_id IN (SELECT race_id FROM race_members WHERE user_id = ?1 AND status = 'active')
+               OR (r.visibility <> 'private'
+                   AND re.actor_user_id IN (SELECT crew_user_id FROM crew_connections
+                                            WHERE user_id = ?1 AND status = 'active')))
+             AND (re.actor_user_id IS NULL OR re.actor_user_id NOT IN (
+                   SELECT blocked_user_id FROM blocked_users WHERE user_id = ?1))
+             AND (re.actor_user_id IS NULL OR re.actor_user_id NOT IN (
+                   SELECT user_id FROM blocked_users WHERE blocked_user_id = ?1))
+         )
+         SELECT (SELECT COUNT(*) FROM scoped) as n,
+                (SELECT MAX(created_at) FROM scoped) as at,
+                (SELECT COUNT(*) FROM activity_reactions ar WHERE ar.entity_type = 'race_event'
+                   AND ar.entity_id IN (SELECT id FROM scoped)) as rn,
+                (SELECT MAX(ar.created_at) FROM activity_reactions ar WHERE ar.entity_type = 'race_event'
+                   AND ar.entity_id IN (SELECT id FROM scoped)) as rat`,
+      )
+      .bind(userId)
+      .first<{ n: number; at: string | null; rn: number; rat: string | null }>(),
+    db
+      .prepare(
+        `SELECT COUNT(*) as n, MAX(n.created_at) as at, SUM(n.read_at IS NULL) as unread,
+                (SELECT COUNT(*) FROM activity_reactions ar WHERE ar.entity_id IN
+                   (SELECT entity_id FROM notifications WHERE user_id = ?1 AND entity_id IS NOT NULL
+                      AND category IN ('crew_request', 'crew_request_accepted', 'crew_connected'))) as rn,
+                (SELECT MAX(ar.created_at) FROM activity_reactions ar WHERE ar.entity_id IN
+                   (SELECT entity_id FROM notifications WHERE user_id = ?1 AND entity_id IS NOT NULL
+                      AND category IN ('crew_request', 'crew_request_accepted', 'crew_connected'))) as rat
+         FROM notifications n
+         WHERE n.user_id = ?1
+           AND n.category IN ('crew_request', 'crew_request_accepted', 'crew_connected')`,
+      )
+      .bind(userId)
+      .first<{ n: number; at: string | null; unread: number | null; rn: number; rat: string | null }>(),
+  ]);
+
+  const notModified = conditional(
+    c,
+    weakEtag(
+      'feed', limit, encodeURIComponent(cursor ?? ''),
+      evStamp?.n, evStamp?.at, evStamp?.rn, evStamp?.rat,
+      noteStamp?.n, noteStamp?.at, noteStamp?.unread, noteStamp?.rn, noteStamp?.rat,
+      stalenessBucket(Date.now(), 60_000),
+    ),
+  );
+  if (notModified) return notModified;
 
   const eventQuery = db.prepare(
     `SELECT re.id, re.event_type, re.race_id, r.title as race_title,

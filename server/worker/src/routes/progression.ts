@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import {
   markLevelSeen,
   readBadgeCollection,
@@ -8,6 +9,16 @@ import {
   readRaceXp,
   setFeaturedBadges,
 } from '../domain/progression';
+
+/** Small non-cryptographic string hash (FNV-1a, base36) for ETag parts. */
+function fnv(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
 
 export const progressionRouter = new Hono<AppEnv>();
 
@@ -18,6 +29,25 @@ progressionRouter.use('*', requireAuth);
 progressionRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const payload = await readProgression(c.env.DB, userId);
+  // Validator derived from the reconciled payload itself, so every input to it
+  // (xp, level, stats-driven achievement progress, unlocks, featured badges,
+  // newlyEarned) is covered. 5-minute bucket bounds unlock_definitions edits.
+  const { newlyEarned, ...rest } = payload;
+  const notModified = conditional(
+    c,
+    weakEtag(
+      'prog',
+      payload.totalXp,
+      payload.level,
+      payload.lastSeenLevel,
+      payload.achievementsEarned,
+      payload.achievementsTotal,
+      fnv(JSON.stringify(rest)),
+      fnv(JSON.stringify(newlyEarned ?? null)),
+      stalenessBucket(),
+    ),
+  );
+  if (notModified) return notModified;
   return c.json({ ok: true, progression: payload });
 });
 

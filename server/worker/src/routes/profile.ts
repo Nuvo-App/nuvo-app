@@ -98,6 +98,8 @@ profileRouter.get('/activity', async (c) => {
   )
     .bind(shift, userId, `-${days} days`)
     .all<{ day: string; proofs: number }>();
+  c.header('Cache-Control', 'private, max-age=60');
+  c.header('Vary', 'Authorization');
   return c.json({
     ok: true,
     days: (results ?? []).map((r) => ({ date: r.day, proofs: r.proofs })),

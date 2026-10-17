@@ -97,6 +97,8 @@ app.get('/config', async (c) => {
       // anonymous
     }
   }
+  c.header('Cache-Control', 'private, max-age=60');
+  c.header('Vary', 'Authorization');
   return c.json({
     custom_motion: customMotion,
     crews: true,
@@ -248,6 +250,7 @@ app.get('/races/activities', async (c) => {
     }));
     const etag = `\"${catalog.catalogVersion}:${activities.length}\"`;
     c.header('ETag', etag);
+    c.header('Cache-Control', 'public, max-age=300');
     if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
     return c.json({
       ok: true,

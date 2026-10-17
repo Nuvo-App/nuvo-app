@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import type { Context } from 'hono';
 import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
@@ -1250,6 +1251,56 @@ racesRouter.get('/', async (c) => {
      WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
      ORDER BY r.created_at DESC`
   ).bind(userId, userId).all<RaceRow>();
+
+  // Conditional GET. Skipped while any race still has a lazy finalize pending:
+  // the builder below performs that write, so a validator computed before it
+  // could hide the transition (the next read validates the settled state).
+  const nowMs = Date.now();
+  const finalizePending = rows.results.some(
+    (r) => r.status === 'active' && r.end_at && new Date(r.end_at).getTime() <= nowMs,
+  );
+  if (!finalizePending) {
+    // One round trip over exactly the races this viewer's list returns.
+    const sig = await c.env.DB.prepare(
+      `WITH s AS (
+         SELECT DISTINCT r.id FROM races r
+         LEFT JOIN race_members rm ON rm.race_id = r.id AND rm.user_id = ? AND rm.status = 'active'
+         WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
+       )
+       SELECT
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '') FROM race_members
+            WHERE status = 'active' AND race_id IN (SELECT id FROM s)) AS members,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), '') || ':' || COALESCE(SUM(rank_cache), 0)
+                || ':' || COALESCE(SUM(progress_value), 0) FROM race_progress
+            WHERE race_id IN (SELECT id FROM s)) AS progress,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(SUM(status = 'verified'), 0)
+                || ':' || COALESCE(SUM(status = 'rejected'), 0) || ':' || COALESCE(SUM(LENGTH(COALESCE(summary, ''))), 0)
+                FROM move_logs WHERE status != 'removed' AND race_id IN (SELECT id FROM s)) AS moves,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(MAX(id), '') FROM race_invites
+            WHERE status = 'active' AND race_id IN (SELECT id FROM s)) AS invites,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(rank_position), 0) || ':' || COALESCE(SUM(score_value), 0)
+            FROM race_final_standings WHERE race_id IN (SELECT id FROM s)) AS standings,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(status = 'open'), 0) FROM race_attempts
+            WHERE user_id = ? AND race_id IN (SELECT id FROM s)) AS attempts`
+    ).bind(userId, userId, userId).first<Record<string, string | null>>();
+    let maxVersion = 0;
+    let maxUpdated = '';
+    const phases: string[] = [];
+    for (const r of rows.results) {
+      maxVersion = Math.max(maxVersion, r.version ?? 0);
+      if ((r.updated_at ?? '') > maxUpdated) maxUpdated = r.updated_at ?? '';
+      // Time-derived status flips (scheduled -> active) don't touch the row.
+      phases.push(effectiveRaceStatus(r.status, r.start_at, r.end_at, new Date(nowMs)).charAt(0));
+    }
+    const etag = weakEtag(
+      'races', userId, rows.results.length, maxVersion, maxUpdated, phases.join(''),
+      sig?.members, sig?.progress, sig?.moves, sig?.invites, sig?.standings, sig?.attempts,
+      stalenessBucket(nowMs),
+    );
+    const nm = conditional(c, etag);
+    if (nm) return nm;
+  }
+
   let races: unknown[];
   try {
     races = await buildRaceResponsesBatch(c.env, userId, rows.results);
@@ -1527,6 +1578,40 @@ racesRouter.get('/:id', async (c) => {
   if (!race) return c.json(badRequest('Race not found'), 404);
   const access = await resolveRaceAccess(c.env.DB, race, c.get('userId'));
   if (!access.canRead) return c.json(badRequest('Race not found'), 404);
+
+  // Conditional GET (after the 404/403 checks above). Skipped while a lazy
+  // finalize is pending: buildRaceResponse performs that write.
+  const nowMs = Date.now();
+  const finalizePending = race.status === 'active' && race.end_at && new Date(race.end_at).getTime() <= nowMs;
+  if (!finalizePending) {
+    const viewerId = c.get('userId');
+    const sig = await c.env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '') FROM race_members
+            WHERE status = 'active' AND race_id = ?1) AS members,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), '') || ':' || COALESCE(SUM(rank_cache), 0)
+                || ':' || COALESCE(SUM(progress_value), 0) FROM race_progress WHERE race_id = ?1) AS progress,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(SUM(status = 'verified'), 0)
+                || ':' || COALESCE(SUM(status = 'rejected'), 0) || ':' || COALESCE(SUM(LENGTH(COALESCE(summary, ''))), 0)
+                FROM move_logs WHERE status != 'removed' AND race_id = ?1) AS moves,
+         (SELECT COUNT(*) FROM proof_votes WHERE race_id = ?1) AS votes,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(MAX(id), '') FROM race_invites
+            WHERE status = 'active' AND race_id = ?1) AS invites,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(rank_position), 0) || ':' || COALESCE(SUM(score_value), 0)
+            FROM race_final_standings WHERE race_id = ?1) AS standings,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(status = 'open'), 0) FROM race_attempts
+            WHERE user_id = ?2 AND race_id = ?1) AS attempts`
+    ).bind(race.id, viewerId).first<Record<string, string | number | null>>();
+    const etag = weakEtag(
+      'race', race.id, viewerId, race.version ?? 0, race.updated_at,
+      effectiveRaceStatus(race.status, race.start_at, race.end_at, new Date(nowMs)),
+      sig?.members, sig?.progress, sig?.moves, sig?.votes, sig?.invites, sig?.standings, sig?.attempts,
+      // 60 s: countdown fields, verifier release, profile names/avatars/levels.
+      stalenessBucket(nowMs, 60_000),
+    );
+    const nm = conditional(c, etag);
+    if (nm) return nm;
+  }
   try {
     return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
   } catch (err) {
