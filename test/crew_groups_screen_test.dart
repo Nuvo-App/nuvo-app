@@ -177,10 +177,10 @@ void main() {
     expect(find.text('Add people'), findsOneWidget);
     expect(find.text('Add race'), findsOneWidget); // I own this crew
     // The Races tab is the default and lists each race as its own card.
-    expect(find.text('Races 1'), findsOneWidget);
+    expect(find.text('Races (1)'), findsOneWidget);
     expect(find.text('Morning push-ups'), findsOneWidget);
     expect(find.text('Tap a race to see its leaderboard.'), findsOneWidget);
-    await tester.tap(find.text('Members 4'));
+    await tester.tap(find.text('Members (4)'));
     await tester.pumpAndSettle();
     expect(find.text('Owner'), findsWidgets);
     expect(find.text('Ava Long'), findsOneWidget);
@@ -204,7 +204,7 @@ void main() {
     await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), const [],
         dark: true);
     expect(tester.takeException(), isNull);
-    expect(find.text('Races 1'), findsOneWidget);
+    expect(find.text('Races (1)'), findsOneWidget);
   });
 
   group('crew icon', () {

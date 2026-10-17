@@ -901,8 +901,8 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
                 _CrewTabBar(
                   selected: _tab,
                   labels: [
-                    'Races ${group.raceCount}',
-                    'Members ${group.memberCount}',
+                    'Races (${group.raceCount})',
+                    'Members (${group.memberCount})',
                   ],
                   onSelect: (i) => setState(() => _tab = i),
                 ),
