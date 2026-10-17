@@ -619,11 +619,11 @@ squadsRouter.post('/:id/leave', async (c) => {
     .bind(squad.id, userId)
     .run();
 
-  // The owner leaving hands the crew to its longest-standing member, or
+  // The owner leaving hands the crew to an admin first, else the longest-standing member, or
   // retires it when nobody is left.
   if (squad.owner_id === userId) {
     const next = await c.env.DB.prepare(
-      `SELECT user_id FROM squad_members WHERE squad_id = ? AND status = 'active' ORDER BY joined_at ASC LIMIT 1`,
+      `SELECT user_id FROM squad_members WHERE squad_id = ? AND status = 'active' ORDER BY (role = 'admin') DESC, joined_at ASC LIMIT 1`,
     )
       .bind(squad.id)
       .first<{ user_id: string }>();
