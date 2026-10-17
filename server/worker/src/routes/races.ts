@@ -1275,6 +1275,35 @@ racesRouter.get('/', async (c) => {
 });
 
 // POST /races
+/** One structured line per refused race creation, so `wrangler tail` shows
+ *  exactly which shape a client sent and why it was refused (no body content,
+ *  only field presence). */
+function logCreateRejected(
+  c: { req: { header(name: string): string | undefined } },
+  userId: string,
+  stage: string,
+  error: string,
+  body: Record<string, unknown>,
+): void {
+  console.log(
+    JSON.stringify({
+      evt: 'race_create_rejected',
+      stage,
+      error,
+      userId,
+      format: body.format ?? null,
+      goalType: body.goalType ?? null,
+      hasTarget: body.targetValue != null,
+      hasFinishLine: Boolean(body.finishLineAt ?? body.endsAt),
+      hasDuration: body.attemptDurationSeconds != null,
+      activityId: body.activityId ?? body.aiActivityType ?? null,
+      verifierType: body.verifierType ?? null,
+      proofMode: body.proofMode ?? null,
+      app: c.req.header('user-agent') ?? null,
+    }),
+  );
+}
+
 racesRouter.post('/', async (c) => {
   const userId = c.get('userId');
 
@@ -1294,6 +1323,7 @@ racesRouter.post('/', async (c) => {
   const raceSubjectText = `${title} ${stringOrNull(body.customActivityName) ?? stringOrNull(body.custom_activity_name) ?? ''}`.trim();
   const safety = evaluateRaceSafety(raceSubjectText);
   if (!safety.ok) {
+    logCreateRejected(c, userId, 'safety', safety.reason ?? 'safety', body);
     return c.json({ ok: false, error: safety.reason, safetyCategory: safety.category }, 400);
   }
 
@@ -1301,12 +1331,14 @@ racesRouter.post('/', async (c) => {
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
   const customConfig = customConfigFromBody(body);
   if (customConfig && 'error' in customConfig) {
+    logCreateRejected(c, userId, 'custom', customConfig.error, body);
     return c.json(badRequest(customConfig.error), 400);
   }
   const isCustomConfig = Boolean(customConfig);
 
   const manualConfig = isCustomConfig ? null : manualConfigFromBody(body);
   if (manualConfig && 'error' in manualConfig) {
+    logCreateRejected(c, userId, 'manual', manualConfig.error, body);
     return c.json(badRequest(manualConfig.error), 400);
   }
   const manual = manualConfig && !('error' in manualConfig) ? manualConfig : null;
@@ -1334,6 +1366,7 @@ racesRouter.post('/', async (c) => {
     }
   }
   if (!isCustomConfig && !manual && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
+    logCreateRejected(c, userId, 'preset', structuredConfig.error, body);
     return c.json(badRequest(structuredConfig.error), 400);
   }
 
@@ -1369,7 +1402,10 @@ racesRouter.post('/', async (c) => {
   // Finish-line sanity (parseable, after the start line, in the future, and
   // mandatory for most/best formats) — see validateRaceWindow.
   const raceWindow = validateRaceWindow(raceFormat, rawStartAt, rawEndAt);
-  if ('error' in raceWindow) return c.json(badRequest(raceWindow.error), 400);
+  if ('error' in raceWindow) {
+    logCreateRejected(c, userId, 'window', raceWindow.error, body);
+    return c.json(badRequest(raceWindow.error), 400);
+  }
   const startAt = raceWindow.startsAt;
   const endAt = raceWindow.endsAt;
   const raceActivityId = custom || manual ? null : config?.activityId ?? normalizeActivityIdLoose(movementType);
