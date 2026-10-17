@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/core/theme/app_colors.dart';
 import 'package:nuvo/core/config/nuvo_flags.dart';
 import 'package:nuvo/core/widgets/nuvo_error_state.dart';
 import 'package:nuvo/core/widgets/nuvo_icons.dart';
@@ -687,6 +688,18 @@ void main() {
         expect(find.text('Race together on one leaderboard'), findsOneWidget);
         expect(find.byType(NuvoCrewIcon), findsOneWidget);
         expect(find.byIcon(Icons.groups_rounded), findsNothing);
+        final card = tester.widget<DecoratedBox>(
+          find.byKey(const ValueKey('people-card')),
+        );
+        final deco = card.decoration as BoxDecoration;
+        final colors = tester
+            .element(find.byKey(const ValueKey('people-card')))
+            .themeColors;
+        expect(deco.color, colors.surface);
+        expect(deco.boxShadow, isNull);
+        final side = (deco.border! as Border).top;
+        expect(side.width, 2);
+        expect(side.color, colors.border);
         expect(tester.takeException(), isNull);
       });
     }

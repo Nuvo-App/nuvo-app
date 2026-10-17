@@ -90,6 +90,7 @@ class ActivityHeatmap extends StatelessWidget {
   static const double _topGap = 18;
   static const double _pad = 14;
   static const double _gap = 3;
+  static const double _cellOutline = 1.25;
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +127,9 @@ class ActivityHeatmap extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(_pad),
             decoration: BoxDecoration(
-              color: c.panelLight,
+              // White card (no ice-blue plane) so the outlined tiles read as a
+              // layer sitting on it.
+              color: c.surface,
               borderRadius: BorderRadius.circular(22),
               border: Border.all(color: c.border, width: 2),
               boxShadow: AppShadows.hardOffset(c.inkShadow),
@@ -207,6 +210,15 @@ class ActivityHeatmap extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(
                                         radius,
                                       ),
+                                      // A firm ink outline on every day tile —
+                                      // thick enough to read at this size, thin
+                                      // enough to stay a texture.
+                                      border: days[w * 7 + d] == null
+                                          ? null
+                                          : Border.all(
+                                              color: c.border,
+                                              width: _cellOutline,
+                                            ),
                                     ),
                                   ),
                                 ),
@@ -236,6 +248,10 @@ class ActivityHeatmap extends StatelessWidget {
                                 decoration: BoxDecoration(
                                   color: shade(l),
                                   borderRadius: BorderRadius.circular(3),
+                                  border: Border.all(
+                                    color: c.border,
+                                    width: _cellOutline,
+                                  ),
                                 ),
                               ),
                             ),

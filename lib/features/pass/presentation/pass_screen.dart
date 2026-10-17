@@ -3248,13 +3248,7 @@ class _RequestSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: Border.all(color: context.themeColors.border, width: 1),
-        // A quiet offset plate — the sheet floats on the social field,
-        // quieter than the featured race's hero plate.
-        boxShadow: AppShadows.hardOffset(
-          context.themeColors.inkShadow,
-          offset: const Offset(2, 2),
-        ),
+        border: Border.all(color: context.themeColors.divider, width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.card - 1),
@@ -3556,9 +3550,8 @@ class _SearchResultList extends StatelessWidget {
   }
 }
 
-/// The social stage — one ice region under the lens switch holding the
-/// crews entry, the people, and their asks. No edge, no shadow: a layer, not
-/// a card.
+/// The social stage — one white card with the app's navy ink outline holding
+/// the crews entry, the people, and their asks. No offset shadow.
 class _SocialField extends StatelessWidget {
   const _SocialField({required this.child});
 
@@ -3566,30 +3559,31 @@ class _SocialField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The list carries no horizontal padding — this field is already at
-    // full width, so the ice bleeds edge-to-edge and the page inset lives
-    // inside.
-    return Container(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(
         NuvoSpacing.pageHorizontal,
-        16,
+        8,
         NuvoSpacing.pageHorizontal,
-        40,
+        32,
       ),
-      decoration: BoxDecoration(
-        color: context.themeColors.panelLight,
-        // A designed edge, not a symmetric cookie-cut: the left corner
-        // scoops deep while the right lifts, so the boundary reads as a
-        // shape transition between worlds. The tonal lip underneath is
-        // the folded edge of the sheet — a whisper, not a border.
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.elliptical(52, 34),
+      child: DecoratedBox(
+        key: const ValueKey('people-card'),
+        decoration: BoxDecoration(
+          color: context.themeColors.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.card),
+          border: Border.all(color: context.themeColors.border, width: 2),
         ),
-        border: Border(
-          bottom: BorderSide(color: context.themeColors.divider, width: 1),
+        child: Padding(
+          // 16 inside; tighter sides on the narrowest phones so rows keep room.
+          padding: EdgeInsets.fromLTRB(
+            MediaQuery.sizeOf(context).width < 340 ? 6 : 16,
+            16,
+            MediaQuery.sizeOf(context).width < 340 ? 6 : 16,
+            16,
+          ),
+          child: child,
         ),
       ),
-      child: child,
     );
   }
 }

@@ -1182,7 +1182,7 @@ class RaceStatusPill extends StatelessWidget {
         text = dark ? c.goldText : const Color(0xFF7A5700);
       case RaceRowTone.waiting:
         base = c.inkMuted;
-        text = dark ? c.inkMuted : const Color(0xFF4E5B73);
+        text = dark ? c.ink : const Color(0xFF4E5B73);
     }
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 132),

@@ -457,7 +457,41 @@ class _CappedRaceList extends StatelessWidget {
     );
   }
 
-  Widget _buildField(BuildContext context, List<Race> visible, bool hasMore) {
+  Widget _buildField(BuildContext outer, List<Race> visible, bool hasMore) {
+    // Navy card: light mode is solid brand navy, dark mode a lifted navy
+    // (dark panel). Everything inside resolves to the DARK tokens so text,
+    // pills, dividers and painters read light-on-navy.
+    final lightMode = Theme.of(outer).brightness == Brightness.light;
+    final fill = lightMode ? NuvoColors.navy : NuvoThemeColors.dark.panel;
+    final edge = lightMode ? NuvoColors.navy : NuvoThemeColors.dark.border;
+    final base = Theme.of(outer);
+    final darkTheme = base.copyWith(
+      brightness: Brightness.dark,
+      extensions: [
+        for (final e in base.extensions.values)
+          if (e is! NuvoThemeColors && e is! NuvoSemanticColors) e,
+        NuvoSemanticColors.dark,
+        NuvoThemeColors.dark,
+      ],
+    );
+    return Theme(
+      data: darkTheme,
+      child: Builder(
+        builder: (context) => DefaultTextStyle.merge(
+          style: TextStyle(color: NuvoThemeColors.dark.ink),
+          child: _navyField(context, visible, hasMore, fill, edge),
+        ),
+      ),
+    );
+  }
+
+  Widget _navyField(
+    BuildContext context,
+    List<Race> visible,
+    bool hasMore,
+    Color fill,
+    Color edge,
+  ) {
     final c = context.themeColors;
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -467,11 +501,13 @@ class _CappedRaceList extends StatelessWidget {
         NuvoSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: c.panelLight,
+        color: fill,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        // The main card on Compete: ink outline + hard-offset plate.
-        border: Border.all(color: c.border, width: 2),
-        boxShadow: AppShadows.hardOffset(c.inkShadow),
+        // Navy card: same-colour outline + hard-offset plate.
+        border: Border.all(color: edge, width: 2),
+        boxShadow: AppShadows.hardOffset(
+          fill == NuvoColors.navy ? NuvoColors.navy : c.inkShadow,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,7 +519,7 @@ class _CappedRaceList extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Your races · ${races.length} active',
-                    style: AppTextStyles.sectionTitle,
+                    style: AppTextStyles.sectionTitle.copyWith(color: c.ink),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

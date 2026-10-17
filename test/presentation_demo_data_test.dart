@@ -34,10 +34,28 @@ void main() {
       final displayed = presentedUser(user);
       expect(displayed.id, user.id);
       expect(displayed.email, user.email);
-      expect(displayed.fullName, 'Maya Chen');
-      expect(displayed.username, 'maya');
+      // The owner's demo shows their own name, not the stand-in persona.
+      expect(displayed.fullName, 'Akshayraj Sanjai');
+      expect(displayed.username, 'akshayraj');
+      expect(presentationViewerName, 'Akshayraj Sanjai');
     },
   );
+
+  test('the store-review identity keeps the Maya Chen persona', () {
+    const reviewer = AuthUser(
+      id: 'reviewer-user',
+      email: 'testing@getnuvo.net',
+      isDemo: true,
+      fullName: 'Reviewer',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    );
+    final displayed = presentedUser(reviewer);
+    expect(displayed.fullName, 'Maya Chen');
+    expect(displayed.username, 'maya');
+    expect(presentationViewerName, 'Maya Chen');
+  });
 
   test(
     'the dedicated store-review identity is always presentation mode, no '
