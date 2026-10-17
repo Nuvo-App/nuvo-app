@@ -30,3 +30,15 @@ export function applyVerifiedSubmission(input: ScoreInput): ScoreOutput {
   const completed = input.format === 'first_to_goal' && Boolean(target && newScore >= target);
   return { newScore, progressPercent, completed };
 }
+
+/** Largest value one proof may carry, per metric. Real work never gets near
+ *  these; they only stop an absurd claim from deciding a race in one write. */
+export const MAX_REPS_PER_SUBMISSION = 3000;
+export const MAX_SECONDS_PER_SUBMISSION = 8 * 60 * 60;
+/** Honor-logged units ("pages", "minutes", "steps") are free-form. */
+export const MAX_MANUAL_VALUE_PER_SUBMISSION = 100_000;
+
+export function maxSubmissionValue(metric: string | null | undefined, manual: boolean): number {
+  if (manual) return MAX_MANUAL_VALUE_PER_SUBMISSION;
+  return metric === 'seconds' ? MAX_SECONDS_PER_SUBMISSION : MAX_REPS_PER_SUBMISSION;
+}

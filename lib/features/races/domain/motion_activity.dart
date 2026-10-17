@@ -252,9 +252,9 @@ String defaultGoalPrompt(MotionMeasurementType type, String activityTitle) =>
 
 enum RaceFormat {
   firstToGoal('first_to_goal', 'First to the goal'),
-  mostInWindow('most_in_window', 'Most before time runs out'),
-  bestAttempt('best_attempt', 'Best single attempt'),
-  timedAttempt('timed_attempt', 'Timed race');
+  mostInWindow('most_in_window', 'Most total (adds up)'),
+  bestAttempt('best_attempt', 'Single best attempt'),
+  timedAttempt('timed_attempt', 'Timed single attempt');
 
   const RaceFormat(this.backendValue, this.label);
 

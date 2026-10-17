@@ -387,7 +387,8 @@ test('P0-4: creator cannot set progress, rewrite status, re-accept a veto, or re
 
   w.exec("UPDATE races SET status = 'completed', winner_user_id = 'B' WHERE id = ?", r);
   assert.equal((await w.req('A', 'PATCH', `/races/${r}`, { status: 'active' })).status, 409, 'cannot reopen');
-  assert.equal((await w.req('A', 'PATCH', `/races/${r}`, { status: 'cancelled' })).status, 200, 'withdrawing is allowed');
+  assert.equal((await w.req('A', 'PATCH', `/races/${r}`, { status: 'cancelled' })).status, 409, 'a finished race cannot be cancelled away');
+  assert.equal((await w.req('A', 'PATCH', `/races/${r}`, { status: 'archived' })).status, 200, 'archiving is allowed');
   await w.flush();
   w.fkClean();
 });

@@ -1,3 +1,23 @@
+// ── FORMAT RULES: cumulative vs single-attempt ─────────────────────────────
+// Things that add up are scored by TOTAL, not by one best attempt.
+//
+// 1. "most X" / "who can do the most X" / "most X this week | today | by
+//    Friday | in a day | in N hours | in N minutes (N >= 3)" =>
+//    most_in_window, scoringRule cumulative_sum. Every verified submission
+//    ADDS to the person's total; the highest total when the race ends wins.
+//    The race window comes from the stated duration/deadline ("in an hour"
+//    => finish line = start + 1 hour, "this week" => end of week). With no
+//    window stated the deadline stays null and the composer must ask for a
+//    finish line — a target is never invented (the target is unused for
+//    this format).
+// 2. timed_attempt (one timed attempt, best of the attempts) ONLY for an
+//    explicit very short single-effort window: "most X in 30 seconds",
+//    "in 1-2 minutes" (<= 120 s).
+// 3. best_attempt (single maximum/minimum result) ONLY for explicit
+//    single-result language: best, longest, highest, heaviest, fastest,
+//    personal best, max, "lowest score wins", etc.
+// 4. first_to_goal ("first to 100 pushups") is unchanged.
+
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 import 'race_draft.dart';
@@ -392,6 +412,13 @@ FlexiRaceInterpretation interpretRaceName(
   if (timed != null) {
     var subject = timed.subject;
     var duration = timed.seconds;
+    // RULE 1 (see header): "most X in 30 minutes" / "in an hour" is a
+    // cumulative race whose finish line IS the stated window, not a single
+    // timed attempt. Only <= 120 s windows stay timed attempts (rule 2), and
+    // explicit single-result words keep today's attempt behaviour (rule 3).
+    final cumulativeWindow = duration > _timedAttemptMaxSeconds &&
+        RegExp(r'\b(most|many)\b').hasMatch(core) &&
+        !_singleResultWord.hasMatch(core);
     final activity = _activityFor(subject, activities);
     String? question;
     if (duration <= 0) {
@@ -422,15 +449,24 @@ FlexiRaceInterpretation interpretRaceName(
       goalKind: activity == null ? RaceGoalKind.manual : RaceGoalKind.movement,
       activity: activity,
       metric: activity?.metric ?? RaceMetric.reps,
-      format: _supported(
-        activity,
-        RaceFormat.timedAttempt,
-        assumptions,
-        'timed attempts',
-      ),
+      format: cumulativeWindow
+          ? _supported(
+              activity,
+              RaceFormat.mostInWindow,
+              assumptions,
+              'a most-total race',
+            )
+          : _supported(
+              activity,
+              RaceFormat.timedAttempt,
+              assumptions,
+              'timed attempts',
+            ),
       targetValue: activity?.defaultTarget ?? 1,
-      attemptDurationSeconds: duration,
-      deadline: deadline ?? _secondWindowDeadline(core),
+      attemptDurationSeconds: cumulativeWindow ? null : duration,
+      deadline: cumulativeWindow
+          ? (deadline ?? _windowPhrase(duration))
+          : (deadline ?? _secondWindowDeadline(core)),
       proofNeed: _resolveProofNeed(
         proofOverride, activity, subject, goalName, manualUnit),
       confidence: activity == null || question != null
@@ -750,16 +786,14 @@ FlexiRaceInterpretation interpretRaceName(
     // a renamed goal can itself carry the missing clarification.
     question ??= _genericSubjectQuestion[goalName];
     // "Most X in <event scope>" (one game, batting practice) is a single
-    // attempt; "most X" alone accumulates. A contradiction defers the
-    // format decision to the clarification, so it reads as best-attempt.
-    // A stated finish line makes even a preset race cumulative-before-
-    // deadline ("most pushups by 8pm").
+    // attempt; "most X" alone accumulates (rule 1, with or without a stated
+    // finish line). A contradiction defers the format decision to the
+    // clarification, so it reads as best-attempt.
     final cumulative = word == 'most' &&
         !_singleAttemptSubject(
             '$subject $tailText ${constraint.text ?? ''} $scopeCtx') &&
         !contradicts &&
-        !RegExp(r'\sin\s*$').hasMatch(core) &&
-        (activity == null || deadline != null);
+        !RegExp(r'\sin\s*$').hasMatch(core);
     // Completion-class canon names ("sensors integrated", "books read
     // with a photo of each") describe reaching a finished state — that is
     // a goal race, not an accumulation.
@@ -1053,12 +1087,15 @@ DateTime? deadlineUtcFromPhrase(String? phrase) {
       return (aug.isAfter(now) ? aug : DateTime(now.year + 1, 8, 31, 23, 59, 59))
           .toUtc();
   }
-  final rel = RegExp(r'^(\d+)\s*(hours?|days?|weeks?|months?)').firstMatch(phrase);
+  final rel = RegExp(r'^(\d+)\s*(minutes?|mins?|hours?|days?|weeks?|months?)')
+      .firstMatch(phrase);
   if (rel != null) {
     final n = int.parse(rel.group(1)!);
     final u = rel.group(2)!;
     return now
-        .add(u.startsWith('h')
+        .add(u.startsWith('mi')
+            ? Duration(minutes: n)
+            : u.startsWith('h')
             ? Duration(hours: n)
             : u.startsWith('d')
                 ? Duration(days: n)
@@ -1461,6 +1498,26 @@ _Timed? _attemptWindow(String core) {
     cleaned = '';
   }
   return _Timed(cleaned, seconds);
+}
+
+/// Longest window (seconds) that still reads as ONE timed attempt.
+const _timedAttemptMaxSeconds = 120;
+
+/// Words that name one single result ("longest", "best", "max") — they keep
+/// attempt semantics even over a long window.
+final _singleResultWord = RegExp(
+  r'\b(best|longest|highest|heaviest|fastest|farthest|furthest|max|maximum|personal best)\b',
+);
+
+/// A stated window as a finish-line phrase the composer can resolve:
+/// 3600 -> "1 hour", 1800 -> "30 minutes".
+String _windowPhrase(int seconds) {
+  if (seconds % 3600 == 0) {
+    final h = seconds ~/ 3600;
+    return h == 1 ? '1 hour' : '$h hours';
+  }
+  final m = (seconds / 60).round();
+  return '$m minutes';
 }
 
 /// When a timed attempt ALSO carries a race window ("most pushups in 30

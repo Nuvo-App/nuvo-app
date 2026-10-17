@@ -47,3 +47,19 @@ test('first to goal still completes at the target', () => {
   assert.equal(out.progressPercent, 100);
   assert.equal(out.completed, true);
 });
+
+const { validateRaceWindow } = require('../.tmp-test-dist/domain/raceValidation.js');
+
+test('finish line: most_in_window requires one; attempt races get a default instead of a refusal', () => {
+  const now = new Date('2026-01-01T00:00:00.000Z');
+  assert.ok(validateRaceWindow('most_in_window', null, null, now).error);
+  const timed = validateRaceWindow('timed_attempt', null, null, now);
+  assert.equal(timed.endsAt, '2026-01-02T00:00:00.000Z');
+  const best = validateRaceWindow('best_attempt', null, null, now);
+  assert.equal(best.endsAt, '2026-01-08T00:00:00.000Z');
+  // an explicit finish line still wins, and a past one is still refused
+  assert.equal(validateRaceWindow('best_attempt', null, '2026-02-01T00:00:00Z', now).endsAt, '2026-02-01T00:00:00.000Z');
+  assert.ok(validateRaceWindow('best_attempt', null, '2025-12-01T00:00:00Z', now).error);
+  // first to goal has no window at all
+  assert.equal(validateRaceWindow('first_to_goal', null, null, now).endsAt, null);
+});

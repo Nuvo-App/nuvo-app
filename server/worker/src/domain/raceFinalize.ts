@@ -38,6 +38,9 @@ export function deadlineEligibility(
   if (effective === 'active') return 'active';
   if (effective !== 'completed' || !race.end_at || !capturedAt) return 'closed';
   const end = new Date(race.end_at).getTime();
+  // A race completed BEFORE its finish line (someone reached the goal) is
+  // over — nothing captured afterwards can still count toward it.
+  if (end > receivedAt.getTime()) return 'closed';
   const captured = capturedAt.getTime();
   // Bound client-clock manipulation: captured time must precede the deadline
   // and be within the grace window of the receive time.
