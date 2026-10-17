@@ -217,16 +217,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     builder: (context, sc) {
                       // Calm space so Your Nuvo always starts below the fold: when
                       // the heat map ends inside the viewport, push the section to
-                      // the viewport's bottom edge so none of it shows half-cut.
-                      // The section starts behind the floating nav (its top edge
-                      // is the page's bottom padding up), so it is out of sight
-                      // at rest but only a short scroll away.
+                      // just past the viewport's bottom edge so no label or row
+                      // straddles the screen edge at rest. It is a short scroll away.
                       final remaining =
-                          sc.viewportMainAxisExtent -
-                          sc.precedingScrollExtent -
-                          MediaQuery.paddingOf(context).bottom;
+                          sc.viewportMainAxisExtent - sc.precedingScrollExtent;
                       final gap = remaining > 0
-                          ? math.max(NuvoSpacing.xl, remaining + 4)
+                          ? math.max(NuvoSpacing.xl, remaining + 2)
                           : NuvoSpacing.xl;
                       return SliverToBoxAdapter(
                         child: Padding(

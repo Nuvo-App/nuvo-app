@@ -71,6 +71,16 @@ class NuvoCharacterPose {
 /// face and a filled silhouette.
 enum NuvoCharacterStyle { solid, lineArt }
 
+/// Camera angle for the character.
+///
+/// [front] is the default square-on figure used by standing movements.
+/// [side] draws the body in profile for floor movements (pushups, plank):
+/// a rounded torso, a head joined by a neck, thick two-segment limbs with
+/// visible elbows and knees, planted hands and toes, and a floor line. In side
+/// view the `left*` joints are the near limbs and the `right*` joints are the
+/// far limbs (drawn lighter, behind the near ones).
+enum NuvoCharacterView { front, side }
+
 /// Paints a neutral movement preview from a [NuvoCharacterPose].
 ///
 /// The character is built from filled rounded body segments — capsules for
@@ -86,6 +96,7 @@ class NuvoCharacterPainter extends CustomPainter {
     this.outlineColor = Colors.white,
     this.outlineWidth = 0,
     this.backgroundRadius = 0,
+    this.view = NuvoCharacterView.front,
   });
 
   final NuvoCharacterPose pose;
@@ -108,8 +119,15 @@ class NuvoCharacterPainter extends CustomPainter {
   /// Corner radius for the rounded-rect background plate (0 = no plate).
   final double backgroundRadius;
 
+  /// Camera angle. Defaults to [NuvoCharacterView.front].
+  final NuvoCharacterView view;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (view == NuvoCharacterView.side) {
+      _paintSide(canvas, size);
+      return;
+    }
     // Map normalized 0–1 coordinates to canvas pixels.
     Offset p(Offset normalized) =>
         Offset(normalized.dx * size.width, normalized.dy * size.height);
@@ -203,6 +221,157 @@ class NuvoCharacterPainter extends CustomPainter {
 
     // Head — drawn last so neck overlap is hidden.
     _drawCircle(canvas, head, headRadius, bodyPaint, outlinePaint);
+  }
+
+  // ── Side view ──────────────────────────────────────────────────────────
+  // Side poses are authored for a 7:5 (210 x 150) stage. The stage is fitted
+  // and centred inside the canvas so proportions never stretch.
+  static const double _sideAspect = 1.4;
+  static const double _stageW = 210;
+
+  void _paintSide(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final fitW = math.min(size.width, size.height * _sideAspect);
+    final fitH = fitW / _sideAspect;
+    final fit = Rect.fromLTWH(
+      (size.width - fitW) / 2,
+      (size.height - fitH) / 2,
+      fitW,
+      fitH,
+    );
+    final u = fitW / _stageW; // pixels per stage unit
+    Offset p(Offset n) =>
+        Offset(fit.left + n.dx * fit.width, fit.top + n.dy * fit.height);
+
+    final head = p(pose.head);
+    final shoulder = p(pose.leftShoulder);
+    final hip = p(pose.leftHip);
+    final elbow = p(pose.leftElbow);
+    final wrist = p(pose.leftWrist);
+    final knee = p(pose.leftKnee);
+    final ankle = p(pose.leftAnkle);
+    final fShoulder = p(pose.rightShoulder);
+    final fHip = p(pose.rightHip);
+    final fElbow = p(pose.rightElbow);
+    final fWrist = p(pose.rightWrist);
+    final fKnee = p(pose.rightKnee);
+    final fAnkle = p(pose.rightAnkle);
+
+    final nearPaint = Paint()
+      ..color = bodyColor
+      ..isAntiAlias = true;
+    // Arms use the accent colour (a sleeve) so the elbow bend stays readable
+    // against the torso; the far side is the same colours, washed out.
+    final armPaint = Paint()
+      ..color = accentColor
+      ..isAntiAlias = true;
+    final farPaint = Paint()
+      ..color = Color.lerp(bodyColor, Colors.white, 0.55)!
+      ..isAntiAlias = true;
+    final farArmPaint = Paint()
+      ..color = Color.lerp(accentColor, Colors.white, 0.55)!
+      ..isAntiAlias = true;
+
+    // Sizes, in stage units.
+    final handLen = 8 * u;
+    final handR = 4.5 * u;
+    final toeDrop = 4 * u;
+    final footLen = 8 * u;
+    final footR = 3.2 * u;
+
+    // The floor sits just under the planted hands and toes.
+    final groundY = math.max(
+      math.max(wrist.dy, fWrist.dy) + handR,
+      math.max(ankle.dy, fAnkle.dy) + toeDrop + footR,
+    );
+    final floorPaint = Paint()
+      ..color = bodyColor.withValues(alpha: 0.28)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2 * u
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(size.width * 0.04, groundY + u),
+      Offset(size.width * 0.96, groundY + u),
+      floorPaint,
+    );
+
+    void limb(Offset a, double ra, Offset b, double rb, Paint paint) =>
+        _taperedCapsule(canvas, a, ra * u, b, rb * u, paint);
+
+    void hand(Offset w, Paint paint) {
+      canvas.drawLine(
+        w,
+        w + Offset(handLen, 0),
+        paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = handR * 2
+          ..strokeCap = StrokeCap.round,
+      );
+      paint.style = PaintingStyle.fill;
+    }
+
+    void foot(Offset a, Paint paint) {
+      final toe = Offset(a.dx + footLen, a.dy + toeDrop);
+      canvas.drawLine(
+        a,
+        toe,
+        paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = footR * 2
+          ..strokeCap = StrokeCap.round,
+      );
+      paint.style = PaintingStyle.fill;
+    }
+
+    // Far limbs first, lighter, so the near limbs read in front.
+    limb(fHip, 8.4, fKnee, 7.0, farPaint);
+    limb(fKnee, 7.0, fAnkle, 5.4, farPaint);
+    foot(fAnkle, farPaint);
+    limb(fShoulder, 6.4, fElbow, 5.4, farArmPaint);
+    limb(fElbow, 5.4, fWrist, 4.4, farArmPaint);
+    hand(fWrist, farArmPaint);
+
+    // Near leg, then torso over the hip joint.
+    limb(hip, 8.6, knee, 7.2, nearPaint);
+    limb(knee, 7.2, ankle, 5.6, nearPaint);
+    foot(ankle, nearPaint);
+    limb(shoulder, 11, hip, 9.2, nearPaint);
+
+    // Neck and head, joined to the shoulder.
+    limb(shoulder, 5.5, head, 5.0, nearPaint);
+    canvas.drawCircle(head, 12 * u, nearPaint);
+
+    // Near arm on top.
+    limb(shoulder, 6.6, elbow, 5.6, armPaint);
+    limb(elbow, 5.6, wrist, 4.6, armPaint);
+    hand(wrist, armPaint);
+  }
+
+  /// Draws a limb segment whose radius eases from [ra] at [a] to [rb] at [b].
+  void _taperedCapsule(
+    Canvas canvas,
+    Offset a,
+    double ra,
+    Offset b,
+    double rb,
+    Paint paint,
+  ) {
+    final d = b - a;
+    final len = d.distance;
+    if (len < 0.001) {
+      canvas.drawCircle(a, math.max(ra, rb), paint);
+      return;
+    }
+    final n = Offset(-d.dy / len, d.dx / len);
+    final path = Path()
+      ..moveTo(a.dx + n.dx * ra, a.dy + n.dy * ra)
+      ..lineTo(b.dx + n.dx * rb, b.dy + n.dy * rb)
+      ..lineTo(b.dx - n.dx * rb, b.dy - n.dy * rb)
+      ..lineTo(a.dx - n.dx * ra, a.dy - n.dy * ra)
+      ..close();
+    canvas.drawPath(path, paint);
+    canvas.drawCircle(a, ra, paint);
+    canvas.drawCircle(b, rb, paint);
   }
 
   void _paintLineArt(
@@ -394,6 +563,7 @@ class NuvoCharacterPainter extends CustomPainter {
       old.bodyColor != bodyColor ||
       old.accentColor != accentColor ||
       old.style != style ||
+      old.view != view ||
       old.outlineColor != outlineColor ||
       old.outlineWidth != outlineWidth;
 }
