@@ -25,6 +25,7 @@ import 'package:nuvo/features/profile/application/progression_controller.dart';
 import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/data/progression_models.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
+import 'package:nuvo/features/profile/presentation/widgets/activity_heatmap.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
@@ -271,7 +272,9 @@ void main() {
                 continue;
               }
               final t = (e.widget as Text).data ?? '?';
-              if (r.top < size.height && r.bottom > size.height + 0.5) {
+              // Profile is a normal scrolling page: content may pass under
+              // the nav's bottom fade at rest, so only a missing fade fails.
+              if (!hasFade && r.top < size.height && r.bottom > size.height + 0.5) {
                 reasons.add('"$t" crosses viewport bottom $r');
               }
               if (!hasFade && r.top < navTop - 0.5 && r.bottom > navTop + 0.5) {
@@ -288,6 +291,22 @@ void main() {
                 ),
               );
               expect(p.didExceedMaxLines, isFalse);
+            }
+            // The first screen is filled: content reaches the nav (>= 90%).
+            final more = tester.getRect(find.text('More'));
+            final yourNuvo = find.text('Your Nuvo');
+            final used = yourNuvo.evaluate().isNotEmpty
+                ? navTop
+                : more.bottom;
+            expect(used, greaterThanOrEqualTo(navTop * 0.9));
+            // No blank band between the heat map card and Your Nuvo beyond a
+            // normal section gap.
+            if (yourNuvo.evaluate().isNotEmpty) {
+              final card = tester.getRect(find.byType(ActivityHeatmap));
+              expect(
+                tester.getRect(yourNuvo).top - card.bottom,
+                lessThanOrEqualTo(40),
+              );
             }
             // Key + record strip + achievements whole when on screen.
             expect(find.text('More'), findsOneWidget);

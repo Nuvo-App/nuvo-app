@@ -153,9 +153,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   parent: AlwaysScrollableScrollPhysics(),
                 ),
                 slivers: [
-                  // Top block: title → identity → level → achievements → record,
-                  // then the heat map, which absorbs whatever room is left so the
-                  // first viewport (above the dock) ends on its Less/More key.
+                  // One normal scrolling page: title → identity → level →
+                  // achievements → record → heat map → Your Nuvo, with fixed
+                  // section spacing. The bottom fade eases content under the nav.
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(
@@ -205,112 +205,54 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
                   ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(
+                  const SliverPadding(
+                    padding: EdgeInsets.symmetric(
                       horizontal: NuvoSpacing.pageHorizontal,
                     ),
-                    sliver: SliverLayoutBuilder(
-                      builder: (context, sc) {
-                        // Room left between the end of the record strip and the
-                        // top of the dock, measured at rest. Short screens get
-                        // 0 and the section keeps its natural height (scroll).
-                        final room =
-                            sc.viewportMainAxisExtent -
-                            sc.precedingScrollExtent -
-                            MediaQuery.paddingOf(context).bottom -
-                            NuvoBottomNav.navTopBreath -
-                            _kBottomFadeHeight;
-                        // The card is whole above the dock or not there at
-                        // all: when the room can't hold its header, grid and
-                        // key, it starts just past the viewport's bottom edge
-                        // (a short scroll away) instead of being sliced by the
-                        // dock.
-                        final natural = ActivityHeatmap.naturalHeight(
-                          sc.crossAxisExtent,
-                          MediaQuery.textScalerOf(context),
-                        );
-                        if (room >= natural) {
-                          return SliverToBoxAdapter(
-                            child: ActivityHeatmapSection(minHeight: room),
-                          );
-                        }
-                        final toFold =
-                            sc.viewportMainAxisExtent -
-                            sc.precedingScrollExtent;
-                        return SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              top: toFold > 0 ? toFold + 1 : 0,
-                            ),
-                            child: const ActivityHeatmapSection(),
-                          ),
-                        );
-                      },
-                    ),
+                    sliver: SliverToBoxAdapter(child: ActivityHeatmapSection()),
                   ),
-                  SliverLayoutBuilder(
-                    builder: (context, sc) {
-                      // Calm space so Your Nuvo always starts below the fold: when
-                      // the heat map ends inside the viewport, push the section to
-                      // just past the viewport's bottom edge so no label or row
-                      // straddles the screen edge at rest. It is a short scroll away.
-                      final remaining =
-                          sc.viewportMainAxisExtent - sc.precedingScrollExtent;
-                      // Only hide it below the fold when real content (the heat
-                      // map) fills the screen above it. If that content is
-                      // missing or short (no activity yet, still loading, a
-                      // failed load), a big blank band would just look empty,
-                      // so Your Nuvo flows in naturally instead.
-                      final hasRoomToHide =
-                          remaining > 0 &&
-                          remaining < sc.viewportMainAxisExtent * 0.3;
-                      final gap = hasRoomToHide
-                          ? math.max(NuvoSpacing.xl, remaining + 2)
-                          : NuvoSpacing.xl;
-                      return SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            NuvoSpacing.pageHorizontal,
-                            gap,
-                            NuvoSpacing.pageHorizontal,
-                            NuvoBottomNav.bottomPadding(context),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      NuvoSpacing.pageHorizontal,
+                      NuvoSpacing.xl,
+                      NuvoSpacing.pageHorizontal,
+                      NuvoBottomNav.bottomPadding(context),
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Your Nuvo — the things that are mine and how the app
+                          // feels. Account, privacy and legal live in Settings.
+                          const _SectionLabel(label: 'Your Nuvo'),
+                          const SizedBox(height: NuvoSpacing.md),
+                          _ProfileActionGroup(
                             children: [
-                              // Your Nuvo — the things that are mine and how the app
-                              // feels. Account, privacy and legal live in Settings.
-                              const _SectionLabel(label: 'Your Nuvo'),
-                              const SizedBox(height: NuvoSpacing.md),
-                              _ProfileActionGroup(
-                                children: [
-                                  _AccountRow(
-                                    icon: Icons.qr_code_2_rounded,
-                                    label: 'My code',
-                                    subtitle: 'Your code and pass link',
-                                    onTap: () => context.push('/my-nuvo'),
-                                  ),
-                                  _AccountRow(
-                                    icon: Icons.notifications_outlined,
-                                    label: 'Notifications',
-                                    subtitle: 'Race and friend updates',
-                                    onTap: () =>
-                                        context.push('/settings/notifications'),
-                                  ),
-                                  const _AppearanceRow(),
-                                  _AccountRow(
-                                    icon: Icons.settings_outlined,
-                                    label: 'Settings',
-                                    subtitle: 'Account, privacy and legal',
-                                    onTap: () => context.push('/settings'),
-                                  ),
-                                ],
+                              _AccountRow(
+                                icon: Icons.qr_code_2_rounded,
+                                label: 'My code',
+                                subtitle: 'Your code and pass link',
+                                onTap: () => context.push('/my-nuvo'),
+                              ),
+                              _AccountRow(
+                                icon: Icons.notifications_outlined,
+                                label: 'Notifications',
+                                subtitle: 'Race and friend updates',
+                                onTap: () =>
+                                    context.push('/settings/notifications'),
+                              ),
+                              const _AppearanceRow(),
+                              _AccountRow(
+                                icon: Icons.settings_outlined,
+                                label: 'Settings',
+                                subtitle: 'Account, privacy and legal',
+                                onTap: () => context.push('/settings'),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -408,7 +350,8 @@ class _IdentityCard extends StatelessWidget {
                     child: NuvoAvatar(
                       initials: initials,
                       photoUrl: photoUrl,
-                      size: 48 +
+                      size:
+                          48 +
                           26 *
                               ((_density(context) - _kMinDensity) /
                                   (1 - _kMinDensity)),
@@ -1324,7 +1267,10 @@ class _HeaderStat extends StatelessWidget {
             Text(
               '—',
               style: AppTextStyles.number(
-                22 + 2 * ((_density(context) - _kMinDensity) / (1 - _kMinDensity)),
+                22 +
+                    2 *
+                        ((_density(context) - _kMinDensity) /
+                            (1 - _kMinDensity)),
                 color: c.inkDim,
                 weight: FontWeight.w800,
               ),
@@ -1336,7 +1282,10 @@ class _HeaderStat extends StatelessWidget {
               value: value!,
               format: (v) => '$v$suffix',
               style: AppTextStyles.number(
-                22 + 2 * ((_density(context) - _kMinDensity) / (1 - _kMinDensity)),
+                22 +
+                    2 *
+                        ((_density(context) - _kMinDensity) /
+                            (1 - _kMinDensity)),
                 color: color ?? c.ink,
                 weight: FontWeight.w800,
               ),
@@ -1420,10 +1369,7 @@ class _PresentationModeRow extends StatelessWidget {
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
-              color: c.surface,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
             child: Icon(Icons.slideshow_rounded, color: c.ink, size: 17),
           ),
           const SizedBox(width: NuvoSpacing.md),
@@ -1472,10 +1418,7 @@ class _AppearanceRow extends ConsumerWidget {
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
-              color: c.surface,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
             child: Icon(
               isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
               color: c.ink,
@@ -1603,10 +1546,7 @@ class _MotionConsentRowState extends ConsumerState<_MotionConsentRow> {
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
-              color: c.surface,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
             child: Icon(Icons.motion_photos_on_rounded, color: c.ink, size: 17),
           ),
           const SizedBox(width: NuvoSpacing.md),
@@ -1665,9 +1605,7 @@ class _AccountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final color = isDanger ? context.themeColors.dangerText : c.ink;
-    final bg = isDanger
-        ? NuvoColors.danger.withValues(alpha: 0.10)
-        : c.surface;
+    final bg = isDanger ? NuvoColors.danger.withValues(alpha: 0.10) : c.surface;
     final navigates = !isDanger && !isAction;
 
     return PressableScale(

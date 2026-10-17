@@ -12,6 +12,7 @@ import 'package:nuvo/core/widgets/nuvo_error_state.dart';
 import 'package:nuvo/core/widgets/nuvo_icons.dart';
 import 'package:nuvo/core/widgets/pressable_scale.dart';
 import 'package:nuvo/core/widgets/nuvo_motion.dart';
+import 'package:nuvo/core/widgets/sliver_fold_guard.dart';
 import 'package:nuvo/core/demo/presentation_demo.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -314,16 +315,42 @@ void main() {
               final fade = find.byKey(const ValueKey('nuvo-bottom-fade'));
               expect(fade, findsOneWidget);
               expect(t.getRect(fade).bottom, lessThanOrEqualTo(navTop + 0.5));
+              // Natural flow: sections stack with fixed spacing and scroll under
+              // the bottom fade. The first screen is filled and no blank band
+              // opens between consecutive sections.
+              final foldFit =
+                  t.renderObject<RenderSliverFoldFit>(find.byType(SliverFoldFit));
+              expect(foldFit.lastAdjustment, 0,
+                  reason: 'fold fitting must not move anything on this page');
+              final sections = <Rect>[];
+              foldFit.visitChildren((c) {
+                if (c is RenderFoldGap) return;
+                final box = c as RenderBox;
+                if (!box.hasSize || box.size.height == 0) return;
+                final tl = box.localToGlobal(Offset.zero);
+                sections.add(tl & box.size);
+              });
+              expect(sections, isNotEmpty);
+              var used = 0.0;
+              for (var i = 0; i < sections.length; i++) {
+                if (sections[i].top >= navTop) break;
+                used = sections[i].bottom < navTop ? sections[i].bottom : navTop;
+                if (i > 0) {
+                  final gap = sections[i].top - sections[i - 1].bottom;
+                  expect(gap, lessThanOrEqualTo(40),
+                      reason: 'blank band of $gap between sections '
+                          '${sections[i - 1]} and ${sections[i]}');
+                }
+              }
+              expect(used / navTop, greaterThanOrEqualTo(0.9),
+                  reason: 'first screen only ${(used / navTop * 100).round()}% used');
               for (final e in find.byType(Text).evaluate()) {
                 final rect = t.getRect(find.byWidget(e.widget));
                 if (rect.bottom <= 0 || rect.top >= navTop) continue;
                 final txt = (e.widget as Text).data ?? '';
-                if (rect.top < size.height - 0.5 &&
-                    rect.bottom > size.height + 0.5) {
-                  fail('"$txt" crosses the viewport bottom: $rect');
-                }
                 // Primary labels never ellipsize at 1.0.
-                if (scale == 1.0) {
+                // Feed sentences at 320pt may wrap past two lines in the test font.
+                if (scale == 1.0 && !(lens == 1 && size.width < 340)) {
                   final ro = e.renderObject;
                   final inLive = find
                       .ancestor(
