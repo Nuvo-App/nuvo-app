@@ -1676,6 +1676,9 @@ racesRouter.patch('/:id', async (c) => {
   if (body.startLineAt !== undefined || body.finishLineAt !== undefined) {
     const nextStart = body.startLineAt !== undefined ? stringOrNull(body.startLineAt) ?? null : race.start_at;
     const nextEnd = body.finishLineAt !== undefined ? stringOrNull(body.finishLineAt) ?? null : race.end_at;
+    if ((race.format ?? race.race_type) === 'most_in_window' && !nextEnd) {
+      return c.json(badRequest('A finish line is required.'), 400);
+    }
     const checked = validateRaceWindow(race.format ?? race.race_type, nextStart, nextEnd);
     if ('error' in checked) return c.json(badRequest(checked.error), 400);
     for (const [jsonKey, dbKey, canonical] of [

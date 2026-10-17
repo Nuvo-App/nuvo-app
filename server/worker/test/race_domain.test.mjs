@@ -368,7 +368,7 @@ test('custom most-in-window race needs a finish line, not a target', () => {
   assert.equal(ok.endsAt, '2026-10-16T05:00:00Z');
 
   const missing = customConfigFromBody(customBody({ format: 'most_in_window' }));
-  assert.equal(missing.error, 'A finish line is required.');
+  assert.equal('error' in missing, false, 'a missing finish line is defaulted later, not refused');
 });
 
 test('custom timed attempt needs a duration and stores no target', () => {

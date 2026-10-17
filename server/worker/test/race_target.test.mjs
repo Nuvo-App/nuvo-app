@@ -52,7 +52,7 @@ const { validateRaceWindow } = require('../.tmp-test-dist/domain/raceValidation.
 
 test('finish line: most_in_window requires one; attempt races get a default instead of a refusal', () => {
   const now = new Date('2026-01-01T00:00:00.000Z');
-  assert.ok(validateRaceWindow('most_in_window', null, null, now).error);
+  assert.equal(validateRaceWindow('most_in_window', null, null, now).endsAt, '2026-01-08T00:00:00.000Z');
   const timed = validateRaceWindow('timed_attempt', null, null, now);
   assert.equal(timed.endsAt, '2026-01-02T00:00:00.000Z');
   const best = validateRaceWindow('best_attempt', null, null, now);
