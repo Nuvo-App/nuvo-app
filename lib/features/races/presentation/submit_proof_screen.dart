@@ -1,3 +1,4 @@
+import '../../../core/utils/friendly_error.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -144,7 +145,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _manualError = e.message;
+          _manualError = friendlyApiError(e);
           _submittingManual = false;
         });
       }

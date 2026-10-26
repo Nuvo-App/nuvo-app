@@ -1,3 +1,4 @@
+import '../../../core/utils/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,7 +58,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
         setState(() {
           _error = e.message.trim().isEmpty
               ? 'That invite code didn’t work. Check it and try again.'
-              : e.message;
+              : friendlyApiError(e);
           _loading = false;
         });
       }

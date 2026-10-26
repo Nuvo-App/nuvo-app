@@ -51,10 +51,14 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
   /// toggles below can't deliver — surface the way back to iOS Settings
   /// rather than letting a user flip dead toggles.
   Future<void> _loadOsStatus() async {
-    final status = await ref
-        .read(pushServiceProvider)
-        .notificationAuthorizationStatus();
-    if (mounted) setState(() => _osStatus = status);
+    try {
+      final status = await ref
+          .read(pushServiceProvider)
+          .notificationAuthorizationStatus();
+      if (mounted) setState(() => _osStatus = status);
+    } catch (_) {
+      // Leave the OS status unknown; the toggles still work.
+    }
   }
 
   Future<void> _load() async {

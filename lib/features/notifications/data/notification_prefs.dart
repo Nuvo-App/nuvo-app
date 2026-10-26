@@ -69,10 +69,8 @@ class NotificationPrefsApi {
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, 'Could not load preferences');
     }
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    return (json['preferences'] as List<dynamic>)
-        .map((e) => NotificationPref.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final json = jMap(jsonDecode(res.body));
+    return jMapList(json?['preferences']).map(NotificationPref.fromJson).toList();
   }
 
   Future<void> update(String category, {bool? inApp, bool? push}) async {
