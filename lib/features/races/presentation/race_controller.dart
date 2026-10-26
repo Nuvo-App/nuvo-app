@@ -11,6 +11,7 @@
 // cache; force:true always refetches. Every screen reads state via
 // raceControllerProvider and calls mutations via .notifier — never a second
 // source of truth, never a direct RaceApi call.
+import '../../../core/utils/friendly_error.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -423,7 +424,7 @@ class RaceController extends StateNotifier<RaceState> {
         state = state.copyWith(
           loading: false,
           refreshing: false,
-          error: state.hasData ? null : e.message,
+          error: state.hasData ? null : friendlyApiError(e),
         );
       }
     } catch (_) {

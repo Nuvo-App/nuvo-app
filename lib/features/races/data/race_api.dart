@@ -317,9 +317,7 @@ class RaceApi {
       token,
       const {},
     );
-    return VerificationSession.fromJson(
-      json['session'] as Map<String, dynamic>,
-    );
+    return VerificationSession.fromJson(_requireMap(json['session']));
   }
 
   Future<VerificationSession> completeVerificationSession(
@@ -348,9 +346,7 @@ class RaceApi {
       token,
       body,
     );
-    return VerificationSession.fromJson(
-      json['session'] as Map<String, dynamic>,
-    );
+    return VerificationSession.fromJson(_requireMap(json['session']));
   }
 
   Future<MotionAnalysisResult> analyzeMotion(
@@ -358,9 +354,7 @@ class RaceApi {
     required MotionAnalysisRequest request,
   }) async {
     final json = await _post('/motion/analyze', token, request.toJson());
-    return MotionAnalysisResult.fromJson(
-      json['result'] as Map<String, dynamic>,
-    );
+    return MotionAnalysisResult.fromJson(_requireMap(json['result']));
   }
 
   /// Uploads one gzip'd [MotionSessionArtifact] plus its searchable metadata.
@@ -444,12 +438,33 @@ class RaceApi {
         0,
         "Can't reach Nuvo. Check your connection and try again.",
       );
+    } on HandshakeException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
+    } on TlsException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
+    } on IOException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
     } on http.ClientException {
       throw const ApiException(
         0,
         "Can't reach Nuvo. Check your connection and try again.",
       );
     }
+  }
+
+  /// A response field that must be a JSON object; anything else is a 502.
+  Map<String, dynamic> _requireMap(Object? v) {
+    if (v is Map) return Map<String, dynamic>.from(v);
+    throw const ApiException(502, 'Something went wrong. Try again.');
   }
 
   /// Decodes a JSON body, tolerating non-JSON error pages (Cloudflare 5xx,

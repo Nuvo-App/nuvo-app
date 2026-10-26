@@ -1,3 +1,4 @@
+import '../../../core/utils/friendly_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -114,7 +115,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = friendlyApiError(e);
           _saving = false;
         });
       }
@@ -199,7 +200,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+            .showSnackBar(SnackBar(content: Text(friendlyApiError(e))));
       }
     } catch (_) {
       if (mounted) {
@@ -269,7 +270,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+            .showSnackBar(SnackBar(content: Text(friendlyApiError(e))));
       }
     } catch (_) {
       if (mounted) {

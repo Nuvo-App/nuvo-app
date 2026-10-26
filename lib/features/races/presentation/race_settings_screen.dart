@@ -1,3 +1,4 @@
+import '../../../core/utils/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -160,7 +161,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = friendlyApiError(e);
           _saving = false;
         });
       }
@@ -201,7 +202,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = friendlyApiError(e);
           _saving = false;
         });
       }

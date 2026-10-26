@@ -27,16 +27,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!canTogglePresentationMode(ref.read(authControllerProvider).user)) {
       return;
     }
-    final persistence = setPresentationModeEnabled(enabled);
-    // Clear generations before loading so an older request cannot restore the
-    // previous mode. Crew and notifications observe the preference directly.
-    final races = ref.read(raceControllerProvider.notifier)..clearRaces();
-    final arena = ref.read(arenaControllerProvider.notifier)..clearSnapshot();
-    await Future.wait([
-      persistence,
-      races.loadRaces(force: true),
-      arena.loadSnapshot(force: true),
-    ]);
+    try {
+      final persistence = setPresentationModeEnabled(enabled);
+      // Clear generations before loading so an older request cannot restore the
+      // previous mode. Crew and notifications observe the preference directly.
+      final races = ref.read(raceControllerProvider.notifier)..clearRaces();
+      final arena = ref.read(arenaControllerProvider.notifier)..clearSnapshot();
+      await Future.wait([
+        persistence,
+        races.loadRaces(force: true),
+        arena.loadSnapshot(force: true),
+      ]);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Something went wrong. Try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _confirmDeleteAccount() async {
