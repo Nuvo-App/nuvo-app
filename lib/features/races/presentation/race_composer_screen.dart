@@ -30,6 +30,7 @@ import '../ai/motion_v2/motion_v2_models.dart';
 import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../data/race_api.dart' show RaceApiException;
 import '../data/race_models.dart';
+import '../../squads/application/squad_controller.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
@@ -203,6 +204,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         // race must be crew-joinable from the start.
         if (parsed != null && prefill.withUser != null) {
           parsed = parsed.copyWith(inviteCrew: true);
+        }
+        // Started from inside a crew: the crew is the audience, so never ask
+        // solo-or-crew and never open the invite screen after creating.
+        if (parsed != null && prefill.crewId != null) {
+          parsed = parsed.copyWith(inviteCrew: false);
         }
         if (parsed != null) {
           ref.read(_composerDraftProvider.notifier).state = parsed;
@@ -572,6 +578,20 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         ref.read(firstRaceGuideProvider.notifier).state =
             FirstRaceGuideStep.raceDetail;
       }
+      final crewId = widget.prefill?.crewId;
+      if (crewId != null) {
+        // Started from a crew — bring the race into it. Best-effort: the race
+        // exists either way, and the crew page has "Bring a race" as a retry.
+        try {
+          await ref
+              .read(squadControllerProvider.notifier)
+              .addRace(crewId, race.id);
+          ref.read(raceControllerProvider.notifier).loadRaces(force: true);
+        } catch (_) {}
+        if (!mounted) return;
+        context.go('/race/${race.id}');
+        return;
+      }
       final withUser = widget.prefill?.withUser;
       if (withUser != null) {
         // Race Together — pull the person into the race we just created.
@@ -822,6 +842,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                         _RacersPage(
                           draft: draft,
                           withUser: widget.prefill?.withUser,
+                          crewName: widget.prefill?.crewId == null
+                              ? null
+                              : (widget.prefill?.crewName ?? 'your crew'),
                           onDraftChanged: (d) =>
                               ref.read(_composerDraftProvider.notifier).state =
                                   d,
@@ -3848,8 +3871,13 @@ class _RacersPage extends StatefulWidget {
     required this.onNext,
     this.onInput,
     this.withUser,
+    this.crewName,
   });
   final RaceDraft draft;
+
+  /// Set when the race was started from inside a crew: the crew is the
+  /// audience, so the solo/crew choice is replaced by a fixed line.
+  final String? crewName;
 
   /// Race Together person context — the crew member this race was started
   /// for. They join when the race is created; the racers step explains that
@@ -3903,7 +3931,15 @@ class _RacersPageState extends State<_RacersPage> {
       ctaKey: FirstRaceGuideKeys.composerRacersCta,
       body: KeyedSubtree(
         key: FirstRaceGuideKeys.composerRacers,
-        child: widget.withUser != null
+        child: widget.crewName != null
+            ? _RacerOption(
+                title: 'Racing with ${widget.crewName}',
+                subtitle: 'Everyone in the crew joins when the race starts.',
+                icon: Icons.groups_rounded,
+                selected: true,
+                onTap: () {},
+              )
+            : widget.withUser != null
             ? _RacerOption(
                 title: 'Racing ${widget.withUser!.displayName}',
                 subtitle: 'They join when the race starts.',
@@ -3981,9 +4017,7 @@ class _RacerOption extends StatelessWidget {
               alignment: Alignment.center,
               child: Icon(
                 icon,
-                color: selected
-                    ? NuvoColors.white
-                    : context.themeColors.ink,
+                color: selected ? NuvoColors.white : context.themeColors.ink,
                 size: 22,
               ),
             ),
@@ -4117,99 +4151,100 @@ class _ReviewPage extends StatelessWidget {
         Expanded(
           child: NuvoFadeScroll(
             child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Review your race',
-                  style: AppTextStyles.labelUppercase(
-                    12,
-                  ).copyWith(color: context.themeColors.accent),
-                ).animate().fadeIn(duration: 180.ms),
-                const SizedBox(height: 8),
-                NuvoPressable(
-                  onTap: () => onEditStep(_Step.name),
-                  haptic: false,
-                  child: Text(
-                    draft.resolvedTitle,
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: context.themeColors.ink,
-                      height: 1.08,
-                    ),
-                  ),
-                ).animate().fadeIn(duration: 220.ms),
-                const SizedBox(height: 6),
-                Text(
-                  _winSubtitle,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: context.themeColors.inkMuted,
-                  ),
-                ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
-                const SizedBox(height: 22),
-                _RaceSummaryCard(
-                  activityIcon: draft.activity.icon,
-                  activityLabel: draft.displayActivityName,
-                  proofLabel: draft.isCustom
-                      ? 'Custom movement · camera verified'
-                      : draft.isManual
-                      ? 'Score + photo proof'
-                      : 'AI Motion verified',
-                  goalValue: _goalParts.$1,
-                  goalUnit: _goalParts.$2,
-                ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
-                const SizedBox(height: 16),
-                _ReviewDetails(
-                  activityLabel: draft.displayActivityName,
-                  activitySub: draft.isCustom
-                      ? 'Custom movement'
-                      : 'Camera verified',
-                  finishLineLabel: _finishLineLabel,
-                  finishLineSub: _finishLineSub,
-                  raceModeLabel: isInvite ? 'Invite friends' : 'Start solo',
-                  raceModeSub: isInvite
-                      ? 'Invite link opens after race starts'
-                      : 'Race yourself first',
-                  onEditActivity: draft.isCustom
-                      ? null
-                      : () => onEditStep(_Step.activity),
-                  onEditGoal: () => onEditStep(_Step.goal),
-                  onEditRacers: () => onEditStep(_Step.racers),
-                ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
-                if (error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.danger.withValues(
-                        alpha: Theme.of(context).brightness == Brightness.dark
-                            ? 0.18
-                            : 0.08,
-                      ),
-                      borderRadius: BorderRadius.circular(NuvoRadii.md),
-                      border: Border.all(
-                        color: NuvoColors.danger.withValues(alpha: 0.28),
-                      ),
-                    ),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Review your race',
+                    style: AppTextStyles.labelUppercase(
+                      12,
+                    ).copyWith(color: context.themeColors.accent),
+                  ).animate().fadeIn(duration: 180.ms),
+                  const SizedBox(height: 8),
+                  NuvoPressable(
+                    onTap: () => onEditStep(_Step.name),
+                    haptic: false,
                     child: Text(
-                      error!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeColors.dangerText,
+                      draft.resolvedTitle,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: context.themeColors.ink,
+                        height: 1.08,
                       ),
                     ),
-                  ),
-                ],
-                if (showDiagnostics) ...[
+                  ).animate().fadeIn(duration: 220.ms),
+                  const SizedBox(height: 6),
+                  Text(
+                    _winSubtitle,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: context.themeColors.inkMuted,
+                    ),
+                  ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
+                  const SizedBox(height: 22),
+                  _RaceSummaryCard(
+                    activityIcon: draft.activity.icon,
+                    activityLabel: draft.displayActivityName,
+                    proofLabel: draft.isCustom
+                        ? 'Custom movement · camera verified'
+                        : draft.isManual
+                        ? 'Score + photo proof'
+                        : 'AI Motion verified',
+                    goalValue: _goalParts.$1,
+                    goalUnit: _goalParts.$2,
+                  ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
                   const SizedBox(height: 16),
-                  NuvoOutlineButton(
-                    label: 'Copy race debug',
-                    expand: true,
-                    onPressed: onCopyDiagnostics,
-                  ),
+                  _ReviewDetails(
+                    activityLabel: draft.displayActivityName,
+                    activitySub: draft.isCustom
+                        ? 'Custom movement'
+                        : 'Camera verified',
+                    finishLineLabel: _finishLineLabel,
+                    finishLineSub: _finishLineSub,
+                    raceModeLabel: isInvite ? 'Invite friends' : 'Start solo',
+                    raceModeSub: isInvite
+                        ? 'Invite link opens after race starts'
+                        : 'Race yourself first',
+                    onEditActivity: draft.isCustom
+                        ? null
+                        : () => onEditStep(_Step.activity),
+                    onEditGoal: () => onEditStep(_Step.goal),
+                    onEditRacers: () => onEditStep(_Step.racers),
+                  ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
+                  if (error != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: NuvoColors.danger.withValues(
+                          alpha: Theme.of(context).brightness == Brightness.dark
+                              ? 0.18
+                              : 0.08,
+                        ),
+                        borderRadius: BorderRadius.circular(NuvoRadii.md),
+                        border: Border.all(
+                          color: NuvoColors.danger.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Text(
+                        error!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.themeColors.dangerText,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (showDiagnostics) ...[
+                    const SizedBox(height: 16),
+                    NuvoOutlineButton(
+                      label: 'Copy race debug',
+                      expand: true,
+                      onPressed: onCopyDiagnostics,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          )),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -4354,11 +4389,18 @@ class _RaceSummaryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: c.surface,
                   shape: BoxShape.circle,
-                  border: Border.all(color: context.themeColors.accent, width: 3),
+                  border: Border.all(
+                    color: context.themeColors.accent,
+                    width: 3,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
-              Icon(Icons.flag_rounded, color: context.themeColors.accent, size: 18),
+              Icon(
+                Icons.flag_rounded,
+                color: context.themeColors.accent,
+                size: 18,
+              ),
             ],
           ),
           const SizedBox(height: 6),

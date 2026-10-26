@@ -795,7 +795,7 @@ class ProofVetoResult {
 /// {name}", run-it-back) carry a structured [draft] — the title interpreter
 /// is only for USER-WRITTEN [idea] text, read once at the name step.
 class RaceCreatePrefill {
-  const RaceCreatePrefill({this.idea, this.draft, this.withUser});
+  const RaceCreatePrefill({this.idea, this.draft, this.withUser, this.crewId, this.crewName});
 
   /// User-written idea text — interpreted once into a draft by the composer.
   final String? idea;
@@ -807,10 +807,18 @@ class RaceCreatePrefill {
   /// is created.
   final PublicUser? withUser;
 
+  /// Crew context — the race was started from inside this crew, so the
+  /// composer skips the solo/crew question and links the race to the crew
+  /// once it exists.
+  final String? crewId;
+  final String? crewName;
+
   RaceCreatePrefill copyWith({PublicUser? withUser}) => RaceCreatePrefill(
     idea: idea,
     draft: draft,
     withUser: withUser ?? this.withUser,
+    crewId: crewId,
+    crewName: crewName,
   );
 
   static RaceDraft _presetDraft(MotionActivityType type, int target) =>

@@ -76,6 +76,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
     });
     try {
       final cameras = await availableCameras();
+      if (!mounted) return;
       if (cameras.isEmpty) {
         setState(() => _state = _ScanState.noCamera);
         return;
@@ -105,13 +106,13 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
           e.code == 'CameraAccessRestricted';
       setState(() {
         _state = denied ? _ScanState.permissionDenied : _ScanState.error;
-        _errorText = denied ? null : (e.description ?? e.code);
+        _errorText = denied ? null : 'Try again, or paste a link.';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _state = _ScanState.error;
-        _errorText = '$e';
+        _errorText = 'Try again, or paste a link.';
       });
     }
   }

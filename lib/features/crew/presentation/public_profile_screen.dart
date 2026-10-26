@@ -114,6 +114,11 @@ class _State extends ConsumerState<PublicProfileScreen> {
         setState(() => _busy = false);
         _snack(e.message);
       }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _snack("Couldn't do that. Try again.");
+      }
     }
   }
 
@@ -134,6 +139,11 @@ class _State extends ConsumerState<PublicProfileScreen> {
       if (mounted) {
         setState(() => _busy = false);
         _snack(e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _snack("Couldn't do that. Try again.");
       }
     }
   }
@@ -164,6 +174,11 @@ class _State extends ConsumerState<PublicProfileScreen> {
       if (mounted) {
         setState(() => _busy = false);
         _snack(e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _snack("Couldn't do that. Try again.");
       }
     }
   }
@@ -209,7 +224,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
           .reportUser(widget.userId, reason: reason);
       _snack('Thanks — our team will take a look.');
     } on ApiException catch (e) {
-      _snack(e.message);
+      if (mounted) _snack(e.message);
+    } catch (_) {
+      if (mounted) _snack("Couldn't do that. Try again.");
     }
   }
 
@@ -229,7 +246,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
       _snack('Blocked.');
       _exit();
     } on ApiException catch (e) {
-      _snack(e.message);
+      if (mounted) _snack(e.message);
+    } catch (_) {
+      if (mounted) _snack("Couldn't do that. Try again.");
     }
   }
 

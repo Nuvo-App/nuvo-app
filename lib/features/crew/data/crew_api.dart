@@ -226,7 +226,12 @@ class CrewApi {
   }
 
   Map<String, dynamic> _decode(http.Response res) {
-    final body = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body);
+    final Object? body;
+    try {
+      body = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body);
+    } on FormatException {
+      throw ApiException(res.statusCode, 'Something went wrong. Try again.');
+    }
     final map = body is Map<String, dynamic> ? body : const <String, dynamic>{};
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, jStr(map['error']) ?? 'Request failed');

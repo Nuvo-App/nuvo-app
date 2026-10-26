@@ -203,13 +203,20 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       ),
     );
     if (source == null) return;
-    final picked = await ImagePicker().pickImage(
-      source: source,
-      maxWidth: 1600,
-      imageQuality: 85,
-    );
-    if (picked != null && mounted) {
-      setState(() => _evidence = picked);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (picked != null && mounted) {
+        setState(() => _evidence = picked);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _manualError =
+            "Couldn't open your photos. Check access and try again.");
+      }
     }
   }
 
