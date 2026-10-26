@@ -23,6 +23,7 @@ import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart' show ApiException;
 import '../../auth/presentation/auth_controller.dart';
+import '../../races/data/race_models.dart' show RaceCreatePrefill;
 import '../../races/presentation/race_controller.dart';
 import '../application/squad_controller.dart';
 import '../data/squad_api.dart';
@@ -592,7 +593,8 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
             TextField(
               key: const ValueKey('crew-input'),
               controller: _controller,
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              onTapOutside: (_) =>
+                  FocusManager.instance.primaryFocus?.unfocus(),
               autofocus: true,
               maxLength: _isCreate ? 40 : 12,
               textAlign: _isCreate ? TextAlign.start : TextAlign.center,
@@ -671,6 +673,15 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
   Future<void> _load() =>
       ref.read(squadControllerProvider.notifier).refreshDetail(widget.groupId);
 
+  RaceCreatePrefill _crewPrefill() => RaceCreatePrefill(
+    crewId: widget.groupId,
+    crewName: ref
+        .read(squadControllerProvider)
+        .details[widget.groupId]
+        ?.group
+        .name,
+  );
+
   Future<void> _bringRace() async {
     final detail = ref.read(squadControllerProvider).details[widget.groupId];
     final me = ref.read(authControllerProvider).user;
@@ -689,7 +700,7 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
 
     if (mine.isEmpty) {
       // Nothing to bring yet — start a race, then come back.
-      context.push('/races/new');
+      context.push('/races/new', extra: _crewPrefill());
       return;
     }
 
@@ -726,7 +737,7 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
                 title: const Text('Start a new race'),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  context.push('/races/new');
+                  context.push('/races/new', extra: _crewPrefill());
                 },
               ),
             ],
@@ -982,7 +993,6 @@ class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
       ),
     );
   }
-
 }
 
 /// The crew at a glance: how big it is, my role, and the two things an owner
@@ -1055,7 +1065,9 @@ class _CrewSummaryCard extends StatelessWidget {
               ),
               _RoleChip(
                 label: role,
-                role: g.isOwner ? 'owner' : (g.myRole == 'admin' ? 'admin' : 'member'),
+                role: g.isOwner
+                    ? 'owner'
+                    : (g.myRole == 'admin' ? 'admin' : 'member'),
               ),
             ],
           ),
@@ -1158,7 +1170,9 @@ class _CrewTabBar extends StatelessWidget {
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
-                      color: i == selected ? NuvoColors.blue : Colors.transparent,
+                      color: i == selected
+                          ? NuvoColors.blue
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(NuvoRadii.pill),
                     ),
                     child: FittedBox(
@@ -1333,10 +1347,7 @@ class _RacesTab extends StatelessWidget {
         // One card per race: every race is its own bordered block, so the
         // list reads as separate items and simply keeps going as it grows.
         for (final r in races)
-          _RaceRow(
-            race: r,
-            onRemove: canManage ? () => onRemove(r) : null,
-          ),
+          _RaceRow(race: r, onRemove: canManage ? () => onRemove(r) : null),
         const SizedBox(height: NuvoSpacing.md),
       ],
     );
@@ -1634,7 +1645,8 @@ class _RaceRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12, right: 3),
       child: Semantics(
         button: true,
-        label: '${race.title}, ${live ? 'racing now' : 'finished'}. Open leaderboard.',
+        label:
+            '${race.title}, ${live ? 'racing now' : 'finished'}. Open leaderboard.',
         excludeSemantics: true,
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -1858,7 +1870,9 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
       _name.text = g.name;
       _seeded = true;
     }
-    final role = g.isOwner ? 'Owner' : (g.myRole == 'admin' ? 'Admin' : 'Member');
+    final role = g.isOwner
+        ? 'Owner'
+        : (g.myRole == 'admin' ? 'Admin' : 'Member');
     return NuvoPage(
       topBar: _topBar(context, 'Crew settings'),
       child: ListView(

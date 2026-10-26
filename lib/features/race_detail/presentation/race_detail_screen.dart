@@ -414,6 +414,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
           SnackBar(content: Text(e.message)),
         );
       }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't send that. Try again.")),
+        );
+      }
     }
   }
 

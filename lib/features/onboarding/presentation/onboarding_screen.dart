@@ -17,6 +17,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_legal_footer.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../auth/data/auth_api.dart' show ApiException;
 import '../../auth/presentation/auth_controller.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -328,9 +329,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e is Exception
-              ? e.toString()
-              : 'Could not save profile. Please try again.';
+          _error = e is ApiException
+              ? (e.statusCode >= 500 ? "Couldn't save. Try again." : e.message)
+              : "Couldn't save. Try again.";
           _loading = false;
         });
       }
