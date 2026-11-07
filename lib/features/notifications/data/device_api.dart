@@ -18,11 +18,18 @@ class DeviceApi {
   final http.Client _client;
   final SecureTokenStore _store;
 
-  Future<void> register(String pushToken, {required String platform, String? appVersion}) async {
+  /// True only when the server accepted the registration (2xx). A silent
+  /// failure here means that device never receives a push, so the caller
+  /// retries rather than assuming it worked.
+  Future<bool> register(
+    String pushToken, {
+    required String platform,
+    String? appVersion,
+  }) async {
     final auth = await _store.getAccessToken();
-    if (auth == null) return;
+    if (auth == null) return false;
     try {
-      await _client
+      final res = await _client
           .post(
             Uri.parse('$kNuvoApiBase/devices'),
             headers: {
@@ -36,12 +43,13 @@ class DeviceApi {
             }),
           )
           .timeout(const Duration(seconds: 15));
+      return res.statusCode >= 200 && res.statusCode < 300;
     } on TimeoutException {
-      /* best effort */
+      return false;
     } on SocketException {
-      /* best effort */
+      return false;
     } on http.ClientException {
-      /* best effort */
+      return false;
     }
   }
 

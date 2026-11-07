@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,6 +18,7 @@ import '../../social/application/deep_link_controller.dart';
 import '../../social/domain/nuvo_destination.dart';
 import '../data/device_api.dart';
 import '../domain/push_invalidation.dart';
+import 'push_token_sync.dart';
 import 'notification_controller.dart';
 
 /// Push transport (docs/agents/19 §10). Push is DELIVERY; the notification
@@ -36,7 +37,23 @@ class PushService {
 
   bool _available = false;
   bool _started = false;
-  String? _lastToken;
+  final Completer<void> _startDone = Completer<void>();
+  _ResumeObserver? _resumeObserver;
+
+  /// Owns getting this device's token onto the server (and keeping it there).
+  late final PushTokenSync _sync = PushTokenSync(
+    fetchToken: () => FirebaseMessaging.instance.getToken(),
+    register: (token) => _deviceApi.register(
+      token,
+      platform: Platform.isIOS ? 'ios' : 'android',
+    ),
+    unregister: _deviceApi.unregister,
+    isSignedIn: () =>
+        _ref.read(authControllerProvider).status == AuthStatus.authenticated,
+  );
+
+  /// Latest reason a token did not reach the server (null when it did).
+  String? get lastTokenFailure => _sync.lastFailure;
 
   bool get isAvailable => _available;
 
@@ -50,6 +67,7 @@ class PushService {
       _available = true;
     } catch (e) {
       debugPrint('[Push] Firebase not configured — push disabled ($e)');
+      _startDone.complete();
       return;
     }
 
@@ -65,7 +83,16 @@ class PushService {
     // reflect it immediately.
     FirebaseMessaging.onMessage.listen((m) => _invalidateFor(m.data));
 
-    messaging.onTokenRefresh.listen(_syncToken);
+    messaging.onTokenRefresh.listen(_sync.onTokenRefresh);
+
+    // A user who was already signed in when the app launched becomes
+    // "authenticated" BEFORE Firebase finished starting, so onSignedIn was a
+    // no-op and nothing else would ever sync their token. Do it now, and again
+    // every time the app returns to the foreground.
+    _startDone.complete();
+    unawaited(_sync.syncNow());
+    _resumeObserver = _ResumeObserver(() => unawaited(_sync.syncNow()));
+    WidgetsBinding.instance.addObserver(_resumeObserver!);
   }
 
   /// The OS notification authorization state — the only honest source for
@@ -91,12 +118,7 @@ class PushService {
     final granted =
         settings.authorizationStatus == AuthorizationStatus.authorized ||
             settings.authorizationStatus == AuthorizationStatus.provisional;
-    if (granted) {
-      try {
-        final token = await FirebaseMessaging.instance.getToken();
-        if (token != null) await _syncToken(token);
-      } catch (_) {}
-    }
+    if (granted) unawaited(_sync.syncNow());
     return granted;
   }
 
@@ -105,39 +127,23 @@ class PushService {
   /// APNs token materializes (always on simulator, briefly on device) — a
   /// missed sync here is harmless: onTokenRefresh re-syncs the moment it does.
   Future<void> onSignedIn() async {
+    // Wait for Firebase to finish starting — signing in first used to make
+    // this a silent no-op.
+    await _startDone.future;
     if (!_available) return;
-    try {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) await _syncToken(token);
-    } catch (_) {}
+    await _sync.syncNow();
   }
 
   Future<void> onSignedOut() async {
-    // _lastToken is in-memory only — after an app restart between token sync
-    // and sign-out it's null, so ask the SDK for the live token to make sure
-    // this device's backend row is really detached.
-    var token = _lastToken;
-    if (token == null && _available) {
+    // The in-memory token is gone after an app restart between token sync and
+    // sign-out — ask the SDK for the live one so this device's backend row is
+    // really detached.
+    if (_sync.knownToken == null && _available) {
       try {
-        token = await FirebaseMessaging.instance.getToken();
+        _sync.knownToken = await FirebaseMessaging.instance.getToken();
       } catch (_) {}
     }
-    if (token != null) await _deviceApi.unregister(token);
-    _lastToken = null;
-  }
-
-  Future<void> _syncToken(String token) async {
-    final previous = _lastToken;
-    _lastToken = token;
-    // Token rotated (T1→T2): detach the old token from this account now
-    // instead of leaving a stale row for FCM to age out via UNREGISTERED.
-    if (previous != null && previous != token) {
-      await _deviceApi.unregister(previous);
-    }
-    await _deviceApi.register(
-      token,
-      platform: Platform.isIOS ? 'ios' : 'android',
-    );
+    await _sync.signOut();
   }
 
   /// Parse a push payload's data block into a destination — pure, so the
@@ -209,3 +215,13 @@ class PushService {
 }
 
 final pushServiceProvider = Provider<PushService>((ref) => PushService(ref));
+
+class _ResumeObserver with WidgetsBindingObserver {
+  _ResumeObserver(this._onResume);
+  final VoidCallback _onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _onResume();
+  }
+}
