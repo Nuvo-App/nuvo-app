@@ -915,14 +915,18 @@ async function levelsForUsers(
   const ids = [...new Set([...userIds].filter((x): x is string => Boolean(x)))];
   const map = new Map<string, number>();
   if (ids.length === 0) return map;
-  const rows = await db
-    .prepare(
-      `SELECT user_id, level FROM user_progression
-       WHERE user_id IN (${ids.map(() => '?').join(',')})`,
-    )
-    .bind(...ids)
-    .all<{ user_id: string; level: number }>();
-  for (const r of rows.results) map.set(r.user_id, r.level);
+  // D1 caps bound variables per statement at 100 — chunk the lookup.
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const rows = await db
+      .prepare(
+        `SELECT user_id, level FROM user_progression
+         WHERE user_id IN (${chunk.map(() => '?').join(',')})`,
+      )
+      .bind(...chunk)
+      .all<{ user_id: string; level: number }>();
+    for (const r of rows.results) map.set(r.user_id, r.level);
+  }
   return map;
 }
 
@@ -1092,10 +1096,25 @@ async function buildRaceResponsesBatch(
   }
 
   const ids = races.map((r) => r.id);
-  const placeholders = ids.map(() => '?').join(', ');
+  // D1 caps bound variables per statement at 100, so id lists are chunked and
+  // the rows merged (each race's rows land in exactly one chunk, so the
+  // per-race ordering is preserved).
+  const idChunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 90) idChunks.push(ids.slice(i, i + 90));
+  const chunked = async <T>(sql: (marks: string) => string, ): Promise<T[]> => {
+    const out: T[] = [];
+    for (const chunk of idChunks) {
+      const res = await db
+        .prepare(sql(chunk.map(() => '?').join(', ')))
+        .bind(...chunk)
+        .all<T>();
+      out.push(...res.results);
+    }
+    return out;
+  };
 
-  const [participantsRows, movesRows, invitesRows, standingsRows, visibilityCtx] = await Promise.all([
-    db.prepare(
+  const [participants, moves, invites, standings, visibilityCtx] = await Promise.all([
+    chunked<ParticipantRow & { race_id: string }>((marks) =>
       `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
@@ -1104,29 +1123,29 @@ async function buildRaceResponsesBatch(
        FROM race_members rm
        LEFT JOIN profiles p ON p.user_id = rm.user_id
        LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'
-       ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
-    ).bind(...ids).all<ParticipantRow & { race_id: string }>(),
-    db.prepare(
+       WHERE rm.race_id IN (${marks}) AND rm.status = 'active'
+       ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`),
+    chunked<MoveRow & { race_id: string }>((marks) =>
       `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM move_logs ml
        LEFT JOIN profiles p ON p.user_id = ml.user_id
-       WHERE ml.race_id IN (${placeholders}) AND ml.status != 'removed'
-       ORDER BY ml.race_id, ml.created_at DESC`
-    ).bind(...ids).all<MoveRow & { race_id: string }>(),
-    db.prepare(
-      `SELECT * FROM race_invites WHERE race_id IN (${placeholders}) AND status = 'active'
-       ORDER BY race_id, created_at DESC`
-    ).bind(...ids).all<InviteRow>(),
-    db.prepare(
+       WHERE ml.race_id IN (${marks}) AND ml.status != 'removed'
+       ORDER BY ml.race_id, ml.created_at DESC`),
+    chunked<InviteRow>((marks) =>
+      `SELECT * FROM race_invites WHERE race_id IN (${marks}) AND status = 'active'
+       ORDER BY race_id, created_at DESC`),
+    chunked<StandingRow & { race_id: string }>((marks) =>
       `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM race_final_standings fs
        LEFT JOIN profiles p ON p.user_id = fs.user_id
-       WHERE fs.race_id IN (${placeholders})
-       ORDER BY fs.race_id, fs.rank_position ASC`
-    ).bind(...ids).all<StandingRow & { race_id: string }>(),
+       WHERE fs.race_id IN (${marks})
+       ORDER BY fs.race_id, fs.rank_position ASC`),
     loadViewerVisibilityContext(db, viewerUserId),
   ]);
+  const participantsRows = { results: participants };
+  const movesRows = { results: moves };
+  const invitesRows = { results: invites };
+  const standingsRows = { results: standings };
 
   // move_logs is capped at 20 most-recent per race, same as the single-race
   // path — the batched query fetches all matching rows pre-sorted per race,
