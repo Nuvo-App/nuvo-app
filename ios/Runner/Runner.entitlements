@@ -18,11 +18,15 @@
 		<string>applinks:nuvo-api.getnuvoapp.workers.dev</string>
 	</array>
 	<!--
-	  Push notifications: no aps-environment key is declared here on purpose.
-	  The provisioning profile supplies 'development' for dev-signed builds
-	  and 'production' for App Store builds; hardcoding a value would force
-	  sandbox APNs into release builds. Requires the Push Notifications
-	  capability on App ID net.getnuvo.app in the Developer portal.
+	  Push notifications. aps-environment MUST be declared or iOS never hands
+	  the app an APNs token, so no push token is ever registered (the app was
+	  shipped without it: 41 users, 0 device tokens). 'development' is the
+	  Xcode default; App Store / TestFlight archives are re-signed with the
+	  distribution profile's 'production' value automatically.
+	  Requires the Push Notifications capability on App ID net.getnuvo.app
+	  in the Apple Developer portal.
 	-->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>
