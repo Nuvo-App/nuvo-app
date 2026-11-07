@@ -223,6 +223,7 @@ export async function deliverNotificationPushes(
           title: n.title,
           body: n.body ?? undefined,
           category: n.category,
+          notificationId: n.id,
           dest: n.dest_type
             ? {
                 type: n.dest_type as DestinationDescriptor['type'],
@@ -264,6 +265,7 @@ export async function safeEmit(
       title: opts.title,
       body: opts.body,
       category: opts.category,
+      notificationId: id,
       dest: opts.dest,
     });
     if (c.executionCtx?.waitUntil) {

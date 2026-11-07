@@ -8,6 +8,7 @@ import { validateMotionVerifierSpec } from '../domain/motionSpec';
 import { declaredPackageAssets, packageAssetKey } from '../domain/motionAssets';
 import { adaptationRecommendation, decideEvaluation, parseEvaluationReport } from '../domain/motionEvaluation';
 import { parseBroadcastRequest, runBroadcast } from '../domain/broadcast';
+import { checkFcmCredentials, sendPushDetailed, type PushPayload } from '../domain/push';
 import { generateId, hashBytes, hashValue } from '../lib/crypto';
 import {
   MODEL_CHANNELS,
@@ -1247,6 +1248,113 @@ internalRouter.post('/qa/reset', async (c) => {
     appleServiceConfig(c.env),
   );
   return c.json({ ok: true, reset: true, previousUserId: user.id });
+});
+
+// ── Push diagnostics (read-only) + single-recipient test send ────────────────
+// Neither route can reach more than ONE user: the recipient is resolved to a
+// single id, and the test send additionally requires `confirmUserId` to equal
+// it (a mistyped address can never send to somebody else). The broadcast route
+// below is the only multi-user sender and is untouched.
+
+const PUSH_TEST_DEST_TYPES = new Set(['race', 'profile', 'crew', 'invite', 'notifications']);
+
+async function resolvePushTarget(
+  c: Context<AppEnv>,
+  body: { userId?: unknown; email?: unknown },
+): Promise<{ id: string; email: string | null } | { error: string; status: 400 | 404 }> {
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  const email = typeof body.email === 'string' ? normalizeEmail(body.email) : '';
+  if (!userId && !email) return { error: 'Pass userId or email (one user).', status: 400 };
+  if (userId && email) return { error: 'Pass only one of userId or email.', status: 400 };
+  const row = userId
+    ? await c.env.DB.prepare("SELECT id, primary_email FROM users WHERE id = ? AND status = 'active' LIMIT 1")
+        .bind(userId).first<{ id: string; primary_email: string | null }>()
+    : await c.env.DB.prepare("SELECT id, primary_email FROM users WHERE LOWER(primary_email) = ? AND status = 'active' LIMIT 1")
+        .bind(email).first<{ id: string; primary_email: string | null }>();
+  if (!row) return { error: 'No active user matches.', status: 404 };
+  return { id: row.id, email: row.primary_email };
+}
+
+// GET /internal/push/status[?userId=|?email=] — are the FCM credentials usable,
+// and (for one user) which devices are registered. Never returns tokens.
+internalRouter.get('/push/status', async (c) => {
+  const credentials = await checkFcmCredentials(c.env);
+  const totals = await c.env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM users WHERE status = 'active') AS activeUsers,
+       (SELECT COUNT(DISTINCT user_id) FROM device_tokens WHERE disabled_at IS NULL) AS usersWithDevices,
+       (SELECT COUNT(*) FROM device_tokens WHERE disabled_at IS NULL) AS activeDevices,
+       (SELECT COUNT(*) FROM device_tokens WHERE disabled_at IS NOT NULL) AS disabledDevices`,
+  ).first<Record<string, number>>();
+
+  let user: Record<string, unknown> | undefined;
+  const userId = c.req.query('userId');
+  const email = c.req.query('email');
+  if (userId || email) {
+    const target = await resolvePushTarget(c, { userId, email });
+    if ('error' in target) return c.json({ ok: false, error: target.error }, target.status);
+    const devices = await c.env.DB.prepare(
+      `SELECT platform, app_version, created_at, last_seen_at, disabled_at, SUBSTR(token, -6) AS token_suffix
+         FROM device_tokens WHERE user_id = ? ORDER BY last_seen_at DESC`,
+    ).bind(target.id).all<Record<string, unknown>>();
+    const unread = await c.env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL',
+    ).bind(target.id).first<{ n: number }>();
+    const recent = await c.env.DB.prepare(
+      'SELECT category, title, created_at, read_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+    ).bind(target.id).all<Record<string, unknown>>();
+    user = {
+      id: target.id,
+      devices: devices.results,
+      activeDevices: devices.results.filter((d) => !d.disabled_at).length,
+      unreadNotifications: unread?.n ?? 0,
+      recentNotifications: recent.results,
+    };
+  }
+  return c.json({ ok: true, credentials, totals, user });
+});
+
+// POST /internal/push/test — ONE notification to ONE user's registered devices.
+//   { userId | email, confirmUserId, title?, body?, dest?: {type,id?}, dryRun? }
+// dryRun defaults to TRUE (lists the devices that WOULD receive it). A real
+// send needs dryRun:false AND confirmUserId === the resolved id. Transport
+// test only: no inbox row is written. Returns FCM's per-device answer; "accepted"
+// means FCM took it — arrival on the phone is not confirmed here.
+internalRouter.post('/push/test', async (c) => {
+  let body: Record<string, unknown>;
+  try { body = (await c.req.json()) as Record<string, unknown>; } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  if (Array.isArray(body.userId) || Array.isArray(body.email)) {
+    return c.json({ ok: false, error: 'Exactly one recipient is allowed.' }, 400);
+  }
+  const target = await resolvePushTarget(c, body);
+  if ('error' in target) return c.json({ ok: false, error: target.error }, target.status);
+
+  const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 120) : 'Nuvo test notification';
+  const text = typeof body.body === 'string' ? body.body.trim().slice(0, 300) : 'If you can read this, push is working.';
+  let dest: PushPayload['dest'];
+  if (body.dest !== undefined && body.dest !== null) {
+    const d = body.dest as { type?: unknown; id?: unknown };
+    if (typeof d !== 'object' || typeof d.type !== 'string' || !PUSH_TEST_DEST_TYPES.has(d.type)) {
+      return c.json({ ok: false, error: `dest.type must be one of ${[...PUSH_TEST_DEST_TYPES].join(', ')}.` }, 400);
+    }
+    dest = { type: d.type, id: typeof d.id === 'string' ? d.id : undefined };
+  }
+
+  const dryRun = body.dryRun !== false;
+  const devices = await c.env.DB.prepare(
+    `SELECT platform, last_seen_at, SUBSTR(token, -6) AS token_suffix FROM device_tokens
+      WHERE user_id = ? AND disabled_at IS NULL`,
+  ).bind(target.id).all<Record<string, unknown>>();
+  const credentials = await checkFcmCredentials(c.env);
+
+  if (dryRun) {
+    return c.json({ ok: true, dryRun: true, recipient: target.id, devices: devices.results, credentials });
+  }
+  if (body.confirmUserId !== target.id) {
+    return c.json({ ok: false, error: 'confirmUserId must equal the resolved recipient id.', recipient: target.id }, 400);
+  }
+  const result = await sendPushDetailed(c.env, target.id, { title, body: text, category: 'test', dest });
+  return c.json({ ok: true, dryRun: false, recipient: target.id, result, credentials });
 });
 
 // Admin broadcast — one notification to every active user. dryRun defaults to
