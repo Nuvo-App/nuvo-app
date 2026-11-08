@@ -212,6 +212,15 @@ export async function bindableAttemptAtTime(
   return null;
 }
 
+/**
+ * How long the bound attempt has actually been live, in ms — measured from
+ * the stored `started_at` on the server clock, never from a client-supplied
+ * duration. Strict timed battles judge rep rate against this window.
+ */
+export function attemptElapsedMs(attempt: RaceAttemptRow, now = new Date()): number {
+  return Math.max(0, now.getTime() - storedMs(attempt.started_at));
+}
+
 export async function closeAttempt(
   db: D1Database,
   attemptId: string,
