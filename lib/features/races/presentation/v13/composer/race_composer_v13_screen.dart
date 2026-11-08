@@ -1213,7 +1213,10 @@ class _ReviewStep extends StatelessWidget {
           const V13Divider(),
           _reviewRow(
             'Finish line',
-            _finishLine() ?? 'First to the goal wins it',
+            _finishLine() ??
+                (draft.format == RaceFormat.firstToGoal
+                    ? 'First to the goal wins it'
+                    : 'Required — tap to set'),
             () => onJump(1),
           ),
           const V13Divider(),

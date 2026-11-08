@@ -145,9 +145,7 @@ class RaceDraft {
     // a window / attempt race has nothing to reach.
     final needsTarget = format.usesScoreTarget || isManual;
     if (needsTarget && targetValue <= 0) return false;
-    if (format == RaceFormat.mostInWindow && (finishLineAt ?? '').isEmpty) {
-      return false;
-    }
+    if (format.usesDeadline && (finishLineAt ?? '').isEmpty) return false;
     if (format == RaceFormat.timedAttempt &&
         (attemptDurationSeconds ?? 0) <= 0) {
       return false;
@@ -205,7 +203,9 @@ class RaceDraft {
             ? 'Lowest score wins — every verified attempt counts.'
             : 'Best single attempt wins — every verified score counts.',
       RaceFormat.timedAttempt =>
-        'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your best single attempt counts.',
+        lowerWins
+            ? 'Least $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your lowest single attempt counts.'
+            : 'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your best single attempt counts.',
       // "First to 20 verified jumping jacks wins." — the bare figure for
       // reps, the spoken duration for timed goals.
       _ => 'First to $_winValueText verified $name wins.',

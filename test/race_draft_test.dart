@@ -198,6 +198,91 @@ void main() {
       expect(preset.format, RaceFormat.timedAttempt);
     });
 
+    test('test_gapN11_deadline_modes_require_finish_line', () {
+      final base = draftFromIdea('First to 100 pushups')!;
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+
+      // First to stays finish-line free — still valid with none set.
+      expect(base.finishLineAt, isNull);
+      expect(base.isValidToCreate, isTrue);
+
+      for (final format in [
+        RaceFormat.mostInWindow,
+        RaceFormat.bestAttempt,
+        RaceFormat.timedAttempt,
+      ]) {
+        final noLine = base.copyWith(format: format);
+        expect(
+          noLine.isValidToCreate,
+          isFalse,
+          reason: '$format without a finish line',
+        );
+        final withLine = noLine.copyWith(
+          finishLineAt: deadline,
+          attemptDurationSeconds:
+              format == RaceFormat.timedAttempt ? 60 : null,
+        );
+        expect(
+          withLine.isValidToCreate,
+          isTrue,
+          reason: '$format with a finish line',
+        );
+      }
+    });
+
+    test('test_gapN11_review_copy_per_mode', () {
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+      final base = draftFromIdea('First to 100 pushups')!;
+      final statements = <RaceFormat, String>{};
+      statements[RaceFormat.firstToGoal] = base.winStatement;
+      statements[RaceFormat.mostInWindow] = base
+          .copyWith(format: RaceFormat.mostInWindow, finishLineAt: deadline)
+          .winStatement;
+      statements[RaceFormat.bestAttempt] = base
+          .copyWith(format: RaceFormat.bestAttempt, finishLineAt: deadline)
+          .winStatement;
+      statements[RaceFormat.timedAttempt] = base
+          .copyWith(
+            format: RaceFormat.timedAttempt,
+            finishLineAt: deadline,
+            attemptDurationSeconds: 30,
+          )
+          .winStatement;
+
+      // Every mode wins a different way — the review page must say so.
+      expect(statements.values.toSet(), hasLength(4));
+      expect(statements[RaceFormat.firstToGoal], contains('First to'));
+      expect(
+        statements[RaceFormat.mostInWindow],
+        contains('Highest total'),
+      );
+      expect(
+        statements[RaceFormat.bestAttempt],
+        contains('Best single attempt'),
+      );
+      expect(statements[RaceFormat.timedAttempt], contains('30s'));
+
+      // Direction is part of the rule for attempt formats.
+      final lowerBest = base
+          .copyWith(
+            format: RaceFormat.bestAttempt,
+            finishLineAt: deadline,
+            scoreDirection: 'lower',
+          )
+          .winStatement;
+      expect(lowerBest, contains('Lowest'));
+      final lowerTimed = base
+          .copyWith(
+            format: RaceFormat.timedAttempt,
+            finishLineAt: deadline,
+            attemptDurationSeconds: 30,
+            scoreDirection: 'lower',
+          )
+          .winStatement;
+      expect(lowerTimed, contains('Least'));
+      expect(lowerTimed, contains('30s'));
+    });
+
     test('test_gap5_timed_battle_without_duration_invalid', () {
       final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
       final battle = draftFromIdea('First to 100 pushups')!.copyWith(
