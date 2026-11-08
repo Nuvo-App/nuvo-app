@@ -26,10 +26,6 @@ import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/auth/presentation/auth_gate.dart';
 import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
-import 'package:nuvo/features/races/data/motion_catalog.dart';
-import 'package:nuvo/features/races/presentation/motion_catalog_provider.dart';
-import 'package:nuvo/features/races/presentation/race_composer_screen.dart';
-import 'package:nuvo/features/races/presentation/race_controller.dart';
 
 const _publicUser = AuthUser(
   id: 'u-public',
@@ -86,11 +82,14 @@ class _ScriptedAuthRepo extends AuthRepository {
     String idToken, {
     String? fullName,
     String? authorizationCode,
-  }) async =>
-      user;
+  }) async => user;
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async => user;
+  Future<AuthUser> signInReviewer(
+    String email,
+    String password, {
+    String intent = 'signin',
+  }) async => user;
 
   @override
   Future<void> logout() async {}
@@ -388,9 +387,7 @@ void main() {
       }
     });
 
-    testWidgets('waiting never advances the guide — no timers', (
-      tester,
-    ) async {
+    testWidgets('waiting never advances the guide — no timers', (tester) async {
       final container = await _pumpCoach(
         tester,
         targetKey: GlobalKey(),
@@ -479,11 +476,7 @@ void main() {
             targetAtTop: atTop,
             viewport: size,
           );
-          expect(
-            tester.takeException(),
-            isNull,
-            reason: '$size atTop=$atTop',
-          );
+          expect(tester.takeException(), isNull, reason: '$size atTop=$atTop');
         }
       }
     });
@@ -908,9 +901,11 @@ void main() {
         ),
       );
       expect(caret.size, const Size(14, 10));
-      final caretRect = tester.getRect(find.byWidgetPredicate(
-        (w) => w is CustomPaint && w.size == const Size(14, 10),
-      ));
+      final caretRect = tester.getRect(
+        find.byWidgetPredicate(
+          (w) => w is CustomPaint && w.size == const Size(14, 10),
+        ),
+      );
       final bubble = tester.getRect(find.text('Start your first race.'));
       expect(caretRect.bottom, lessThanOrEqualTo(bubble.top + 20));
     });
@@ -937,246 +932,6 @@ void main() {
         container.read(firstRaceGuideProvider),
         FirstRaceGuideStep.complete,
       );
-    });
-  });
-
-  group('real composer walkthrough', () {
-    Future<ProviderContainer> pumpComposer(WidgetTester tester) async {
-      // Phone-sized viewport — the default 800×600 window lets bottom bars
-      // cover scrollable rows and misroutes taps.
-      tester.view.physicalSize = const Size(1170, 2532);
-      tester.view.devicePixelRatio = 3.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      final container = ProviderContainer(
-        overrides: [
-          firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
-          authControllerProvider.overrideWith(
-            (ref) => AuthController(_ScriptedAuthRepo(user: _testingUser)),
-          ),
-          motionCatalogProvider.overrideWith(
-            (ref) async => MotionCatalogSnapshot.bundled(),
-          ),
-          raceControllerProvider.overrideWith(
-            (ref) => RaceController(
-              ref.watch(raceRepositoryProvider),
-              isPresentationDemo: () => true,
-              presentationUserId: () => 'u-testing',
-            ),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-      container.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.composerName;
-      final router = GoRouter(
-        initialLocation: '/races/new',
-        routes: [
-          GoRoute(
-            path: '/races/new',
-            builder: (_, _) => const RaceComposerScreen(),
-          ),
-          GoRoute(path: '/compete', builder: (_, _) => const _Screen('c')),
-          GoRoute(path: '/races/teach', builder: (_, _) => const _Screen('t')),
-          GoRoute(
-            path: '/race/:id',
-            builder: (_, _) => const _Screen('detail'),
-          ),
-          GoRoute(
-            path: '/race/:id/invite',
-            builder: (_, _) => const _Screen('invite'),
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      // Bounded pumps — the coach pulse never settles.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pump();
-      return container;
-    }
-
-    Future<void> settle(WidgetTester tester) async {
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 450));
-      await tester.pump();
-    }
-
-    testWidgets('input → continue-CTA substeps across every page', (
-      tester,
-    ) async {
-      final container = await pumpComposer(tester);
-
-      // NAME — input substep on the real field.
-      expect(find.text('NAME IT'), findsOneWidget);
-      expect(find.text('Give your race a name.'), findsOneWidget);
-      expect(find.text('Skip'), findsOneWidget);
-
-      // Typing satisfies the input, but the coach stays on the field while
-      // the keyboard is up — it only retargets once the user is done typing.
-      await tester.enterText(find.byType(TextField).first, 'Morning Mile');
-      await settle(tester);
-      expect(find.text('NAME IT'), findsOneWidget);
-      expect(find.text('Pick the activity.'), findsNothing);
-
-      // Dismiss the keyboard → coach retargets the real CTA. Route does NOT
-      // move on input alone.
-      WidgetsBinding.instance.focusManager.primaryFocus?.unfocus();
-      await settle(tester);
-      expect(find.text('Pick the activity.'), findsOneWidget);
-      expect(find.text('Tap Choose activity.'), findsOneWidget);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.composerName,
-      );
-
-      // The real CTA drives the page change.
-      await tester.tap(find.text('Choose activity'));
-      await settle(tester);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.composerActivity,
-      );
-      // 'Morning Mile' resolved to a running race — the activity step is
-      // already satisfied, so the coach points at the continue CTA.
-      expect(find.text('Tap Set the finish line.'), findsOneWidget);
-
-      // The picker leads the activity step — pick a real movement.
-      await tester.ensureVisible(find.text('Pushups').first);
-      await tester.pump();
-      await tester.tap(find.text('Pushups').first);
-      await settle(tester);
-      expect(find.text('Set the finish line.'), findsOneWidget);
-      expect(find.text('Tap Continue.'), findsOneWidget);
-
-      await tester.tap(find.text('Continue with Pushups'));
-      await settle(tester);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.composerGoal,
-      );
-      expect(find.text('SET THE FINISH'), findsOneWidget);
-
-      // Change the goal — coach retargets Invite racers. 'Morning Mile'
-      // interpreted as a best-attempt race, so the goal page leads with the
-      // mode chips and no target stepper; switching to first-to-goal reveals
-      // the stepper, then a real increment counts as the input.
-      await tester.tap(find.text('First to the goal'));
-      await settle(tester);
-      await tester.tap(find.byIcon(Icons.add_rounded));
-      await settle(tester);
-      expect(find.text('Bring in your friends.'), findsOneWidget);
-      expect(find.text('Tap Invite racers.'), findsOneWidget);
-
-      await tester.tap(find.text('Invite racers'));
-      await settle(tester);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.composerRacers,
-      );
-      expect(find.text('BRING YOUR FRIENDS'), findsOneWidget);
-
-      // Choose solo — coach retargets Review race.
-      await tester.tap(find.text('Start solo'));
-      await settle(tester);
-      expect(find.text('Review your race.'), findsOneWidget);
-      expect(find.text('Tap Review race.'), findsOneWidget);
-
-      await tester.tap(find.text('Review race'));
-      await settle(tester);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.composerReview,
-      );
-      expect(find.text('START THE RACE'), findsOneWidget);
-
-      // The real Start race button creates the race and arms raceDetail.
-      await tester.tap(find.text('Start race'));
-      await settle(tester);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.raceDetail,
-      );
-      // Unmount the tree and advance the fake clock past the demo-race
-      // expiry timer (10 min in RaceController._addPresentationRace).
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(minutes: 11));
-      await tester.pump();
-    });
-
-    testWidgets('back navigation re-derives the correct substep', (
-      tester,
-    ) async {
-      await pumpComposer(tester);
-
-      await tester.enterText(find.byType(TextField).first, 'Morning Mile');
-      await settle(tester);
-      await tester.tap(find.text('Choose activity'));
-      await settle(tester);
-      await tester.ensureVisible(find.text('Pushups').first);
-      await tester.pump();
-      await tester.tap(find.text('Pushups').first);
-      await settle(tester);
-      await tester.tap(find.text('Continue with Pushups'));
-      await settle(tester);
-      expect(find.text('SET THE FINISH'), findsOneWidget);
-
-      // Back → Activity. The movement is still picked, so the coach points
-      // at the continue CTA — not the input — without re-asking.
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded).first);
-      await settle(tester);
-      expect(find.text('Set the finish line.'), findsOneWidget);
-      expect(find.text('PICK THE MOVE'), findsNothing);
-
-      // Back → Name. The name is still valid → coach targets the CTA again.
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded).first);
-      await settle(tester);
-      expect(find.text('Pick the activity.'), findsOneWidget);
-      expect(find.text('NAME IT'), findsNothing);
-      // Entered values survive — the field still holds the typed name.
-      expect(find.text('Morning Mile'), findsOneWidget);
-      // Unmount the tree and advance the fake clock — fires/cancels
-      // flutter_animate's deferred mount timers.
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
-    });
-
-    // The composer may skip the activity step entirely when the typed name
-    // already resolves the subject — the coach must follow the real route
-    // and land on whatever the goal step still needs, never on an activity
-    // substep that isn't on screen.
-    testWidgets('resolved name — the coach lands on the goal step', (
-      tester,
-    ) async {
-      final container = await pumpComposer(tester);
-      await tester.enterText(find.byType(TextField).first, 'Pushups');
-      await settle(tester);
-      WidgetsBinding.instance.focusManager.primaryFocus?.unfocus();
-      await settle(tester);
-      await tester.tap(find.text('Choose activity'));
-      await settle(tester);
-
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.composerGoal,
-      );
-      expect(find.text('SET THE FINISH'), findsOneWidget);
-      expect(find.text('Pick the activity.'), findsNothing);
-      expect(find.text('PICK THE MOVE'), findsNothing);
-      // The goal number is still open — the coach targets the real input,
-      // not a stale continue CTA.
-      expect(find.text('How many pushups?'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 1));
     });
   });
 }

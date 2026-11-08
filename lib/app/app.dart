@@ -1,4 +1,3 @@
-import '../core/config/v13.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/nuvo_responsive.dart';
-import '../core/theme/nuvo_theme_mode.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/notifications/application/push_service.dart';
 import '../features/onboarding/data/first_use_store.dart';
@@ -140,9 +138,7 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
     });
 
     // v13 is light-only for this release (FEASIBILITY A9).
-    final themeMode = kNuvoV13
-        ? ThemeMode.light
-        : ref.watch(nuvoThemeModeProvider);
+    final themeMode = ThemeMode.light;
     final brightness = themeMode == ThemeMode.dark
         ? Brightness.dark
         : Brightness.light;

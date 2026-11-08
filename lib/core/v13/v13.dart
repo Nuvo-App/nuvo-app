@@ -2,7 +2,6 @@
 /// redesign (`docs/redesign/PROTOTYPE_V13_SPEC.md`).
 library;
 
-export '../config/v13.dart';
 export 'motion.dart';
 export 'navigation.dart';
 export 'tokens.dart';

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nuvo/core/config/v13.dart';
 import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
 
 void main() {
-  test('v13 flag defaults on', () {
-    expect(kNuvoV13, isTrue);
+  test('the shell uses the v13 destination table', () {
     expect(identical(activeDestinations, v13Destinations), isTrue);
   });
 
@@ -17,12 +15,14 @@ void main() {
       'Crew',
       'Profile',
     ]);
-    // Same paths and order as the pre-v13 table, so branch index, deep links
-    // and auth_gate's protected-route list keep working.
-    expect(
-      v13Destinations.map((d) => d.path),
-      nuvoDestinations.map((d) => d.path),
-    );
+    // The Crew tab keeps /pass: auth_gate's protected-route list and existing
+    // deep links use it.
+    expect(v13Destinations.map((d) => d.path), [
+      '/arena',
+      '/compete',
+      '/pass',
+      '/profile',
+    ]);
   });
 
   testWidgets('v13 tab bar renders every destination and reports taps', (

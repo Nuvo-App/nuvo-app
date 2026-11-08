@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/v13.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
@@ -235,29 +233,22 @@ class _MainShellState extends ConsumerState<MainShell>
         ? (widget.child as StatefulNavigationShell).currentIndex
         : _indexFor(GoRouterState.of(context).uri.path);
 
-    final Widget navigation = kNuvoV13
-        ? V13TabBar(
-            key: TrackSideLayoutKeys.navigation,
-            items: [
-              for (final d in activeDestinations)
-                V13TabItem(
-                  label: d.label,
-                  icon: d.icon,
-                  selectedIcon: d.selectedIcon,
-                ),
-            ],
-            currentIndex: currentIndex,
-            onTap: _onTapTab,
-          )
-        : NuvoBottomNav(
-            key: TrackSideLayoutKeys.navigation,
-            rowKey: TrackSideLayoutKeys.navigationRow,
-            currentIndex: currentIndex,
-            onTap: _onTapTab,
-          );
+    final Widget navigation = V13TabBar(
+      key: TrackSideLayoutKeys.navigation,
+      items: [
+        for (final d in activeDestinations)
+          V13TabItem(
+            label: d.label,
+            icon: d.icon,
+            selectedIcon: d.selectedIcon,
+          ),
+      ],
+      currentIndex: currentIndex,
+      onTap: _onTapTab,
+    );
 
     return Scaffold(
-      backgroundColor: kNuvoV13 ? V13.bg : context.themeColors.page,
+      backgroundColor: V13.bg,
       extendBody: true,
       body: SafeArea(
         bottom: false,
@@ -299,7 +290,7 @@ class _DockOcclusion extends StatelessWidget {
             MediaQuery.paddingOf(context).bottom +
             NuvoBottomNav.navDockGap +
             NuvoBottomNav.navTopBreath,
-        color: kNuvoV13 ? V13.bg : context.themeColors.page,
+        color: V13.bg,
       ),
     );
   }
