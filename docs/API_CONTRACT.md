@@ -386,6 +386,20 @@ Request body:
 }
 ```
 
+Race fields:
+
+- `rulesVersion` (or `rules_version`) — race rules revision: `0` legacy
+  (default), `1` strict rules. Any other value normalizes to `0`. Stored on
+  create, echoed as `rulesVersion` in every race response, and copied to
+  rematches. Not PATCH-able.
+- `format` may be `first_to_goal`, `most_in_window`, `best_attempt`, or
+  `timed_attempt`. Attempt formats accept `attemptLimit` and
+  `attemptDurationSeconds`. On `rulesVersion: 1`, `attemptDurationSeconds` is
+  required for `timed_attempt` (400 `"Attempt duration is required."` when
+  missing); on `0` a missing duration defaults to 60 seconds.
+- `scoreDirection: "lower"` is honored on attempt formats; races that score by
+  cumulative sum always rank "most wins".
+
 Response: race object with the same shape as `GET /races`.
 
 ### GET /races/:id
@@ -446,6 +460,13 @@ Update race settings (creator only).
 
 Request body: same fields as `POST /races`. Partial updates allowed.
 
+- `rulesVersion` is create-only and ignored here.
+- `finishLineAt: null` is rejected for formats decided at the finish line
+  (`most_in_window`, `best_attempt`, `timed_attempt`); `first_to_goal` races
+  may clear it.
+- `goalType` updates the legacy `race_type` only on legacy-vocabulary rows; a
+  race whose canonical `format` is set keeps its type.
+
 Response:
 
 ```json
@@ -484,6 +505,14 @@ Request body:
 }
 ```
 
+Attempt formats: a verified proof binds the racer's open attempt. If none is
+open, the Worker auto-opens one (recording the same `attempt_started` event as
+`POST /races/:id/attempts`) — always for `best_attempt`, and for
+`timed_attempt` only when the race's `rulesVersion` is `0`. Submission still
+400s when the attempt limit is reached or the race is not active. A proof
+rejected for no open attempt consumes nothing: the same verification session
+and `clientSubmissionId` may be retried once an attempt is open.
+
 Response:
 
 ```json
@@ -507,6 +536,11 @@ Request body:
 ```
 
 `verificationStatus` may be `accepted`, `rejected`, or `ai_verified`.
+
+On an attempt-format race, accepting a pending proof binds it to the attempt
+whose window contained the proof's submission time (attempt deadline plus a
+short grace, or the untimed attempt TTL); the attempt need not still be open at
+review time.
 
 Response:
 
