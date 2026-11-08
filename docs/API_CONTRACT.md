@@ -147,7 +147,7 @@ v13 fields (all additive, `null` when unset):
 - `bio` — free-text bio, up to 80 chars.
 - `favoriteMovementKey` — the member's favorite movement key, up to 40 chars.
 - `activityMapShared` — whether the member shares their activity map with other members (default `true`).
-- `raceInvitesFrom` — `"everyone"` (default) or `"friends"`. When `"friends"`, only a connected friend may add this member to a race; other add attempts return `403`.
+- `raceInvitesFrom` — `"everyone"` (default) or `"friends"`. Stored for old app builds only — it is never enforced; anyone can race anyone.
 
 ### POST /profile
 
@@ -668,18 +668,9 @@ Request body:
 
 Response: `200` with the updated race object (same shape as `GET /races/:id`).
 
-**"Who can race me" gate:** every add-member path — this route,
-`/participants`, rematch fan-out, and crew race fan-out — checks the
-*target's* `raceInvitesFrom` pref. When the target has
-`raceInvitesFrom = "friends"` and the inviter is not a connected friend, the
-add returns `403`:
-
-```json
-{ "ok": false, "error": "This member only races with friends" }
-```
-
-Rematch fan-out silently skips ineligible members rather than failing the
-whole rematch. Existing block checks still apply on top of this gate.
+**"Who can race me":** the `raceInvitesFrom` profile pref still round-trips
+(old app builds may send or display it) but is never enforced — anyone can
+race anyone. Existing block checks still apply.
 
 ---
 
