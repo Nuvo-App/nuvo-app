@@ -15,6 +15,7 @@ import '../../data/race_models.dart';
 import '../../domain/chase_context.dart';
 import '../../domain/motion_activity.dart';
 import '../../domain/race_display.dart';
+import '../../domain/race_mode_semantics.dart';
 import '../race_controller.dart';
 import 'submit_proof_entry.dart';
 
@@ -376,8 +377,10 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         race.scoreDirection == 'lower'
             ? 'Lowest single score wins'
             : 'Best single attempt wins',
-      RaceFormat.timedAttempt =>
-        'Most in ${formatDurationShort(race.attemptDurationSeconds ?? 0)} wins',
+      RaceFormat.timedAttempt => timedAttemptRuleLine(
+          race.scoreDirection,
+          race.attemptDurationSeconds,
+        ),
     };
   }
 
