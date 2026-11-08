@@ -62,12 +62,18 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       _invited.add(prefill!.withUser!.id);
     }
     _draft = draft;
+    // Warm the friend list early so step 3 never flashes empty.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadFriends();
+    });
   }
 
   void _update(RaceDraft d) => setState(() => _draft = d);
 
   void _next() {
-    if (_step == 2) _loadFriends();
+    // Load friends on the way INTO the invite step (index 2), not on the way
+    // out of it — otherwise the step always renders "No friends yet".
+    if (_step + 1 == 2) _loadFriends();
     setState(() {
       _step = (_step + 1).clamp(0, 3);
       _error = null;
@@ -148,6 +154,9 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       targetUnit: payload['targetUnit'] as String,
       proofMode: payload['proofMode'] as String,
       scoreDirection: payload['scoreDirection'] as String?,
+      // The finish line the user picked — without this the server falls back
+      // to its default window and the race page disagrees with step 4.
+      finishLineAt: payload['finishLineAt'] as String?,
     );
   }
 
@@ -196,7 +205,7 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       showV13Confetti(context);
       showV13Toast(
         context,
-        crewId != null
+        sent == 0
             ? '${race.displayTitle} is live.'
             : '${race.displayTitle} is live. $sent '
                   'invite${sent == 1 ? '' : 's'} sent.',
@@ -487,8 +496,17 @@ class _NameStepState extends State<_NameStep> {
               style: V13.bodyStrong,
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _commit(),
+              // The card is the field's frame — kill every themed border so
+              // focus doesn't draw a second ring inside it.
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                filled: false,
+                isDense: false,
                 hintText: 'First to 100 Pushups',
                 hintStyle: TextStyle(color: V13.muted),
               ),
@@ -855,6 +873,9 @@ class _ManualFieldsState extends State<_ManualFields> {
       onChanged: onChanged,
       decoration: InputDecoration(
         border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        filled: false,
         hintText: hint,
         hintStyle: const TextStyle(color: V13.muted),
       ),
@@ -900,6 +921,9 @@ class _MovementNameSheetState extends State<_MovementNameSheet> {
               onSubmitted: (_) => Navigator.of(context).pop(_ctrl.text),
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 hintText: 'Burpee backflip',
                 hintStyle: TextStyle(color: V13.muted),
               ),
@@ -1080,7 +1104,7 @@ class _ReviewStep extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(draft.resolvedTitle, style: V13.bodyStrong),
+                Text(_titleCase(draft.resolvedTitle), style: V13.bodyStrong),
                 const SizedBox(height: 4),
                 Text(draft.winStatement, style: V13.caption),
               ],
@@ -1155,3 +1179,15 @@ class _ReviewStep extends StatelessWidget {
         showDivider: false,
       );
 }
+
+/// Same casing `Race.displayTitle` applies, so the review card matches the
+/// race everywhere else.
+String _titleCase(String raw) => raw
+    .trim()
+    .split(RegExp(r'\s+'))
+    .map(
+      (w) => w.isEmpty
+          ? w
+          : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}',
+    )
+    .join(' ');

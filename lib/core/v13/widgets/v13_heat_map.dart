@@ -30,7 +30,13 @@ class V13HeatMap extends StatelessWidget {
     final today = DateUtils.dateOnly(DateTime.now());
     // Columns are Sunday-start weeks; the last column ends at today.
     final sinceSunday = today.weekday % 7;
-    final start = today.subtract(Duration(days: (weeks - 1) * 7 + sinceSunday));
+    // Calendar arithmetic, not Duration: subtracting 24h blocks across a DST
+    // change lands on 23:00/01:00 and no cell ever matches a midnight key.
+    final start = DateTime(
+      today.year,
+      today.month,
+      today.day - ((weeks - 1) * 7 + sinceSunday),
+    );
 
     final normalized = <DateTime, int>{};
     var maxCount = 0;
@@ -106,7 +112,7 @@ class V13HeatMap extends StatelessWidget {
     int maxCount,
     double size,
   ) {
-    final day = start.add(Duration(days: col * 7 + row));
+    final day = DateTime(start.year, start.month, start.day + col * 7 + row);
     if (day.isAfter(today)) {
       return SizedBox.square(dimension: size);
     }

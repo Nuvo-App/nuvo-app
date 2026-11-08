@@ -201,7 +201,7 @@ class ArenaRaceCard extends ConsumerWidget {
               const SizedBox(width: V13.gapSm),
               Expanded(
                 child: Text(
-                  '${data.movementLabel} · ${data.racerCount} racers',
+                  '${data.movementLabel} · ${data.racerCount} ${data.racerCount == 1 ? 'racer' : 'racers'}',
                   style: V13.caption.copyWith(
                     color: V13.navy,
                     fontWeight: FontWeight.w700,

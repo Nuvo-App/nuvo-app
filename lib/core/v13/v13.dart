@@ -16,6 +16,7 @@ export 'widgets/v13_icon_tile.dart';
 export 'widgets/v13_list_row.dart';
 export 'widgets/v13_medal_circle.dart';
 export 'widgets/v13_number_pop.dart';
+export 'widgets/v13_nuvo_qr.dart';
 export 'widgets/v13_otp_input.dart';
 export 'widgets/v13_pill.dart';
 export 'widgets/v13_pressable.dart';

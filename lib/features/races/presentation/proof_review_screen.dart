@@ -624,6 +624,9 @@ class _ReportMoveSheet extends StatelessWidget {
               style: V13.body,
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 hintText: 'Optional details',
                 hintStyle: TextStyle(color: V13.muted),
                 counterStyle: TextStyle(color: V13.muted),
