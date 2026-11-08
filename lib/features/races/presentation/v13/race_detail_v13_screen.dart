@@ -11,6 +11,7 @@ import '../../../auth/data/auth_api.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../../../crew/application/crew_controller.dart';
 import '../../../race_detail/domain/race_poll_backoff.dart';
+import '../../../notifications/domain/notification_display.dart';
 import '../../data/race_models.dart';
 import '../../domain/chase_context.dart';
 import '../../domain/motion_activity.dart';
@@ -52,12 +53,32 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
   bool _inFlight = false;
   bool _resumed = true;
   bool _gated = false;
-  bool _proofsOpen = false;
+  bool _showAllRacers = false;
+
+  /// Scroll + hero key: the sticky Submit proof only appears once the YOU
+  /// hero (which carries its own Submit) has scrolled off — never both.
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey _heroKey = GlobalKey();
+  final ValueNotifier<bool> _heroVisible = ValueNotifier(true);
+
+  void _onScroll() {
+    final ctx = _heroKey.currentContext;
+    if (ctx == null) {
+      _heroVisible.value = false;
+      return;
+    }
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return;
+    final bottom = box.localToGlobal(Offset(0, box.size.height)).dy;
+    // Off once the hero's bottom edge passes under the header (~120pt).
+    _heroVisible.value = bottom > 120;
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scroll.addListener(_onScroll);
     _resumed =
         (WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed) ==
         AppLifecycleState.resumed;
@@ -69,6 +90,8 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _scroll.dispose();
+    _heroVisible.dispose();
     super.dispose();
   }
 
@@ -378,9 +401,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
             ? 'Lowest single score wins'
             : 'Best single attempt wins',
       RaceFormat.timedAttempt => timedAttemptRuleLine(
-          race.scoreDirection,
-          race.attemptDurationSeconds,
-        ),
+        race.scoreDirection,
+        race.attemptDurationSeconds,
+      ),
     };
   }
 
@@ -435,31 +458,40 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     final isOwner = uid != null && race.isCreator(uid);
     final isParticipant = uid != null && race.isParticipant(uid);
     final completed = raceIsCompleted(race);
-    final canVerify = raceIsActive(race) && (isOwner || isParticipant);
-    final canJoin = raceIsActive(race) && !isOwner && !isParticipant;
+    final active = raceIsActive(race);
+    final canVerify = active && (isOwner || isParticipant);
+    final canJoin = active && !isOwner && !isParticipant;
     final chase = uid == null ? null : ChaseContext.compute(race, uid);
     final sorted = serverRankedParticipants(race);
     final me = isParticipant ? race.participantFor(uid) : null;
     final canOpenProofs = raceCanInspectProofs(race, uid);
+    final showHero = me != null && !completed;
 
-    final (primaryLabel, onPrimary) = canJoin
-        ? ('Join race', _join)
+    Future<void> submit() async {
+      await openSubmitProof(context, ref, race);
+      _load();
+    }
+
+    // The one blue action. Submit lives inside the hero; the sticky copy
+    // only shows once the hero is scrolled away.
+    final (primaryLabel, onPrimary, primaryIcon) = canJoin
+        ? ('Join race', _join, Icons.flag_rounded)
         : completed
         ? (
             isOwner || isParticipant ? 'Race again' : 'Start another race',
             isOwner || isParticipant
                 ? _rematch
                 : () => context.push('/races/new'),
+            Icons.replay_rounded,
           )
         : canVerify
-        ? (
-            'Submit proof',
-            () async {
-              await openSubmitProof(context, ref, race);
-              _load();
-            },
-          )
-        : ('', null);
+        ? ('Submit proof', submit, Icons.check_rounded)
+        : ('', null, Icons.check_rounded);
+    final stickyOnlyWhenHeroHidden = showHero && canVerify;
+
+    var stagger = 0;
+    Widget enter(Widget child, String key) =>
+        V13StaggerIn(key: ValueKey(key), index: stagger++, child: child);
 
     return Column(
       children: [
@@ -479,125 +511,327 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
             onRefresh: _load,
             color: V13.blue,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
+              controller: _scroll,
+              padding: EdgeInsets.fromLTRB(
                 V13.pagePad,
-                V13.gapMd,
+                V13.gapSm,
                 V13.pagePad,
-                96,
+                MediaQuery.paddingOf(context).bottom + 120,
               ),
               children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(_ruleLine(race), style: V13.body)),
-                    if (chase?.timeLeft != null && !completed)
-                      V13Pill(
-                        label: '${chase!.timeLeft} left',
-                        color: V13.sun,
-                        textColor: V13.navy,
-                      ),
-                  ],
-                ),
+                enter(_metaChips(race, chase, completed), 'meta'),
                 const SizedBox(height: V13.gapLg),
-                if (completed && race.finalStandings.isNotEmpty)
-                  _finalStandings(race, uid)
-                else ...[
-                  _podium(sorted, uid),
-                  if (sorted.length > 3) ...[
-                    const SizedBox(height: V13.gapMd),
-                    for (var i = 3; i < sorted.length; i++) ...[
-                      const V13Divider(),
-                      _boardRow(race, sorted[i], i + 1, uid),
-                    ],
-                  ],
-                  if (sorted.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: V13.gapXl),
-                      child: Text(
-                        'No one on the board yet — invite your friends.',
-                        style: V13.body,
-                        textAlign: TextAlign.center,
+                if (showHero) ...[
+                  enter(
+                    KeyedSubtree(
+                      key: _heroKey,
+                      child: _youHero(
+                        race,
+                        me,
+                        chase,
+                        sorted,
+                        onSubmit: canVerify ? submit : null,
                       ),
                     ),
-                ],
-                if (isParticipant && !completed && me != null) ...[
-                  const SizedBox(height: V13.gapLg),
-                  V13Card(
-                    padding: const EdgeInsets.all(V13.gapMd),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            V13NumberPop(
-                              value: me.progressValue,
-                              style: V13.number,
-                            ),
-                            const SizedBox(width: V13.gapSm),
-                            Expanded(
-                              child: Text(
-                                raceDisplayUnit(race),
-                                style: V13.caption,
-                              ),
-                            ),
-                            Text(
-                              raceRankLabel(race, uid),
-                              style: V13.bodyStrong.copyWith(color: V13.blue),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: V13.gapSm),
-                        V13ProgressBar(
-                          value: raceProgressPercent(race, me) / 100,
-                        ),
-                        if (race.attemptLimit != null) ...[
-                          const SizedBox(height: V13.gapSm),
-                          Text(
-                            '${race.viewerContext?.attemptsUsed ?? 0} of ${race.attemptLimit} attempts used',
-                            style: V13.caption,
-                          ),
-                        ],
-                        if (chase?.chaseCopy != null) ...[
-                          const SizedBox(height: V13.gapSm),
-                          Text(chase!.chaseCopy!, style: V13.caption),
-                        ],
-                      ],
-                    ),
+                    'hero',
                   ),
+                  const SizedBox(height: V13.gapSection),
                 ],
-                const SizedBox(height: V13.gapLg),
-                _proofsSection(race, canOpenProofs),
+                enter(
+                  completed && race.finalStandings.isNotEmpty
+                      ? _finalStandings(race, uid)
+                      : _standings(race, sorted, uid),
+                  'standings',
+                ),
+                const SizedBox(height: V13.gapSection),
+                enter(_activity(race, canOpenProofs), 'activity'),
+                const SizedBox(height: V13.gapSection),
+                enter(_about(race, active), 'about'),
               ],
             ),
           ),
         ),
         if (onPrimary != null && primaryLabel.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              V13.pagePad,
-              0,
-              V13.pagePad,
-              V13.gapLg,
+          ValueListenableBuilder<bool>(
+            valueListenable: _heroVisible,
+            builder: (context, heroVisible, _) {
+              final show = !stickyOnlyWhenHeroHidden || !heroVisible;
+              return AnimatedSize(
+                duration: V13Motion.fast,
+                curve: Curves.easeOutCubic,
+                child: show
+                    ? Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          V13.pagePad,
+                          V13.gapSm,
+                          V13.pagePad,
+                          MediaQuery.paddingOf(context).bottom + V13.gapSm,
+                        ),
+                        child: V13Button.primary(
+                          label: primaryLabel,
+                          icon: primaryIcon,
+                          loading: _busy,
+                          fullWidth: true,
+                          onPressed: onPrimary,
+                        ),
+                      )
+                    : const SizedBox(width: double.infinity),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  // ── Meta chips ──────────────────────────────────────────────────────────
+
+  Widget _metaChips(Race race, ChaseContext? chase, bool completed) {
+    final icon = raceActivityDefinition(race)?.icon ?? Icons.flag_rounded;
+    final n = race.participants.length;
+    Widget chip(IconData? i, String label) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: V13.card,
+        borderRadius: BorderRadius.circular(V13.radiusPill),
+        border: Border.all(color: V13.divider, width: V13.outline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (i != null) ...[
+            Icon(i, size: 15, color: V13.navy),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              style: V13.caption.copyWith(
+                color: V13.navy,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            child: V13Button.primary(
-              label: primaryLabel,
-              icon: canJoin
-                  ? Icons.flag_rounded
-                  : completed
-                  ? Icons.replay_rounded
-                  : Icons.check_rounded,
-              loading: _busy,
+          ),
+        ],
+      ),
+    );
+    return Wrap(
+      spacing: V13.gapSm,
+      runSpacing: V13.gapSm,
+      children: [
+        chip(icon, _ruleLine(race)),
+        if (completed)
+          chip(Icons.flag_circle_rounded, 'Finished')
+        else if (chase?.timeLeft != null)
+          chip(Icons.schedule_rounded, '${chase!.timeLeft} left'),
+        chip(Icons.group_rounded, '$n ${n == 1 ? 'racer' : 'racers'}'),
+      ],
+    );
+  }
+
+  // ── YOU hero ────────────────────────────────────────────────────────────
+
+  String _chaseLine(Race race, ChaseContext? chase, List<RaceParticipant> all) {
+    if (all.every((p) => p.progressValue <= 0)) {
+      return 'No one’s moved yet. First proof takes the lead.';
+    }
+    return chase?.chaseCopy ?? 'Keep going.';
+  }
+
+  Widget _youHero(
+    Race race,
+    RaceParticipant me,
+    ChaseContext? chase,
+    List<RaceParticipant> sorted, {
+    VoidCallback? onSubmit,
+  }) {
+    final hasGoal = raceHasFinishLine(race);
+    final rank = rankForUser(race, me.userId);
+    final type = raceMeasurementType(race);
+    final reps = type == MotionMeasurementType.repetitions;
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    return V13Card(
+      color: V13.raceColor(race.id),
+      padding: const EdgeInsets.all(V13.gapLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('YOU', style: V13.label.copyWith(color: V13.navy)),
+              const Spacer(),
+              if (rank != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: V13.card,
+                    borderRadius: BorderRadius.circular(V13.radiusPill),
+                    border: Border.all(color: V13.navy, width: V13.outline),
+                  ),
+                  child: Text(
+                    '${raceOrdinal(rank)} of ${sorted.length}',
+                    style: V13.bodyStrong.copyWith(fontSize: 14),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: V13.gapSm),
+          // Count up to the current value. Reps get a big number + unit;
+          // time / distance use the shared formatter so units never drift.
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: me.progressValue.toDouble()),
+            duration: reduce
+                ? Duration.zero
+                : const Duration(milliseconds: 700),
+            curve: Curves.easeOutCubic,
+            builder: (_, v, _) {
+              final n = v.round();
+              if (!reps) {
+                return Text(
+                  raceScoreLabel(race, n),
+                  style: V13.hugeNumber.copyWith(fontSize: 48),
+                  maxLines: 1,
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text('$n', style: V13.hugeNumber.copyWith(fontSize: 64)),
+                  const SizedBox(width: V13.gapSm),
+                  Flexible(
+                    child: Text(
+                      hasGoal
+                          ? '/ ${race.targetValue} ${raceDisplayUnit(race)}'
+                          : raceDisplayUnit(race),
+                      style: V13.numberSm.copyWith(color: V13.navy),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          if (hasGoal) ...[
+            const SizedBox(height: V13.gapSm),
+            V13ProgressBar(
+              value: raceProgressPercent(race, me) / 100,
+              trackColor: V13.card,
+            ),
+          ],
+          const SizedBox(height: V13.gapMd),
+          Text(_chaseLine(race, chase, sorted), style: V13.bodyStrong),
+          if (race.attemptLimit != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${race.viewerContext?.attemptsUsed ?? 0} of ${race.attemptLimit} attempts used',
+              style: V13.caption.copyWith(color: V13.navy),
+            ),
+          ],
+          // Stage S5 slot: the timed-battle countdown / "start attempt"
+          // entry point mounts here, right above Submit proof.
+          raceDetailAttemptSlot(context, race),
+          if (onSubmit != null) ...[
+            const SizedBox(height: V13.gapLg),
+            V13Button.primary(
+              label: 'Submit proof',
+              icon: Icons.check_rounded,
               fullWidth: true,
-              onPressed: onPrimary,
+              onPressed: onSubmit,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Standings ───────────────────────────────────────────────────────────
+
+  Widget _standings(Race race, List<RaceParticipant> sorted, String? uid) {
+    if (sorted.isEmpty) {
+      return Text(
+        'No one on the board yet — invite your friends.',
+        style: V13.body.copyWith(color: V13.muted),
+      );
+    }
+    final moved = sorted.where((p) => p.progressValue > 0).toList();
+    if (moved.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('STANDINGS', style: V13.label),
+          const SizedBox(height: V13.gapMd),
+          Row(
+            children: [
+              V13FaceStack(
+                faces: [
+                  for (final p in sorted)
+                    V13FaceInfo(
+                      photoUrl: p.profilePhotoUrl,
+                      name: p.displayName,
+                      isMe: p.userId == uid,
+                    ),
+                ],
+                total: sorted.length,
+                max: 6,
+                size: 36,
+              ),
+              const SizedBox(width: V13.gapMd),
+              Expanded(
+                child: Text(
+                  'Everyone’s at 0',
+                  style: V13.body.copyWith(color: V13.muted),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+    final podium = moved.length >= 3;
+    final listFrom = podium ? 3 : 0;
+    final rest = sorted.skip(listFrom).toList();
+    final visible = _showAllRacers ? rest : rest.take(8).toList();
+    final rankCounts = <int, int>{};
+    for (final p in sorted) {
+      final r = p.rank ?? 0;
+      rankCounts[r] = (rankCounts[r] ?? 0) + 1;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('STANDINGS', style: V13.label),
+        const SizedBox(height: V13.gapMd),
+        if (podium) ...[
+          Center(child: _podium(moved.take(3).toList(), uid)),
+          const SizedBox(height: V13.gapLg),
+        ],
+        for (var i = 0; i < visible.length; i++)
+          _boardRow(
+            race,
+            visible[i],
+            visible[i].rank ?? (listFrom + i + 1),
+            uid,
+            tied: (rankCounts[visible[i].rank ?? -1] ?? 0) > 1,
+          ),
+        if (rest.length > 8 && !_showAllRacers)
+          Padding(
+            padding: const EdgeInsets.only(top: V13.gapSm),
+            child: V13Button.ghost(
+              label: 'Show all ${sorted.length} racers',
+              onPressed: () => setState(() => _showAllRacers = true),
             ),
           ),
       ],
     );
   }
 
-  Widget _podium(List<RaceParticipant> sorted, String? uid) {
-    if (sorted.isEmpty) return const SizedBox.shrink();
-    final top = sorted.take(3).toList();
-    // Podium order: 2nd, 1st, 3rd — the leader stands taller in the middle.
+  Widget _podium(List<RaceParticipant> top, String? uid) {
     final order = [
       for (final i in [1, 0, 2])
         if (i < top.length) top[i],
@@ -608,7 +842,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     ];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < order.length; i++) ...[
@@ -620,14 +853,14 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
   }
 
   Widget _podiumPerson(RaceParticipant p, int place, String? uid) {
-    final size = place == 1 ? 76.0 : 56.0;
+    final size = place == 1 ? 72.0 : 54.0;
     return SizedBox(
-      width: 92,
+      width: 96,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (place == 1) ...[
-            const Icon(Icons.emoji_events_rounded, color: V13.gold, size: 26),
+            const Icon(Icons.emoji_events_rounded, color: V13.gold, size: 24),
             const SizedBox(height: 2),
           ],
           V13Face(
@@ -638,17 +871,16 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
             onTap: () => openPerson(context, ref, p.userId),
           ),
           const SizedBox(height: V13.gapSm),
-          V13MedalCircle(place: place, size: 26),
+          V13MedalCircle(place: place, size: 24),
           const SizedBox(height: 2),
           Text(
             p.userId == uid ? 'You' : p.displayName.split(' ').first,
-            style: V13.label,
-            textAlign: TextAlign.center,
+            style: V13.bodyStrong.copyWith(fontSize: 14),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           Text(
-            raceProgressLabel(_race!, p),
+            raceScoreLabel(_race!, p.progressValue),
             style: V13.caption,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -658,25 +890,192 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     );
   }
 
-  Widget _boardRow(Race race, RaceParticipant p, int rank, String? uid) =>
-      V13ListRow(
-        title: p.userId == uid ? 'You' : p.displayName,
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(width: 30, child: Text('#$rank', style: V13.numberSm)),
-            V13Face(
-              photoUrl: p.profilePhotoUrl,
-              size: 34,
-              isMe: p.userId == uid,
-              name: p.displayName,
+  Widget _boardRow(
+    Race race,
+    RaceParticipant p,
+    int rank,
+    String? uid, {
+    bool tied = false,
+  }) {
+    final mine = p.userId == uid;
+    final hasGoal = raceHasFinishLine(race);
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: V13.gapSm, vertical: 10),
+      child: Row(
+        children: [
+          // Fixed rank column: #1–#99 always fit on one line.
+          SizedBox(
+            width: 40,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${tied ? '=' : '#'}$rank',
+                style: V13.numberSm,
+                maxLines: 1,
+                softWrap: false,
+              ),
             ),
+          ),
+          V13Face(
+            photoUrl: p.profilePhotoUrl,
+            size: 36,
+            isMe: mine,
+            name: p.displayName,
+            onTap: () => openPerson(context, ref, p.userId),
+          ),
+          const SizedBox(width: V13.gapMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  mine ? 'You' : p.displayName,
+                  style: V13.bodyStrong,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (hasGoal) ...[
+                  const SizedBox(height: 4),
+                  V13ProgressBar(
+                    value: raceProgressPercent(race, p) / 100,
+                    height: 6,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: V13.gapMd),
+          Text(raceScoreLabel(race, p.progressValue), style: V13.bodyStrong),
+        ],
+      ),
+    );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => openPerson(context, ref, p.userId),
+      child: mine
+          ? Container(
+              decoration: BoxDecoration(
+                color: V13.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(V13.radiusTileLg),
+              ),
+              child: row,
+            )
+          : row,
+    );
+  }
+
+  // ── Activity ────────────────────────────────────────────────────────────
+
+  Widget _activity(Race race, bool canOpen) {
+    final proofs = race.recentProofs;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('ACTIVITY', style: V13.label),
+        const SizedBox(height: V13.gapSm),
+        if (proofs.isEmpty)
+          Text(
+            raceIsActive(race)
+                ? 'No proofs yet — the first one sets the pace.'
+                : 'Nobody logged a move in this race.',
+            style: V13.body.copyWith(color: V13.muted),
+          )
+        else
+          for (var i = 0; i < proofs.length && i < 12; i++) ...[
+            if (i > 0) const V13Divider(),
+            _proofRow(race, proofs[i], canOpen),
+          ],
+      ],
+    );
+  }
+
+  Widget _proofRow(Race race, RaceProof proof, bool canOpen) {
+    final name = proof.displayName.trim().split(RegExp(r'\s+')).first;
+    final value = proof.value;
+    final amount = value == null
+        ? 'logged a proof'
+        : raceIsAccumulating(race)
+        ? '+${raceScoreLabel(race, value)}'
+        : raceScoreLabel(race, value);
+    final when = DateTime.tryParse(proof.createdAt);
+    final meta = [
+      if (when != null) notificationRelativeTime(when.toUtc()),
+      proof.proofType == 'ai_motion' ? 'Camera' : 'Manual',
+      if (proof.verificationStatus == 'pending_review') 'pending',
+    ].join(' · ');
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: canOpen
+          ? () => context.push('/race/${race.id}/proofs/${proof.id}')
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: V13.gapMd),
+        child: Row(
+          children: [
+            V13Face(
+              photoUrl: proof.profilePhotoUrl,
+              size: 36,
+              name: proof.displayName,
+            ),
+            const SizedBox(width: V13.gapMd),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: name, style: V13.bodyStrong),
+                        TextSpan(text: ' $amount', style: V13.body),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(meta, style: V13.caption),
+                ],
+              ),
+            ),
+            if (canOpen)
+              const Icon(Icons.chevron_right_rounded, color: V13.muted),
           ],
         ),
-        trailing: Text(raceProgressLabel(race, p), style: V13.bodyStrong),
-        onTap: () => openPerson(context, ref, p.userId),
-        showDivider: false,
-      );
+      ),
+    );
+  }
+
+  // ── About ───────────────────────────────────────────────────────────────
+
+  Widget _about(Race race, bool active) {
+    final finish = DateTime.tryParse(race.finishLineAt ?? '')?.toLocal();
+    final creator = race.participantFor(race.creatorId)?.displayName;
+    final facts = [
+      '${raceModeLabel(race.format)} — ${_ruleLine(race)}.',
+      if (finish != null)
+        'Finish line: ${MaterialLocalizations.of(context).formatMediumDate(finish)}.',
+      if (creator != null) 'Started by $creator.',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('ABOUT THIS RACE', style: V13.label),
+        const SizedBox(height: V13.gapSm),
+        for (final f in facts) ...[
+          Text(f, style: V13.body),
+          const SizedBox(height: 4),
+        ],
+        if (active) ...[
+          const SizedBox(height: V13.gapMd),
+          V13Button.secondary(
+            label: 'Invite friends',
+            icon: Icons.person_add_alt_1_rounded,
+            onPressed: () => context.push('/race/${race.id}/invite'),
+          ),
+        ],
+      ],
+    );
+  }
 
   Widget _finalStandings(Race race, String? uid) {
     return Column(
@@ -716,104 +1115,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         ],
       ],
     );
-  }
-
-  Widget _proofsSection(Race race, bool canOpen) {
-    final proofs = race.recentProofs;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        V13Pressable(
-          onTap: () => setState(() => _proofsOpen = !_proofsOpen),
-          pressDepth: 1.5,
-          semanticLabel: _proofsOpen ? 'Hide proofs' : 'Show proofs',
-          child: Row(
-            children: [
-              Text('PROOFS', style: V13.label),
-              const SizedBox(width: V13.gapSm),
-              Text('${proofs.length}', style: V13.caption),
-              const Spacer(),
-              Icon(
-                _proofsOpen
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.keyboard_arrow_down_rounded,
-                color: V13.muted,
-              ),
-            ],
-          ),
-        ),
-        if (_proofsOpen || proofs.isEmpty) ...[
-          const SizedBox(height: V13.gapSm),
-          if (proofs.isEmpty)
-            V13Card(
-              padding: const EdgeInsets.all(V13.gapLg),
-              child: Row(
-                children: [
-                  const V13IconTile(
-                    icon: Icons.photo_camera_rounded,
-                    color: V13.sky,
-                  ),
-                  const SizedBox(width: V13.gapMd),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('No proofs yet', style: V13.bodyStrong),
-                        const SizedBox(height: 2),
-                        Text(
-                          raceIsActive(race)
-                              ? 'Submit the first proof and set the pace.'
-                              : 'Nobody logged a move in this race.',
-                          style: V13.caption,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            for (var i = 0; i < proofs.length && i < 8; i++) ...[
-              if (i > 0) const V13Divider(),
-              V13ListRow(
-                title: proofs[i].displayName,
-                subtitle: _proofLine(race, proofs[i]),
-                leading: V13Face(
-                  photoUrl: proofs[i].profilePhotoUrl,
-                  size: 32,
-                  name: proofs[i].displayName,
-                ),
-                trailing: proofs[i].value != null
-                    ? Text(
-                        raceIsAccumulating(race)
-                            ? '+${raceScoreLabel(race, proofs[i].value!)}'
-                            : raceScoreLabel(race, proofs[i].value!),
-                        style: V13.bodyStrong,
-                      )
-                    : null,
-                onTap: canOpen
-                    ? () => context.push(
-                        '/race/${race.id}/proofs/${proofs[i].id}',
-                      )
-                    : null,
-                showDivider: false,
-              ),
-            ],
-        ],
-      ],
-    );
-  }
-
-  String _proofLine(Race race, RaceProof proof) {
-    final when = proof.createdAt;
-    final time = DateTime.tryParse(when)?.toLocal();
-    final clock = time == null
-        ? ''
-        : ' · ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    final status = proof.verificationStatus == 'pending_review'
-        ? ' · pending'
-        : '';
-    return '${proof.proofType == 'ai_motion' ? 'Camera proof' : 'Manual proof'}$clock$status';
   }
 }
 
@@ -867,3 +1168,9 @@ class _ReportSheet extends StatelessWidget {
     );
   }
 }
+
+/// Stage S5 slot (race thread): the timed-battle countdown and "start
+/// attempt" entry point mount inside the YOU hero, directly above Submit
+/// proof. Renders nothing until S5 lands.
+Widget raceDetailAttemptSlot(BuildContext context, Race race) =>
+    const SizedBox.shrink();
