@@ -34,6 +34,7 @@ class V13ProgressBar extends StatelessWidget {
     return Semantics(
       label: semanticLabel ?? 'Progress ${(target * 100).round()} percent',
       child: Container(
+        width: double.infinity,
         height: height,
         padding: const EdgeInsets.all(2),
         decoration: BoxDecoration(
