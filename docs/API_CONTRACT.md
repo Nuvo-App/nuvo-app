@@ -790,6 +790,470 @@ Response:
 
 ---
 
+## 6b. Squad (crew group) routes
+
+"Squad" is the API/storage noun — the app calls these groups **crews**. A
+crew is a named group with an owner, admins and members; crew members race
+each other on linked races and weekly recurring races. Base `squad_members`
+statuses are `active | left | removed`; join requests reuse the row with
+`status = 'requested'`. All routes require a bearer token; where a response
+supports conditional GET it honours `ETag` / `If-None-Match`. Users blocked
+by the viewer (either direction) are anonymized as `Private User` with a
+null photo — or excluded outright on discovery.
+
+### POST /squads
+
+Create a crew. Requires accepted Terms of Service.
+
+Request body:
+
+```json
+{
+  "name": "Morning Crew"
+}
+```
+
+Response (201):
+
+```json
+{
+  "ok": true,
+  "squad": {
+    "id": "squad-uuid",
+    "name": "Morning Crew",
+    "joinCode": "ABC123",
+    "isOwner": true,
+    "memberCount": 1,
+    "raceCount": 0
+  }
+}
+```
+
+Errors: `403` terms not accepted · `400` name not 2-40 chars · `409` at the
+max number of crews.
+
+### GET /squads
+
+The crews I'm an active member of. v13 adds owner name, member faces, my
+weekly rank, crew identity fields and the next recurring race per card.
+Supports conditional GET.
+
+```json
+{
+  "ok": true,
+  "squads": [
+    {
+      "id": "squad-uuid",
+      "name": "Morning Crew",
+      "joinCode": "ABC123",
+      "isOwner": false,
+      "memberCount": 4,
+      "raceCount": 2,
+      "ownerName": "Alex Demo",
+      "memberPreviews": [
+        { "id": "user-uuid", "displayName": "Alex Demo", "profilePhotoUrl": "https://..." }
+      ],
+      "myRankWeek": 2,
+      "nextRecurring": {
+        "id": "rec-uuid",
+        "title": "Pushup Monday",
+        "weekday": 1,
+        "nextAt": "2026-07-06T00:00:00.000Z",
+        "isLive": false
+      },
+      "colorKey": "coral",
+      "iconKey": "bolt"
+    }
+  ]
+}
+```
+
+- `memberPreviews` — up to 5 active members, oldest join first; blocked
+  members render as `Private User` / null photo.
+- `myRankWeek` — the viewer's competition rank on this week's crew standings
+  (same scoring as `GET /squads/:id/standings?period=week`); `null` when the
+  crew has no linked races yet.
+- `nextRecurring` — the soonest upcoming active recurring race; `null` when
+  none is configured. `isLive` means today's instance already spawned.
+- `colorKey` / `iconKey` — `null` until set via `PATCH /squads/:id`.
+
+### POST /squads/join
+
+Join a crew by invite code. Requires accepted Terms of Service.
+
+```json
+{ "code": "ABC123" }
+```
+
+Response:
+
+```json
+{ "ok": true, "alreadyJoined": false, "squadId": "squad-uuid" }
+```
+
+Joining pulls the member into every still-active crew race. Errors: `404`
+bad code (or the owner blocked you) · `403` removed member · `409` crew full
+or viewer at the crew cap.
+
+### GET /squads/discover
+
+Crews where at least one of my active friends is an active member and I am
+neither a member nor a pending requester. Any crew containing an active
+member the viewer blocked (or who blocked the viewer) is excluded.
+
+```json
+{
+  "ok": true,
+  "squads": [
+    {
+      "id": "squad-uuid",
+      "name": "Dawn Racers",
+      "iconKey": "bolt",
+      "colorKey": "sun",
+      "memberCount": 6,
+      "ownerName": "Alex Demo",
+      "memberPreviews": [
+        { "id": "user-uuid", "displayName": "Alex Demo", "profilePhotoUrl": null }
+      ]
+    }
+  ]
+}
+```
+
+Ordered by member count, capped at 50.
+
+### GET /squads/:id/preview
+
+The card a non-member sees before asking to join. Also readable by members
+(`viewerStatus: "member"`) so the client can reuse the shape — the full
+detail stays members-only.
+
+```json
+{
+  "ok": true,
+  "squad": {
+    "id": "squad-uuid",
+    "name": "Dawn Racers",
+    "iconKey": "bolt",
+    "colorKey": "sun",
+    "memberCount": 6,
+    "ownerName": "Alex Demo",
+    "memberPreviews": [
+      { "id": "user-uuid", "displayName": "Alex Demo", "profilePhotoUrl": null }
+    ],
+    "viewerStatus": "none"
+  }
+}
+```
+
+`viewerStatus` is `none | requested | member`. Errors: `404` unknown crew.
+
+### GET /squads/:id/standings?period=week|all
+
+Points leaderboard across the crew's linked races — the crew race. Members
+only. `period` defaults to `week`; any other value falls back to `week`.
+
+```json
+{
+  "ok": true,
+  "period": "week",
+  "standings": [
+    {
+      "userId": "user-uuid",
+      "displayName": "Alex Demo",
+      "profilePhotoUrl": "https://...",
+      "role": "owner",
+      "points": 30,
+      "rank": 1,
+      "isMe": false
+    }
+  ]
+}
+```
+
+- `points` = sum of `value` over the member's **verified** `move_logs` in
+  races linked to this crew. `week` counts proof since Monday 00:00 UTC;
+  `all` has no time bound. Pending/rejected proofs never count, and proof
+  submitted outside crew races never leaks in.
+- `rank` = competition rank — tied points share a rank; the user id breaks
+  remaining ties deterministically.
+- Every active member gets a row, including zero-point members.
+- Blocked members are anonymized; `role` is `owner | admin | member`.
+
+### GET /squads/:id
+
+Crew detail — members only. v13 adds `createdAt`, `bio`, `colorKey`,
+`iconKey`, `stats`, `muted` and `battle` inside `squad`, plus top-level
+`recurring` and `joinRequests` arrays. Supports conditional GET.
+
+```json
+{
+  "ok": true,
+  "squad": {
+    "id": "squad-uuid",
+    "name": "Morning Crew",
+    "joinCode": "ABC123",
+    "isOwner": false,
+    "myRole": "member",
+    "memberCount": 4,
+    "raceCount": 2,
+    "createdAt": "2026-07-01T00:00:00Z",
+    "bio": "Dawn racers only.",
+    "colorKey": "coral",
+    "iconKey": "bolt",
+    "stats": { "wins": 1, "races": 2, "streakDays": 3 },
+    "muted": false,
+    "battle": null
+  },
+  "recurring": [
+    {
+      "id": "rec-uuid",
+      "title": "Pushup Monday",
+      "activityId": "push_ups",
+      "raceType": "most_in_window",
+      "targetValue": 100,
+      "targetUnit": "reps",
+      "weekday": 1,
+      "active": true,
+      "autoJoin": true,
+      "autoJoinPreviews": [
+        { "id": "user-uuid", "displayName": "Alex Demo", "profilePhotoUrl": null }
+      ],
+      "nextAt": "2026-07-06T00:00:00.000Z",
+      "isLive": false
+    }
+  ],
+  "joinRequests": [
+    {
+      "userId": "user-uuid",
+      "requestedAt": "2026-07-02T10:00:00Z",
+      "displayName": "Sam Demo",
+      "profilePhotoUrl": null
+    }
+  ],
+  "members": [
+    {
+      "userId": "user-uuid",
+      "displayName": "Alex Demo",
+      "username": "alexdemo",
+      "profilePhotoUrl": "https://...",
+      "role": "owner"
+    }
+  ],
+  "races": [
+    {
+      "id": "race-uuid",
+      "title": "Weekend Pushups",
+      "status": "active",
+      "targetValue": 100,
+      "targetUnit": "reps",
+      "activityId": "push_ups"
+    }
+  ],
+  "standings": [
+    {
+      "userId": "user-uuid",
+      "rank": 1,
+      "points": 30,
+      "wins": 1,
+      "races": 2,
+      "displayName": "Alex Demo",
+      "profilePhotoUrl": "https://...",
+      "isYou": false
+    }
+  ]
+}
+```
+
+- `stats.wins` — linked races whose recorded winner is an active member.
+- `stats.streakDays` — consecutive UTC days, ending today or yesterday, with
+  at least one verified proof by an active member inside a crew race.
+- `recurring[].autoJoin` — the viewer's effective state (definition on AND
+  viewer not opted out); `autoJoinPreviews` shows up to 5 members who will
+  be pulled in.
+- `joinRequests` — pending requests, oldest first; **owner/admin only**
+  (always `[]` for plain members).
+- `muted` — the viewer's crew-mute flag.
+- `battle` — reserved for the crew-vs-crew surface; `null` for now.
+- `standings` (top-level) — the all-time crew leaderboard aggregated across
+  linked races (existing behaviour), distinct from the `/standings`
+  endpoint's proof-value scoring.
+
+### PATCH /squads/:id
+
+Rename the crew and/or set identity fields. Owner/admin only.
+
+```json
+{
+  "name": "Dawn Racers",
+  "bio": "Dawn racers only.",
+  "colorKey": "coral",
+  "iconKey": "bolt"
+}
+```
+
+- `bio` — string, max 120 chars; `null` clears.
+- `colorKey` — one of `coral | sun | lilac | mint | sky`; `null` clears.
+- `iconKey` — string, max 32 chars; `null` clears.
+
+Response echoes the stored values: `{ "ok": true, "name": "...", "bio": "...",
+"colorKey": "...", "iconKey": "..." }`. An empty object is a `400`.
+
+### POST /squads/:id/races
+
+Bring a race into the crew — **any active member** may do this, but the race
+must be one the caller created. Every active crew member is pulled in
+(muted members still get the seat, not the notification).
+
+```json
+{ "raceId": "race-uuid" }
+```
+
+Response:
+
+```json
+{ "ok": true, "raceId": "race-uuid", "added": 3, "memberCount": 4 }
+```
+
+Errors: `404` unknown crew/not a member/race not found · `403` race created
+by someone else · `400` race not active · `409` race already linked to
+another crew.
+
+### POST /squads/:id/join-request
+
+Ask to join a crew (the flow behind the discovery board). Idempotent: an
+existing member returns `status: "member"`, a repeat request returns
+`requested`. Requires accepted Terms of Service. The owner and admins get an
+in-app `squad_join_request` notification (muted admins and people who
+blocked the requester are skipped).
+
+```json
+{ "ok": true, "status": "requested", "squadId": "squad-uuid" }
+```
+
+Errors: `404` unknown crew or blocked-by-owner · `403` removed member ·
+`409` crew full or viewer at the crew cap.
+
+### POST /squads/:id/join-requests/:userId/approve
+
+Owner/admin turns a pending request into an active member — the new member
+is pulled into open crew races exactly like a code-join and gets a
+`squad_join_approved` notification (unless they muted the crew).
+Idempotent when the target is already a member.
+
+```json
+{ "ok": true, "status": "member" }
+```
+
+Errors: `403` caller not owner/admin · `404` no pending request · `409` caps
+hit.
+
+### POST /squads/:id/join-requests/:userId/decline
+
+Owner/admin drops a pending request; the requester may ask again.
+
+```json
+{ "ok": true, "status": "declined" }
+```
+
+Errors: `403` caller not owner/admin · `404` no pending request.
+
+### POST /squads/:id/mute
+
+Suppress this crew's notifications for the caller (race invites, join
+requests, spawn pings). Stored on the caller's `squad_members` row; the
+older `/mutes/crews/:id` surface mutes the same crew — either flag
+suppresses delivery. Members only.
+
+```json
+{ "on": true }
+```
+
+```json
+{ "ok": true, "muted": true }
+```
+
+`on` defaults to `true`; pass `{ "on": false }` to unmute.
+
+### POST /squads/:id/recurring
+
+Define a weekly crew race — owner/admin only. Every UTC day the scheduled
+sweep spawns a real race for active definitions whose `weekday` matches and
+whose `last_spawned_at` predates today; the spawn is idempotent (one race
+per definition per UTC day) and auto-joins every active member who has not
+opted out.
+
+```json
+{
+  "title": "Pushup Monday",
+  "activityId": "push_ups",
+  "raceType": "most_in_window",
+  "targetValue": 100,
+  "targetUnit": "reps",
+  "weekday": 1
+}
+```
+
+- `title` — required, 2-60 chars. `weekday` — required, integer `0`-`6`
+  (`0` = Sunday, UTC).
+- `activityId`, `raceType`, `targetValue`, `targetUnit` — optional template
+  fields copied onto each spawned race.
+
+Response (201): `{ "ok": true, "recurring": { ...same shape as
+GET /squads/:id recurring[]... } }`. Errors: `403` not owner/admin · `400`
+invalid title/weekday.
+
+### PATCH /squads/:id/recurring/:rid
+
+Owner/admin edits a definition. Accepts any of the create fields plus
+`active` (pause/resume) and `autoJoin` (the crew-level default — members can
+still opt out individually).
+
+### DELETE /squads/:id/recurring/:rid
+
+Owner/admin removes the definition (and its opt-outs). Already-spawned
+races keep running.
+
+### POST /squads/:id/recurring/:rid/auto-join
+
+The caller's personal opt-out for one recurring race — members only. Opted
+out members are skipped at spawn; opting back in joins future instances.
+
+```json
+{ "on": false }
+```
+
+```json
+{ "ok": true, "autoJoin": false }
+```
+
+### POST /reports/squads/:id
+
+Report a crew. Mirrors the existing report routes (`reason` ≤ 500 chars,
+`target_type: 'squad'`, `status: 'pending'`).
+
+```json
+{ "reason": "The crew bio is spam" }
+```
+
+```json
+{ "ok": true }
+```
+
+Errors: `404` unknown crew · `400` missing/over-long reason.
+
+### Feed and requests (crew surface)
+
+- `GET /crew/requests` rows also carry `mutualCount` and `mutualNames`
+  (≤2 names) — active friends the requester shares with the viewer.
+- `GET /crew/feed` emits `type: "badge_earned"` items when a friend earns an
+  achievement. The row's `actor` is the friend, `entityType` is
+  `"crew_activity"`, and `payload` carries `{ key, name }` (e.g.
+  `{ "key": "first_move", "name": "First Move" }`). Items respect the
+  existing actor-mute exclusion.
+
+---
+
 ## 7. User routes
 
 ### GET /users/search?q=alex

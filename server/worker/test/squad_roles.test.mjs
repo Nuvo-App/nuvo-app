@@ -129,14 +129,14 @@ test('remove race: owner/admin ok, member 403', async () => {
   assert.equal(count(), 0);
 });
 
-test('add race: plain member gets 403; admin passes the role gate', async () => {
+test('add race: any member reaches the creator check; outsider still 404', async () => {
   const db = seed();
-  const denied = await call(db, 'mem', 'POST', '/squads/s1/races', { raceId: 'r9' });
-  assert.equal(denied.status, 403);
-  assert.equal(denied.json.error, 'Only crew admins can add races');
-  // Admin gets past the gate (race r9 does not exist -> 404, not 403).
-  // Full add-race success needs the whole race/notification schema; skipped.
+  // v13: a plain member may bring their own race — the gate is gone, so the
+  // missing raceId resolves to 404 instead of 403. Creator + crew checks for
+  // someone else's race still apply (404/403 live on the race path).
+  assert.equal((await call(db, 'mem', 'POST', '/squads/s1/races', { raceId: 'r9' })).status, 404);
   assert.equal((await call(db, 'admin', 'POST', '/squads/s1/races', { raceId: 'r9' })).status, 404);
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/s1/races', { raceId: 'r9' })).status, 404);
 });
 
 test('join rejects a previously removed member', async () => {
@@ -176,7 +176,9 @@ test('leave resets role to member; rejoin does not restore owner/admin', async (
   assert.deepEqual(rowOf(db, 'admin'), { status: 'left', role: 'member' });
   assert.equal((await call(db, 'admin', 'POST', '/squads/join', { code: 'JOINME' })).status, 200);
   assert.deepEqual(rowOf(db, 'admin'), { status: 'active', role: 'member' });
-  assert.equal((await call(db, 'admin', 'POST', '/squads/s1/races', { raceId: 'r9' })).status, 403);
+  // v13: plain members can link their own races — the old role gate is gone,
+  // so a missing raceId now resolves to 404 rather than 403.
+  assert.equal((await call(db, 'admin', 'POST', '/squads/s1/races', { raceId: 'r9' })).status, 404);
 
   // Former owner leaves (handoff), then rejoins as a plain member.
   assert.equal((await call(db, 'owner', 'POST', '/squads/s1/leave')).status, 200);

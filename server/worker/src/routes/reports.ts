@@ -69,6 +69,30 @@ reportsRouter.post('/races/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// POST /reports/squads/:id — report a crew (name/bio/icon content).
+reportsRouter.post('/squads/:id', async (c) => {
+  const reporterUserId = c.get('userId');
+  const targetId = c.req.param('id');
+  let body: { reason?: unknown };
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body' }, 400); }
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : null;
+  if (reason != null && reason.length > 500) {
+    return c.json({ ok: false, error: 'reason must be 500 characters or fewer' }, 400);
+  }
+  const squad = await c.env.DB.prepare('SELECT id FROM squads WHERE id = ? AND deleted_at IS NULL')
+    .bind(targetId)
+    .first()
+    .catch(() => null); // no squads table → the crew doesn't exist either
+  if (!squad) return c.json({ ok: false, error: 'Crew not found' }, 404);
+
+  await c.env.DB.prepare(
+    `INSERT INTO reports (id, reporter_user_id, target_type, target_id, reason, status, created_at, updated_at)
+     VALUES (?, ?, 'squad', ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  ).bind(generateId(), reporterUserId, targetId, reason).run();
+
+  return c.json({ ok: true });
+});
+
 // POST /reports/content/:id  (move log / proof id)
 reportsRouter.post('/content/:id', async (c) => {
   const reporterUserId = c.get('userId');
