@@ -151,6 +151,46 @@ void main() {
       expect(ctx.remainingToGoal, 0);
       expect(ctx.statusLine, 'Goal reached');
     });
+
+    test('test_gapN1_first_to_camera_stops_at_goal', () {
+      // The camera auto-finishes on the same predicate the Done path uses:
+      // session count reaches the REMAINING goal — wired as
+      // hasFinishTarget + sessionTarget = remainingToGoal + sessionValue =
+      // this take's count. 20/50 means 30 more ends the recording.
+      final ctx = VerifierRaceContext.forRace(
+        makeRace(
+          targetValue: 50,
+          participants: [participant(userId: 'me', score: 20)],
+        ),
+        'me',
+      );
+      bool reached(int count) => sessionReachedFinishTarget(
+        hasFinishTarget: ctx.format.usesScoreTarget,
+        sessionTarget: ctx.remainingToGoal,
+        sessionValue: count,
+      );
+      expect(reached(29), isFalse);
+      expect(reached(30), isTrue);
+      // Only that take — never under-fires, never fires for no-goal modes.
+      expect(reached(0), isFalse);
+      expect(
+        sessionReachedFinishTarget(
+          hasFinishTarget: false,
+          sessionTarget: null,
+          sessionValue: 99,
+        ),
+        isFalse,
+      );
+      // An already-banked goal leaves nothing to reach.
+      expect(
+        sessionReachedFinishTarget(
+          hasFinishTarget: true,
+          sessionTarget: 0,
+          sessionValue: 5,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('BEST_ATTEMPT higher-wins', () {

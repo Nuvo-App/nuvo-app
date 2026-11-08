@@ -943,6 +943,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _targetCelebrated = true;
         _targetCelebrationSeq++;
         HapticFeedback.heavyImpact();
+        // A first-to session that crosses its remaining goal is done — stop
+        // recording and run the exact finish/submit path the Done button
+        // takes. _finishRecording's status guard keeps this once-only.
+        unawaited(_finishRecording());
       }
       _debugFrameCount++;
       if (_debugFrameCount == 1 || _debugFrameCount % 15 == 0) {
