@@ -568,6 +568,21 @@ export function customRepRateImplausible(value: number, durationMs: number | nul
   return value > 5 + (durationMs / 1000) * 5;
 }
 
+/**
+ * Strict-rules timed battles (rules_version >= 1): the declared attempt
+ * length bounds the proof itself — the camera stops counting at zero, so a
+ * seconds-metric score can never outlast the attempt duration. Races with
+ * no declared duration (legacy rows) are not judged.
+ */
+export function timedAttemptValueExceedsDuration(
+  value: number,
+  metric: string | null | undefined,
+  attemptDurationSeconds: number | null | undefined,
+): boolean {
+  if (attemptDurationSeconds == null || metric !== 'seconds') return false;
+  return value > attemptDurationSeconds;
+}
+
 /** Formats decided at the finish line: with no end_at they would never finish. */
 export function formatNeedsFinishLine(format: string | null | undefined): boolean {
   return format === 'most_in_window' || format === 'best_attempt' || format === 'timed_attempt';

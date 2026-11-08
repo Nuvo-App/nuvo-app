@@ -1277,6 +1277,11 @@ class RaceController extends StateNotifier<RaceState> {
     String? clientAttemptId,
   }) => _repo.startAttempt(raceId, clientAttemptId: clientAttemptId);
 
+  /// Release an open attempt that no proof bound to — an abandoned take
+  /// cancels instead of spending the attempt limit.
+  Future<void> cancelAttempt(String raceId, String attemptId) =>
+      _repo.cancelAttempt(raceId, attemptId);
+
   /// Clone a finished race's settings + roster into a fresh race — the
   /// one-tap "race again" loop.
   Future<Race> rematchRace(String raceId) async {

@@ -46,6 +46,7 @@ import '../domain/motion_progress_presentation.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
 import '../domain/race_mode_semantics.dart';
+import '../domain/timed_attempt_take.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import 'board_moved_screen.dart';
 
@@ -167,7 +168,52 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int _debugFrameCount = 0;
   bool _autoSubmitScheduled = false;
 
+  // ── Timed battle take ────────────────────────────────────────────────────
+  // A timed_attempt race with a declared duration runs a fixed-length take:
+  // 3-2-1, a server-timed window counted down on the HUD, then the same
+  // finish path as Done. Legacy timed races without a duration keep the
+  // untimed flow — [_isTimedTake] is false for them.
+  TimedAttemptTake? _timedTake;
+
+  /// Bumped whenever a take is abandoned — an in-flight attempt-open for an
+  /// older take cancels itself instead of stranding an open attempt.
+  int _timedTakeSerial = 0;
+
+  /// The open POST for the live take (retries inside) — awaited briefly
+  /// before the proof send so the proof binds THIS attempt, not a fresh
+  /// (mistimed) one the submit path would declare.
+  Future<void>? _timedAttemptOpen;
+  Timer? _countdownTimer;
+  int? _attemptLimit;
+  int _attemptsUsed = 0;
+
   bool get _isObjectComposition => _objectCompositionSpec != null;
+
+  /// Timed battles only: a `timed_attempt` race WITH a declared duration.
+  /// Legacy timed races have no duration — they keep the untimed flow.
+  bool get _isTimedTake =>
+      _raceContext?.format == RaceFormat.timedAttempt &&
+      (_raceContext?.attemptDurationSeconds ?? 0) > 0;
+
+  /// The race's attempt limit leaves no room for another take. A null limit
+  /// never blocks; usage comes from the server's viewer context, not a local
+  /// count.
+  bool get _attemptLimitReached => timedAttemptLimitReached(
+    attemptLimit: _attemptLimit,
+    attemptsUsed: _attemptsUsed,
+  );
+
+  /// "N of M attempts used" is shown before starting when a limit exists —
+  /// for any attempt race, not just timed ones.
+  bool get _attemptUsageShown =>
+      _raceContext?.isAttemptBased == true && _attemptLimit != null;
+
+  /// Seconds left in a timed take's window — the HUD counts this down, not
+  /// up, while the attempt is live.
+  Duration? get _timedRemaining {
+    final left = _timedTake?.secondsRemaining;
+    return left == null ? null : Duration(seconds: left);
+  }
 
   bool _isLocalPresentationRace(Race race) {
     final user = ref.read(authControllerProvider).user;
@@ -442,6 +488,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _raceContext = VerifierRaceContext.forRace(race, userId);
         _raceTitle = race.title;
         _measurementType = raceMeasurementType(race).name;
+        _attemptLimit = race.attemptLimit;
+        _attemptsUsed = race.viewerContext?.attemptsUsed ?? 0;
       });
       // Skip redundant pre-camera panel — go straight to camera
       _initializeCamera();
@@ -559,6 +607,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         );
         _raceTitle = race.title;
         _measurementType = 'repetitions';
+        _attemptLimit = race.attemptLimit;
+        _attemptsUsed = race.viewerContext?.attemptsUsed ?? 0;
       });
       _initializeCamera();
     } catch (error) {
@@ -594,6 +644,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive) {
+      // An interrupted 3-2-1 can't honestly start the window — drop the take
+      // back to ready; the user restarts it from the camera preview. A live
+      // take is released by _resumeInterruptedRecording on the way back.
+      if (_timedTake?.countingDown == true) {
+        unawaited(_releaseTimedAttempt());
+      }
       final controller = _cameraController;
       if (controller != null && controller.value.isInitialized) {
         _stopCamera();
@@ -624,11 +680,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   @override
   void dispose() {
     _disposed = true;
+    // Leaving with an unsubmitted timed take releases its open attempt —
+    // a cancelled attempt never spends the limit.
+    unawaited(_releaseTimedAttempt());
     _releaseProofSettled();
     // Catch attempts abandoned before server analysis resolved.
     _finalizeSession();
     WidgetsBinding.instance.removeObserver(this);
     _recordingTimer?.cancel();
+    _countdownTimer?.cancel();
     _skeletonExpiryTimer?.cancel();
     _stopCamera();
     _objectDotProducer?.dispose();
@@ -744,6 +804,145 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
+    // A timed take runs its 3-2-1 first — a re-tap during it or a spent
+    // attempt limit both stop here, before anything is declared.
+    if (_isTimedTake) {
+      if (_timedTake != null || _attemptLimitReached) return;
+      _startTimedCountdown();
+      return;
+    }
+
+    await _beginTake();
+  }
+
+  /// One take on a timed battle: 3-2-1 over the live preview, then the
+  /// attempt opens on the server clock and the fixed window starts ticking.
+  void _startTimedCountdown() {
+    final serial = ++_timedTakeSerial;
+    _timedTake = TimedAttemptTake(
+      durationSeconds: _raceContext!.attemptDurationSeconds!,
+      clientAttemptId: const Uuid().v4(),
+    );
+    setState(() {});
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _disposed || serial != _timedTakeSerial) {
+        timer.cancel();
+        return;
+      }
+      if (_timedTake?.tickCountdown() == true) {
+        timer.cancel();
+        unawaited(_beginTimedTake());
+      }
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// The countdown ended — open the server attempt (its `started_at` anchors
+  /// the deadline, so it goes out now) and start recording into the window.
+  Future<void> _beginTimedTake() async {
+    final take = _timedTake;
+    if (take == null) return;
+    _timedAttemptOpen = _openTimedAttempt(take);
+    await _beginTake();
+    // The camera refused the take — release whatever the open declared so
+    // the screen isn't stranded on a dead take with no way back.
+    if (_status != AiMotionProofStatus.recording) {
+      await _releaseTimedAttempt();
+    }
+  }
+
+  /// POSTs the attempt open with the take's stable client id. Retried while
+  /// the take is live — a retry reuses the same clientAttemptId, so it can
+  /// never open a second attempt — and a 409 just means an attempt is
+  /// already open, which binds this take's proof the same way.
+  Future<void> _openTimedAttempt(TimedAttemptTake take) async {
+    if (_isPresentationFixtureRace) return;
+    final serial = _timedTakeSerial;
+    // Grab the controller up front — if the take outlives the widget, ref
+    // reads throw but this object keeps working.
+    final controller = ref.read(raceControllerProvider.notifier);
+    for (var i = 0; i < 3; i++) {
+      if (_disposed || serial != _timedTakeSerial || _timedTake != take) {
+        return;
+      }
+      try {
+        final res = await controller.startAttempt(
+          widget.raceId,
+          clientAttemptId: take.clientAttemptId,
+        );
+        if (_disposed || serial != _timedTakeSerial || _timedTake != take) {
+          // The take was abandoned while the open was on the wire — release
+          // the attempt it just took so it can't sit open and block a retry.
+          unawaited(_cancelServerAttempt(controller, res.attemptId));
+          return;
+        }
+        take.markOpened(res.attemptId);
+        return;
+      } on ApiException catch (e) {
+        // Already open — the existing attempt binds this take's proof.
+        if (e.statusCode == 409) return;
+      } catch (_) {
+        // Transient — fall through to the next retry.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+  }
+
+  /// An abandoned take releases its open attempt — a cancelled attempt
+  /// never counts against the limit, so leaving before the proof lands must
+  /// not burn a slot. A proof already on the wire keeps its attempt.
+  Future<void> _releaseTimedAttempt() async {
+    if (_submitInFlight) return;
+    _timedTakeSerial++;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    final take = _timedTake;
+    _timedTake = null;
+    _timedAttemptOpen = null;
+    // The countdown timer that drives rebuilds is gone too — drop the
+    // overlay/actions right away rather than on the next incidental tick.
+    if (mounted && !_disposed) setState(() {});
+    if (take == null || !take.needsRelease || _isPresentationFixtureRace) {
+      return;
+    }
+    // Grab the controller now — once dispose() has run, ref reads throw but
+    // this object still works, so the DELETE always gets out.
+    final controller = ref.read(raceControllerProvider.notifier);
+    await _cancelServerAttempt(controller, take.openAttemptId!);
+  }
+
+  /// Best-effort attempt cancel — a failure must never mask the action the
+  /// user actually took (retry, back, dispose).
+  Future<void> _cancelServerAttempt(
+    RaceController controller,
+    String attemptId,
+  ) async {
+    try {
+      await controller.cancelAttempt(widget.raceId, attemptId);
+    } catch (_) {
+      _debugLog('timedAttemptCancelFailed');
+    }
+  }
+
+  /// Every "leave this screen" path funnels here so an abandoned timed take
+  /// releases its attempt instead of stranding it open until the deadline.
+  void _leaveScreen() {
+    unawaited(_releaseTimedAttempt());
+    safePopOrGo(context, '/race/${widget.raceId}');
+  }
+
+  /// Actually begins a take — verifier, session recorder, frame stream. For
+  /// a timed take this runs only after the 3-2-1, alongside the attempt open.
+  Future<void> _beginTake() async {
+    final controller = _cameraController;
+    final camera = _selectedCamera;
+    if (controller == null ||
+        camera == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
     if (!_isObjectComposition) _runtime.start();
     // No POST …/start: `complete` accepts a session that is still `created`.
     _elapsed = Duration.zero;
@@ -806,7 +1005,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _recordingTimer?.cancel();
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _status == AiMotionProofStatus.recording) {
+        final hitZero = _timedTake?.tickWindow() ?? false;
         setState(() => _elapsed += const Duration(seconds: 1));
+        // The declared attempt window is over — finish exactly as Done does.
+        if (hitZero) unawaited(_finishRecording());
       }
     });
 
@@ -1536,10 +1738,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     if (optimistic != null) {
       _openOptimisticCelebration(optimistic, value, status);
     }
+    // A timed take must bind ITS attempt — if the open is still on the wire,
+    // give it a beat before the submit path's own ensure-open would declare
+    // a fresh (mistimed) attempt.
+    final pendingOpen = _timedAttemptOpen;
+    if (pendingOpen != null) {
+      try {
+        await pendingOpen.timeout(const Duration(seconds: 4));
+      } catch (_) {
+        // Failed or still pending — the submit path's ensure-open is the
+        // fallback; either way the proof is allowed to try.
+      }
+    }
     try {
       final race = await send(clientSubmissionId);
       _proofAccepted = true;
       _clientSubmissionId = null;
+      _timedTake?.markSubmitted();
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);
       if (!_optimisticCelebrationOpen) _goToCelebration(race, value, status);
@@ -1674,6 +1889,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Future<void> _recordAgain() async {
+    // A timed take abandoned here releases its open attempt — cancelling
+    // before submit never spends the limit.
+    await _releaseTimedAttempt();
     _recordingTimer?.cancel();
     await _stopImageStream();
     if (_objectCompositionSpec != null) {
@@ -1930,8 +2148,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   _immersiveIconButton(
                     icon: Icons.arrow_back_rounded,
-                    onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}'),
+                    onPressed: _leaveScreen,
                   ),
                   const SizedBox(width: 10),
                   _pill('Goal: $_targetLabel', color: V13.card),
@@ -2032,6 +2249,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           if (recording && _targetCelebrationSeq > 0)
             Positioned.fill(child: _targetReachedOverlay()),
 
+          // Timed battle 3-2-1 — over the live preview, before the take starts.
+          if (_timedTake?.countingDown == true)
+            Positioned.fill(
+              child: IgnorePointer(child: Center(child: _countdownOverlay())),
+            ),
+
           if (_switchingCamera)
             const Positioned.fill(
               child: IgnorePointer(
@@ -2052,8 +2275,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   _immersiveIconButton(
                     icon: Icons.arrow_back_rounded,
-                    onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}'),
+                    onPressed: _leaveScreen,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -2203,6 +2425,38 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
+  /// The 3-2-1 before a timed take — the attempt opens on the server clock
+  /// the moment it ends, so this is the last moment to get into position.
+  Widget _countdownOverlay() {
+    final remaining = _timedTake?.countdownRemaining ?? 0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$remaining',
+          style: V13.hugeNumber.copyWith(
+            fontSize: 160,
+            color: V13.white,
+            shadows: const [
+              Shadow(
+                color: Color(0xB3000000),
+                blurRadius: 24,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+        ).animate(key: ValueKey(remaining)).scale(
+          begin: const Offset(0.6, 0.6),
+          end: const Offset(1, 1),
+          duration: 300.ms,
+          curve: Curves.easeOutBack,
+        ),
+        const SizedBox(height: 12),
+        _pill('Get in position', color: V13.card),
+      ],
+    );
+  }
+
   Widget _immersiveIconButton({
     required IconData icon,
     required VoidCallback? onPressed,
@@ -2229,8 +2483,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   _immersiveIconButton(
                     icon: Icons.arrow_back_rounded,
-                    onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}'),
+                    onPressed: _leaveScreen,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2644,7 +2897,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             ),
           ),
           Text(
-            _formatElapsed(_elapsed),
+            _formatElapsed(_timedRemaining ?? _elapsed),
             style: V13.numberSm.copyWith(color: V13.muted),
           ),
         ],
@@ -2683,8 +2936,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 V13Button.secondary(
                   label: 'Back',
                   fullWidth: true,
-                  onPressed: () =>
-                      safePopOrGo(context, '/race/${widget.raceId}'),
+                  onPressed: _leaveScreen,
                 ),
               ]
             : [const SizedBox.shrink()],
@@ -2692,20 +2944,51 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         V13Button.secondary(
           label: 'Back',
           fullWidth: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+          onPressed: _leaveScreen,
         ),
       ],
-      AiMotionProofStatus.cameraReady => [
-        V13Button.primary(
-          label: 'Start recording',
-          icon: Icons.videocam_rounded,
-          fullWidth: true,
-          onPressed: _startRecording,
-        ),
-      ],
+      AiMotionProofStatus.cameraReady => _timedTake?.countingDown == true
+          ? [
+              // The 3-2-1 is running — the only action is backing out of it.
+              V13Button.secondary(
+                label: 'Cancel',
+                fullWidth: true,
+                onPressed: _releaseTimedAttempt,
+              ),
+            ]
+          : _attemptLimitReached
+          ? [
+              _errorMessage(
+                'All $_attemptLimit attempts used — no attempts left in this race.',
+              ),
+              const SizedBox(height: 12),
+              V13Button.secondary(
+                label: 'Back',
+                fullWidth: true,
+                onPressed: _leaveScreen,
+              ),
+            ]
+          : [
+              if (_attemptUsageShown) ...[
+                Center(
+                  child: _pill(
+                    timedAttemptsUsedLabel(_attemptLimit, _attemptsUsed),
+                    color: V13.card,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              V13Button.primary(
+                label: 'Start recording',
+                icon: Icons.videocam_rounded,
+                fullWidth: true,
+                onPressed: _startRecording,
+              ),
+            ],
       AiMotionProofStatus.recording => [
         V13Button.primary(
-          label: 'Done',
+          // A timed take finishes itself at zero — the button is the early out.
+          label: _timedTake != null ? 'Finish early' : 'Done',
           icon: Icons.check_rounded,
           fullWidth: true,
           onPressed: _finishRecording,
@@ -2748,7 +3031,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         V13Button.secondary(
           label: 'Back',
           fullWidth: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+          onPressed: _leaveScreen,
         ),
       ],
       AiMotionProofStatus.aiFailed || AiMotionProofStatus.cameraError => [

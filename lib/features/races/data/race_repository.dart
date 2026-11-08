@@ -506,6 +506,11 @@ class RaceRepository {
         _api.startAttempt(token, raceId, clientAttemptId: clientAttemptId),
   );
 
+  /// Cancel an open attempt that has no bound proof — a cancelled attempt
+  /// never spends the attempt limit.
+  Future<void> cancelAttempt(String raceId, String attemptId) =>
+      _withRefresh((token) => _api.cancelAttempt(token, raceId, attemptId));
+
   Future<Race> rematchRace(String raceId) =>
       _withRefresh((token) => _api.rematchRace(token, raceId));
 

@@ -971,6 +971,16 @@ class RaceApi {
     return RaceAttemptResult.fromJson(json);
   }
 
+  /// Cancel an open attempt. Only an open attempt with no bound proof can
+  /// be cancelled, and a cancelled attempt never counts against the limit.
+  Future<void> cancelAttempt(
+    String token,
+    String raceId,
+    String attemptId,
+  ) async {
+    await _delete('/races/$raceId/attempts/$attemptId', token);
+  }
+
   /// One-step rematch — the server clones participants + settings into a new
   /// race and returns it ready to race.
   Future<Race> rematchRace(String token, String raceId) async {

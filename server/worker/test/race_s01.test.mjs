@@ -508,7 +508,7 @@ test('test_gap8_retry_after_opening_attempt_scores', async () => {
   const raceId = await attemptRace(w, 'timed_attempt', { rulesVersion: 1 });
   w.member(raceId, 'B');
 
-  const first = await aiProof(w, raceId, 'B', 7, 'cs-retry');
+  const first = await aiProof(w, raceId, 'B', 5, 'cs-retry');
   assert.equal(first.res.status, 400, first.res.text);
   assert.equal(
     w.q('SELECT id FROM move_logs WHERE race_id = ?', raceId).length,
@@ -523,14 +523,14 @@ test('test_gap8_retry_after_opening_attempt_scores', async () => {
   const retry = await w.req('B', 'POST', `/races/${raceId}/proof`, {
     proofType: 'ai_motion',
     metric: 'reps',
-    value: 7,
+    value: 5,
     clientSubmissionId: 'cs-retry',
     verificationSessionId: first.sessionId,
     verificationStatus: 'ai_verified',
     activityType: 'push_ups',
   });
   assert.equal(retry.status, 200, retry.text);
-  assert.equal(w.progress(raceId, 'B'), 7);
+  assert.equal(w.progress(raceId, 'B'), 5);
   assert.equal(
     w.one("SELECT status FROM race_attempts WHERE race_id = ? AND user_id = 'B'", raceId).status,
     'submitted',

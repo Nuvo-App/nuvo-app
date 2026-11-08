@@ -27,6 +27,7 @@ import {
   validateRaceWindow,
   registryConfigFromBody,
   rulesVersionFromBody,
+  timedAttemptValueExceedsDuration,
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission, maxSubmissionValue } from '../domain/raceScoring';
@@ -55,6 +56,7 @@ import { scheduleRaceStartingSoon } from '../domain/notificationJobs';
 import { computeViewerContext } from '../domain/raceContext';
 import { effectiveTargetValue } from '../domain/raceTarget';
 import {
+  attemptElapsedMs,
   attemptsUsed,
   bindableAttemptAtTime,
   bindableOpenAttempt,
@@ -2458,11 +2460,18 @@ racesRouter.post('/:id/proof', async (c) => {
   if (isCustom && completionEvents !== null && completionEvents < increment) {
     return c.json(badRequest('Custom proof completion events must cover value.'), 400);
   }
-  if (isCustom && aiStatus === 'custom_verified' && customRepRateImplausible(increment, durationMs)) {
+  // Strict-rules timed battles (rules_version >= 1) judge rep rate against
+  // the bound attempt's real window (started_at..now), not the client's
+  // claimed durationMs — the client-clock check below is skipped for them
+  // and runs after the attempt binds instead.
+  const strictTimedAttempt =
+    scoring.format === 'timed_attempt' && (race.rules_version ?? 0) >= 1;
+  if (isCustom && aiStatus === 'custom_verified' && !strictTimedAttempt &&
+      customRepRateImplausible(increment, durationMs)) {
     return c.json(badRequest('Custom proof count is not possible in the recorded time.'), 400);
   }
   if (isAiMotion && !isCustom && aiStatus === 'ai_verified' && scoring.metric === 'reps' &&
-      customRepRateImplausible(increment, durationMs)) {
+      !strictTimedAttempt && customRepRateImplausible(increment, durationMs)) {
     return c.json(badRequest('Proof count is not possible in the recorded time.'), 400);
   }
   if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
@@ -2536,6 +2545,19 @@ racesRouter.post('/:id/proof', async (c) => {
     }
     if (!boundAttempt) {
       return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
+    }
+    // v1 timed battles: the attempt's server window bounds the proof — a
+    // seconds-metric score can never outlast the declared attempt length,
+    // and rep rate is judged against the real window, never durationMs.
+    if (strictTimedAttempt) {
+      if (timedAttemptValueExceedsDuration(increment, scoring.metric, race.attempt_duration_seconds)) {
+        return c.json(badRequest('Score exceeds the attempt duration.'), 400);
+      }
+      const aiVerified = aiStatus === 'ai_verified' || aiStatus === 'custom_verified';
+      if (aiVerified && scoring.metric === 'reps' &&
+          customRepRateImplausible(increment, attemptElapsedMs(boundAttempt))) {
+        return c.json(badRequest('Proof count is not possible in the attempt window.'), 400);
+      }
     }
   }
 
