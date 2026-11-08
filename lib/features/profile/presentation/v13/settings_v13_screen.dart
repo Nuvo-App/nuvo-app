@@ -720,17 +720,8 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
               color: V13.sun,
             ),
             trailing: const Icon(Icons.chevron_right_rounded, color: V13.muted),
-            onTap: () => openLegalLink(context, LegalLinks.termsUri),
-          ),
-          V13ListRow(
-            title: 'Delete account on the web',
-            leading: const V13IconTile(
-              icon: Icons.open_in_new_rounded,
-              color: V13.coral,
-            ),
-            trailing: const Icon(Icons.chevron_right_rounded, color: V13.muted),
             showDivider: false,
-            onTap: () => openLegalLink(context, LegalLinks.deleteAccountUri),
+            onTap: () => openLegalLink(context, LegalLinks.termsUri),
           ),
         ]),
       ],

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import '../helpers/screenshot.dart';
 import 'package:nuvo/core/utils/photo_service.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -290,6 +291,7 @@ void _size(WidgetTester tester) {
 }
 
 void main() {
+  setUpAll(loadShotFonts);
   testWidgets('Profile: header, counts, actions, sections', (tester) async {
     _size(tester);
     await tester.pumpWidget(_app(const ProfileV13Screen()));
@@ -304,6 +306,7 @@ void main() {
     expect(find.text('ACTIVITY'), findsOneWidget);
     expect(find.text('RACE HISTORY'), findsOneWidget);
     expect(find.text('Pushups'), findsOneWidget);
+    await shot(tester, 'v13_profile_own');
   });
 
   testWidgets('Profile: Edit profile navigates to /profile/edit', (
@@ -386,6 +389,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Squat Sprint'), findsOneWidget);
     expect(find.text('You won'), findsOneWidget);
+    await shot(tester, 'v13_public_friend');
   });
 
   testWidgets('Public profile: Friends sheet exposes mute and remove', (
@@ -440,6 +444,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Request sent.'), findsOneWidget);
     expect(find.text('Requested'), findsOneWidget);
+    await shot(tester, 'v13_public_nonfriend');
   });
 
   testWidgets('Public profile: error state retries', (tester) async {
@@ -473,6 +478,7 @@ void main() {
     expect(find.text('All'), findsOneWidget);
     expect(find.text('Earned'), findsOneWidget);
     expect(find.text('Locked'), findsOneWidget);
+    await shot(tester, 'v13_badges');
   });
 
   testWidgets('Settings: account card, sections, gated rows hide/show', (
@@ -501,6 +507,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete account'), findsOneWidget);
     expect(find.text('Community Guidelines'), findsOneWidget);
+    await shot(tester, 'v13_settings');
   });
 
   testWidgets(
@@ -548,6 +555,7 @@ void main() {
     expect(find.text('@testuser'), findsOneWidget);
     expect(find.text('Share your code'), findsOneWidget);
     expect(find.text('Copy link'), findsOneWidget);
+    await shot(tester, 'v13_my_code');
   });
 
   testWidgets('My Nuvo: initialTab=1 opens Scan with paste bar', (
