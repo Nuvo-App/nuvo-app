@@ -21,13 +21,14 @@ Branch: `redesign/v13` (base `motion-ota-tuning` 0a6f761). Plan: `FEASIBILITY.md
 - S10 restyle (merges a1fb8ab r2 races, 1d93f2d r1 social, 5a4909c r3 badges/teach) + QA: /race/:id/proof now opens Race detail with the v13 Submit proof sheet (old SubmitProofScreen deleted, 82a47e2); old core widgets left dead by the restyle deleted (f1c1014); faces on requests and feed items open profiles (8e8cd36); pre-v13 first-race coach tour retired (dd1f388).
 - Final state (dd1f388): flutter analyze 0 errors / 0 warnings; flutter test 2196 tests, only the 16 pre-existing failures in tool/ci/known_failing_tests.txt; worker npm test 586/586; GitHub Actions CI green.
 
+- 2026-11-08 production: nuvo-api version a23c1214 deployed from redesign/v13 with Akshay's approval; prod D1 backed up, then migrations 0047, 0048, 0049 applied; 19 read endpoints smoke-tested 200 as Nuvo QA.
+- S11 final restyle sweep: m2 (merge a621c39) level-up/achievement moments, badge tiles, email verify, legal-link and calibration toasts, old dock removed; m1 (merge 7340669) AI Motion Proof camera flow, primer sheet, focused stage, rep count and web fallback in the v13 look. m1 diff-audited: identical callback targets, no camera/pose/count/submit lines changed. Full suite 2185 tests, 0 new failures.
+
 ## Not built / open
 - Crew battle (W4): no backend yet. The Crew page only renders the section when the API sends an active battle, so nothing dead shows.
-- AI Motion Proof camera screen (no-touch) keeps its pre-v13 chrome. Restyling only its chrome needs Akshay's explicit approval for that file.
 - Device QA on a physical iPhone (Mac thread) has not been done; everything here is verified with analyzer, widget tests and real-font screenshots.
 
 ## Blocked / needs Akshay
-- Production Worker deploy + prod D1 migrations 0048_v13_profile and 0049_v13_crews (plus the older unapplied 0047_reconcile_prod). The v13 app needs these endpoints in prod; until then the new sections hide themselves. Dev (nuvo-api-dev) is deployed and at 0049.
 - Merging redesign/v13 into main (no PR opened yet).
 - Devin weekly quota on the paid models is used up; agents run on the free SWE-2 Max model, with closer orchestrator review.
 
