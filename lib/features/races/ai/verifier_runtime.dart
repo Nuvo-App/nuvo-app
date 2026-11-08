@@ -304,10 +304,7 @@ class VerifierRuntimeResolution {
           'motion_v2 runtime requires a verifier spec.',
         );
       }
-      // Learned-motion runtimes still require a concrete target; a no-goal
-      // session keeps the prior single-rep placeholder until they report
-      // raw counts directly.
-      return MotionV2VerifierRuntime(spec: v2Spec, target: target ?? 1);
+      return MotionV2VerifierRuntime(spec: v2Spec, target: target);
     }
     if (type == VerifierType.customPoseSequence) {
       if (customSpec == null) {
@@ -322,7 +319,7 @@ class VerifierRuntimeResolution {
           'Invalid custom_pose_sequence verifier spec: ${e.message}',
         );
       }
-      return CustomPoseSequenceRuntime(spec: customSpec, target: target ?? 1);
+      return CustomPoseSequenceRuntime(spec: customSpec, target: target);
     }
     final executableRemoteSpec = remoteSpecOverride ?? remoteVerifierSpec;
     if (executableRemoteSpec != null) {

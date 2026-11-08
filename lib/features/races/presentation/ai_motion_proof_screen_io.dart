@@ -2279,7 +2279,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           children: [
             Text('state: ${update?.state.name ?? '--'}'),
             Text(
-              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue}',
+              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue ?? '-'}',
             ),
             Text(
               'sequence: ${(update?.sequenceProgress ?? 0).toStringAsFixed(2)}',
