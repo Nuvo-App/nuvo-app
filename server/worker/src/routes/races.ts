@@ -25,6 +25,7 @@ import {
   manualConfigFromBody,
   validateRaceWindow,
   registryConfigFromBody,
+  rulesVersionFromBody,
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission, maxSubmissionValue } from '../domain/raceScoring';
@@ -828,6 +829,7 @@ function shapeRaceResponse(
     rules: '',
     proofRequirement,
     proofReviewMode: race.proof_review_mode ?? 'auto_accept',
+    rulesVersion: race.rules_version ?? 0,
     visibility: race.visibility,
     // The invite code is insider data — returning it to a non-member would
     // hand any signed-in user the key to join the race.
@@ -1495,6 +1497,7 @@ racesRouter.post('/', async (c) => {
 
   const raceTypeRaw = typeof body.goalType === 'string' ? body.goalType : 'manual';
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
+  const rulesVersion = rulesVersionFromBody(body);
   const customConfig = customConfigFromBody(body);
   if (customConfig && 'error' in customConfig) {
     logCreateRejected(c, userId, 'custom', customConfig.error, body);
@@ -1615,9 +1618,9 @@ racesRouter.post('/', async (c) => {
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
           attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
+          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1646,13 +1649,14 @@ racesRouter.post('/', async (c) => {
         endAt,
         raceScoreDirection,
         raceProofReviewMode,
+        rulesVersion,
       )
     : c.env.DB.prepare(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
+          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1677,6 +1681,7 @@ racesRouter.post('/', async (c) => {
         endAt,
         raceScoreDirection,
         raceProofReviewMode,
+        rulesVersion,
       );
 
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
@@ -3132,9 +3137,9 @@ racesRouter.post('/:id/rematch', async (c) => {
       `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
         target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
         attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, verifier_release_id,
+        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version, verifier_release_id,
         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(
       newRaceId,
@@ -3164,6 +3169,9 @@ racesRouter.post('/:id/rematch', async (c) => {
       null, // deadlines are not carried over
       race.score_direction ?? 'higher',
       race.proof_review_mode ?? 'auto_accept',
+      // A rematch inherits the source race's rules revision — the
+      // competition contract is cloned verbatim.
+      race.rules_version ?? 0,
       race.verifier_release_id,
     )
     .run();

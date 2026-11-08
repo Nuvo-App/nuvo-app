@@ -153,6 +153,7 @@ export interface RaceRow {
   verifier_release_id?: string | null;
   score_direction?: string | null;
   proof_review_mode?: string | null;
+  rules_version?: number | null;
   version?: number | null;
   is_live_session?: number | null;
   live_window_seconds?: number | null;

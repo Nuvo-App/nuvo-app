@@ -1,0 +1,11 @@
+-- races.rules_version: which rules revision a race was created under.
+--
+--   0 = legacy behaviour — all existing rows, plus races created by old
+--       app builds that send nothing. Today's lenient semantics apply.
+--   1 = approved strict rules — the new app opts in by sending
+--       rulesVersion: 1 on POST /races; the worker stamps it.
+--
+-- Additive only: existing rows read 0 via the column default, no backfill.
+-- The value is set at creation (create/rematch/recurring spawn) and is
+-- never PATCH-able — the competition contract does not change mid-race.
+ALTER TABLE races ADD COLUMN rules_version INTEGER NOT NULL DEFAULT 0;

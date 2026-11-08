@@ -26,6 +26,7 @@ const SCHEMA = [
   readFileSync(new URL('migrations/0046_squads.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0047_reconcile_prod.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0048_v13_profile.sql', root), 'utf8'),
+  readFileSync(new URL('migrations/0050_race_rules_version.sql', root), 'utf8'),
 ];
 
 // ── D1 adapter over node:sqlite ──────────────────────────────────────────────

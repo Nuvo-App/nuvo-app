@@ -86,6 +86,19 @@ export function scoreDirectionFromBody(
     : 'higher';
 }
 
+/**
+ * Rules revision stamped on the race at creation (migration 0050).
+ *   0 = legacy semantics — every existing row and every old-build create;
+ *   1 = approved strict rules — the new app opts in on POST /races.
+ * Only 0 and 1 are honoured; anything else (missing, wrong type, future
+ * revisions) falls back to 0 so unknown clients never get stricter races
+ * than they asked for.
+ */
+export function rulesVersionFromBody(body: Record<string, unknown>): number {
+  const raw = body.rulesVersion ?? body.rules_version;
+  return raw === 1 || raw === '1' ? 1 : 0;
+}
+
 const MANUAL_PROOF_REQUIREMENTS = new Set([
   'manual',
   'note',
