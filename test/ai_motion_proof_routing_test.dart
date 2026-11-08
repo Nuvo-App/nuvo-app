@@ -144,7 +144,10 @@ class _ProfileMarker extends StatelessWidget {
   final router = GoRouter(
     initialLocation: '/home',
     routes: [
-      GoRoute(path: '/home', builder: (_, _) => home ?? const SizedBox.shrink()),
+      GoRoute(
+        path: '/home',
+        builder: (_, _) => home ?? const SizedBox.shrink(),
+      ),
       GoRoute(
         path: '/race/:id/proof',
         builder: (_, _) => const _ChooserMarker(),
@@ -348,7 +351,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 800));
 
-        await tester.tap(find.text('Record again'));
+        await tester.tap(find.text('Go again'));
         await tester.pumpAndSettle();
         expect(_path(built.router), '/race/race-move/proof/ai-motion');
         expect(find.text('PROOF-CHOOSER'), findsNothing);
