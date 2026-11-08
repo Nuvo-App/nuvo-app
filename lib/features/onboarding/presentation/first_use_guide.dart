@@ -4,9 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/v13/v13.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/first_use_store.dart';
@@ -164,14 +162,12 @@ CoachSpec? composerCoachSpec(
               targetKey: FirstRaceGuideKeys.composerActivityCta,
               eyebrow: 'NEXT',
               dim: false,
-              title: teachMode
-                  ? 'Teach it to Nuvo.'
-                  : 'Set the finish line.',
+              title: teachMode ? 'Teach it to Nuvo.' : 'Set the finish line.',
               body: teachMode
                   ? 'Tap Continue to training.'
                   : manualGoal
-                      ? 'Tap Set the finish line.'
-                      : 'Tap Continue.',
+                  ? 'Tap Set the finish line.'
+                  : 'Tap Continue.',
             )
           : CoachSpec(
               targetKey: FirstRaceGuideKeys.composerActivity,
@@ -455,7 +451,7 @@ class _FirstRaceGuideCoachState extends ConsumerState<FirstRaceGuideCoach>
                   builder: (context, _) => DecoratedBox(
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: NuvoColors.blue.withValues(
+                        color: V13.blue.withValues(
                           alpha: .55 + _pulse.value * .45,
                         ),
                         width: 2.5,
@@ -463,7 +459,7 @@ class _FirstRaceGuideCoachState extends ConsumerState<FirstRaceGuideCoach>
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: NuvoColors.blue.withValues(
+                          color: V13.blue.withValues(
                             alpha: .10 + _pulse.value * .12,
                           ),
                           blurRadius: 14,
@@ -502,12 +498,12 @@ class _CoachScrimPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = NuvoColors.navy.withValues(alpha: .35);
+    final paint = Paint()..color = V13.navy.withValues(alpha: .35);
     final hole = this.hole;
     if (hole == null) {
       canvas.drawRect(
         Offset.zero & size,
-        Paint()..color = NuvoColors.navy.withValues(alpha: .10),
+        Paint()..color = V13.navy.withValues(alpha: .10),
       );
       return;
     }
@@ -566,8 +562,9 @@ class _GuideCallout extends StatelessWidget {
   Widget build(BuildContext context) {
     // Overlay-local space: top inset was already consumed by the SafeArea
     // wrapping us, so local (0,0) is the first usable row.
-    final size =
-        overlaySize.width <= 0 ? MediaQuery.sizeOf(context) : overlaySize;
+    final size = overlaySize.width <= 0
+        ? MediaQuery.sizeOf(context)
+        : overlaySize;
     final padding = MediaQuery.paddingOf(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final usable = Rect.fromLTRB(
@@ -654,8 +651,8 @@ class _GuideCallout extends StatelessWidget {
       var bestScore = double.negativeInfinity;
       for (final c in candidates) {
         final visible = c.rect.intersect(usable);
-        final visibleFrac = (visible.width * visible.height)
-            .clamp(0.0, double.infinity) /
+        final visibleFrac =
+            (visible.width * visible.height).clamp(0.0, double.infinity) /
             (c.rect.width * c.rect.height);
         var score = visibleFrac * 1000 + c.bias;
         // Never cover the target — an overlap is near-fatal.
@@ -666,7 +663,10 @@ class _GuideCallout extends StatelessWidget {
         for (final a in avoidRects) {
           final over = c.rect.intersect(a);
           if (!over.isEmpty) {
-            score -= 600 * (over.width * over.height) / (c.rect.width * c.rect.height);
+            score -=
+                600 *
+                (over.width * over.height) /
+                (c.rect.width * c.rect.height);
           }
         }
         if (score > bestScore) {
@@ -698,10 +698,10 @@ class _GuideCallout extends StatelessWidget {
             key: bubbleKey,
             padding: const EdgeInsets.fromLTRB(14, 10, 12, 12),
             decoration: BoxDecoration(
-              color: NuvoColors.surface,
+              color: V13.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: NuvoColors.navy, width: 1.6),
-              boxShadow: AppShadows.hardSmall,
+              border: Border.all(color: V13.navy, width: 2),
+              boxShadow: V13.shadow3,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -709,12 +709,7 @@ class _GuideCallout extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        eyebrow,
-                        style: AppTextStyles.brandLabel,
-                      ),
-                    ),
+                    Expanded(child: Text(eyebrow, style: V13.label)),
                     GestureDetector(
                       onTap: onSkip,
                       behavior: HitTestBehavior.opaque,
@@ -722,8 +717,7 @@ class _GuideCallout extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(10, 2, 2, 2),
                         child: Text(
                           actionLabel,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: NuvoColors.muted,
+                          style: V13.caption.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -732,16 +726,14 @@ class _GuideCallout extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 3),
-                Text(title, style: AppTextStyles.titleMedium),
+                Text(title, style: V13.bodyStrong),
                 if (body != null && body!.isNotEmpty) ...[
                   const SizedBox(height: 3),
                   Text(
                     body!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
+                    style: V13.caption.copyWith(fontSize: 13),
                   ),
                 ],
               ],
@@ -788,34 +780,38 @@ class _CoachCaretPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final path = switch (side) {
-      _CaretSide.top => Path()
-        ..moveTo(0, h)
-        ..lineTo(w / 2, 0)
-        ..lineTo(w, h)
-        ..close(),
-      _CaretSide.bottom => Path()
-        ..moveTo(0, 0)
-        ..lineTo(w / 2, h)
-        ..lineTo(w, 0)
-        ..close(),
-      _CaretSide.left => Path()
-        ..moveTo(w, 0)
-        ..lineTo(0, h / 2)
-        ..lineTo(w, h)
-        ..close(),
-      _CaretSide.right => Path()
-        ..moveTo(0, 0)
-        ..lineTo(w, h / 2)
-        ..lineTo(0, h)
-        ..close(),
+      _CaretSide.top =>
+        Path()
+          ..moveTo(0, h)
+          ..lineTo(w / 2, 0)
+          ..lineTo(w, h)
+          ..close(),
+      _CaretSide.bottom =>
+        Path()
+          ..moveTo(0, 0)
+          ..lineTo(w / 2, h)
+          ..lineTo(w, 0)
+          ..close(),
+      _CaretSide.left =>
+        Path()
+          ..moveTo(w, 0)
+          ..lineTo(0, h / 2)
+          ..lineTo(w, h)
+          ..close(),
+      _CaretSide.right =>
+        Path()
+          ..moveTo(0, 0)
+          ..lineTo(w, h / 2)
+          ..lineTo(0, h)
+          ..close(),
     };
-    canvas.drawPath(path, Paint()..color = NuvoColors.surface);
+    canvas.drawPath(path, Paint()..color = V13.card);
     canvas.drawPath(
       path,
       Paint()
-        ..color = NuvoColors.navy
+        ..color = V13.navy
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4,
+        ..strokeWidth = 2,
     );
     // Erase the base edge so the caret reads as part of the bubble.
     final (a, b) = switch (side) {
@@ -828,8 +824,8 @@ class _CoachCaretPainter extends CustomPainter {
       a,
       b,
       Paint()
-        ..color = NuvoColors.surface
-        ..strokeWidth = 2.4,
+        ..color = V13.card
+        ..strokeWidth = 3,
     );
   }
 

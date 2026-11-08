@@ -9,6 +9,7 @@ class NuvoNotification {
     required this.createdAt,
     required this.read,
     this.body,
+    this.actorId,
     this.actorName,
     this.actorPhotoUrl,
     this.destination,
@@ -20,6 +21,9 @@ class NuvoNotification {
   final String? body;
   final DateTime createdAt;
   final bool read;
+
+  /// The acting member's user id (`actor.id`) — powers face → profile.
+  final String? actorId;
   final String? actorName;
   final String? actorPhotoUrl;
 
@@ -27,16 +31,17 @@ class NuvoNotification {
   final NuvoDestination? destination;
 
   NuvoNotification copyWith({bool? read}) => NuvoNotification(
-        id: id,
-        category: category,
-        title: title,
-        body: body,
-        createdAt: createdAt,
-        read: read ?? this.read,
-        actorName: actorName,
-        actorPhotoUrl: actorPhotoUrl,
-        destination: destination,
-      );
+    id: id,
+    category: category,
+    title: title,
+    body: body,
+    createdAt: createdAt,
+    read: read ?? this.read,
+    actorId: actorId,
+    actorName: actorName,
+    actorPhotoUrl: actorPhotoUrl,
+    destination: destination,
+  );
 
   factory NuvoNotification.fromJson(Map<String, dynamic> j) {
     final actor = j['actor'] as Map<String, dynamic>?;
@@ -47,8 +52,9 @@ class NuvoNotification {
       body: jStr(j['body']),
       createdAt:
           DateTime.tryParse(jStr(j['createdAt']) ?? '')?.toUtc() ??
-              DateTime.now().toUtc(),
+          DateTime.now().toUtc(),
       read: jBool(j['read']) ?? false,
+      actorId: actor?['id'] as String?,
       actorName: actor?['displayName'] as String?,
       actorPhotoUrl: actor?['profilePhotoUrl'] as String?,
       destination: NuvoDestination.fromDescriptor(
@@ -70,11 +76,11 @@ class NotificationPage {
 
   /// 304 reply to a conditional first-page fetch: nothing changed.
   const NotificationPage.notModified({this.etag})
-      : items = const [],
-        unreadCount = 0,
-        nextCursor = null,
-        notModified = true,
-        raw = null;
+    : items = const [],
+      unreadCount = 0,
+      nextCursor = null,
+      notModified = true,
+      raw = null;
 
   final List<NuvoNotification> items;
   final int unreadCount;
@@ -91,8 +97,9 @@ class NotificationPage {
       NotificationPage(
         etag: etag,
         raw: j,
-        items: jMapList(j['notifications']).map(NuvoNotification.fromJson)
-            .toList(),
+        items: jMapList(
+          j['notifications'],
+        ).map(NuvoNotification.fromJson).toList(),
         unreadCount: jInt(j['unreadCount']) ?? 0,
         nextCursor: jStr(j['nextCursor']),
       );

@@ -22,6 +22,7 @@ class V13Button extends StatelessWidget {
     this.variant = V13ButtonVariant.primary,
     this.size = V13ButtonSize.medium,
     this.icon,
+    this.leading,
     this.loading = false,
     this.fullWidth = false,
     this.semanticLabel,
@@ -33,6 +34,7 @@ class V13Button extends StatelessWidget {
     this.onPressed,
     this.size = V13ButtonSize.medium,
     this.icon,
+    this.leading,
     this.loading = false,
     this.fullWidth = false,
     this.semanticLabel,
@@ -44,6 +46,7 @@ class V13Button extends StatelessWidget {
     this.onPressed,
     this.size = V13ButtonSize.medium,
     this.icon,
+    this.leading,
     this.loading = false,
     this.fullWidth = false,
     this.semanticLabel,
@@ -55,6 +58,7 @@ class V13Button extends StatelessWidget {
     this.onPressed,
     this.size = V13ButtonSize.medium,
     this.icon,
+    this.leading,
     this.loading = false,
     this.fullWidth = false,
     this.semanticLabel,
@@ -66,6 +70,7 @@ class V13Button extends StatelessWidget {
     this.onPressed,
     this.size = V13ButtonSize.medium,
     this.icon,
+    this.leading,
     this.loading = false,
     this.fullWidth = false,
     this.semanticLabel,
@@ -76,6 +81,10 @@ class V13Button extends StatelessWidget {
   final V13ButtonVariant variant;
   final V13ButtonSize size;
   final IconData? icon;
+
+  /// Custom leading widget (provider glyphs etc.) — takes precedence over
+  /// [icon] when set.
+  final Widget? leading;
   final bool loading;
   final bool fullWidth;
   final String? semanticLabel;
@@ -126,7 +135,10 @@ class V13Button extends StatelessWidget {
             ),
           )
         else ...[
-          if (icon != null) ...[
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: V13.gapSm),
+          ] else if (icon != null) ...[
             Icon(icon, size: _fontSize + 4, color: fg),
             const SizedBox(width: V13.gapSm),
           ],
@@ -148,7 +160,10 @@ class V13Button extends StatelessWidget {
       padding: EdgeInsets.symmetric(
         horizontal: size == V13ButtonSize.small ? V13.gapLg : V13.gapXl,
       ),
-      alignment: Alignment.center,
+      // Only a full-width button may center inside spare space: a Container
+      // with an alignment grows to fill loose constraints, which would make
+      // every compact button stretch inside an Align/Column.
+      alignment: fullWidth ? Alignment.center : null,
       decoration: BoxDecoration(
         color: fill,
         borderRadius: borderRadius,
