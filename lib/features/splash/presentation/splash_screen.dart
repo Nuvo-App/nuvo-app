@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/asset_paths.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/v13/v13.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/data/first_use_store.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
@@ -22,7 +22,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   static const int _frameCount = AssetPaths.splashFrameCount;
   static const int _fps = 60;
-  static const Color _bg = NuvoColors.page;
+  static const Color _bg = V13.bg;
 
   late final AnimationController _frameController;
   late final AnimationController _settleController;
@@ -174,9 +174,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // never re-appear on every sign-in. The store-review identity never
       // reaches this branch (it reset and re-entered the story above), so
       // its always-replay contract holds.
-      final guideDone = ref
-          .read(firstUseStoreProvider)
-          .isGuideDone(user.email);
+      final guideDone = ref.read(firstUseStoreProvider).isGuideDone(user.email);
       final replayIntro =
           ref.read(demoReplayProvider) ||
           ((user.isDemo || authState.guideFirstRace) && !guideDone);
@@ -286,13 +284,11 @@ class _LaunchMark extends StatelessWidget {
             opacity: settleProgress,
             child: Column(
               children: [
-                const Text(
+                Text(
                   'WELCOME TO',
-                  style: TextStyle(
-                    color: NuvoColors.blue,
-                    fontFamily: 'Avenir Next',
+                  style: V13.label.copyWith(
+                    color: V13.blue,
                     fontSize: 15,
-                    fontWeight: FontWeight.w900,
                     letterSpacing: 3.1,
                   ),
                 ),
@@ -301,7 +297,7 @@ class _LaunchMark extends StatelessWidget {
                   width: 42,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: NuvoColors.blue,
+                    color: V13.blue,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -342,7 +338,7 @@ class _LaunchAtmospherePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..color = NuvoColors.page);
+    canvas.drawRect(rect, Paint()..color = V13.bg);
 
     // Give the white mark a quiet contrast pocket without introducing a hard
     // badge or circle behind it. One hue (brand blue) at falling alpha, per
@@ -358,9 +354,9 @@ class _LaunchAtmospherePainter extends CustomPainter {
       Paint()
         ..shader = RadialGradient(
           colors: [
-            NuvoColors.blue.withValues(alpha: .27),
-            NuvoColors.blue.withValues(alpha: .13),
-            NuvoColors.blue.withValues(alpha: 0),
+            V13.blue.withValues(alpha: .27),
+            V13.blue.withValues(alpha: .13),
+            V13.blue.withValues(alpha: 0),
           ],
           stops: const [0, .45, 1],
         ).createShader(markField),

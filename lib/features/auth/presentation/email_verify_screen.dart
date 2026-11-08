@@ -5,11 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/otp_input.dart';
 import '../data/auth_api.dart';
 import 'auth_controller.dart';
 
@@ -161,7 +158,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,94 +168,96 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
               child: NuvoScrollBottomFade(
                 child:
                     SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              NuvoBackButton(
-                                onPressed: () =>
-                                    safePopOrGo(context, '/auth/email'),
+                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            V13IconButton(
+                              icon: Icons.arrow_back,
+                              shape: V13IconButtonShape.square,
+                              semanticLabel: 'Back',
+                              onTap: () => safePopOrGo(context, '/auth/email'),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Check your email',
+                              style: V13.title.copyWith(
+                                fontSize: 32,
+                                letterSpacing: -0.9,
                               ),
-                              const SizedBox(height: 24),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Enter the 6-digit code we sent to ${widget.email}.',
+                              style: V13.body.copyWith(
+                                color: V13.muted,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            V13OtpInput(controllers: _controllers),
+                            if (_error != null) ...[
+                              const SizedBox(height: 12),
                               Text(
-                                'Check your email',
-                                style: AppTextStyles.headlineLarge.copyWith(
-                                  fontSize: 32,
-                                  letterSpacing: -0.9,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Enter the 6-digit code we sent to ${widget.email}.',
-                                style: AppTextStyles.bodyLarge.copyWith(
-                                  color: context.themeColors.inkMuted,
-                                ),
-                              ),
-                              const SizedBox(height: 32),
-                              OtpInput(controllers: _controllers),
-                              if (_error != null) ...[
-                                const SizedBox(height: 12),
-                                Text(
-                                  _error!,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: context.themeColors.dangerText,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 22),
-                              Center(
-                                child: Text(
-                                  "Didn't get a code?",
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: context.themeColors.inkMuted,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              GestureDetector(
-                                onTap: (_resending || _resendCooldownLeft > 0)
-                                    ? null
-                                    : _resend,
-                                behavior: HitTestBehavior.opaque,
-                                child: Center(
-                                  child: Text(
-                                    _resending
-                                        ? 'Sending...'
-                                        : _resendCooldownLeft > 0
-                                        ? 'Resend code in ${_resendCooldownLeft}s'
-                                        : 'Resend code',
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color:
-                                          (_resending ||
-                                              _resendCooldownLeft > 0)
-                                          ? context.themeColors.inkMuted
-                                          : context.themeColors.accent,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
+                                _error!,
+                                style: V13.caption.copyWith(
+                                  fontSize: 13,
+                                  color: V13.danger,
                                 ),
                               ),
                             ],
-                          ),
-                        )
-                        .animate()
-                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                        .slideY(
-                          begin: 0.04,
-                          end: 0,
-                          duration: 320.ms,
-                          curve: Curves.easeOutCubic,
+                            const SizedBox(height: 22),
+                            Center(
+                              child: Text(
+                                "Didn't get a code?",
+                                style: V13.caption.copyWith(fontSize: 13),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            GestureDetector(
+                              onTap: (_resending || _resendCooldownLeft > 0)
+                                  ? null
+                                  : _resend,
+                              behavior: HitTestBehavior.opaque,
+                              child: Center(
+                                child: Text(
+                                  _resending
+                                      ? 'Sending...'
+                                      : _resendCooldownLeft > 0
+                                      ? 'Resend code in ${_resendCooldownLeft}s'
+                                      : 'Resend code',
+                                  style: V13.caption.copyWith(
+                                    fontSize: 13,
+                                    color:
+                                        (_resending || _resendCooldownLeft > 0)
+                                        ? V13.muted
+                                        : V13.blue,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.04,
+                        end: 0,
+                        duration: 320.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
               ),
             ),
 
             // ── Pinned CTA ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: NuvoPrimaryButton(
+              child: V13Button.primary(
                 label: 'Verify code',
                 icon: Icons.arrow_forward_rounded,
-                expand: true,
+                fullWidth: true,
                 loading: _loading,
                 onPressed: _canVerify ? _verify : null,
               ),

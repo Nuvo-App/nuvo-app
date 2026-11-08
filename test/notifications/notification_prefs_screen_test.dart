@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nuvo/core/widgets/nuvo_back_header.dart';
-import 'package:nuvo/core/widgets/nuvo_button.dart';
-import 'package:nuvo/core/widgets/nuvo_toggle.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/features/notifications/data/notification_prefs.dart';
 import 'package:nuvo/features/notifications/presentation/notification_prefs_screen.dart';
 
@@ -89,13 +87,12 @@ void main() {
   ) async {
     await _pump(tester);
 
-    expect(find.byType(NuvoBackHeader), findsOneWidget);
-    expect(find.byType(NuvoBackButton), findsNothing);
+    expect(find.byType(V13BackBar), findsOneWidget);
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.bySemanticsLabel('Back'), findsOneWidget);
 
     // Title sits beside the back control, not under it.
-    final backBottom = tester.getBottomLeft(find.byIcon(Icons.arrow_back_rounded)).dy;
+    final backBottom = tester.getBottomLeft(find.byIcon(Icons.arrow_back)).dy;
     final titleTop = tester.getTopLeft(find.text('Notifications')).dy;
     final titleBottom = tester.getBottomLeft(find.text('Notifications')).dy;
     expect(titleTop, lessThan(backBottom));
@@ -146,7 +143,7 @@ void main() {
 
     // Row order: race_starting, race_completed, passed, proof_accepted,
     // proof_rejected — each row is App cell then Push cell.
-    final pushSwitch = find.byType(NuvoToggle).at(4 * 2 + 1);
+    final pushSwitch = find.byType(V13Toggle).at(4 * 2 + 1);
     await tester.tap(pushSwitch);
     await tester.pumpAndSettle();
 
@@ -169,7 +166,7 @@ void main() {
       await _pump(tester, size: size);
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(NuvoBackHeader), findsOneWidget);
+      expect(find.byType(V13BackBar), findsOneWidget);
       expect(find.text('Notifications'), findsOneWidget);
     });
   }
