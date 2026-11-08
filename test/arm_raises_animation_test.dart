@@ -281,7 +281,7 @@ void main() {
               body: SizedBox(
                 width: 200,
                 height: 300,
-                child: NuvoMovementAnimation(demo: demo!),
+                child: NuvoMovementAnimation(demo: demo),
               ),
             ),
           ),
@@ -303,7 +303,7 @@ void main() {
                 body: SizedBox(
                   width: 200,
                   height: 300,
-                  child: NuvoMovementAnimation(demo: demo!),
+                  child: NuvoMovementAnimation(demo: demo),
                 ),
               ),
             ),
@@ -351,7 +351,7 @@ void main() {
                   body: SizedBox(
                     width: 200,
                     height: 300,
-                    child: NuvoMovementAnimation(demo: demo!),
+                    child: NuvoMovementAnimation(demo: demo),
                   ),
                 ),
               ),

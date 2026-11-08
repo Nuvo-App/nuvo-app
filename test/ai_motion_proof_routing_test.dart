@@ -93,25 +93,6 @@ const _participant = RaceParticipant(
   joinedAt: '2026-01-01T00:00:00Z',
 );
 
-/// A manual-goal race — never camera-verifiable.
-Race _manualRace({String id = 'race-manual'}) => Race(
-  id: id,
-  creatorId: 'user-1',
-  title: 'Reading Race',
-  goalType: 'first_to_goal',
-  targetValue: 5,
-  unit: 'books',
-  targetUnit: 'books',
-  metric: 'books',
-  format: 'first_to_goal',
-  proofRequirement: 'manual',
-  proofMode: 'manual',
-  status: 'active',
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-  participants: const [_participant],
-);
-
 // ── Route markers — the proof chooser and the verifier are DISTINCT widgets ──
 
 class _ChooserMarker extends StatelessWidget {
