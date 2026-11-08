@@ -6,6 +6,7 @@
 // pageBuilder — see /race/:id/edit); every "open a race" tap lands on /race/:id;
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
+import '../core/config/v13.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,7 +64,10 @@ Page<void> _authPage(GoRouterState state, Widget child) =>
 // Camera/verification pages: the person is mid-move with the phone propped up,
 // so the screen is kept awake for as long as the page is mounted.
 Page<void> _cameraPage(GoRouterState state, Widget child) =>
-    CupertinoPage<void>(key: state.pageKey, child: KeepScreenAwake(child: child));
+    CupertinoPage<void>(
+      key: state.pageKey,
+      child: KeepScreenAwake(child: child),
+    );
 
 // Race detail: horizontal slide with slight scale for depth.
 Page<void> _detailPage(GoRouterState state, Widget child) =>
@@ -87,12 +91,14 @@ String moveRedirect(Uri uri) {
 /// The screen behind each shell destination — keyed by the canonical
 /// destination path so route → screen is declared exactly once.
 Widget _tabScreenFor(String path) {
-  final screen = switch (path) {
-    '/compete' => const CompeteScreen(),
-    '/pass' => const PassScreen(),
-    '/profile' => const ProfileScreen(),
-    _ => const ArenaScreen(),
-  };
+  final screen =
+      (kNuvoV13 ? _v13TabScreenFor(path) : null) ??
+      switch (path) {
+        '/compete' => const CompeteScreen(),
+        '/pass' => const PassScreen(),
+        '/profile' => const ProfileScreen(),
+        _ => const ArenaScreen(),
+      };
   // Debug-only trace: pairs with the [NuvoNav] tap print in MainShell so a
   // wrong-page report shows index → path → screen in the console.
   assert(() {
@@ -101,6 +107,13 @@ Widget _tabScreenFor(String path) {
   }());
   return screen;
 }
+
+/// v13 tab screens, keyed like [_tabScreenFor]. A path that returns null
+/// falls through to the pre-v13 screen, so every tab works at every stage of
+/// the redesign.
+Widget? _v13TabScreenFor(String path) => switch (path) {
+  _ => null,
+};
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
@@ -280,7 +293,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, _, navigationShell) =>
             MainShell(child: navigationShell),
         branches: [
-          for (final d in nuvoDestinations)
+          for (final d in activeDestinations)
             StatefulShellBranch(
               routes: [
                 GoRoute(
@@ -292,6 +305,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
         ],
       ),
+
+      // v13: the Crew tab lives on /pass (auth_gate protects /pass); /crew
+      // is an alias for links that use the tab's label.
+      GoRoute(path: '/crew', redirect: (_, _) => '/pass'),
 
       // ── Retired Verify tab ────────────────────────────────────────────────
       // There is no Verify page any more; proof starts from Race Detail or

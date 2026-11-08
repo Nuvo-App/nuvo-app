@@ -26,12 +26,17 @@ jobs:
       - run: flutter pub get
       - name: flutter analyze
         run: flutter analyze --no-fatal-infos
-      - name: flutter test
+      # Until stage S9 deletes the pre-v13 shell, the existing suite guards the
+      # old app (NUVO_V13=false must stay byte-for-byte unchanged) and test/v13
+      # covers the new shell with the flag at its default (on).
+      - name: flutter test (pre-v13 suite, NUVO_V13=false)
         run: |
           set +e
-          flutter test --reporter json > test-results.json
+          flutter test --dart-define=NUVO_V13=false $(ls -d test/* | grep -v '^test/v13$') --reporter json > test-results.json
           set -e
           node tool/ci/check_test_failures.mjs test-results.json tool/ci/known_failing_tests.txt
+      - name: flutter test (v13, default flag)
+        run: flutter test test/v13
       - if: always()
         uses: actions/upload-artifact@v4
         with:

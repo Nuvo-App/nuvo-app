@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/v13.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../arena/presentation/arena_controller.dart';
@@ -48,9 +50,7 @@ class MainShell extends ConsumerStatefulWidget {
   // Nav index → shell route path, derived from the canonical destination
   // table in bottom_nav.dart — the same order the router uses to declare
   // its StatefulShellRoute branches, so nav index == branch index always.
-  static final _paths = [
-    for (final d in nuvoDestinations) d.path,
-  ];
+  static final _paths = [for (final d in activeDestinations) d.path];
 
   @override
   ConsumerState<MainShell> createState() => _MainShellState();
@@ -148,8 +148,8 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   int _indexFor(String location) {
-    for (var i = 0; i < nuvoDestinations.length; i++) {
-      if (location.startsWith(nuvoDestinations[i].path)) return i;
+    for (var i = 0; i < activeDestinations.length; i++) {
+      if (location.startsWith(activeDestinations[i].path)) return i;
     }
     return 0;
   }
@@ -159,7 +159,7 @@ class _MainShellState extends ConsumerState<MainShell>
     // shows the wrong page again, this line plus the [NuvoNav] route print
     // in router.dart pin down exactly where the mapping diverges.
     assert(() {
-      final d = nuvoDestinations[index];
+      final d = activeDestinations[index];
       debugPrint('[NuvoNav] tap index=$index → ${d.label} (${d.path})');
       return true;
     }());
@@ -235,15 +235,29 @@ class _MainShellState extends ConsumerState<MainShell>
         ? (widget.child as StatefulNavigationShell).currentIndex
         : _indexFor(GoRouterState.of(context).uri.path);
 
-    final navigation = NuvoBottomNav(
-      key: TrackSideLayoutKeys.navigation,
-      rowKey: TrackSideLayoutKeys.navigationRow,
-      currentIndex: currentIndex,
-      onTap: _onTapTab,
-    );
+    final Widget navigation = kNuvoV13
+        ? V13TabBar(
+            key: TrackSideLayoutKeys.navigation,
+            items: [
+              for (final d in activeDestinations)
+                V13TabItem(
+                  label: d.label,
+                  icon: d.icon,
+                  selectedIcon: d.selectedIcon,
+                ),
+            ],
+            currentIndex: currentIndex,
+            onTap: _onTapTab,
+          )
+        : NuvoBottomNav(
+            key: TrackSideLayoutKeys.navigation,
+            rowKey: TrackSideLayoutKeys.navigationRow,
+            currentIndex: currentIndex,
+            onTap: _onTapTab,
+          );
 
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: kNuvoV13 ? V13.bg : context.themeColors.page,
       extendBody: true,
       body: SafeArea(
         bottom: false,
@@ -281,10 +295,11 @@ class _DockOcclusion extends StatelessWidget {
     return IgnorePointer(
       child: Container(
         key: const ValueKey('nuvo-dock-occlusion'),
-        height: MediaQuery.paddingOf(context).bottom +
+        height:
+            MediaQuery.paddingOf(context).bottom +
             NuvoBottomNav.navDockGap +
             NuvoBottomNav.navTopBreath,
-        color: context.themeColors.page,
+        color: kNuvoV13 ? V13.bg : context.themeColors.page,
       ),
     );
   }

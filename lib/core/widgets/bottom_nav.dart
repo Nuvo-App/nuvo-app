@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 
+import '../config/v13.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
@@ -54,6 +55,40 @@ const nuvoDestinations = <NuvoDestination>[
     selectedIcon: Icons.person,
   ),
 ];
+
+/// v13 destinations. Same paths and branch order as [nuvoDestinations] — the
+/// third tab keeps its `/pass` route (auth_gate protects `/pass`; `/crew`
+/// redirects to it) but is labelled "Crew" and holds friends + crews.
+const v13Destinations = <NuvoDestination>[
+  NuvoDestination(
+    path: '/arena',
+    label: 'Arena',
+    icon: Icons.stadium_outlined,
+    selectedIcon: Icons.stadium,
+  ),
+  NuvoDestination(
+    path: '/compete',
+    label: 'Compete',
+    icon: Icons.emoji_events_outlined,
+    selectedIcon: Icons.emoji_events,
+  ),
+  NuvoDestination(
+    path: '/pass',
+    label: 'Crew',
+    icon: Icons.groups_outlined,
+    selectedIcon: Icons.groups,
+  ),
+  NuvoDestination(
+    path: '/profile',
+    label: 'Profile',
+    icon: Icons.person_outline,
+    selectedIcon: Icons.person,
+  ),
+];
+
+/// The destination table the running shell uses (v13 unless
+/// `--dart-define=NUVO_V13=false`).
+const activeDestinations = kNuvoV13 ? v13Destinations : nuvoDestinations;
 
 /// Bottom navigation for Nuvo: a FLOATING pill bar.
 ///

@@ -42,7 +42,7 @@ Spec vs repo rules and real features:
 |---|---|---|
 | A1 | "Private profile" toggle | **Dropped** (private profiles don't exist). Privacy = "Show my activity map", "Who can race me" (Everyone / Friends), "Blocked accounts". |
 | A2 | "Challenge [Name]" / "Who can challenge me" | **"Race [Name]"** / **"Who can race me"**. Banned word. |
-| A3 | Tab 3 "Crew" | Follow v13. Tab label "Crew"; it holds friends (person links) **and** crews (groups). Copy keeps the friend/crew distinction ("Add friend", "Your crews"). `/pass` redirects to `/crew`. NUVO_PRODUCT_MODEL.md gets a v13 note at the end. |
+| A3 | Tab 3 "Crew" | Follow v13. Tab label "Crew"; it holds friends (person links) **and** crews (groups). Copy keeps the friend/crew distinction ("Add friend", "Your crews"). **Route stays `/pass`** (auth_gate.dart, a no-touch file, protects `/pass` but not a bare `/crew`); `/crew` redirects to `/pass`. NUVO_PRODUCT_MODEL.md gets a v13 note at the end. |
 | A4 | Manual proof | Server requires photo evidence for non-AI proofs (`races.ts:2085`). Manual mode = stepper **plus a required photo row**. Not faked, contract unchanged. |
 | A5 | "Message" on non-friend profile | **Dropped.** It would be a button that only explains it can't work, which breaks the no-dead-buttons rule. |
 | A6 | Streak (header, Best streak, Streak buddies, Streaks filter) | **Build** a server-derived day streak from verified `move_logs` (additive keys on `/progression` and `/users/:id`). |
