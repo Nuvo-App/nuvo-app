@@ -7,6 +7,12 @@
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
 import '../core/config/v13.dart';
+import '../features/profile/presentation/v13/badges_v13_screen.dart';
+import '../features/profile/presentation/v13/edit_profile_v13_screen.dart';
+import '../features/profile/presentation/v13/my_nuvo_code_v13_screen.dart';
+import '../features/profile/presentation/v13/profile_v13_screen.dart';
+import '../features/profile/presentation/v13/public_profile_v13_screen.dart';
+import '../features/profile/presentation/v13/settings_v13_screen.dart';
 import '../features/arena/presentation/v13/arena_v13_screen.dart';
 import '../features/compete/presentation/v13/compete_v13_screen.dart';
 import '../features/races/presentation/v13/composer/race_composer_v13_screen.dart';
@@ -120,6 +126,8 @@ Widget? _v13TabScreenFor(String path) => switch (path) {
   '/arena' => const ArenaScreenV13(),
   // v13: compete (S5)
   '/compete' => const CompeteV13Screen(),
+  // v13: profile (S7)
+  '/profile' => const ProfileV13Screen(),
   _ => null,
 };
 
@@ -161,13 +169,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/scan',
+        redirect: (_, _) => kNuvoV13 ? '/my-nuvo?tab=scan' : null,
         pageBuilder: (_, state) => _cameraPage(state, const QrScanScreen()),
       ),
       GoRoute(
         path: '/u/:id',
         pageBuilder: (_, state) => _detailPage(
           state,
-          PublicProfileScreen(userId: state.pathParameters['id']!),
+          kNuvoV13
+              ? PublicProfileV13Screen(userId: state.pathParameters['id']!)
+              : PublicProfileScreen(userId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -213,7 +224,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/my-nuvo',
-        pageBuilder: (_, state) => _authPage(state, const MyNuvoScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          kNuvoV13
+              ? MyNuvoCodeV13Screen(
+                  initialTab: state.uri.queryParameters['tab'] == 'scan'
+                      ? 1
+                      : 0,
+                )
+              : const MyNuvoScreen(),
+        ),
       ),
       GoRoute(
         path: '/notifications',
@@ -222,7 +242,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/settings',
-        pageBuilder: (_, state) => _authPage(state, const SettingsScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          kNuvoV13 ? const SettingsV13Screen() : const SettingsScreen(),
+        ),
       ),
       GoRoute(
         path: '/settings/notifications',
@@ -445,11 +468,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile/edit',
-        pageBuilder: (_, state) => _authPage(state, const EditProfileScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          kNuvoV13 ? const EditProfileV13Screen() : const EditProfileScreen(),
+        ),
       ),
       GoRoute(
         path: '/profile/badges',
-        pageBuilder: (_, state) => _authPage(state, const BadgesScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          kNuvoV13 ? const BadgesV13Screen() : const BadgesScreen(),
+        ),
       ),
       if (kDebugMode)
         GoRoute(

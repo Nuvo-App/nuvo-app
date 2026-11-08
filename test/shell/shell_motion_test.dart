@@ -102,6 +102,15 @@ class _CrewRepo implements CrewRepository {
   Future<void> blockUser(String userId) async {}
   @override
   Future<void> unblockUser(String userId) async {}
+  @override
+  Future<PublicUserActivity> getUserActivity(String userId) =>
+      throw UnimplementedError();
+  @override
+  Future<void> muteUser(String userId) async {}
+  @override
+  Future<void> unmuteUser(String userId) async {}
+  @override
+  Future<List<PublicUser>> getBlocked() async => const [];
 }
 
 class _FeedRepo extends CrewActivityRepository {
