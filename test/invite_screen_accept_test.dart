@@ -80,23 +80,26 @@ Future<void> _open(
 }
 
 void main() {
-  testWidgets('a non-JSON failure resets the button and shows a generic error',
-      (tester) async {
-    await _open(tester, () async => throw const FormatException('<html>429'));
-    await tester.tap(find.text('Join race'));
-    await tester.pumpAndSettle();
-    expect(find.text("Couldn't accept this invite. Try again."), findsOneWidget);
-    // Not stuck loading: the button is tappable again.
-    expect(find.text('Join race'), findsOneWidget);
-  });
+  testWidgets(
+    'a non-JSON failure resets the button and shows a generic error',
+    (tester) async {
+      await _open(tester, () async => throw const FormatException('<html>429'));
+      await tester.tap(find.text('Join race'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text("Couldn't accept this invite. Try again."),
+        findsOneWidget,
+      );
+      // Not stuck loading: the button is tappable again.
+      expect(find.text('Join race'), findsOneWidget);
+    },
+  );
 
   testWidgets('a closed race shows a clear message', (tester) async {
     await _open(
       tester,
-      () async => InviteAcceptResult.fromJson(const {
-        'ok': false,
-        'status': 'closed',
-      }),
+      () async =>
+          InviteAcceptResult.fromJson(const {'ok': false, 'status': 'closed'}),
     );
     await tester.tap(find.text('Join race'));
     await tester.pumpAndSettle();
