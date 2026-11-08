@@ -1,4 +1,4 @@
-import 'analytics.dart';
+import 'analytics_service.dart';
 
 /// Non-io platforms (the web preview) never reach PostHog — analytics simply
 /// reports unconfigured. dart.library.io picks posthog_sink_io.dart instead.
@@ -18,6 +18,9 @@ class _NullPosthogSink implements AnalyticsSink {
 
   @override
   Future<void> setOptedOut(bool optedOut) async {}
+
+  @override
+  Future<void> reset() async {}
 
   @override
   Future<void> flush() async {}

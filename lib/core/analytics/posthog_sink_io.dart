@@ -1,6 +1,6 @@
 import 'package:posthog_flutter/posthog_flutter.dart';
 
-import 'analytics.dart';
+import 'analytics_service.dart';
 
 /// PostHog-backed [AnalyticsSink]. Keeps every posthog_flutter call behind
 /// the wrapper so tests and opted-out users never touch the SDK.
@@ -46,6 +46,11 @@ class _PosthogAnalyticsSink implements AnalyticsSink {
   @override
   Future<void> setOptedOut(bool optedOut) =>
       optedOut ? Posthog().disable() : Posthog().enable();
+
+  /// Clears the SDK's cached distinct id — the wrapper writes a fresh
+  /// anonymous UUID into the next identify call after a reset.
+  @override
+  Future<void> reset() => Posthog().reset();
 
   @override
   Future<void> flush() => Posthog().flush();
