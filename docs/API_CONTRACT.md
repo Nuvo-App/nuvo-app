@@ -551,6 +551,51 @@ Response:
 }
 ```
 
+### POST /races/:id/attempts
+
+Declare an attempt on a `best_attempt` / `timed_attempt` race (race members
+only). The next verified proof binds to the open attempt automatically.
+
+Request body (optional):
+
+```json
+{ "clientAttemptId": "uuid" }
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "attempt": { "id": "...", "attemptIndex": 1, "status": "open", "startedAt": "...", "deadlineAt": "..." },
+  "attemptsUsed": 0,
+  "attemptsRemaining": 3,
+  "serverTime": "..."
+}
+```
+
+Attempt accounting: `attemptsUsed` / the `attemptLimit` enforcement count
+**submitted** attempts only — a cancelled or expired-unused attempt frees its
+slot. A new open is refused while one is already live (`409`), so a racer can
+never hold two open attempts at once.
+
+### DELETE /races/:id/attempts/:attemptId
+
+Cancel an open attempt (attempt owner only). The attempt must still be
+`open` with no bound proof — submitted and expired attempts are immutable
+(`400`); another racer's attempt and unknown ids both return `404`.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "attempt": { "id": "...", "attemptIndex": 1, "status": "cancelled" },
+  "attemptsUsed": 0,
+  "attemptsRemaining": 3
+}
+```
+
 ### POST /races/:id/moves
 
 New move submission endpoint.

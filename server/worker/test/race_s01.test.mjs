@@ -293,6 +293,93 @@ test('test_gap4_explicit_attempt_still_binds_first', async () => {
   assert.equal(rows[0].score, 12);
 });
 
+// ── gap 4 follow-up: a cancelled attempt does not spend the limit ────────────
+
+test('test_gap4_cancel_open_attempt_frees_slot', async () => {
+  const w = world();
+  w.user('A');
+  w.user('B');
+  seedPreset(w);
+  const raceId = await attemptRace(w, 'best_attempt', { attemptLimit: 1 });
+  w.member(raceId, 'B');
+
+  const att = await w.req('B', 'POST', `/races/${raceId}/attempts`, {});
+  assert.equal(att.status, 200, att.text);
+  const attemptId = att.json.attempt.id;
+
+  // A second open is refused while one is live (can't hold two), but the
+  // limit itself is untouched: only submitted attempts spend it.
+  const second = await w.req('B', 'POST', `/races/${raceId}/attempts`, {});
+  assert.equal(second.status, 409, second.text);
+
+  const del = await w.req('B', 'DELETE', `/races/${raceId}/attempts/${attemptId}`);
+  assert.equal(del.status, 200, del.text);
+  assert.equal(del.json.attempt.status, 'cancelled');
+  assert.equal(del.json.attemptsUsed, 0, 'cancelled attempts do not count');
+  assert.equal(del.json.attemptsRemaining, 1);
+  assert.equal(
+    w.one('SELECT status FROM race_attempts WHERE id = ?', attemptId).status,
+    'cancelled',
+  );
+
+  // The slot is free — a fresh attempt opens (and gets the next index, not
+  // a UNIQUE-colliding reuse of the cancelled row's number).
+  const reopen = await w.req('B', 'POST', `/races/${raceId}/attempts`, {});
+  assert.equal(reopen.status, 200, reopen.text);
+  assert.equal(reopen.json.attempt.attemptIndex, 2);
+});
+
+test('test_gap4_cannot_cancel_submitted_attempt', async () => {
+  const w = world();
+  w.user('A');
+  w.user('B');
+  seedPreset(w);
+  const raceId = await attemptRace(w, 'best_attempt');
+  w.member(raceId, 'B');
+
+  const att = await w.req('B', 'POST', `/races/${raceId}/attempts`, {});
+  assert.equal(att.status, 200, att.text);
+  const attemptId = att.json.attempt.id;
+
+  const { res } = await aiProof(w, raceId, 'B', 12);
+  assert.equal(res.status, 200, res.text);
+  assert.equal(w.one('SELECT status FROM race_attempts WHERE id = ?', attemptId).status, 'submitted');
+
+  // A submitted attempt is immutable — its score is on the leaderboard.
+  const del = await w.req('B', 'DELETE', `/races/${raceId}/attempts/${attemptId}`);
+  assert.equal(del.status, 400, del.text);
+  assert.equal(w.one('SELECT status FROM race_attempts WHERE id = ?', attemptId).status, 'submitted');
+
+  // Only the owner may cancel: another racer gets the opaque 404, and an
+  // unknown attempt id 404s the same way.
+  const stranger = await w.req('A', 'DELETE', `/races/${raceId}/attempts/${attemptId}`);
+  assert.equal(stranger.status, 404, stranger.text);
+  const missing = await w.req('B', 'DELETE', `/races/${raceId}/attempts/nope`);
+  assert.equal(missing.status, 404, missing.text);
+});
+
+test('test_gap4_expired_unused_attempt_does_not_count', async () => {
+  const w = world();
+  w.user('A');
+  w.user('B');
+  seedPreset(w);
+  const raceId = await attemptRace(w, 'best_attempt', { attemptLimit: 1 });
+  w.member(raceId, 'B');
+
+  // An attempt that expired with no proof bound does not spend the limit.
+  w.exec(
+    `INSERT INTO race_attempts (id, race_id, user_id, attempt_index, status, started_at, deadline_at, created_at)
+     VALUES ('dead-1', ?, 'B', 1, 'expired', ?, ?, CURRENT_TIMESTAMP)`,
+    raceId,
+    new Date(Date.now() - 8 * HOUR).toISOString(),
+    new Date(Date.now() - 7 * HOUR).toISOString(),
+  );
+
+  const att = await w.req('B', 'POST', `/races/${raceId}/attempts`, {});
+  assert.equal(att.status, 200, att.text);
+  assert.equal(att.json.attempt.attemptIndex, 2, 'expired row keeps its number — next index is 2');
+});
+
 // ── N4: rejected bind must not consume the session ───────────────────────────
 
 test('test_gap8_rejected_bind_does_not_consume_session', async () => {

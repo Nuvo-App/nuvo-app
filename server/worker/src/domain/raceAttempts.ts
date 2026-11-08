@@ -91,6 +91,16 @@ export async function openAttempt(
     return { ok: false, error: 'attempt_limit_reached', attemptsUsed: used };
   }
 
+  // attempt_index is a per-racer sequence over ALL attempts — cancelled and
+  // expired rows keep their number so the UNIQUE(race,user,index) key stays
+  // stable even though only submitted attempts spend the limit.
+  const nextIndex = await db
+    .prepare(
+      'SELECT COALESCE(MAX(attempt_index), 0) + 1 AS n FROM race_attempts WHERE race_id = ? AND user_id = ?',
+    )
+    .bind(race.id, userId)
+    .first<{ n: number }>();
+
   const durationMs = race.attempt_duration_seconds != null ? race.attempt_duration_seconds * 1000 : null;
   const deadline = durationMs != null ? new Date(now.getTime() + durationMs).toISOString() : null;
   const attemptId = generateId();
@@ -100,17 +110,23 @@ export async function openAttempt(
          (id, race_id, user_id, attempt_index, client_attempt_id, status, started_at, deadline_at, created_at)
        VALUES (?, ?, ?, ?, ?, 'open', ?, ?, CURRENT_TIMESTAMP)`,
     )
-    .bind(attemptId, race.id, userId, used + 1, clientAttemptId, now.toISOString(), deadline)
+    .bind(attemptId, race.id, userId, nextIndex?.n ?? 1, clientAttemptId, now.toISOString(), deadline)
     .run();
 
   const attempt = await db.prepare('SELECT * FROM race_attempts WHERE id = ?').bind(attemptId).first<RaceAttemptRow>();
   return { ok: true, attempt: attempt ?? undefined, attemptsUsed: used };
 }
 
+/**
+ * Attempt-limit accounting: only SUBMITTED attempts spend the limit. A
+ * cancelled or expired-unused attempt frees its slot. (Whether a NEW open is
+ * allowed also requires no live open attempt — openAttempt enforces that
+ * separately, so a racer can't hold two at once.)
+ */
 export async function attemptsUsed(db: D1Database, raceId: string, userId: string): Promise<number> {
   const row = await db
     .prepare(
-      "SELECT COUNT(*) as n FROM race_attempts WHERE race_id = ? AND user_id = ? AND status IN ('open','submitted','expired')",
+      "SELECT COUNT(*) as n FROM race_attempts WHERE race_id = ? AND user_id = ? AND status = 'submitted'",
     )
     .bind(raceId, userId)
     .first<{ n: number }>();
@@ -215,6 +231,22 @@ export async function expireAttempt(db: D1Database, attemptId: string): Promise<
     .prepare("UPDATE race_attempts SET status = 'expired' WHERE id = ? AND status = 'open'")
     .bind(attemptId)
     .run();
+}
+
+/**
+ * Cancel an open attempt (DELETE /:id/attempts/:attemptId). Guarded at the
+ * row so a race between the route's check and this write can never void a
+ * bound attempt — 'cancelled' is not a counting status, only submitted
+ * attempts spend the limit. Returns true when a row was cancelled.
+ */
+export async function cancelAttempt(db: D1Database, attemptId: string): Promise<boolean> {
+  const res = await db
+    .prepare(
+      "UPDATE race_attempts SET status = 'cancelled' WHERE id = ? AND status = 'open' AND move_log_id IS NULL",
+    )
+    .bind(attemptId)
+    .run();
+  return (res.meta?.changes ?? 0) > 0;
 }
 
 async function expireStaleOpenAttempts(

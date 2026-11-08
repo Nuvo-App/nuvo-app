@@ -58,6 +58,7 @@ import {
   attemptsUsed,
   bindableAttemptAtTime,
   bindableOpenAttempt,
+  cancelAttempt,
   closeAttempt,
   formatUsesAttempts,
   openAttempt,
@@ -3100,6 +3101,41 @@ racesRouter.post('/:id/attempts', async (c) => {
     attemptsUsed: used,
     attemptsRemaining: race.attempt_limit != null ? Math.max(0, race.attempt_limit - used) : null,
     serverTime: new Date().toISOString(),
+  });
+});
+
+// DELETE /races/:id/attempts/:attemptId — cancel an open attempt. Only the
+// attempt's owner may cancel, and only while nothing is bound to it —
+// submitted (and already-expired) attempts are immutable. A cancelled
+// attempt does not count against the attempt limit; only submitted ones do.
+racesRouter.delete('/:id/attempts/:attemptId', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  const attempt = await c.env.DB
+    .prepare('SELECT * FROM race_attempts WHERE id = ? AND race_id = ?')
+    .bind(c.req.param('attemptId'), race.id)
+    .first<RaceAttemptRow>();
+  // One 404 for both "no such attempt" and "not yours" — don't leak rows.
+  if (!attempt || attempt.user_id !== userId) {
+    return c.json(badRequest('Attempt not found'), 404);
+  }
+  if (attempt.status !== 'open' || attempt.move_log_id) {
+    return c.json(badRequest('Only an open attempt with no submitted proof can be cancelled'), 400);
+  }
+
+  await cancelAttempt(c.env.DB, attempt.id);
+  const used = await attemptsUsed(c.env.DB, race.id, userId);
+  return c.json({
+    ok: true,
+    attempt: {
+      id: attempt.id,
+      attemptIndex: attempt.attempt_index,
+      status: 'cancelled',
+    },
+    attemptsUsed: used,
+    attemptsRemaining: race.attempt_limit != null ? Math.max(0, race.attempt_limit - used) : null,
   });
 });
 
