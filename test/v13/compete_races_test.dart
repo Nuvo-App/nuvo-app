@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import '../helpers/screenshot.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -122,6 +123,7 @@ Widget _app(_StubRaceRepo repo, {required Widget home}) => ProviderScope(
 );
 
 void main() {
+  setUpAll(loadShotFonts);
   testWidgets('Compete: header, live races, hidden open section', (
     tester,
   ) async {
@@ -183,6 +185,7 @@ void main() {
     expect(find.text('Maya Miles'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('80 pts'), findsOneWidget);
+    await shot(tester, 'v13_compete_populated');
   });
 
   testWidgets('Race detail: podium, rows, join CTA for non-participant', (
@@ -214,6 +217,7 @@ void main() {
     expect(find.text('First to 100 reps'), findsOneWidget);
     expect(find.text('Maya'), findsOneWidget);
     expect(find.text('Join race'), findsOneWidget);
+    await shot(tester, 'v13_race_detail_visitor');
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Report this race'), findsOneWidget);
@@ -232,6 +236,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Submit proof'), findsOneWidget);
     expect(find.text('Join race'), findsNothing);
+    await shot(tester, 'v13_race_detail_racer');
   });
 
   testWidgets('Submit proof sheet: manual requires a photo', (tester) async {
@@ -248,6 +253,7 @@ void main() {
     // Camera-verifiable pushup → segmented chooser shows both.
     expect(find.text('Camera'), findsOneWidget);
     expect(find.text('Manual'), findsOneWidget);
+    await shot(tester, 'v13_submit_sheet');
     await tester.tap(find.text('Manual'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Log proof'));

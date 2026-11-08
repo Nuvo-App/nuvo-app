@@ -154,6 +154,9 @@ abstract final class V13 {
   /// Section heads — 19/800.
   static TextStyle get sectionHead => _m(19, FontWeight.w800, height: 1.2);
 
+  /// Race card titles — 18/800 (spec: the name on a race swiper card).
+  static TextStyle get cardTitle => _m(18, FontWeight.w800, height: 1.2);
+
   /// Body copy — 14/500.
   static TextStyle get body => _m(14, FontWeight.w500, height: 1.45);
 
