@@ -155,6 +155,20 @@ void main() {
       expect(payload['attemptLimit'], 3);
     });
 
+    test('test_gap5_timed_battle_without_duration_invalid', () {
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+      final battle = draftFromIdea('First to 100 pushups')!.copyWith(
+        format: RaceFormat.timedAttempt,
+        finishLineAt: deadline,
+      );
+      expect(battle.attemptDurationSeconds, isNull);
+      expect(battle.isValidToCreate, isFalse);
+      expect(
+        battle.copyWith(attemptDurationSeconds: 30).isValidToCreate,
+        isTrue,
+      );
+    });
+
     test('clearTiming resets deadline + attempt fields', () {
       final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
       final timed = draftFromIdea('First to 100 pushups')!.copyWith(

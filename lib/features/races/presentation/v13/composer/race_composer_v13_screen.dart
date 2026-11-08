@@ -535,6 +535,14 @@ class _SetupStep extends ConsumerWidget {
     RaceFormat.timedAttempt: 'Timed battle',
   };
 
+  /// Timed battle attempt lengths — (seconds, chip label).
+  static const _attemptLengths = [
+    (15, '15 s'),
+    (30, '30 s'),
+    (60, '60 s'),
+    (120, '2 min'),
+  ];
+
   Future<void> _teach(BuildContext context) async {
     final name = await showV13Sheet<String>(
       context,
@@ -705,6 +713,58 @@ class _SetupStep extends ConsumerWidget {
                       draft.copyWith(
                         targetValue: t,
                         markEdited: {RaceField.target},
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: V13.gapLg),
+          ],
+          if (draft.format.usesAttemptDuration) ...[
+            Text('ATTEMPT LENGTH', style: V13.label),
+            const SizedBox(height: V13.gapMd),
+            Wrap(
+              spacing: V13.gapSm,
+              runSpacing: V13.gapSm,
+              children: [
+                for (final (secs, label) in _attemptLengths)
+                  V13Chip(
+                    label: label,
+                    selected: draft.attemptDurationSeconds == secs,
+                    onTap: () => onUpdate(
+                      draft.copyWith(
+                        attemptDurationSeconds: secs,
+                        markEdited: {RaceField.timing},
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: V13.gapLg),
+            Text('ATTEMPTS', style: V13.label),
+            const SizedBox(height: V13.gapMd),
+            Wrap(
+              spacing: V13.gapSm,
+              runSpacing: V13.gapSm,
+              children: [
+                V13Chip(
+                  label: 'Unlimited',
+                  selected: draft.attemptLimit == null,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      clearAttemptLimit: true,
+                      markEdited: {RaceField.timing},
+                    ),
+                  ),
+                ),
+                for (final n in const [1, 3, 5])
+                  V13Chip(
+                    label: '$n',
+                    selected: draft.attemptLimit == n,
+                    onTap: () => onUpdate(
+                      draft.copyWith(
+                        attemptLimit: n,
+                        markEdited: {RaceField.timing},
                       ),
                     ),
                   ),
@@ -1093,6 +1153,22 @@ class _ReviewStep extends StatelessWidget {
           _reviewRow('Movement', draft.displayActivityName, () => onJump(1)),
           const V13Divider(),
           _reviewRow('Mode', mode, () => onJump(1)),
+          if (draft.format.usesAttemptDuration) ...[
+            const V13Divider(),
+            _reviewRow(
+              'Attempt length',
+              formatDurationShort(draft.attemptDurationSeconds ?? 0),
+              () => onJump(1),
+            ),
+            const V13Divider(),
+            _reviewRow(
+              'Attempts',
+              draft.attemptLimit == null
+                  ? 'Unlimited'
+                  : '${draft.attemptLimit}',
+              () => onJump(1),
+            ),
+          ],
           const V13Divider(),
           _reviewRow(
             'Finish line',

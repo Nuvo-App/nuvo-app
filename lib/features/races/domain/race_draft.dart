@@ -242,6 +242,7 @@ class RaceDraft {
     String? scoreDirection,
     bool clearTiming = false,
     bool clearAttemptFields = false,
+    bool clearAttemptLimit = false,
     bool clearCustom = false,
     bool clearClarification = false,
     Set<RaceField>? markEdited,
@@ -275,7 +276,7 @@ class RaceDraft {
       attemptDurationSeconds: clearTiming || clearAttemptFields
           ? null
           : attemptDurationSeconds ?? this.attemptDurationSeconds,
-      attemptLimit: clearTiming || clearAttemptFields
+      attemptLimit: clearTiming || clearAttemptFields || clearAttemptLimit
           ? null
           : attemptLimit ?? this.attemptLimit,
       scoreDirection: scoreDirection ?? this.scoreDirection,
@@ -344,14 +345,15 @@ class RaceDraft {
   }
 
   /// Finish-line / attempt fields shared by camera and manual payloads —
-  /// omitted entirely when unset so first-to-goal races stay byte-identical
-  /// to the pre-V2 contract.
+  /// emitted only when the format actually uses them so first-to-goal races
+  /// stay byte-identical to the pre-V2 contract even on a stale draft.
   Map<String, dynamic> _timingPayload() => {
-    if (finishLineAt != null && finishLineAt!.isNotEmpty)
+    if (format.usesDeadline && finishLineAt != null && finishLineAt!.isNotEmpty)
       'finishLineAt': finishLineAt,
-    if (attemptDurationSeconds != null)
+    if (format.usesAttemptDuration && attemptDurationSeconds != null)
       'attemptDurationSeconds': attemptDurationSeconds,
-    if (attemptLimit != null) 'attemptLimit': attemptLimit,
+    if (format.isAttemptBased && attemptLimit != null)
+      'attemptLimit': attemptLimit,
   };
 
   Map<String, dynamic> _manualCreatePayload() {

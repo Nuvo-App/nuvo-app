@@ -170,4 +170,35 @@ void main() {
     expect(bodies[1]['attemptDurationSeconds'], 30);
     expect(bodies[1]['attemptLimit'], 3);
   });
+
+  testWidgets('test_gap5_timed_battle_duration_picker_sets_draft', (
+    tester,
+  ) async {
+    _size(tester);
+    final bodies = <Map<String, dynamic>>[];
+    final repo = _WireRaceRepo(onBody: bodies.add);
+    await tester.pumpWidget(_app(repo, home: const RaceComposerV13Screen()));
+    await tester.pumpAndSettle();
+
+    await _toSetup(tester);
+    await _tapVisible(tester, 'Timed battle');
+    await _tapVisible(tester, '30 s');
+    await _tapVisible(tester, '3');
+    await _tapVisible(tester, 'In 1 week');
+    await _toReview(tester);
+
+    // Review shows the attempt timing before the race goes live.
+    expect(find.text('Attempt length'), findsOneWidget);
+    expect(find.text('30s'), findsOneWidget);
+    expect(find.text('Attempts'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+
+    await tester.tap(find.text('Start race'));
+    await tester.pumpAndSettle();
+    expect(bodies, hasLength(1));
+    expect(bodies.single['format'], 'timed_attempt');
+    expect(bodies.single['attemptDurationSeconds'], 30);
+    expect(bodies.single['attemptLimit'], 3);
+    expect(bodies.single['finishLineAt'], isNotNull);
+  });
 }
