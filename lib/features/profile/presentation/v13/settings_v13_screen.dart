@@ -203,30 +203,6 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
     }
   }
 
-  Future<void> _pickRaceInvites(NuvoProfilePrefs prefs) async {
-    final choice = await showV13ActionSheet<String>(
-      context,
-      title: 'Who can race me',
-      actions: const [
-        V13SheetAction(label: 'Everyone', value: 'everyone'),
-        V13SheetAction(label: 'Friends only', value: 'friends'),
-      ],
-    );
-    if (choice == null || !mounted) return;
-    try {
-      await ref
-          .read(profileV13ApiProvider)
-          .updatePrefs(raceInvitesFrom: choice);
-      ref.invalidate(profilePrefsProvider);
-    } on ApiException catch (e) {
-      if (mounted) showV13Toast(context, e.message);
-    } catch (_) {
-      if (mounted) {
-        showV13Toast(context, "Couldn't save that. Try again.");
-      }
-    }
-  }
-
   Future<void> _setMotionConsent(bool on) async {
     final previous = _motionConsent;
     setState(() => _motionConsent = on);
@@ -364,17 +340,20 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
 
     return Scaffold(
       backgroundColor: V13.bg,
+      // bottom: false — the list scrolls to the screen edge (behind the home
+      // indicator) instead of stopping at the safe inset with a blank strip.
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             const V13BackBar(title: 'Settings'),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   V13.pagePad,
                   V13.gapMd,
                   V13.pagePad,
-                  V13.gapXxl * 2,
+                  MediaQuery.paddingOf(context).bottom + V13.gapXxl * 2,
                 ),
                 children: [
                   _accountCard(
@@ -488,7 +467,6 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
 
   Widget _privacySection(NuvoProfilePrefs? prefs) {
     final showActivity = prefs?.hasActivityMapShared == true;
-    final showRaceScope = prefs?.hasRaceInvitesFrom == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -506,22 +484,6 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
                 value: prefs!.activityMapShared ?? true,
                 onChanged: _setActivityMapShared,
               ),
-            ),
-          if (showRaceScope)
-            V13ListRow(
-              title: 'Who can race me',
-              subtitle: (prefs!.raceInvitesFrom ?? 'everyone') == 'friends'
-                  ? 'Friends only'
-                  : 'Everyone',
-              leading: const V13IconTile(
-                icon: Icons.group_outlined,
-                color: V13.sky,
-              ),
-              trailing: const Icon(
-                Icons.chevron_right_rounded,
-                color: V13.muted,
-              ),
-              onTap: () => _pickRaceInvites(prefs),
             ),
           V13ListRow(
             title: 'Blocked accounts',

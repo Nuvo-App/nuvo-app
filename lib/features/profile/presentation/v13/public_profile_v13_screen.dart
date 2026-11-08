@@ -126,6 +126,7 @@ class _PublicProfileV13ScreenState
     return Scaffold(
       backgroundColor: V13.bg,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             V13BackBar(

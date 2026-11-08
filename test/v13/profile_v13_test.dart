@@ -497,7 +497,8 @@ void main() {
     // Reminders has no server category → hidden.
     expect(find.text('Reminders'), findsNothing);
     expect(find.text('Show my activity map'), findsOneWidget);
-    expect(find.text('Who can race me'), findsOneWidget);
+    // Anyone can race anyone — the setting is gone.
+    expect(find.text('Who can race me'), findsNothing);
     expect(find.text('Blocked accounts'), findsOneWidget);
     expect(find.text('Haptics'), findsOneWidget);
     await tester.dragUntilVisible(
@@ -569,7 +570,7 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 300));
     }
-    expect(find.text('Paste a Nuvo link'), findsOneWidget);
+    expect(find.text('Or paste a Nuvo link'), findsOneWidget);
   });
 }
 

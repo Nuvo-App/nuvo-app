@@ -32,8 +32,32 @@ class ArenaRaceSwiper extends ConsumerStatefulWidget {
   /// Called when a race's "+N" float finishes so the screen clears the flag.
   final void Function(String raceId)? onPlusDone;
 
-  /// Swiper height — cards fill it so every page reads the same size.
+  /// Card height at 1.0 text scale — cards fill it so every page reads
+  /// the same size. The swiper grows it with the text scale and adds room
+  /// for the hard shadow, so nothing clips.
   static const double height = 336;
+
+  /// Most race cards the swiper shows before the "See all" card.
+  static const int maxCards = 8;
+
+  /// Card base colours, cycled by position (never by race id) so neighbours
+  /// never match — including the wrap from the last card to the first.
+  static const List<Color> palette = [
+    V13.mint,
+    V13.sky,
+    V13.coral,
+    V13.sun,
+    V13.lilac,
+    Color(0xFFA8E6F0), // aqua
+    Color(0xFFFFD6A5), // apricot
+  ];
+
+  static Color colorAt(int index, int count) {
+    var c = index % palette.length;
+    // Last card would repeat the first's colour on a wrap: shift it.
+    if (count > 1 && index == count - 1 && c == 0) c = 1;
+    return palette[c];
+  }
 
   @override
   ConsumerState<ArenaRaceSwiper> createState() => _ArenaRaceSwiperState();
@@ -45,7 +69,8 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
 
   /// ~318 px card + 12 px gap → 330 px page as a fraction of the viewport.
   PageController _ensureController(double viewportWidth) {
-    final fraction = math.min(1.0, 330.0 / viewportWidth);
+    // Centred card at ~88% of the width; neighbours peek in on both sides.
+    const fraction = 0.88;
     final current = _controller;
     if (current == null) {
       return _controller = PageController(viewportFraction: fraction);
@@ -63,6 +88,11 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
     return _controller!;
   }
 
+  static int _pageToDot(int page, int pages) =>
+      pages <= 8 ? page : (page * 7 / (pages - 1)).round();
+  static int _dotToPage(int dot, int pages) =>
+      pages <= 8 ? dot : (dot * (pages - 1) / 7).round();
+
   @override
   void dispose() {
     _controller?.dispose();
@@ -71,9 +101,13 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
 
   @override
   Widget build(BuildContext context) {
-    final pageCount = widget.cards.length + 1;
+    final shown = widget.cards.take(ArenaRaceSwiper.maxCards).toList();
+    final overflow = widget.cards.length - shown.length;
+    final pageCount = shown.length + 1;
+    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
+    final cardHeight = ArenaRaceSwiper.height * (0.55 + 0.45 * textScale);
     return Padding(
-      padding: const EdgeInsets.only(left: V13.pagePad),
+      padding: EdgeInsets.zero,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final controller = _ensureController(constraints.maxWidth);
@@ -81,26 +115,31 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                height: ArenaRaceSwiper.height,
+                // + room for the 6pt hard shadow under/right of each card.
+                height: cardHeight + 8,
                 child: PageView.builder(
                   controller: controller,
-                  padEnds: false,
+                  clipBehavior: Clip.none,
+                  padEnds: true,
                   itemCount: pageCount,
                   onPageChanged: (i) => setState(() => _page = i),
                   itemBuilder: (context, i) {
-                    final child = i == widget.cards.length
-                        ? const ArenaAnotherCard()
+                    final child = i == shown.length
+                        ? (overflow > 0
+                              ? ArenaSeeAllCard(total: widget.cards.length)
+                              : const ArenaAnotherCard())
                         : ArenaRaceCard(
-                            data: widget.cards[i],
-                            plus: widget.plusBursts[widget.cards[i].race.id],
+                            data: shown[i],
+                            color: ArenaRaceSwiper.colorAt(i, shown.length),
+                            plus: widget.plusBursts[shown[i].race.id],
                             onPlusDone: widget.onPlusDone == null
                                 ? null
-                                : () => widget.onPlusDone!(
-                                    widget.cards[i].race.id,
-                                  ),
+                                : () => widget.onPlusDone!(shown[i].race.id),
                           );
                     return Padding(
-                      padding: const EdgeInsets.only(right: V13.gapMd),
+                      // Balanced gutters; the extra 6pt on the right/bottom
+                      // is the hard shadow's room.
+                      padding: const EdgeInsets.fromLTRB(5, 0, 11, 8),
                       child: child,
                     );
                   },
@@ -109,13 +148,16 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
               if (pageCount > 1) ...[
                 const SizedBox(height: V13.gapMd),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    for (var i = 0; i < pageCount; i++)
+                    // At most 8 dots; with more pages each dot covers a
+                    // stretch of them so the row never runs off screen.
+                    for (var i = 0; i < math.min(pageCount, 8); i++)
                       V13Pressable(
                         onTap: () {
                           V13Haptics.select();
                           controller.animateToPage(
-                            i,
+                            _dotToPage(i, pageCount),
                             duration: V13Motion.medium,
                             curve: V13Motion.spring,
                           );
@@ -128,10 +170,12 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
                           child: AnimatedContainer(
                             duration: V13Motion.fast,
                             curve: V13Motion.spring,
-                            width: i == _page ? 20 : 6,
+                            width: i == _pageToDot(_page, pageCount) ? 20 : 6,
                             height: 6,
                             decoration: BoxDecoration(
-                              color: i == _page ? V13.navy : V13.divider,
+                              color: i == _pageToDot(_page, pageCount)
+                                  ? V13.navy
+                                  : V13.divider,
                               borderRadius: BorderRadius.circular(3),
                             ),
                           ),
@@ -155,11 +199,15 @@ class ArenaRaceCard extends ConsumerWidget {
   const ArenaRaceCard({
     super.key,
     required this.data,
+    this.color,
     this.plus,
     this.onPlusDone,
   });
 
   final ArenaCardData data;
+
+  /// Position-based base colour from the swiper; falls back to the race's.
+  final Color? color;
 
   /// Non-null → the "+N" float that rides over the score once.
   final int? plus;
@@ -169,7 +217,7 @@ class ArenaRaceCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final race = data.race;
     return V13Card(
-      color: V13.raceColor(race.id),
+      color: color ?? V13.raceColor(race.id),
       radius: V13.radiusCard,
       shadow: V13.shadow6,
       padding: const EdgeInsets.all(V13.gapMd + 2),
@@ -201,7 +249,7 @@ class ArenaRaceCard extends ConsumerWidget {
               const SizedBox(width: V13.gapSm),
               Expanded(
                 child: Text(
-                  '${data.movementLabel} · ${data.racerCount} racers',
+                  '${data.movementLabel} · ${data.racerCount} ${data.racerCount == 1 ? 'racer' : 'racers'}',
                   style: V13.caption.copyWith(
                     color: V13.navy,
                     fontWeight: FontWeight.w700,
@@ -350,6 +398,40 @@ class ArenaAnotherCard extends StatelessWidget {
               label: 'Join a race',
               onPressed: () => context.go('/compete'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Last swiper page when more than [ArenaRaceSwiper.maxCards] races are
+/// live — sends the rest to Compete instead of an endless swipe.
+class ArenaSeeAllCard extends StatelessWidget {
+  const ArenaSeeAllCard({super.key, required this.total});
+
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return V13Card.dashed(
+      padding: const EdgeInsets.all(V13.gapLg + 2),
+      semanticLabel: 'See all $total races',
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$total races live',
+            style: V13.cardTitle,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: V13.gapLg),
+          V13Button.primary(
+            label: 'See all $total races',
+            icon: Icons.grid_view_rounded,
+            fullWidth: true,
+            onPressed: () => context.go('/compete'),
           ),
         ],
       ),

@@ -130,7 +130,7 @@ class RacingFriendCell extends StatelessWidget {
       onTap: onTap,
       semanticLabel: name,
       child: SizedBox(
-        width: 80,
+        width: 84,
         child: Column(
           children: [
             Stack(
@@ -163,11 +163,14 @@ class RacingFriendCell extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            // The movement, not "Racing · <full race title>" — that never fit
+            // an 80pt cell and always ended in an ellipsis.
             Text(
-              'Racing · ${race.displayTitle}',
+              raceActivityDefinition(race)?.title ?? race.displayTitle,
               style: V13.caption,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -377,6 +380,22 @@ int? feedLogValue(CrewActivityItem item) =>
 
 /// One feed row — photo + kind badge, headline, race-color dot + time, big
 /// number chip for logs and the flame cheer toggle.
+/// Bold actor name, regular rest — "**Akshay** started First to 6 Pushups".
+TextSpan _headlineSpan(String headline, String? actorName) {
+  final first = actorName?.trim().split(RegExp(r'\s+')).first ?? '';
+  for (final name in [actorName?.trim() ?? '', first]) {
+    if (name.isNotEmpty && headline.startsWith(name)) {
+      return TextSpan(
+        children: [
+          TextSpan(text: name, style: V13.bodyStrong),
+          TextSpan(text: headline.substring(name.length), style: V13.body),
+        ],
+      );
+    }
+  }
+  return TextSpan(text: headline, style: V13.body);
+}
+
 class FeedItemRow extends StatelessWidget {
   const FeedItemRow({
     super.key,
@@ -454,9 +473,8 @@ class FeedItemRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        headline,
-                        style: V13.bodyStrong,
+                      Text.rich(
+                        _headlineSpan(headline, item.actor?.displayName),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -493,20 +511,19 @@ class FeedItemRow extends StatelessWidget {
                   const SizedBox(width: V13.gapSm),
                   V13Pill(label: '+$value', color: V13.sun),
                 ],
+                // The cheer lives inline on the row's right (activity-feed
+                // style), not as a lonely chip under every item.
+                if (item.isReactionable && onCheer != null) ...[
+                  const SizedBox(width: V13.gapSm),
+                  _CheerChip(
+                    cheered: cheered,
+                    count: cheerCount,
+                    busy: reactBusy,
+                    onTap: onCheer,
+                  ),
+                ],
               ],
             ),
-            if (item.isReactionable && onCheer != null) ...[
-              const SizedBox(height: V13.gapSm),
-              Padding(
-                padding: const EdgeInsets.only(left: 56),
-                child: _CheerChip(
-                  cheered: cheered,
-                  count: cheerCount,
-                  busy: reactBusy,
-                  onTap: onCheer,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -802,6 +819,9 @@ class _CrewInputSheetState extends State<CrewInputSheet> {
                 hintText: widget.hint,
                 hintStyle: V13.body.copyWith(color: V13.muted),
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
               ),
               onSubmitted: (_) => _submit(),
             ),

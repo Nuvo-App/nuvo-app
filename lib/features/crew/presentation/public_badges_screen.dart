@@ -287,20 +287,15 @@ class _State extends ConsumerState<PublicBadgesScreen> {
   Widget _filterChips() {
     final filters = _filters;
     if (filters.length < 2) return const SizedBox.shrink();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var i = 0; i < filters.length; i++) ...[
-            if (i > 0) const SizedBox(width: V13.gapSm),
-            V13Chip(
-              label: filters[i].label,
-              selected: _filter == filters[i].label,
-              onTap: () => setState(() => _filter = filters[i].label),
-            ),
-          ],
-        ],
-      ),
+    return V13ChipRow(
+      children: [
+        for (final f in filters)
+          V13Chip(
+            label: f.label,
+            selected: _filter == f.label,
+            onTap: () => setState(() => _filter = f.label),
+          ),
+      ],
     );
   }
 

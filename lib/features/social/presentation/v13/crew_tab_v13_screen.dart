@@ -369,12 +369,18 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
                 ),
               )
             else ...[
-              for (final crew in groups) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
-                  child: CrewGroupCard(
-                    crew: crew,
-                    onTap: () => context.push('/crews/${crew.id}'),
+              for (final (i, crew) in groups.indexed) ...[
+                V13StaggerIn(
+                  key: ValueKey('crew-${crew.id}'),
+                  index: i,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: V13.pagePad,
+                    ),
+                    child: CrewGroupCard(
+                      crew: crew,
+                      onTap: () => context.push('/crews/${crew.id}'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: V13.gapMd),

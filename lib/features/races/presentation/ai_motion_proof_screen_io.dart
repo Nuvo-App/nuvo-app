@@ -46,6 +46,7 @@ import '../domain/motion_progress_presentation.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
 import '../domain/race_mode_semantics.dart';
+import '../domain/rep_inactivity_watch.dart';
 import '../domain/timed_attempt_take.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import 'board_moved_screen.dart';
@@ -187,7 +188,31 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int? _attemptLimit;
   int _attemptsUsed = 0;
 
+  // ── Rep inactivity prompt ────────────────────────────────────────────────
+  // Rep takes only: 30 s without a counted rep asks "Are you still there?"
+  // — a hold never arms it (stillness IS the attempt), a timed window
+  // never arms it (the take already races a deadline), and the basketball
+  // pipeline has its own shot flow. The clock anchors at take start so a
+  // take that never lands rep one still asks.
+  final _inactivityWatch = RepInactivityWatch();
+  bool _inactivityPromptOpen = false;
+  BuildContext? _inactivityDialogContext;
+
+  /// False while the app isn't in the foreground — the prompt never fires
+  /// (or queues) against a screen the athlete can't see.
+  bool _appInForeground = true;
+
   bool get _isObjectComposition => _objectCompositionSpec != null;
+
+  /// The take is a hold — stillness is the whole point, so the rep
+  /// inactivity prompt must never apply to it.
+  bool get _isHoldSession =>
+      _measure == MotionMeasurementType.duration || _runtime.movement.isHold;
+
+  /// Only an open-ended rep take gets the "Are you still there?" prompt —
+  /// holds and timed windows are excluded by what they are, not by a flag.
+  bool get _watchesRepInactivity =>
+      !_isObjectComposition && !_isHoldSession && !_isTimedTake;
 
   /// Timed battles only: a `timed_attempt` race WITH a declared duration.
   /// Legacy timed races have no duration — they keep the untimed flow.
@@ -253,6 +278,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // just not shown?" from a device log.
   final _repEventLog = RepEventLog();
 
+  // Live encouragement — rotating copy pools keyed on phase, streak,
+  // elapsed time and milestone/new-best beats. Presentation only; a line
+  // can never touch the count.
+  final _encouragement = SessionEncouragement();
+  MotionProgressPhase? _lastHudPhase;
+  DateTime? _hudFlashUntil;
+  bool _newBestFlashed = false;
+
   /// Distance presentation (milestone spacing / pace) for this race's scale.
   DistancePresentationPolicy get _distancePolicy =>
       DistancePresentationPolicy.forTarget(_raceTarget);
@@ -271,11 +304,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak => _burst.isOnStreak;
 
-  String get _streakLabel {
-    if (_streakCount < 5) return 'Keep going';
-    if (_streakCount < 10) return 'Keep your streak!';
-    return 'On fire!';
-  }
+  String get _streakLabel => _encouragement.streakLine(_streakCount);
 
   /// Short decaying pulse used to thicken the skeleton the instant a rep lands.
   double get _skeletonGlow {
@@ -292,6 +321,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _targetCelebrationSeq = 0;
     _burst.reset();
     _repEventLog.clear();
+    _encouragement.reset();
+    _lastHudPhase = null;
+    _hudFlashUntil = null;
+    _newBestFlashed = false;
   }
 
   void _scheduleSkeletonExpiry() {
@@ -643,6 +676,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The inactivity clock is wall time — while the app is away nothing
+    // counts and nothing should prompt either, so the check only runs
+    // against a live, on-screen take.
+    _appInForeground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.inactive) {
       // An interrupted 3-2-1 can't honestly start the window — drop the take
       // back to ready; the user restarts it from the camera preview. A live
@@ -690,6 +727,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _recordingTimer?.cancel();
     _countdownTimer?.cancel();
     _skeletonExpiryTimer?.cancel();
+    _inactivityWatch.disarm();
+    _dismissInactivityPrompt();
     _stopCamera();
     _objectDotProducer?.dispose();
     _poseDetector.dispose();
@@ -1002,6 +1041,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _result = null;
     });
 
+    // Arm the inactivity clock at take start — a take that never lands a
+    // rep asks too, not just one that went quiet mid-way.
+    if (_watchesRepInactivity) {
+      _inactivityWatch.arm(DateTime.now());
+    } else {
+      _inactivityWatch.disarm();
+    }
     _recordingTimer?.cancel();
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _status == AiMotionProofStatus.recording) {
@@ -1009,6 +1055,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         setState(() => _elapsed += const Duration(seconds: 1));
         // The declared attempt window is over — finish exactly as Done does.
         if (hitZero) unawaited(_finishRecording());
+        _maybePromptRepInactivity();
       }
     });
 
@@ -1115,8 +1162,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         debugValues: output.debugValues,
       );
       _maybeSnapshotSession(output.count, output.validatorState);
+      final countedAt = _runtime.lastCountedAt;
+      if (countedAt != null) _inactivityWatch.noteCounted(countedAt);
       if (_usesCustomRuntimeOutput) {
         _customUpdate = output.customPoseUpdate;
+      }
+      // A hold that stayed out of position past the break tolerance is
+      // over — end the take exactly as Done does so what banked submits.
+      if (output.holdBroken) {
+        _debugLog('holdBroken state=${output.validatorState}');
+        unawaited(_finishRecording());
+        return;
       }
       _skeletonHold.show(frame, DateTime.now());
       _scheduleSkeletonExpiry();
@@ -1139,6 +1195,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           HapticFeedback.lightImpact();
         }
       }
+      // Encouragement moments — a phase step flashes a milestone line,
+      // crossing the score-to-beat flashes a new-best line. Presentation
+      // only; it never feeds back into recognition.
+      _updateEncouragementMoments();
       // Finish line reached — fire once per recording, and only in a mode
       // that has a finish line. Attempt races never "reach" one.
       if (!_targetCelebrated && _targetReachedNow) {
@@ -1201,10 +1261,127 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
   }
 
+  /// Milestone + new-best beats for the recording HUD's encouragement
+  /// line. A phase step IS the milestone; [VerifierRaceContext]'s
+  /// [VerifierRaceContext.beatsPersonalBest] is the new best. Each beat
+  /// hands the HUD one line to hold for a few seconds, then the phase
+  /// line comes back.
+  void _updateEncouragementMoments() {
+    final phase = motionProgressPhase(
+      current: _displayedRaceProgress,
+      target: _raceTarget,
+    );
+    final previous = _lastHudPhase;
+    _lastHudPhase = phase;
+    if (previous != null && phase != previous) {
+      _encouragement.triggerMilestone();
+      _hudFlashUntil = DateTime.now().add(const Duration(seconds: 4));
+      return;
+    }
+    if (!_newBestFlashed &&
+        (_raceContext?.beatsPersonalBest(_sessionContribution) ?? false)) {
+      _newBestFlashed = true;
+      _encouragement.triggerNewBest();
+      _hudFlashUntil = DateTime.now().add(const Duration(seconds: 4));
+    }
+  }
+
+  /// Once a second while a rep take is live: long enough without a counted
+  /// rep asks whether the athlete is still there. The watch decides "quiet"
+  /// — this only owns foreground gating and one-prompt-at-a-time.
+  void _maybePromptRepInactivity() {
+    if (!_appInForeground || _inactivityPromptOpen) return;
+    if (!_inactivityWatch.isSilent(DateTime.now())) return;
+    _inactivityWatch.markPrompted();
+    unawaited(_showInactivityPrompt());
+  }
+
+  /// "Are you still there?" — Keep going re-arms the clock; Finish ends the
+  /// take through [_finishRecording], the exact path Done takes. A null
+  /// answer (the route was dismissed underneath) resolves as resume — the
+  /// take was already over, or the user saw the prompt and kept moving.
+  Future<void> _showInactivityPrompt() async {
+    if (_inactivityPromptOpen || !mounted) return;
+    _inactivityPromptOpen = true;
+    final choice = await showDialog<RepInactivityChoice>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _inactivityDialogContext = dialogContext;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: V13Card(
+              radius: V13.radiusCardLg,
+              shadow: V13.shadow6,
+              padding: const EdgeInsets.all(V13.gapXxl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Are you still there?',
+                    style: V13.sectionHead,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: V13.gapSm),
+                  Text(
+                    'Nothing has counted for a bit. Keep the take going, or finish with what you have.',
+                    style: V13.caption,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: V13.gapXl),
+                  V13Button.primary(
+                    label: 'Keep going',
+                    fullWidth: true,
+                    onPressed: () => Navigator.of(
+                      dialogContext,
+                    ).pop(RepInactivityChoice.keepGoing),
+                  ),
+                  const SizedBox(height: V13.gapSm),
+                  V13Button.secondary(
+                    label: 'Finish',
+                    fullWidth: true,
+                    onPressed: () => Navigator.of(
+                      dialogContext,
+                    ).pop(RepInactivityChoice.finish),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    _inactivityDialogContext = null;
+    _inactivityPromptOpen = false;
+    // The take may have ended while the prompt was up (finish line, timed
+    // window, lifecycle) — only a still-recording take resolves a choice.
+    if (!mounted || _disposed || _status != AiMotionProofStatus.recording) {
+      return;
+    }
+    final resolution = _inactivityWatch.resolve(choice, DateTime.now());
+    if (resolution == RepInactivityResolution.endTake) {
+      unawaited(_finishRecording());
+    }
+  }
+
+  /// The take is ending without the prompt's answer — drop the dialog so
+  /// it can't hang over the result or the next take.
+  void _dismissInactivityPrompt() {
+    final dialogContext = _inactivityDialogContext;
+    if (dialogContext != null && dialogContext.mounted) {
+      Navigator.of(dialogContext).pop();
+    }
+    _inactivityDialogContext = null;
+  }
+
   Future<void> _finishRecording() async {
     if (_status != AiMotionProofStatus.recording) return;
     setState(() => _status = AiMotionProofStatus.processing);
     _recordingTimer?.cancel();
+    _inactivityWatch.disarm();
+    _dismissInactivityPrompt();
     await _stopImageStream();
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
@@ -1893,6 +2070,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     // before submit never spends the limit.
     await _releaseTimedAttempt();
     _recordingTimer?.cancel();
+    _inactivityWatch.disarm();
+    _dismissInactivityPrompt();
     await _stopImageStream();
     if (_objectCompositionSpec != null) {
       _basketballShot = BasketballShotCoordinator(
@@ -2857,10 +3036,22 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final showsPace =
         _isDistanceRace &&
         motionProgressShowsPace(MotionMeasurementType.distance, _raceTarget);
-    final phaseLine = motionProgressPhase(
+    final phase = motionProgressPhase(
       current: _displayedRaceProgress,
       target: _raceTarget,
-    ).label;
+    );
+    // A milestone/new-best beat holds the line for its flash window;
+    // otherwise the phase pool's rotating line shows.
+    final flashActive =
+        _hudFlashUntil != null && DateTime.now().isBefore(_hudFlashUntil!);
+    final phaseLine = flashActive
+        ? _encouragement.flashLine
+        : _encouragement.phaseLine(
+            phase,
+            elapsedSeconds: _elapsed.inSeconds,
+            rotationTick:
+                _elapsed.inSeconds ~/ SessionEncouragement.rotationSeconds,
+          );
     final effort = [
       if (showsPace) ?_paceLabel,
       if (showsPace) ?_intensityLabel,

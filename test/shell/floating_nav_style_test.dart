@@ -1,5 +1,5 @@
-// The v13 bottom bar: white, 2px navy top outline, four labelled slots, and
-// a blue indicator dash that slides to the active slot.
+// The v13 floating dock: a white outlined pill inset from the edges, four
+// labelled slots, and a blue capsule that slides to the active slot.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/v13/v13.dart';
@@ -57,14 +57,21 @@ void main() {
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
 
-          // Flush bar: full width, bottom edge on the screen's bottom edge.
-          // The painted extent is the 2px navy top line + barHeight of white
-          // body + the safe inset below it.
-          final bar = tester.getRect(find.byType(V13TabBar));
-          expect(bar.left, 0);
-          expect(bar.right, size.width);
-          expect(bar.bottom, size.height);
-          expect(bar.height, V13TabBar.barHeight + V13.outline + inset);
+          // Floating dock: inset from both edges, centred, sized to its
+          // slots, sitting just above the home indicator.
+          final dock = tester.getRect(find.byKey(const ValueKey('v13-dock')));
+          expect(dock.left, greaterThanOrEqualTo(V13TabBar.sideInset - 0.01));
+          expect(
+            dock.right,
+            lessThanOrEqualTo(size.width - V13TabBar.sideInset + 0.01),
+          );
+          expect((dock.left + dock.right) / 2, closeTo(size.width / 2, 0.5));
+          expect(
+            dock.height,
+            closeTo(V13TabBar.barHeight + V13.outline * 2, 0.01),
+          );
+          final gap = inset > 0 ? inset - 8 : 12.0;
+          expect(size.height - dock.bottom, closeTo(gap, 0.01));
 
           for (var i = 0; i < 4; i++) {
             expect(find.byKey(ValueKey('v13-tab-slot-$i')), findsOneWidget);
@@ -97,16 +104,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    const slotW = 390 / 4;
+    final slotW = V13TabBar.slotWidthFor(390, 4);
     double indicatorLeft() => tester
         .widget<AnimatedPositioned>(find.byType(AnimatedPositioned))
         .left!;
-    expect(indicatorLeft(), closeTo((slotW - 28) / 2, 0.01));
+    expect(indicatorLeft(), closeTo(0, 0.01));
 
     await tester.tap(find.byKey(const ValueKey('v13-tab-slot-2')));
     set(() {});
     await tester.pumpAndSettle();
-    expect(indicatorLeft(), closeTo(slotW * 2 + (slotW - 28) / 2, 0.01));
+    expect(indicatorLeft(), closeTo(slotW * 2, 0.01));
     expect(tester.takeException(), isNull);
   });
 

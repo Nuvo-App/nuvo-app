@@ -44,6 +44,10 @@ MotionMeasurementType raceMeasurementType(Race race) {
 
 /// The user-facing noun for a race's progress ("reps", "steps", "seconds").
 String raceDisplayUnit(Race race) {
+  // Distance races store metres; the activity's default plural unit is "mi",
+  // which made "0 mi" sit next to "0 / 200 m". Metres is the stored truth —
+  // formatDistance picks m / km / mi for display from it.
+  if (raceMeasurementType(race) == MotionMeasurementType.distance) return 'm';
   final activity = raceActivityDefinition(race);
   if (activity != null) return activity.unit;
   // A non-motion race still knows its unit from the backend ("strokes",

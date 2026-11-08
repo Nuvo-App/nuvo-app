@@ -259,21 +259,78 @@ class _ActivityV13ScreenState extends ConsumerState<ActivityV13Screen> {
     );
   }
 
-  Widget _list(NotificationState state) {
-    final fresh = <NuvoNotification>[];
-    final earlier = <NuvoNotification>[];
-    for (final n in state.items) {
-      (_newIds.contains(n.id) ? fresh : earlier).add(n);
+  /// Activity-style sections: New (unread when opened), then Today /
+  /// This week / Earlier by date.
+  static String _bucket(DateTime createdUtc) {
+    final now = DateTime.now();
+    final local = createdUtc.toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    if (!local.isBefore(today)) return 'Today';
+    if (!local.isBefore(DateTime(now.year, now.month, now.day - 6))) {
+      return 'This week';
     }
+    return 'Earlier';
+  }
+
+  /// Rows that ask for a decision stay single; everything else collapses
+  /// with its neighbours when it's the same kind of event about the same
+  /// thing ("Sunil and 2 others reacted…").
+  bool _groupable(NuvoNotification n) =>
+      !_isPendingRequest(n) && n.category != 'race_invite';
+
+  String _groupKey(NuvoNotification n) =>
+      '${n.category}|${n.destination?.location ?? n.title}';
+
+  List<List<NuvoNotification>> _grouped(List<NuvoNotification> items) {
+    final out = <List<NuvoNotification>>[];
+    final byKey = <String, List<NuvoNotification>>{};
+    for (final n in items) {
+      if (!_groupable(n)) {
+        out.add([n]);
+        continue;
+      }
+      final k = _groupKey(n);
+      final existing = byKey[k];
+      if (existing != null &&
+          existing.every((e) => e.actorId != n.actorId || n.actorId == null)) {
+        existing.add(n);
+      } else if (existing == null) {
+        final g = [n];
+        byKey[k] = g;
+        out.add(g);
+      } else {
+        out.add([n]);
+      }
+    }
+    return out;
+  }
+
+  Widget _list(NotificationState state) {
+    final sections = <String, List<NuvoNotification>>{
+      'New': [],
+      'Today': [],
+      'This week': [],
+      'Earlier': [],
+    };
+    for (final n in state.items) {
+      final key = _newIds.contains(n.id) ? 'New' : _bucket(n.createdAt);
+      sections[key]!.add(n);
+    }
+    var index = 0;
     final children = <Widget>[
-      if (fresh.isNotEmpty) ...[
-        const V13SectionHeader(title: 'New'),
-        for (final n in fresh) _row(n),
-      ],
-      if (earlier.isNotEmpty) ...[
-        const V13SectionHeader(title: 'Earlier'),
-        for (final n in earlier) _row(n),
-      ],
+      for (final entry in sections.entries)
+        if (entry.value.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: V13.gapLg, bottom: 2),
+            child: V13SectionHeader(title: entry.key),
+          ),
+          for (final g in _grouped(entry.value))
+            V13StaggerIn(
+              key: ValueKey('act-${g.first.id}'),
+              index: index++,
+              child: _row(g.first, others: g.skip(1).toList()),
+            ),
+        ],
       if (state.loadingMore || state.hasMore)
         Padding(
           padding: const EdgeInsets.all(V13.gapLg),
@@ -293,17 +350,23 @@ class _ActivityV13ScreenState extends ConsumerState<ActivityV13Screen> {
     return ListView(
       controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(V13.pagePad, 0, V13.pagePad, 32),
+      padding: EdgeInsets.fromLTRB(
+        V13.pagePad,
+        0,
+        V13.pagePad,
+        MediaQuery.paddingOf(context).bottom + 32,
+      ),
       children: children,
     );
   }
 
-  Widget _row(NuvoNotification n) {
+  Widget _row(NuvoNotification n, {List<NuvoNotification> others = const []}) {
     final busy = _busy.contains(n.id);
     final pendingRequest = _isPendingRequest(n);
     final showUnreadDot = _newIds.contains(n.id) && !_handled.contains(n.id);
     return _ActivityRow(
       item: n,
+      others: others,
       busy: busy,
       showUnreadDot: showUnreadDot,
       pendingRequest: pendingRequest,
@@ -323,6 +386,7 @@ class _ActivityV13ScreenState extends ConsumerState<ActivityV13Screen> {
 class _ActivityRow extends StatelessWidget {
   const _ActivityRow({
     required this.item,
+    this.others = const [],
     required this.busy,
     required this.showUnreadDot,
     required this.pendingRequest,
@@ -336,6 +400,9 @@ class _ActivityRow extends StatelessWidget {
   });
 
   final NuvoNotification item;
+
+  /// Similar events folded into this row ("and 2 others").
+  final List<NuvoNotification> others;
   final bool busy;
   final bool showUnreadDot;
 
@@ -388,18 +455,30 @@ class _ActivityRow extends StatelessWidget {
           onPressed: busy ? null : onAcceptInvite,
         );
       default:
-        if (dest == null) return null;
-        return V13Button.secondary(
-          label: 'View',
-          size: V13ButtonSize.small,
-          onPressed: busy ? null : onView,
-        );
+        // The whole row opens its destination — no per-row "View" button.
+        return null;
     }
+  }
+
+  /// "Sunil passed you" + 2 similar → "Sunil and 2 others passed you".
+  String _groupedTitle(String raw) {
+    if (others.isEmpty) return raw;
+    final actor = item.actorName?.trim().split(RegExp(r'\s+')).first;
+    final more = '${others.length} ${others.length == 1 ? 'other' : 'others'}';
+    if (actor != null && actor.isNotEmpty && raw.startsWith(actor)) {
+      final full = item.actorName!.trim();
+      final rest = raw.startsWith(full)
+          ? raw.substring(full.length)
+          : raw.substring(actor.length);
+      return '$actor and $more$rest';
+    }
+    return '$raw (+$more)';
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = notificationStripEmoji(item.title);
+    final rawTitle = notificationStripEmoji(item.title);
+    final title = _groupedTitle(rawTitle);
     final body = item.body == null ? null : notificationStripEmoji(item.body!);
     final action = _action();
     return Column(
@@ -415,42 +494,66 @@ class _ActivityRow extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                V13Face(
-                  photoUrl: item.actorPhotoUrl,
-                  name: item.actorName,
-                  size: 42,
-                  // A face opens the actor's profile — only real when the
-                  // server sent an actor id.
-                  onTap: item.actorId == null || item.actorId!.isEmpty
-                      ? null
-                      : onActorTap,
-                ),
+                if (others.isNotEmpty)
+                  SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Stack(
+                      children: [
+                        V13Face(
+                          photoUrl: others.first.actorPhotoUrl,
+                          name: others.first.actorName,
+                          size: 30,
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: V13Face(
+                            photoUrl: item.actorPhotoUrl,
+                            name: item.actorName,
+                            size: 30,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  V13Face(
+                    photoUrl: item.actorPhotoUrl,
+                    name: item.actorName,
+                    size: 42,
+                    // A face opens the actor's profile — only real when the
+                    // server sent an actor id.
+                    onTap: item.actorId == null || item.actorId!.isEmpty
+                        ? null
+                        : onActorTap,
+                  ),
                 const SizedBox(width: V13.gapMd),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: title,
                               style: showUnreadDot ? V13.bodyStrong : V13.body,
                             ),
-                          ),
-                          const SizedBox(width: V13.gapSm),
-                          Text(
-                            notificationRelativeTime(item.createdAt),
-                            style: V13.caption,
-                          ),
-                        ],
+                            TextSpan(
+                              text:
+                                  '  ${notificationRelativeTime(item.createdAt)}',
+                              style: V13.caption,
+                            ),
+                          ],
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (body != null && body.isNotEmpty) ...[
+                      if (body != null &&
+                          body.isNotEmpty &&
+                          others.isEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           body,
@@ -459,13 +562,13 @@ class _ActivityRow extends StatelessWidget {
                           style: V13.caption,
                         ),
                       ],
-                      if (action != null) ...[
-                        const SizedBox(height: V13.gapSm),
-                        Align(alignment: Alignment.centerLeft, child: action),
-                      ],
                     ],
                   ),
                 ),
+                if (action != null) ...[
+                  const SizedBox(width: V13.gapSm),
+                  action,
+                ],
                 if (showUnreadDot)
                   Container(
                     margin: const EdgeInsets.only(left: 8, top: 6),

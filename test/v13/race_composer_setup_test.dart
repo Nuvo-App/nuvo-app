@@ -102,7 +102,21 @@ void _size(WidgetTester tester) {
 }
 
 /// The step bodies are lazy ListViews — scroll a label into view, then tap.
+/// Setup collapses Mode and Finish line into one-line rows — open them so
+/// their options are on screen.
+Future<void> _expandPickers(WidgetTester tester) async {
+  for (final row in const ['Mode']) {
+    final f = find.text(row);
+    if (f.evaluate().isEmpty) continue;
+    await tester.ensureVisible(f.first);
+    await tester.pumpAndSettle();
+    await tester.tap(f.first);
+    await tester.pumpAndSettle();
+  }
+}
+
 Future<void> _tapVisible(WidgetTester tester, String label) async {
+  if (find.text(label).evaluate().isEmpty) await _expandPickers(tester);
   await tester.scrollUntilVisible(
     find.text(label),
     200,
@@ -143,6 +157,13 @@ void main() {
     await _tapVisible(tester, 'Best single');
     await _tapVisible(tester, 'In 1 week');
     await _toReview(tester);
+    // The review card is taller now — bring the CTA on screen first.
+    await tester.scrollUntilVisible(
+      find.text('Start race'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Start race'));
     await tester.pumpAndSettle();
 
@@ -197,6 +218,13 @@ void main() {
     expect(find.text('Attempts'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
 
+    // The review card is taller now — bring the CTA on screen first.
+    await tester.scrollUntilVisible(
+      find.text('Start race'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Start race'));
     await tester.pumpAndSettle();
     expect(bodies, hasLength(1));
@@ -215,23 +243,26 @@ void main() {
     await tester.pumpAndSettle();
     await _toSetup(tester);
 
-    // The grid is lazy inside the step ListView — scroll down, collecting
-    // every movement label until the trailing Custom tiles are in view.
+    // Setup shows the main movements as tiles plus "More", which opens a
+    // searchable sheet of the FULL range — every movement must be reachable.
     final titles = motionActivityDefinitions.map((d) => d.title).toSet();
+    await _tapVisible(tester, 'More');
     final found = <String>{};
     var guard = 0;
-    while (find.text('Custom goal').evaluate().isEmpty && guard++ < 40) {
+    final sheetList = find.byType(Scrollable).last;
+    while (guard++ < 40) {
       for (final t in titles) {
         if (find.text(t).evaluate().isNotEmpty) found.add(t);
       }
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+      if (found.containsAll(titles)) break;
+      await tester.drag(sheetList, const Offset(0, -250));
       await tester.pump();
     }
-    for (final t in titles) {
-      if (find.text(t).evaluate().isNotEmpty) found.add(t);
-    }
     expect(found, containsAll(titles));
-    expect(find.text('Custom'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Search movements'))).pop();
+    await tester.pumpAndSettle();
+    // Custom movement + Custom goal are first-class option cards.
+    expect(find.text('Custom move'), findsOneWidget);
     expect(find.text('Custom goal'), findsOneWidget);
   });
 
@@ -258,6 +289,13 @@ void main() {
     await _tapVisible(tester, 'Lowest wins');
     await _tapVisible(tester, 'In 1 week');
     await _toReview(tester);
+    // The review card is taller now — bring the CTA on screen first.
+    await tester.scrollUntilVisible(
+      find.text('Start race'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Start race'));
     await tester.pumpAndSettle();
 
@@ -299,6 +337,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Set it up'));
     await tester.pumpAndSettle();
+    await _expandPickers(tester);
 
     for (final mode in [
       'First to',
@@ -307,11 +346,12 @@ void main() {
       'Timed battle',
     ]) {
       await tester.scrollUntilVisible(
-        find.text(mode),
+        find.text(mode).last,
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text(mode), findsOneWidget, reason: mode);
+      // The collapsed Mode row also shows the current mode as its value.
+      expect(find.text(mode), findsWidgets, reason: mode);
     }
   });
 
@@ -336,6 +376,7 @@ void main() {
     await _toSetup(tester);
 
     // First to offers None / 1 week / 2 weeks — None is the default.
+    await _expandPickers(tester);
     await tester.scrollUntilVisible(
       find.text('None'),
       200,
@@ -346,6 +387,13 @@ void main() {
 
     await _tapVisible(tester, 'In 1 week');
     await _toReview(tester);
+    // The review card is taller now — bring the CTA on screen first.
+    await tester.scrollUntilVisible(
+      find.text('Start race'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Start race'));
     await tester.pumpAndSettle();
 
