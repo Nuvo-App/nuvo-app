@@ -319,15 +319,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       final raceTarget = race.targetValue;
       final alreadyDone = myPart?.progressValue ?? 0;
       final isCustom = race.isCustomVerifierRace;
-      final target = isCustom
+      // A session only carries a finish line when the format has one. First
+      // to targets whatever is left to reach it; window and attempt formats
+      // have no goal — the session counts everything, target stays null,
+      // and the HUD shows the raw count instead of a fabricated "N / cap".
+      final int? target = race.format == 'first_to_goal'
           ? (raceTarget != null && raceTarget > 0
                 ? (raceTarget - alreadyDone).clamp(1, raceTarget)
-                : 1)
-          : race.format == 'first_to_goal'
-          ? (raceTarget != null && raceTarget > 0
-                ? (raceTarget - alreadyDone).clamp(1, raceTarget)
+                : isCustom
+                ? 1
                 : eligibility.movementDefinition?.defaultTarget ?? 1)
-          : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
+          : null;
       if (eligibility.objectCompositionSpec != null) {
         await _loadBasketballRelease(
           race: race,
@@ -476,7 +478,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Future<void> _loadBasketballRelease({
     required Race race,
     required CameraVerificationEligibility eligibility,
-    required int target,
+    required int? target,
     required int alreadyDone,
   }) async {
     final spec = eligibility.objectCompositionSpec!;
@@ -937,13 +939,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       }
       // Finish line reached — fire once per recording, and only in a mode
       // that has a finish line. Attempt races never "reach" one.
-      if (!_targetCelebrated &&
-          _hasFinishTarget &&
-          _targetValue > 0 &&
-          output.count >= _targetValue) {
+      if (!_targetCelebrated && _targetReachedNow) {
         _targetCelebrated = true;
         _targetCelebrationSeq++;
         HapticFeedback.heavyImpact();
+        // A first-to session that crosses its remaining goal is done — stop
+        // recording and run the exact finish/submit path the Done button
+        // takes. _finishRecording's status guard keeps this once-only.
+        unawaited(_finishRecording());
       }
       _debugFrameCount++;
       if (_debugFrameCount == 1 || _debugFrameCount % 15 == 0) {
@@ -1254,7 +1257,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   ? (_customMovementName ?? 'custom')
                   : _activityId,
               frames: List<NuvoPoseFrame>.unmodifiable(_capturedFrames),
-              targetReps: _targetValue > 0 ? _targetValue : null,
+              targetReps: (_targetValue ?? 0) > 0 ? _targetValue : null,
               durationMs: _elapsed.inMilliseconds,
             ),
           );
@@ -1742,9 +1745,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _status == AiMotionProofStatus.submitted;
 
   /// The verifier's own target — the REMAINING amount this session must reach
-  /// to complete the race.
-  int get _targetValue => _isObjectComposition
-      ? ((_raceTargetValue ?? 1) - _raceTotalBefore).clamp(1, 1000000).toInt()
+  /// to complete the race. Null when the format has no finish line: the
+  /// session then counts everything and reports the raw count.
+  int? get _targetValue => _isObjectComposition
+      ? (_hasFinishTarget
+            ? ((_raceTargetValue ?? 1) - _raceTotalBefore)
+                  .clamp(1, 1000000)
+                  .toInt()
+            : null)
       : _runtime.targetValue;
 
   /// Only a format that scores against a finish line gets target-reached
@@ -1754,9 +1762,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool get _hasFinishTarget => _raceContext?.format.usesScoreTarget ?? true;
 
   /// The session reached a real finish line — never true for attempt or
-  /// deadline modes, where the machine target is not a finish.
-  bool get _targetReachedNow =>
-      _hasFinishTarget && _targetValue > 0 && _currentValue >= _targetValue;
+  /// deadline modes, where there is no session target to reach.
+  bool get _targetReachedNow => sessionReachedFinishTarget(
+    hasFinishTarget: _hasFinishTarget,
+    sessionTarget: _targetValue,
+    sessionValue: _currentValue,
+  );
 
   /// What the rest-state pill names before recording — "Goal: 50 pushups"
   /// when there's a finish line, the mode's own stakes when there isn't.
@@ -1774,7 +1785,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   ContinuationProgress get _continuation => ContinuationProgress(
     startingRaceProgress: _startingRaceProgress,
-    raceTarget: _raceTargetValue ?? (_startingRaceProgress + _targetValue),
+    // No finish line means no cap on displayed progress — 0 keeps
+    // [ContinuationProgress.displayedProgress] returning the true
+    // cumulative count instead of clamping at a fabricated target.
+    raceTarget: _hasFinishTarget
+        ? (_raceTargetValue ?? (_startingRaceProgress + (_targetValue ?? 0)))
+        : 0,
   );
 
   /// The full race target (reps / seconds / metres).
@@ -1850,9 +1866,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   ///   attempt races  → the attempt itself ("14") — there is no /target
   String get _raceProgressReadout {
     final ctx = _raceContext;
-    // Custom (taught) movements included: a window / attempt race has no
-    // finish line, so it shows the running count — never "N / 60 reps".
-    if (ctx != null && !_hasFinishTarget && !_isObjectComposition) {
+    // Custom (taught) movements and shot-counting included: a window /
+    // attempt race has no finish line, so it shows the running count —
+    // never "N / 60 reps" or "N / 6 shots".
+    if (ctx != null && !_hasFinishTarget) {
       final shown = ctx.isAttemptBased
           ? _sessionContribution
           : _raceTotalBefore + _sessionContribution;
@@ -2266,7 +2283,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           children: [
             Text('state: ${update?.state.name ?? '--'}'),
             Text(
-              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue}',
+              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue ?? '-'}',
             ),
             Text(
               'sequence: ${(update?.sequenceProgress ?? 0).toStringAsFixed(2)}',
@@ -2460,7 +2477,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                       // wherever the athlete was, and only this session's
                       // contribution was added).
                       detected > 0
-                          ? "You're at ${_progressText(_startingRaceProgress + detected, _raceTarget)}. Keep going."
+                          ? (_hasFinishTarget
+                                ? "You're at ${_progressText(_startingRaceProgress + detected, _raceTarget)}. Keep going."
+                                : 'You logged ${formatMotionTarget(_measure, _startingRaceProgress + detected, _displayUnit)}. Keep going.')
                           : 'Nothing counted this time — line yourself up and try again.',
                       style: V13.bodyStrong,
                       textAlign: TextAlign.center,
@@ -2802,7 +2821,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     if (_isObjectComposition) {
       return '$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}';
     }
-    final value = result?.detectedReps ?? _targetValue;
+    final value = result?.detectedReps ?? _targetValue ?? 0;
     final definition = motionActivityForBackendValue(_activityId);
     if (_isDistanceRace) return formatMotionTarget(_measure, value, 'mi');
     if (definition?.isHold == true) return '$value seconds';
@@ -2811,7 +2830,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   String _customCountedLabel(CustomPoseRuntimeResult? result) {
-    final value = result?.count ?? _targetValue;
+    final value = result?.count ?? _targetValue ?? 0;
     return '$value ${result?.movementName ?? _customMovementName ?? 'reps'}';
   }
 }

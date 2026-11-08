@@ -157,7 +157,10 @@ class AiMotionResult {
   });
 
   final AiMotionActivity activity;
-  final int targetReps;
+
+  /// Session finish line — null when the race format has no goal, so the
+  /// proof reports the detected count without claiming a target existed.
+  final int? targetReps;
   final int detectedReps;
   final double confidence;
   final String verificationStatus;

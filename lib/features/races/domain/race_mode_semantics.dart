@@ -53,6 +53,21 @@ String timedAttemptRuleLine(String scoreDirection, int? durationSeconds) {
   };
 }
 
+/// Session level: this take's raw count has reached its own finish line —
+/// for first_to_goal the session target is the remaining-to-goal count, so
+/// crossing it means the take ends itself exactly as if the athlete tapped
+/// Done. Sessions with no finish line (window and attempt formats carry a
+/// null [sessionTarget]) never reach one.
+bool sessionReachedFinishTarget({
+  required bool hasFinishTarget,
+  required int? sessionTarget,
+  required int sessionValue,
+}) =>
+    hasFinishTarget &&
+    sessionTarget != null &&
+    sessionTarget > 0 &&
+    sessionValue >= sessionTarget;
+
 /// The competitive context a verifier needs to talk about the race it's
 /// measuring — built from the race payload (`viewerContext` first: it is
 /// server-computed truth; participant standings are the fallback).

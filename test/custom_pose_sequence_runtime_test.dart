@@ -548,6 +548,66 @@ void main() {
       expect(diag, containsPair('currentCanonicalIndex', isA<int>()));
     });
   });
+
+  group('gap 3 — taught movements with no finish line', () {
+    test('test_gap3_custom_most_window_session_target', () {
+      // A most-in-window custom race opens a session with no target. The
+      // runtime must carry null through — no placeholder "1" to reach.
+      final eligibility = resolveCameraVerification(_race());
+      final resolution = const VerifierRuntimeResolver().resolve(
+        eligibility: eligibility,
+        explicitVerifierType: customPoseVerifierType,
+      );
+
+      final runtime = resolution.createRuntime(
+        target: null,
+        customSpec: _terminalSpec(),
+      );
+
+      expect(runtime.type, VerifierType.customPoseSequence);
+      expect(runtime.targetValue, isNull);
+
+      runtime.start();
+      VerifierUpdate? last;
+      for (final frame in _terminalAttempt()) {
+        last = runtime.update(frame);
+      }
+
+      final update = last!.customPoseUpdate!;
+      expect(update.target, isNull);
+      expect(update.completed, isFalse);
+      expect(last.target, isNull);
+      expect(last.completed, isFalse);
+    });
+
+    test('test_gap3_taught_motion_no_goal_shows_no_cap', () {
+      // Two full verified attempts on a no-goal session: the count reports
+      // both — never clamped at a fake target of 1.
+      final runtime = CustomPoseSequenceRuntime(
+        spec: _terminalSpec(),
+        target: null,
+      );
+      runtime.start();
+
+      _play(runtime, _terminalAttempt());
+      _play(runtime, _terminalAttempt());
+
+      expect(runtime.targetValue, isNull);
+      expect(runtime.currentValue, 2);
+      expect(runtime.lastUpdate.count, 2);
+      expect(runtime.lastUpdate.completed, isFalse);
+
+      final result = runtime.customResult();
+      expect(result.count, 2);
+      expect(result.target, isNull);
+      expect(result.verificationStatus, 'custom_verified');
+
+      final payload = result.toProofPayload(clientSubmissionId: 's-1');
+      expect(payload['value'], 2);
+      expect(payload['detectedValue'], 2);
+      expect(payload['targetValue'], isNull);
+    });
+  });
 }
 
 CustomPoseSequenceRuntime _runtime(CustomPoseVerifierSpec spec) {
