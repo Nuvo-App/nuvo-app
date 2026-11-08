@@ -181,12 +181,16 @@ class RacingFriendCell extends StatelessWidget {
 class FriendRequestCard extends StatelessWidget {
   const FriendRequestCard({
     super.key,
+    this.onPersonTap,
     required this.user,
     this.mutuals,
     this.busy = false,
     required this.onAccept,
     required this.onDecline,
   });
+
+  /// Tapping the face opens that person's profile.
+  final VoidCallback? onPersonTap;
 
   final PublicUser user;
   final CrewRequestMutuals? mutuals;
@@ -224,6 +228,7 @@ class FriendRequestCard extends StatelessWidget {
                 photoUrl: user.profilePhotoUrl,
                 size: 48,
                 name: user.displayName,
+                onTap: onPersonTap,
               ),
               const SizedBox(width: V13.gapMd),
               Expanded(
@@ -282,10 +287,14 @@ class FriendRequestCard extends StatelessWidget {
 class OutgoingRequestRow extends StatelessWidget {
   const OutgoingRequestRow({
     super.key,
+    this.onPersonTap,
     required this.user,
     this.busy = false,
     required this.onCancel,
   });
+
+  /// Tapping the face opens that person's profile.
+  final VoidCallback? onPersonTap;
 
   final PublicUser user;
   final bool busy;
@@ -298,6 +307,7 @@ class OutgoingRequestRow extends StatelessWidget {
         photoUrl: user.profilePhotoUrl,
         size: 40,
         name: user.displayName,
+        onTap: onPersonTap,
       ),
       title: 'Waiting on ${user.displayName.split(' ').first}',
       subtitle: 'Request sent',
@@ -370,12 +380,16 @@ int? feedLogValue(CrewActivityItem item) =>
 class FeedItemRow extends StatelessWidget {
   const FeedItemRow({
     super.key,
+    this.onPersonTap,
     required this.item,
     this.myId = '',
     this.reactBusy = false,
     this.onTap,
     this.onCheer,
   });
+
+  /// Tapping the face opens that person's profile.
+  final VoidCallback? onPersonTap;
 
   final CrewActivityItem item;
   final String myId;
@@ -413,6 +427,7 @@ class FeedItemRow extends StatelessWidget {
                       photoUrl: item.actor?.profilePhotoUrl,
                       size: 44,
                       name: item.actor?.displayName,
+                      onTap: onPersonTap,
                     ),
                     if (badge != null)
                       Positioned(

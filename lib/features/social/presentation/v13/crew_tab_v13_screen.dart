@@ -305,6 +305,7 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
                   padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
                   child: FriendRequestCard(
                     user: user,
+                    onPersonTap: () => openPerson(context, ref, user.id),
                     mutuals: crewState.mutuals[user.id],
                     busy: crewState.pendingUserIds.contains(user.id),
                     onAccept: () => _acceptRequest(user),
@@ -318,6 +319,7 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
                   padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
                   child: OutgoingRequestRow(
                     user: user,
+                    onPersonTap: () => openPerson(context, ref, user.id),
                     busy: crewState.pendingUserIds.contains(user.id),
                     onCancel: () => _cancelOutgoing(user),
                   ),
@@ -485,6 +487,9 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
                   if (i > 0) const V13Divider(),
                   FeedItemRow(
                     item: items[i],
+                    onPersonTap: items[i].actor == null
+                        ? null
+                        : () => openPerson(context, ref, items[i].actor!.id),
                     myId: myId,
                     reactBusy: feedState.reactingItemIds.contains(items[i].id),
                     onTap: () => _openFeedItem(items[i]),
