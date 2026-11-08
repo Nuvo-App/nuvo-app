@@ -271,15 +271,43 @@ class _MainShellState extends ConsumerState<MainShell>
         bottom: false,
         // Content scrolls behind the floating dock; every tab pads its last
         // row by V13TabBar.bottomPadding so it can scroll fully clear.
-        child: FadeTransition(
-          opacity: CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.012),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: _tabIn, curve: Curves.easeOut)),
-            child: widget.child,
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            FadeTransition(
+              opacity: CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+              child: SlideTransition(
+                position: Tween(
+                  begin: const Offset(0, 0.012),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+                ),
+                child: widget.child,
+              ),
+            ),
+            // Soft fade behind the floating dock: content dissolves into the
+            // page colour instead of hard-cutting at the dock's edge.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: MediaQuery.paddingOf(context).bottom + 32,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey('nuvo-dock-fade'),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [V13.bg.withValues(alpha: 0), V13.bg],
+                      stops: const [0, 0.55],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: navigation,

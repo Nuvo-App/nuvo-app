@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/v13/v13.dart';
+import '../../../notifications/domain/notification_display.dart';
 import '../../../races/data/race_models.dart';
 import '../../../races/domain/chase_context.dart';
 import '../../../races/domain/motion_activity.dart';
@@ -185,22 +186,41 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                   _Header(
                     onNewRace: () => context.push('/races/new'),
                     onJoinCode: () => context.push('/races/join'),
+                    focus: _YouRightNow.pick(live, user?.id) == null
+                        ? null
+                        : _YouRightNow(
+                            race: _YouRightNow.pick(live, user?.id)!,
+                            userId: user!.id,
+                          ),
                   ),
                   const SizedBox(height: V13.gapSection),
                   if (live.isNotEmpty) ...[
                     const _SectionHead('Live races'),
                     const SizedBox(height: V13.gapLg),
-                    SizedBox(
-                      height: 250,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: live.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(width: V13.gapMd),
-                        itemBuilder: (_, i) => _LiveRaceCard(
-                          race: live[i],
-                          userId: user?.id,
-                          onOpen: () => context.push('/race/${live[i].id}'),
+                    // Cards size to their content; the strip keeps room
+                    // below/right for the 4pt hard shadow so it never clips.
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      padding: const EdgeInsets.only(bottom: 6, right: 6),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = 0; i < live.length; i++) ...[
+                              if (i > 0) const SizedBox(width: V13.gapMd),
+                              V13StaggerIn(
+                                key: ValueKey('live-${live[i].id}'),
+                                index: i,
+                                child: _LiveRaceCard(
+                                  race: live[i],
+                                  userId: user?.id,
+                                  onOpen: () =>
+                                      context.push('/race/${live[i].id}'),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
@@ -234,9 +254,16 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onNewRace, required this.onJoinCode});
+  const _Header({
+    required this.onNewRace,
+    required this.onJoinCode,
+    this.focus,
+  });
   final VoidCallback onNewRace;
   final VoidCallback onJoinCode;
+
+  /// "You right now" — the one race that most needs you. Optional.
+  final Widget? focus;
 
   @override
   Widget build(BuildContext context) {
@@ -245,6 +272,7 @@ class _Header extends StatelessWidget {
       children: [
         Text('Compete', style: V13.title),
         const SizedBox(height: V13.gapLg),
+        if (focus != null) ...[focus!, const SizedBox(height: V13.gapLg)],
         Row(
           children: [
             Expanded(
@@ -388,6 +416,9 @@ class _LiveRaceCard extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: V13.gapMd),
+                      // Pushes the faces to the bottom when a neighbour card
+                      // is taller (IntrinsicHeight equalises the row).
                       const Spacer(),
                       Row(
                         children: [
@@ -417,7 +448,7 @@ class _LiveRaceCard extends ConsumerWidget {
   }
 }
 
-class _OpenRacesSection extends ConsumerWidget {
+class _OpenRacesSection extends ConsumerStatefulWidget {
   const _OpenRacesSection({
     required this.joinedIds,
     required this.joiningId,
@@ -428,86 +459,160 @@ class _OpenRacesSection extends ConsumerWidget {
   final void Function(Race race) onJoin;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final value = ref.watch(openRacesProvider);
-    final races = value.valueOrNull;
+  ConsumerState<_OpenRacesSection> createState() => _OpenRacesSectionState();
+}
+
+/// "Join a race" as an activity list (Instagram-notifications style): open
+/// rows with thin dividers, one bold line per person, a muted meta line and
+/// a small filled Join pill. One person's several races collapse into a
+/// single "Eswar is racing 3 races" row that expands in place.
+class _OpenRacesSectionState extends ConsumerState<_OpenRacesSection> {
+  final Set<String> _expanded = {};
+
+  static RaceParticipant? _host(Race r) =>
+      r.participantFor(r.creatorId) ?? r.participants.firstOrNull;
+
+  @override
+  Widget build(BuildContext context) {
+    final races = ref.watch(openRacesProvider).valueOrNull;
     // Hidden on error or empty — the section is opportunistic, not required.
     if (races == null || races.isEmpty) return const SizedBox.shrink();
-    final visible = races.where((r) => !joinedIds.contains(r.id)).toList();
-    final joinedVisible = races.where((r) => joinedIds.contains(r.id)).toList();
+
+    // Group by host, keeping first-seen order.
+    final groups = <String, List<Race>>{};
+    for (final r in races) {
+      groups.putIfAbsent(_host(r)?.userId ?? r.creatorId, () => []).add(r);
+    }
+    final keys = groups.keys.toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHead('Join a race'),
-        const SizedBox(height: V13.gapLg),
-        for (final (i, race) in [...visible, ...joinedVisible].indexed) ...[
+        const SizedBox(height: V13.gapSm),
+        for (var i = 0; i < keys.length; i++) ...[
+          if (i > 0) const V13Divider(),
           V13StaggerIn(
-            key: ValueKey('open-${race.id}'),
+            key: ValueKey('open-group-${keys[i]}'),
             index: i,
-            child: _OpenRaceCard(
-              race: race,
-              joined: joinedIds.contains(race.id),
-              joining: joiningId == race.id,
-              onJoin: () => onJoin(race),
-            ),
+            child: _group(groups[keys[i]]!, keys[i]),
           ),
-          const SizedBox(height: V13.gapMd),
         ],
-        const SizedBox(height: V13.gapSection - V13.gapMd),
+        const SizedBox(height: V13.gapSection),
       ],
     );
   }
-}
 
-class _OpenRaceCard extends StatelessWidget {
-  const _OpenRaceCard({
-    required this.race,
-    required this.joined,
-    required this.joining,
-    required this.onJoin,
-  });
-  final Race race;
-  final bool joined;
-  final bool joining;
-  final VoidCallback onJoin;
-
-  String _namesLine() {
-    final names = race.participants
-        .take(3)
-        .map((p) => p.displayName.trim().split(RegExp(r'\s+')).first)
-        .toList();
-    if (names.isEmpty) return 'Your friends are racing';
-    if (names.length == 1) return '${names[0]} is racing';
-    if (names.length == 2) return '${names[0]} and ${names[1]}';
-    return '${names[0]}, ${names[1]} and ${names[2]}';
+  Widget _group(List<Race> races, String key) {
+    final host = _host(races.first);
+    final name = (host?.displayName ?? 'A friend')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .first;
+    if (races.length == 1) {
+      return _row(
+        face: host,
+        boldName: name,
+        rest: ' is racing ${races.first.displayTitle}',
+        meta: _meta(races.first),
+        trailing: _joinPill(races.first),
+      );
+    }
+    final open = _expanded.contains(key);
+    return Column(
+      children: [
+        _row(
+          face: host,
+          boldName: name,
+          rest: ' is racing ${races.length} races',
+          meta: races.map((r) => r.displayTitle).take(2).join(' · '),
+          trailing: AnimatedRotation(
+            turns: open ? 0.5 : 0,
+            duration: V13Motion.fast,
+            curve: V13Motion.spring,
+            child: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: V13.muted,
+            ),
+          ),
+          onTap: () => setState(() {
+            open ? _expanded.remove(key) : _expanded.add(key);
+          }),
+        ),
+        AnimatedSize(
+          duration: V13Motion.fast,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: open
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 52),
+                  child: Column(
+                    children: [
+                      for (final r in races)
+                        _row(
+                          boldName: r.displayTitle,
+                          rest: '',
+                          meta: _meta(r),
+                          trailing: _joinPill(r),
+                        ),
+                    ],
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return V13Card(
-      padding: const EdgeInsets.all(V13.gapMd),
+  String _meta(Race r) {
+    final n = r.participants.length;
+    final created = DateTime.tryParse(r.createdAt);
+    final when = created == null
+        ? null
+        : notificationRelativeTime(created.toUtc());
+    return [
+      '$n ${n == 1 ? 'racer' : 'racers'}',
+      if (when != null) when,
+    ].join(' · ');
+  }
+
+  Widget _row({
+    RaceParticipant? face,
+    required String boldName,
+    required String rest,
+    required String meta,
+    required Widget trailing,
+    VoidCallback? onTap,
+  }) {
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: V13.gapMd),
       child: Row(
         children: [
-          V13FaceStack(
-            faces: [
-              for (final p in race.participants.take(3))
-                V13FaceInfo(photoUrl: p.profilePhotoUrl, name: p.displayName),
-            ],
-            size: 30,
-          ),
-          const SizedBox(width: V13.gapMd),
+          if (face != null) ...[
+            V13Face(
+              photoUrl: face.profilePhotoUrl,
+              size: 40,
+              name: face.displayName,
+            ),
+            const SizedBox(width: V13.gapMd),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _namesLine(),
-                  style: V13.bodyStrong,
-                  maxLines: 1,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: boldName, style: V13.bodyStrong),
+                      TextSpan(text: rest, style: V13.body),
+                    ],
+                  ),
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  race.displayTitle,
+                  meta,
                   style: V13.caption,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -516,13 +621,49 @@ class _OpenRaceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: V13.gapMd),
-          V13Button.secondary(
-            label: joined ? 'Joined' : 'Join',
-            onPressed: joined ? null : onJoin,
-            loading: joining,
-            icon: joined ? Icons.check_rounded : null,
-          ),
+          trailing,
         ],
+      ),
+    );
+    if (onTap == null) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: row,
+    );
+  }
+
+  Widget _joinPill(Race race) {
+    final joined = widget.joinedIds.contains(race.id);
+    final joining = widget.joiningId == race.id;
+    return V13Pressable(
+      onTap: joined || joining ? null : () => widget.onJoin(race),
+      shadow: joined ? null : V13.shadow3,
+      borderRadius: BorderRadius.circular(V13.radiusPill),
+      semanticLabel: joined ? 'Joined' : 'Join ${race.displayTitle}',
+      child: AnimatedContainer(
+        duration: V13Motion.fast,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(
+          color: joined ? V13.card : V13.blue,
+          borderRadius: BorderRadius.circular(V13.radiusPill),
+          border: Border.all(color: V13.navy, width: V13.outline),
+        ),
+        child: joining
+            ? const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: V13.card,
+                ),
+              )
+            : Text(
+                joined ? 'Joined' : 'Join',
+                style: V13.bodyStrong.copyWith(
+                  color: joined ? V13.navy : V13.card,
+                  fontSize: 14,
+                ),
+              ),
       ),
     );
   }
@@ -716,5 +857,90 @@ class _TrophyShelf extends StatelessWidget {
       if (s.userId == userId) return s.rank;
     }
     return rankForUser(race, userId);
+  }
+}
+
+/// Compete's single focal strip: your standing in the race that most needs
+/// you — the closest contest with someone to chase or defend against, ties
+/// broken by the soonest finish line. One tap opens that race.
+class _YouRightNow extends StatelessWidget {
+  const _YouRightNow({required this.race, required this.userId});
+
+  final Race race;
+  final String userId;
+
+  static Race? pick(List<Race> live, String? userId) {
+    if (userId == null) return null;
+    Race? best;
+    var bestScore = 1 << 30;
+    for (final r in live) {
+      if (r.participants.length < 2 || r.participantFor(userId) == null) {
+        continue;
+      }
+      final c = ChaseContext.compute(r, userId);
+      if (c.myRank == null || c.chaseCopy == null) continue;
+      // Smaller is more urgent: close gaps first, then near deadlines.
+      final gap = (c.leaderGap ?? 50).abs().clamp(0, 999);
+      final days = (c.daysLeft ?? 30).clamp(0, 999);
+      final score = gap * 10 + days;
+      if (score < bestScore) {
+        bestScore = score;
+        best = r;
+      }
+    }
+    return best;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ChaseContext.compute(race, userId);
+    return V13Card(
+      onTap: () => context.push('/race/${race.id}'),
+      semanticLabel: 'Open ${race.displayTitle}',
+      padding: const EdgeInsets.all(V13.gapLg),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.myRank == 1 ? V13.sun : V13.sky,
+              shape: BoxShape.circle,
+              border: Border.all(color: V13.navy, width: V13.outline),
+            ),
+            child: Text('#${c.myRank}', style: V13.numberSm),
+          ),
+          const SizedBox(width: V13.gapMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('YOU RIGHT NOW', style: V13.label),
+                const SizedBox(height: 2),
+                Text(
+                  race.displayTitle,
+                  style: V13.bodyStrong,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  c.chaseCopy!,
+                  style: V13.caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (c.timeLeft != null) ...[
+            const SizedBox(width: V13.gapSm),
+            V13Pill(label: c.timeLeft!, color: V13.sun, textColor: V13.navy),
+          ],
+          const SizedBox(width: V13.gapXs),
+          const Icon(Icons.chevron_right_rounded, color: V13.muted),
+        ],
+      ),
+    );
   }
 }

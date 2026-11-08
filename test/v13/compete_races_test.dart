@@ -250,7 +250,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Join a race'), findsOneWidget);
-    expect(find.text('Squat Sprint'), findsOneWidget);
+    expect(
+      find.textContaining('is racing Squat Sprint', findRichText: true),
+      findsOneWidget,
+    );
     expect(find.text('Join'), findsOneWidget);
     expect(find.text('Leaderboard'), findsOneWidget);
     expect(find.text('Maya Miles'), findsOneWidget);
