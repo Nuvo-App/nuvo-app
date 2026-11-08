@@ -50,6 +50,7 @@ class VerifierUpdate {
     required this.debugValues,
     required this.validatorState,
     required this.failedRuleReason,
+    this.holdBroken = false,
     this.customPoseUpdate,
   });
 
@@ -64,6 +65,7 @@ class VerifierUpdate {
     debugValues: output.debugValues,
     validatorState: output.validatorState,
     failedRuleReason: output.failedRuleReason,
+    holdBroken: output.holdBroken,
   );
 
   final VerifierType type;
@@ -76,6 +78,10 @@ class VerifierUpdate {
   final Map<String, double> debugValues;
   final String validatorState;
   final String failedRuleReason;
+
+  /// A hold attempt ended terminally — the screen finishes the take with
+  /// what banked, the same path as Done. Always false for rep movements.
+  final bool holdBroken;
   final CustomPoseRuntimeUpdate? customPoseUpdate;
 }
 
@@ -101,6 +107,10 @@ abstract class VerifierRuntime {
   int get currentValue;
   bool get fullBodyVisible;
   String get failedRuleReason;
+
+  /// Frame time of the last counted rep — the rep-inactivity prompt's
+  /// clock. Null until the engine counts something.
+  DateTime? get lastCountedAt => null;
 
   void start();
   VerifierUpdate update(NuvoPoseFrame frame);
@@ -139,6 +149,9 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
 
   @override
   String get failedRuleReason => _engine.failedRuleReason;
+
+  @override
+  DateTime? get lastCountedAt => _engine.lastCountedAt;
 
   @override
   void start() => _engine.start();
@@ -197,6 +210,9 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   String get failedRuleReason => _lastUpdate?.diagnostic ?? '';
 
   @override
+  DateTime? get lastCountedAt => _runtime.lastRepAt;
+
+  @override
   void start() => _runtime.start();
 
   @override
@@ -205,6 +221,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
     if (frame.hasPoints(_spec.requiredLandmarks)) _validPoseFrames++;
     final update = _runtime.update(frame);
     _lastUpdate = update;
+    final holdBroken = update.state == RemoteRuntimeState.holdBroken;
     return VerifierUpdate(
       type: VerifierType.presetPose,
       selectedMovement: _movement,
@@ -218,10 +235,11 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
         'progress': update.progress,
         'elapsedMs': update.elapsedMs.toDouble(),
       },
-      validatorState: update.state.name,
+      validatorState: holdBroken ? 'hold_broken' : update.state.name,
       failedRuleReason: update.state == RemoteRuntimeState.notReady
           ? update.diagnostic
           : '',
+      holdBroken: holdBroken,
     );
   }
 

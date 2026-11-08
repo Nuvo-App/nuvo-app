@@ -320,6 +320,7 @@ class NuvoVerifyOutput {
     required this.debugValues,
     required this.validatorState,
     required this.failedRuleReason,
+    this.holdBroken = false,
   });
 
   final MovementDefinition selectedMovement;
@@ -333,6 +334,10 @@ class NuvoVerifyOutput {
   final Map<String, double> debugValues;
   final String validatorState;
   final String failedRuleReason;
+
+  /// A hold attempt ended — the engine is terminal and the take must
+  /// finish with what it banked. Always false for rep movements.
+  final bool holdBroken;
 }
 
 class NuvoVerifyEngine {
@@ -350,6 +355,7 @@ class NuvoVerifyEngine {
   bool get fullBodyVisible => _validator.fullBodyVisible;
   String get validatorState => _validator.stateLabel;
   String get failedRuleReason => _validator.failedRuleReason;
+  DateTime? get lastCountedAt => _validator.lastCountedAt;
 
   void selectMovement(MovementDefinition movement, int? target) {
     _movement = movement;
@@ -387,6 +393,7 @@ class NuvoVerifyEngine {
       debugValues: _validator.debugValues,
       validatorState: _validator.stateLabel,
       failedRuleReason: _validator.failedRuleReason,
+      holdBroken: _validator.holdBroken,
     );
   }
 }
@@ -523,6 +530,14 @@ abstract class MotionValidator {
   Map<String, double> get debugValues;
   String get stateLabel;
   String get failedRuleReason;
+
+  /// Frame time of the last counted rep — null until something counts.
+  /// The rep-inactivity prompt's clock.
+  DateTime? get lastCountedAt => null;
+
+  /// The hold attempt ended terminally — out of position past the break
+  /// tolerance. Always false for rep validators.
+  bool get holdBroken => false;
 
   void start();
   MotionValidationUpdate update(NuvoPoseFrame frame);
@@ -730,21 +745,44 @@ class RepCounterStateMachine {
 }
 
 class HoldTimerStateMachine {
+  /// A hold is one unbroken attempt: this much continuous time out of
+  /// position ends it. Jitter under the tolerance survives — the break
+  /// clock only runs while frames keep arriving out of position.
+  static const maxBreakMs = 1000;
+
   int _validHoldMs = 0;
   DateTime? _lastValidFrameAt;
+  DateTime? _breakStartedAt;
+  bool _broken = false;
 
   int get seconds => (_validHoldMs / 1000).floor();
+
+  /// The hold broke for longer than [maxBreakMs] — terminal, no resume.
+  /// Banked time stays as the attempt's result.
+  bool get isBroken => _broken;
 
   void reset() {
     _validHoldMs = 0;
     _lastValidFrameAt = null;
+    _breakStartedAt = null;
+    _broken = false;
   }
 
   void update({required DateTime now, required bool valid}) {
+    if (_broken) return;
     if (!valid) {
       _lastValidFrameAt = null;
+      // The break clock only exists once the hold has banked time — a
+      // take that never got into position has nothing to break.
+      if (_validHoldMs > 0) {
+        _breakStartedAt ??= now;
+        if (now.difference(_breakStartedAt!).inMilliseconds > maxBreakMs) {
+          _broken = true;
+        }
+      }
       return;
     }
+    _breakStartedAt = null;
     if (_lastValidFrameAt != null) {
       final delta = now.difference(_lastValidFrameAt!).inMilliseconds;
       if (delta > 0 && delta < 500) _validHoldMs += delta;
@@ -834,6 +872,9 @@ abstract class _BaseValidator extends MotionValidator {
   String lastFailureReason = '';
 
   @override
+  DateTime? lastCountedAt;
+
+  @override
   int get durationMs => startedAt == null
       ? 0
       : DateTime.now().difference(startedAt!).inMilliseconds;
@@ -857,6 +898,7 @@ abstract class _BaseValidator extends MotionValidator {
     startedAt = DateTime.now();
     lastVisibilityScore = 0;
     lastFailureReason = '';
+    lastCountedAt = null;
     resetState();
   }
 
@@ -876,7 +918,9 @@ abstract class _BaseValidator extends MotionValidator {
     if (!fullBodyVisible) {
       lastFailureReason = 'low_landmark_confidence';
     }
+    final valueBefore = currentValue;
     analyzeValidFrame(frame);
+    if (currentValue > valueBefore) lastCountedAt = frame.createdAt;
     return snapshot();
   }
 
@@ -1560,8 +1604,28 @@ class PlankHoldValidator extends _BaseValidator {
   @override
   String get coachingText => _plankFeedback;
   @override
-  String get stateLabel =>
-      _stableAlignmentFrames >= 4 ? 'hold_valid' : 'hold_paused';
+  bool get holdBroken => _timer.isBroken;
+  @override
+  String get stateLabel => _timer.isBroken
+      ? 'hold_broken'
+      : _stableAlignmentFrames >= 4
+      ? 'hold_valid'
+      : 'hold_paused';
+
+  @override
+  MotionValidationUpdate update(NuvoPoseFrame frame) {
+    // Out of frame is out of position too — a missing body feeds the same
+    // break clock a broken pose line does. Once the hold has banked time,
+    // [HoldTimerStateMachine.maxBreakMs] of this ends the attempt.
+    if (!frame.hasPoints(criticalPoints)) {
+      _feedTimer(frame.createdAt, valid: false);
+    }
+    final update = super.update(frame);
+    // A broken hold keeps its own reason — 'missing_landmarks' or a form
+    // reason would hide the one that actually ended the take.
+    if (_timer.isBroken) lastFailureReason = 'hold_broken';
+    return update;
+  }
   @override
   List<String> get criticalPoints => const [
     'leftShoulder',
@@ -1644,11 +1708,9 @@ class PlankHoldValidator extends _BaseValidator {
     }
 
     _stableAlignmentFrames++;
-    _plankFeedback = _stableAlignmentFrames >= 4
-        ? 'Hold steady.'
-        : 'Hold steady.';
+    _plankFeedback = 'Hold steady.';
     lastFailureReason = '';
-    _timer.update(now: frame.createdAt, valid: _stableAlignmentFrames >= 4);
+    _feedTimer(frame.createdAt, valid: _stableAlignmentFrames >= 4);
   }
 
   @override
@@ -1665,7 +1727,17 @@ class PlankHoldValidator extends _BaseValidator {
     _stableAlignmentFrames = 0;
     lastFailureReason = reason;
     _plankFeedback = feedback;
-    _timer.update(now: frame.createdAt, valid: false);
+    _feedTimer(frame.createdAt, valid: false);
+  }
+
+  /// Feeds the hold clock and surfaces the terminal break the moment it
+  /// lands — a hold past the break tolerance never resumes.
+  void _feedTimer(DateTime now, {required bool valid}) {
+    _timer.update(now: now, valid: valid);
+    if (_timer.isBroken) {
+      lastFailureReason = 'hold_broken';
+      _plankFeedback = 'The hold broke — finishing up.';
+    }
   }
 
   _Point _mid(NuvoPosePoint a, NuvoPosePoint b) =>
