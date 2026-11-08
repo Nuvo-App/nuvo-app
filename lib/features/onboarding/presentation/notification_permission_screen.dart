@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../notifications/application/push_service.dart';
@@ -34,6 +35,7 @@ class _NotificationPermissionScreenState
     extends ConsumerState<NotificationPermissionScreen> {
   bool _ready = false;
   bool _busy = false;
+  DateTime? _stepOpenedAt;
 
   @override
   void initState() {
@@ -51,12 +53,29 @@ class _NotificationPermissionScreenState
       return;
     }
     setState(() => _ready = true);
+    // The primer only counts as a viewed step once it actually renders —
+    // already-decided OS states skip straight through without a view.
+    _stepOpenedAt = DateTime.now();
+    ref
+        .read(analyticsProvider)
+        .onboardingStepViewed(stepIndex: 10, stepName: 'notifications');
   }
 
   /// Every exit lands here: the step counts as resolved once shown, so it
   /// never replays on later launches — and the owed flag is what the route
-  /// guard resumes from.
+  /// guard resumes from. Completing (enable or maybe-later) still finishes
+  /// onboarding — the server flag already flipped upstream.
   Future<void> _resolve() async {
+    final openedAt = _stepOpenedAt;
+    ref
+        .read(analyticsProvider)
+        .onboardingStepCompleted(
+          stepIndex: 10,
+          stepName: 'notifications',
+          msOnStep: openedAt == null
+              ? null
+              : DateTime.now().difference(openedAt).inMilliseconds,
+        );
     await ref.read(firstUseStoreProvider).clearNotificationPromptOwed();
     if (mounted) context.go('/arena');
   }

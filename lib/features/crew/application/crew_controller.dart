@@ -423,7 +423,9 @@ class CrewController extends StateNotifier<CrewState> {
             ? CrewConnectionStatus.connected : CrewConnectionStatus.pendingOutgoing},
         loading: false, refreshing: false,
       );
-      if (connected) onRequestResolved?.call(user.id);
+      if (connected) {
+        onRequestResolved?.call(user.id);
+      }
     },
   );
 

@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/v13/v13.dart';
@@ -168,6 +169,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Duration _elapsed = Duration.zero;
   int _debugFrameCount = 0;
   bool _autoSubmitScheduled = false;
+
+  // ── Product analytics ──────────────────────────────────────────────────
+  // `camera_ready` measures screen-open to the first live preview and fires
+  // once per open; `calibration_failed` fires per take that ends unverified
+  // and carries the verifier's internal failure enum. `proof_result` stays
+  // on the RaceController submit seams — this screen never emits it.
+  final _screenOpenedAt = DateTime.now();
+  bool _cameraReadyTracked = false;
 
   // ── Timed battle take ────────────────────────────────────────────────────
   // A timed_attempt race with a declared duration runs a fixed-length take:
@@ -784,6 +793,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
 
       if (!mounted || _disposed) return;
+      _trackCameraReadyOnce();
       setState(() => _status = AiMotionProofStatus.cameraReady);
     } on CameraException catch (e) {
       if (!mounted) return;
@@ -1407,6 +1417,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _proofSettled = Completer<void>();
         unawaited(_awaitProofSettled().then((_) => _finalizeSession()));
       } else {
+        _trackCalibrationFailed(update?.diagnostic ?? 'shot_not_confirmed');
         _finalizeSession();
       }
       _sessionCompletionResult = (
@@ -1452,7 +1463,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             : AiMotionProofStatus.aiFailed;
         _message = null;
       });
-      if (acceptedResult.isVerified) _proofSettled = Completer<void>();
+      if (acceptedResult.isVerified) {
+        _proofSettled = Completer<void>();
+      } else {
+        _trackCalibrationFailed(
+          acceptedResult.finalFailureReason ?? _runtime.failedRuleReason,
+        );
+      }
       unawaited(_analyzeCapturedMotion());
       _sessionCompletionResult = (
         value: acceptedResult.count,
@@ -1488,7 +1505,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           : AiMotionProofStatus.aiFailed;
       _message = null;
     });
-    if (acceptedResult.isVerified) _proofSettled = Completer<void>();
+    if (acceptedResult.isVerified) {
+      _proofSettled = Completer<void>();
+    } else {
+      _trackCalibrationFailed(_runtime.failedRuleReason);
+    }
     unawaited(_analyzeCapturedMotion());
     _sessionCompletionResult = (
       value: acceptedResult.detectedReps,
@@ -2126,6 +2147,30 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       e.code == 'CameraAccessDenied' ||
       e.code == 'CameraAccessDeniedWithoutPrompt' ||
       e.code == 'CameraAccessRestricted';
+
+  /// The first transition to a live preview — `camera_ready` is the
+  /// screen-open → ready latency, emitted once per open. Lens flips and
+  /// lifecycle resumes re-enter the ready state without re-timing it.
+  void _trackCameraReadyOnce() {
+    if (_cameraReadyTracked) return;
+    _cameraReadyTracked = true;
+    ref
+        .read(analyticsProvider)
+        .cameraReady(
+          ms: DateTime.now().difference(_screenOpenedAt).inMilliseconds,
+        );
+  }
+
+  /// A finished take the verifier could not accept — calibration/baseline
+  /// detection gave up. [reason] is the runtime's internal failure enum
+  /// (an empty read means the take simply fell short), never a message.
+  void _trackCalibrationFailed(String? reason) {
+    ref
+        .read(analyticsProvider)
+        .calibrationFailed(
+          reason: reason == null || reason.isEmpty ? 'unknown' : reason,
+        );
+  }
 
   void _debugLog(String message) {
     assert(() {

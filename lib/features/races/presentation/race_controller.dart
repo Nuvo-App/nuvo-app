@@ -21,6 +21,7 @@ import '../../arena/presentation/arena_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../profile/application/progression_controller.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/network/conditional.dart';
@@ -33,6 +34,7 @@ import '../data/race_api.dart';
 import '../data/race_models.dart';
 import '../data/race_repository.dart';
 import '../domain/motion_activity.dart';
+import '../domain/proof_status.dart';
 import '../domain/race_display.dart';
 
 class RaceState {
@@ -92,6 +94,7 @@ class RaceController extends StateNotifier<RaceState> {
     this.presentationUserId = _emptyPresentationUserId,
     this.cache,
     this.accountId = _noAccountId,
+    this.analytics,
   }) : super(const RaceState());
 
   /// Disk snapshot store + signed-in user id (the cache account key). Both
@@ -171,6 +174,64 @@ class RaceController extends StateNotifier<RaceState> {
   final void Function()? onMutated;
   final bool Function() isPresentationDemo;
   final String Function() presentationUserId;
+
+  /// Product analytics — null leaves every emit site a no-op. Proof and
+  /// attempt events ride these controller seams so the camera implementation
+  /// files stay untouched; only sanitized codes ever leave the app.
+  final AnalyticsService? analytics;
+
+  /// The just-submitted proof is `recentProofs.first` in every submit
+  /// response (the same read the camera result panel makes). One
+  /// `proof_result` per landing — outcome is the canonical verdict mapping,
+  /// detected_value is bucketed, duration_s is the attempt window the
+  /// service clocked when the attempt opened. `race_completed` follows when
+  /// the submit closed the racer's race.
+  void _emitProofOutcome(Race race) {
+    final a = analytics;
+    if (a == null) return;
+    final proof = race.recentProofs.firstOrNull;
+    final status = proof?.verificationStatus;
+    final outcome = switch (proofStatusFromRaw(status)) {
+      ProofStatus.verified => 'verified',
+      ProofStatus.needsReview => 'needs_review',
+      ProofStatus.pending => 'pending',
+      ProofStatus.notVerified => 'rejected',
+      ProofStatus.unknown => 'pending',
+    };
+    a.proofResult(
+      outcome: outcome,
+      failureReason: outcome == 'rejected'
+          ? ((status == null || status.isEmpty) ? 'unknown' : status)
+          : null,
+      detectedValue: proof?.detectedValue ?? race.submissionResult?.verifiedValue,
+      durationS: a.elapsedAttemptSeconds(),
+    );
+    if (race.submissionResult?.raceCompleted ?? false) {
+      a.raceCompleted();
+    }
+  }
+
+  /// A submit that never landed — an HTTP status, or 'error' for anything
+  /// else. Never the exception message: free text can carry user data.
+  void _emitProofFailure(Object e) {
+    analytics?.proofResult(
+      outcome: 'submit_failed',
+      failureReason: e is ApiException ? 'http_${e.statusCode}' : 'error',
+      durationS: analytics?.elapsedAttemptSeconds(),
+    );
+    if (e is ApiException) {
+      analytics?.apiError(route: 'submit_proof', status: e.statusCode);
+    }
+  }
+
+  void _emitJoinFailure(Object e) {
+    analytics?.raceJoinFailed(
+      reason: e is ApiException ? 'http_${e.statusCode}' : 'error',
+    );
+    if (e is ApiException) {
+      analytics?.apiError(route: 'join_race', status: e.statusCode);
+    }
+  }
 
   static bool _neverPresentationDemo() => false;
   static String _emptyPresentationUserId() => '';
@@ -906,16 +967,23 @@ class RaceController extends StateNotifier<RaceState> {
         value: value,
       );
       _upsertRace(race);
+      _emitProofOutcome(race);
       return race;
     }
     await _ensureOpenAttempt(raceId);
-    final race = await _repo.submitProof(
-      raceId,
-      proofType: proofType,
-      note: note,
-      value: value,
-      mediaObjectKey: mediaObjectKey,
-    );
+    final Race race;
+    try {
+      race = await _repo.submitProof(
+        raceId,
+        proofType: proofType,
+        note: note,
+        value: value,
+        mediaObjectKey: mediaObjectKey,
+      );
+    } catch (e) {
+      _emitProofFailure(e);
+      rethrow;
+    }
     if (mounted) {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
@@ -924,6 +992,7 @@ class RaceController extends StateNotifier<RaceState> {
       _afterPatch();
       onMutated?.call();
     }
+    _emitProofOutcome(race);
     return race;
   }
 
@@ -952,23 +1021,30 @@ class RaceController extends StateNotifier<RaceState> {
         verificationSummary: result.verificationSummary,
       );
       _upsertRace(race);
+      _emitProofOutcome(race);
       return race;
     }
     await _ensureOpenAttempt(
       raceId,
       clientAttemptId: _attemptIdForSubmission(clientSubmissionId),
     );
-    final race = await _sendReconciling(
-      raceId,
-      () => _repo.submitAiMotionProof(
+    final Race race;
+    try {
+      race = await _sendReconciling(
         raceId,
-        result: result,
-        clientSubmissionId: clientSubmissionId,
-        metric: metric,
-        verificationSessionId: verificationSessionId,
-        sessionResult: sessionResult,
-      ),
-    );
+        () => _repo.submitAiMotionProof(
+          raceId,
+          result: result,
+          clientSubmissionId: clientSubmissionId,
+          metric: metric,
+          verificationSessionId: verificationSessionId,
+          sessionResult: sessionResult,
+        ),
+      );
+    } catch (e) {
+      _emitProofFailure(e);
+      rethrow;
+    }
     if (mounted) {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
@@ -977,6 +1053,7 @@ class RaceController extends StateNotifier<RaceState> {
       _afterPatch();
       onMutated?.call();
     }
+    _emitProofOutcome(race);
     return race;
   }
 
@@ -1010,30 +1087,37 @@ class RaceController extends StateNotifier<RaceState> {
         verificationSummary: verificationSummary,
       );
       _upsertRace(race);
+      _emitProofOutcome(race);
       return race;
     }
     await _ensureOpenAttempt(
       raceId,
       clientAttemptId: _attemptIdForSubmission(clientSubmissionId),
     );
-    final race = await _sendReconciling(
-      raceId,
-      () => _repo.submitObjectCompositionProof(
+    final Race race;
+    try {
+      race = await _sendReconciling(
         raceId,
-        activityId: activityId,
-        clientSubmissionId: clientSubmissionId,
-        metric: metric,
-        value: value,
-        targetValue: targetValue,
-        confidence: confidence,
-        verificationSummary: verificationSummary,
-        validatorVersion: validatorVersion,
-        framesAnalyzed: framesAnalyzed,
-        durationMs: durationMs,
-        verificationSessionId: verificationSessionId,
-        sessionResult: sessionResult,
-      ),
-    );
+        () => _repo.submitObjectCompositionProof(
+          raceId,
+          activityId: activityId,
+          clientSubmissionId: clientSubmissionId,
+          metric: metric,
+          value: value,
+          targetValue: targetValue,
+          confidence: confidence,
+          verificationSummary: verificationSummary,
+          validatorVersion: validatorVersion,
+          framesAnalyzed: framesAnalyzed,
+          durationMs: durationMs,
+          verificationSessionId: verificationSessionId,
+          sessionResult: sessionResult,
+        ),
+      );
+    } catch (e) {
+      _emitProofFailure(e);
+      rethrow;
+    }
     if (mounted) {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
@@ -1042,6 +1126,7 @@ class RaceController extends StateNotifier<RaceState> {
       _afterPatch();
       onMutated?.call();
     }
+    _emitProofOutcome(race);
     return race;
   }
 
@@ -1069,22 +1154,29 @@ class RaceController extends StateNotifier<RaceState> {
             result.finalFailureReason ?? 'Demo proof recorded locally.',
       );
       _upsertRace(race);
+      _emitProofOutcome(race);
       return race;
     }
     await _ensureOpenAttempt(
       raceId,
       clientAttemptId: _attemptIdForSubmission(clientSubmissionId),
     );
-    final race = await _sendReconciling(
-      raceId,
-      () => _repo.submitCustomPoseProof(
+    final Race race;
+    try {
+      race = await _sendReconciling(
         raceId,
-        result: result,
-        clientSubmissionId: clientSubmissionId,
-        verificationSessionId: verificationSessionId,
-        sessionResult: sessionResult,
-      ),
-    );
+        () => _repo.submitCustomPoseProof(
+          raceId,
+          result: result,
+          clientSubmissionId: clientSubmissionId,
+          verificationSessionId: verificationSessionId,
+          sessionResult: sessionResult,
+        ),
+      );
+    } catch (e) {
+      _emitProofFailure(e);
+      rethrow;
+    }
     if (mounted) {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
@@ -1093,6 +1185,7 @@ class RaceController extends StateNotifier<RaceState> {
       _afterPatch();
       onMutated?.call();
     }
+    _emitProofOutcome(race);
     return race;
   }
 
@@ -1136,9 +1229,19 @@ class RaceController extends StateNotifier<RaceState> {
     }
   }
 
+  /// `race_joined`/`race_join_failed` fire here — the single seam every
+  /// join surface (code entry, open card, detail CTA, inbox accept) flows
+  /// through, so screens don't emit their own.
   Future<Race> joinRace(String id) async {
-    final race = await _repo.joinRace(id);
+    final Race race;
+    try {
+      race = await _repo.joinRace(id);
+    } catch (e) {
+      _emitJoinFailure(e);
+      rethrow;
+    }
     _upsertRace(race);
+    analytics?.raceJoined();
     return race;
   }
 
@@ -1254,8 +1357,15 @@ class RaceController extends StateNotifier<RaceState> {
   Future<String> createInviteCode(String id) => _repo.createInviteCode(id);
 
   Future<Race> joinRaceByCode(String code) async {
-    final race = await _repo.joinRaceByCode(code);
+    final Race race;
+    try {
+      race = await _repo.joinRaceByCode(code);
+    } catch (e) {
+      _emitJoinFailure(e);
+      rethrow;
+    }
     _upsertRace(race);
+    analytics?.raceJoined();
     return race;
   }
 
@@ -1272,15 +1382,28 @@ class RaceController extends StateNotifier<RaceState> {
   /// Open a server-timestamped attempt (best-attempt / timed races). The
   /// returned `serverTime`/`deadlineAt` are authoritative for the attempt
   /// window — the next verified proof binds to this attempt automatically.
+  ///
+  /// This is also the `race_started` seam: the camera screen calls it when
+  /// the racer taps start, while `_ensureOpenAttempt` binds silently through
+  /// the repo and never counts as a user-visible start.
   Future<RaceAttemptResult> startAttempt(
     String raceId, {
     String? clientAttemptId,
-  }) => _repo.startAttempt(raceId, clientAttemptId: clientAttemptId);
+  }) async {
+    final result = await _repo.startAttempt(
+      raceId,
+      clientAttemptId: clientAttemptId,
+    );
+    analytics?.raceStarted();
+    return result;
+  }
 
   /// Release an open attempt that no proof bound to — an abandoned take
   /// cancels instead of spending the attempt limit.
-  Future<void> cancelAttempt(String raceId, String attemptId) =>
-      _repo.cancelAttempt(raceId, attemptId);
+  Future<void> cancelAttempt(String raceId, String attemptId) async {
+    await _repo.cancelAttempt(raceId, attemptId);
+    analytics?.raceAbandoned();
+  }
 
   /// Clone a finished race's settings + roster into a fresh race — the
   /// one-tap "race again" loop.
@@ -1544,6 +1667,7 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
       presentationUserId: () => ref.read(authControllerProvider).user?.id ?? '',
       cache: ref.read(cacheStoreProvider),
       accountId: () => ref.read(authControllerProvider).user?.id,
+      analytics: ref.read(analyticsProvider),
       // Any race write immediately revalidates the Arena snapshot (it is
       // derived from races) so a race created in the composer shows up in the
       // Arena without the user navigating there and back. Progression

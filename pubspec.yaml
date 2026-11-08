@@ -34,6 +34,7 @@ dependencies:
   # + the APNs key are added — PushService guards Firebase.initializeApp() and
   # no-ops if it throws. See docs/agents/19 §10.
   firebase_core: ^4.2.0
+  firebase_crashlytics: ^5.0.0
   firebase_messaging: ^16.7.1
 
   # Images
@@ -47,6 +48,12 @@ dependencies:
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^5.0.0
   web: ^1.0.0
+
+  # Product analytics — configured only via --dart-define POSTHOG_API_KEY /
+  # POSTHOG_HOST; a missing key leaves the wrapper a no-op. Session replay
+  # stays off; the distinct id is an anonymous install UUID. See
+  # docs/ANALYTICS.md. Pinned to the 4.x API.
+  posthog_flutter: ^4.0.0
 
   # Utils
   intl: ^0.19.0

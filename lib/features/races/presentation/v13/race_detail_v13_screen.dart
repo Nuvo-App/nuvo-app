@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/navigation/nuvo_navigation.dart';
 import '../../../../core/utils/friendly_error.dart';
 import '../../../../core/v13/v13.dart';
@@ -84,6 +85,14 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         AppLifecycleState.resumed;
     _load();
     _scheduleNext();
+    final openedAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(analyticsProvider).screen(
+        'race_detail',
+        ms: DateTime.now().difference(openedAt).inMilliseconds,
+      );
+    });
   }
 
   @override
@@ -149,7 +158,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
       _backoff.recordResult(
         changed: before == null || before != raceSignature(race),
       );
-      if (mounted) setState(() => _race = race);
+      if (mounted) {
+        setState(() => _race = race);
+      }
     } catch (_) {
       _backoff.recordResult(changed: false);
     } finally {
