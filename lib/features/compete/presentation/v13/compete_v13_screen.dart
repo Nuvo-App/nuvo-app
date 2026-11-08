@@ -12,7 +12,6 @@ import '../../../races/domain/race_display.dart';
 import '../../../races/domain/race_draft.dart';
 import '../../../races/presentation/motion_catalog_provider.dart';
 import '../../../races/presentation/race_controller.dart';
-import '../../../races/presentation/v13/submit_proof_entry.dart';
 import '../../../auth/presentation/auth_controller.dart';
 
 /// `GET /races/open` (W3) — friends' joinable races. The provider returns
@@ -394,41 +393,6 @@ class _LiveRaceCard extends ConsumerWidget {
                           size: 22,
                         ),
                         const Spacer(),
-                        if (me != null)
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: V13Pressable(
-                                onTap: () {
-                                  unawaited(
-                                    openSubmitProof(context, ref, race),
-                                  );
-                                },
-                                pressDepth: 2,
-                                semanticLabel: 'Submit proof',
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: V13.blue,
-                                    borderRadius: BorderRadius.circular(
-                                      V13.radiusPill,
-                                    ),
-                                    border: Border.all(
-                                      color: V13.navy,
-                                      width: V13.outline,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Submit proof',
-                                    style: V13.label.copyWith(color: V13.card),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ],
