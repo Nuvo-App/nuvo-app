@@ -508,6 +508,40 @@ export async function reconcileProgression(
     });
   }
 
+  // The Crew feed: a freshly-earned achievement becomes a badge_earned
+  // activity row in the same reconcile pass. INSERT OR IGNORE on the
+  // (actor, kind, ref) unique key keeps a revoke/re-award cycle from
+  // double-posting; a schema without crew_activity just skips it.
+  const newAchievements = grantable.filter(
+    (d) => newUnlockIds.includes(d.id) && d.requirement_kind === 'stat',
+  );
+  if (newAchievements.length > 0) {
+    try {
+      await db.batch(
+        newAchievements.map((d) =>
+          db
+            .prepare(
+              `INSERT OR IGNORE INTO crew_activity (id, actor_user_id, kind, ref_id, payload_json, created_at)
+               VALUES (?, ?, 'badge_earned', ?, ?, CURRENT_TIMESTAMP)`,
+            )
+            .bind(
+              generateId(),
+              userId,
+              d.id,
+              JSON.stringify({
+                key: d.unlock_key,
+                name: d.name,
+                iconKey: d.icon_key,
+                category: d.category,
+              }),
+            ),
+        ),
+      );
+    } catch (err) {
+      console.error('[progression] crew_activity write failed:', (err as Error).message);
+    }
+  }
+
   // Revocation — the same projection rule runs both ways. When invalidated
   // proof pulls a stat or the level below a definition's requirement, the
   // award is no longer provable and is removed. Only reconcile-granted
@@ -527,6 +561,19 @@ export async function reconcileProgression(
     )
     .bind(userId, userId)
     .run();
+  // Same projection rule for the feed row: a revoked achievement's
+  // badge_earned item is no longer provable either.
+  try {
+    await db
+      .prepare(
+        `DELETE FROM crew_activity WHERE actor_user_id = ? AND kind = 'badge_earned'
+         AND ref_id NOT IN (SELECT unlock_id FROM user_unlocks WHERE user_id = ?)`,
+      )
+      .bind(userId, userId)
+      .run();
+  } catch {
+    // crew_activity predates 0049 — nothing to revoke
+  }
 
   return { totalXp, level, previousLevel, newUnlockIds };
 }

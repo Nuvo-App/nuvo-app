@@ -25,6 +25,8 @@ export const NOTIFICATION_CATEGORIES = [
   'crew_request',
   'crew_request_accepted',
   'crew_connected',
+  'squad_join_request',
+  'squad_join_approved',
   'reaction',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
@@ -47,6 +49,8 @@ export const CATEGORY_DEFAULTS: Record<
   crew_request: { inApp: true, push: true },
   crew_request_accepted: { inApp: true, push: false }, // nice-to-know, not urgent
   crew_connected: { inApp: true, push: false }, // appears in the inbox + activity
+  squad_join_request: { inApp: true, push: true }, // an admin has to act on it
+  squad_join_approved: { inApp: true, push: false }, // you're in — no alarm needed
   reaction: { inApp: true, push: false }, // lightweight signal — inbox only by default
 };
 
