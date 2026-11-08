@@ -7,6 +7,9 @@
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
 import '../core/config/v13.dart';
+import '../features/compete/presentation/v13/compete_v13_screen.dart';
+import '../features/races/presentation/v13/composer/race_composer_v13_screen.dart';
+import '../features/races/presentation/v13/race_detail_v13_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,6 +115,8 @@ Widget _tabScreenFor(String path) {
 /// falls through to the pre-v13 screen, so every tab works at every stage of
 /// the redesign.
 Widget? _v13TabScreenFor(String path) => switch (path) {
+  // v13: compete (S5)
+  '/compete' => const CompeteV13Screen(),
   _ => null,
 };
 
@@ -322,11 +327,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/races/new',
         pageBuilder: (_, state) => _authPage(
           state,
-          RaceComposerScreen(
-            prefill: state.extra is RaceCreatePrefill
-                ? state.extra! as RaceCreatePrefill
-                : null,
-          ),
+          kNuvoV13
+              ? RaceComposerV13Screen(
+                  prefill: state.extra is RaceCreatePrefill
+                      ? state.extra! as RaceCreatePrefill
+                      : null,
+                )
+              : RaceComposerScreen(
+                  prefill: state.extra is RaceCreatePrefill
+                      ? state.extra! as RaceCreatePrefill
+                      : null,
+                ),
         ),
       ),
       GoRoute(
@@ -360,7 +371,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/race/:id',
         pageBuilder: (_, state) => _detailPage(
           state,
-          RaceDetailScreen(id: state.pathParameters['id']!),
+          kNuvoV13
+              ? RaceDetailV13Screen(raceId: state.pathParameters['id']!)
+              : RaceDetailScreen(id: state.pathParameters['id']!),
         ),
       ),
       GoRoute(

@@ -26,6 +26,7 @@ class MotionCatalogActivity {
     this.instructions = const [],
     this.cameraOrientation,
     this.aliases = const [],
+    this.racerCount,
   });
 
   final String id;
@@ -60,6 +61,11 @@ class MotionCatalogActivity {
 
   /// Server-published search/display aliases.
   final List<String> aliases;
+
+  /// W3: distinct racers on live, non-deleted races of this activity —
+  /// the Compete "trending moves" count. Null when the field is absent
+  /// (older Worker / bundled snapshot).
+  final int? racerCount;
 
   factory MotionCatalogActivity.fromJson(Map<String, dynamic> json) {
     final rawTargets = json['suggestedTargets'];
@@ -120,6 +126,9 @@ class MotionCatalogActivity {
                 if (entry is String && entry.trim().isNotEmpty) entry.trim(),
             ]
           : const [],
+      racerCount: json['racerCount'] is num
+          ? (json['racerCount'] as num).toInt()
+          : null,
     );
   }
 
