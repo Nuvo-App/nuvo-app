@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'helpers/screenshot.dart';
 import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/core/widgets/nuvo_flip_text.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
@@ -137,6 +138,7 @@ Finder get _secondaryButton => find.byWidgetPredicate(
 );
 
 void main() {
+  setUpAll(loadShotFonts);
   testWidgets('signup has a clear primary action without legacy branding', (
     tester,
   ) async {
@@ -145,6 +147,8 @@ void main() {
     expect(find.text('Create account'), findsOneWidget);
     expect(find.textContaining('Training for:'), findsNothing);
     expect(find.byType(Image), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await shot(tester, 'v13_auth_signup');
   });
 
   testWidgets('login presents the existing email-code form inline', (
@@ -157,6 +161,8 @@ void main() {
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Password'), findsNothing);
     expect(find.text('Forgot password?'), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await shot(tester, 'v13_auth_login');
   });
 
   testWidgets(

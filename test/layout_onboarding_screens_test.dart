@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/screenshot.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -52,6 +53,7 @@ Widget _buildApp(Widget home) {
 }
 
 void main() {
+  setUpAll(loadShotFonts);
   group('Onboarding Profile layout', () {
     testWidgets('CTA pinned and visible on normal iPhone', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -63,6 +65,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('Continue'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await shot(tester, 'v13_onboarding_profile');
     });
 
     testWidgets('CTA pinned and visible on small iPhone', (tester) async {
