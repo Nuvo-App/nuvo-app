@@ -3,30 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'theme_ink.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/theme/nuvo_entrance.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_empty_state.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
-import '../../../core/widgets/nuvo_page.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../notifications/application/notification_controller.dart';
 import '../../notifications/application/push_service.dart';
-import '../../notifications/domain/notification_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../application/deep_link_controller.dart';
 import '../data/invite_models.dart';
 import '../domain/nuvo_destination.dart';
 import '../social_providers.dart';
-
-String _initials(String name) => notificationInitials(name);
 
 /// `/invite/:token` — the one screen every invite link, QR scan and web
 /// fallback lands on. Previews before it does anything; accepting is an
@@ -87,7 +75,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     });
     String? error;
     try {
-      final result = await ref.read(inviteRepositoryProvider).accept(widget.token);
+      final result = await ref
+          .read(inviteRepositoryProvider)
+          .accept(widget.token);
       if (!result.ok) {
         error = _messageForStatus(result.status);
       } else {
@@ -135,37 +125,40 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     unawaited(ref.read(pushServiceProvider).requestPermissionInContext());
     if (!mounted) return;
     if (result.connectionStatus == 'pending') {
-      _showSnack('Request sent — you’ll connect once they accept.');
+      showV13Toast(context, 'Request sent — you’ll connect once they accept.');
     }
     context.go(dest?.location ?? '/arena');
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   String _messageForStatus(InviteStatus s) => switch (s) {
-        InviteStatus.expired => 'This invite has expired.',
-        InviteStatus.revoked => 'This invite was turned off.',
-        InviteStatus.used => 'This invite has already been used.',
-        InviteStatus.notFound => 'This invite is no longer available.',
-        InviteStatus.blocked => 'This invite is no longer available.',
-        InviteStatus.closed => 'This race has ended.',
-        _ => 'This invite could not be used.',
-      };
+    InviteStatus.expired => 'This invite has expired.',
+    InviteStatus.revoked => 'This invite was turned off.',
+    InviteStatus.used => 'This invite has already been used.',
+    InviteStatus.notFound => 'This invite is no longer available.',
+    InviteStatus.blocked => 'This invite is no longer available.',
+    InviteStatus.closed => 'This race has ended.',
+    _ => 'This invite could not be used.',
+  };
 
   @override
   Widget build(BuildContext context) {
-    return NuvoPage(
-      topBar: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: Row(children: [NuvoBackButton(onPressed: _exit)]),
+    // Watch, not read: the session restore can land after first paint, and
+    // the CTA label ("Join race" vs "Sign in to join") must follow it.
+    final authed = ref.watch(
+      authControllerProvider.select(
+        (s) => s.status == AuthStatus.authenticated,
+      ),
+    );
+    return Scaffold(
+      backgroundColor: V13.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            V13BackBar(title: 'Invite', onBack: _exit),
+            Expanded(child: _body(authed)),
+          ],
         ),
       ),
-      child: _body(),
     );
   }
 
@@ -177,56 +170,53 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     }
   }
 
-  Widget _body() {
+  Widget _body(bool authed) {
     if (_loadError != null) {
-      return Center(
-        child: NuvoErrorState(
-          message: "Couldn't load this invite.",
-          onRetry: _load,
-        ),
+      return V13AsyncView<Never>.state(
+        status: V13AsyncStatus.error,
+        errorTitle: "Couldn't load this invite.",
+        errorBody: 'Check your connection and try again.',
+        onRetry: _load,
+        builder: (_) => const SizedBox.shrink(),
       );
     }
     final preview = _preview;
     if (preview == null) {
-      return const Center(child: NuvoLoadingIndicator());
+      return const V13Skeleton.screen();
     }
     if (!preview.isAvailable) {
-      return Center(
-        child: NuvoEmptyState(
-          icon: Icons.link_off_rounded,
-          title: 'Invite unavailable',
-          body: _messageForStatus(preview.status),
-          ctaLabel: 'Done',
-          onCta: _exit,
-          align: TextAlign.center,
-        ),
+      return V13AsyncView<Never>.state(
+        status: V13AsyncStatus.empty,
+        emptyIcon: Icons.link_off_rounded,
+        emptyTitle: 'Invite unavailable',
+        emptyBody: _messageForStatus(preview.status),
+        emptyAction: V13Button.secondary(label: 'Done', onPressed: _exit),
+        builder: (_) => const SizedBox.shrink(),
       );
     }
     return switch (preview.kind) {
       'race_join' => _RacePreview(
-          card: preview.race,
-          accepting: _accepting,
-          error: _acceptError,
-          authed: _authed,
-          onAccept: _accept,
-        ),
+        card: preview.race,
+        accepting: _accepting,
+        error: _acceptError,
+        authed: authed,
+        onAccept: _accept,
+      ),
       'crew_connect' => _PersonPreview(
-          card: preview.person,
-          accepting: _accepting,
-          error: _acceptError,
-          authed: _authed,
-          onAccept: _accept,
-        ),
-      _ => Center(
-          child: NuvoEmptyState(
-            icon: Icons.help_outline_rounded,
-            title: 'Unsupported invite',
-            body: 'Update Nuvo to open this link.',
-            ctaLabel: 'Done',
-            onCta: _exit,
-            align: TextAlign.center,
-          ),
-        ),
+        card: preview.person,
+        accepting: _accepting,
+        error: _acceptError,
+        authed: authed,
+        onAccept: _accept,
+      ),
+      _ => V13AsyncView<Never>.state(
+        status: V13AsyncStatus.empty,
+        emptyIcon: Icons.help_outline_rounded,
+        emptyTitle: 'Unsupported invite',
+        emptyBody: 'Update Nuvo to open this link.',
+        emptyAction: V13Button.secondary(label: 'Done', onPressed: _exit),
+        builder: (_) => const SizedBox.shrink(),
+      ),
     };
   }
 }
@@ -255,72 +245,95 @@ class _RacePreview extends StatelessWidget {
     final target = (c.targetValue != null)
         ? '${c.targetValue}${c.targetUnit != null ? ' ${c.targetUnit}' : ''}'
         : null;
-    return SafeArea(
-      top: false,
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight - 36,
-            ),
-            child: IntrinsicHeight(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          V13.pagePad,
+          V13.gapMd,
+          V13.pagePad,
+          V13.pagePad,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: constraints.maxHeight - V13.gapMd - V13.pagePad,
+          ),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                V13Card(
+                  color: V13.raceColor(c.id),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 12),
-                      Text('You’re invited to a race',
-                          style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)
-                              .copyWith(color: context.blueInk)),
-                      const SizedBox(height: 8),
-                      Text(c.title, style: AppTextStyles.displaySmall),
-                      const SizedBox(height: 16),
-                      Wrap(spacing: 8, runSpacing: 8, children: [
-                        if (target != null)
-                          _Pill(icon: Icons.flag_rounded, text: 'Goal $target'),
-                        if (c.activityId != null)
-                          _Pill(icon: Icons.bolt_rounded, text: _pretty(c.activityId!)),
-                        _Pill(
-                          icon: Icons.group_rounded,
-                          text: '${c.participantCount} racing',
+                      Text("You're invited to a race", style: V13.label),
+                      const SizedBox(height: V13.gapSm),
+                      Text(c.title, style: V13.title),
+                      const SizedBox(height: V13.gapMd),
+                      Wrap(
+                        spacing: V13.gapSm,
+                        runSpacing: V13.gapSm,
+                        children: [
+                          if (target != null)
+                            V13Pill(
+                              icon: Icons.flag_rounded,
+                              label: 'Goal $target',
+                            ),
+                          if (c.activityId != null)
+                            V13Pill(
+                              icon: Icons.bolt_rounded,
+                              label: _pretty(c.activityId!),
+                            ),
+                          V13Pill(
+                            icon: Icons.group_rounded,
+                            label: '${c.participantCount} racing',
+                          ),
+                        ],
+                      ),
+                      if (c.creatorName != null) ...[
+                        const SizedBox(height: V13.gapLg),
+                        Row(
+                          children: [
+                            V13Face(
+                              photoUrl: c.creatorPhotoUrl,
+                              size: 32,
+                              name: c.creatorName,
+                            ),
+                            const SizedBox(width: V13.gapMd),
+                            Expanded(
+                              child: Text(
+                                'Created by ${c.creatorName}',
+                                style: V13.bodyStrong,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                      ]),
-                      const SizedBox(height: 20),
-                      if (c.creatorName != null)
-                        Row(children: [
-                          NuvoAvatar(
-                            photoUrl: c.creatorPhotoUrl,
-                            initials: _initials(c.creatorName!),
-                            size: 32,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text('Created by ${c.creatorName}',
-                                style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)),
-                          ),
-                        ]),
+                      ],
                     ],
-                  ).nuvoEnter(),
-                  const Spacer(),
-                  if (error != null) ...[
-                    Text(error!, style: AppTextStyles.bodySmall.copyWith(color: context.dangerInk)),
-                    const SizedBox(height: 12),
-                  ],
-                  NuvoPrimaryButton(
-                    label: c.alreadyJoined
-                        ? 'Go to race'
-                        : authed
-                            ? 'Join race'
-                            : 'Sign in to join',
-                    loading: accepting,
-                    expand: true,
-                    onPressed: accepting ? null : onAccept,
                   ),
+                ),
+                const Spacer(),
+                if (error != null) ...[
+                  Text(
+                    error!,
+                    textAlign: TextAlign.center,
+                    style: V13.caption.copyWith(color: V13.danger),
+                  ),
+                  const SizedBox(height: V13.gapMd),
                 ],
-              ),
+                V13Button.primary(
+                  label: c.alreadyJoined
+                      ? 'Go to race'
+                      : authed
+                      ? 'Join race'
+                      : 'Sign in to join',
+                  loading: accepting,
+                  fullWidth: true,
+                  onPressed: accepting ? null : onAccept,
+                ),
+              ],
             ),
           ),
         ),
@@ -351,90 +364,74 @@ class _PersonPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = card;
     if (c == null) return const Center(child: Text('Profile not found'));
-    return SafeArea(
-      top: false,
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight - 36,
-            ),
-            child: IntrinsicHeight(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Spacer(),
-                  Column(
-                    children: [
-                      Center(
-                        child: NuvoAvatar(
-                          photoUrl: c.profilePhotoUrl,
-                          initials: _initials(c.displayName),
-                          size: 88,
-                        ),
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          V13.pagePad,
+          V13.gapMd,
+          V13.pagePad,
+          V13.pagePad,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: constraints.maxHeight - V13.gapMd - V13.pagePad,
+          ),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(),
+                Column(
+                  children: [
+                    Center(
+                      child: V13Face(
+                        photoUrl: c.profilePhotoUrl,
+                        size: 88,
+                        name: c.displayName,
                       ),
-                      const SizedBox(height: 16),
-                      Text(c.displayName,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.displaySmall),
-                      if (c.username != null) ...[
-                        const SizedBox(height: 4),
-                        Text('@${c.username}',
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)
-                                .copyWith(color: context.themeColors.inkSubtle)),
-                      ],
-                      const SizedBox(height: 10),
+                    ),
+                    const SizedBox(height: V13.gapLg),
+                    Text(
+                      c.displayName,
+                      textAlign: TextAlign.center,
+                      style: V13.title,
+                    ),
+                    if (c.username != null) ...[
+                      const SizedBox(height: V13.gapXs),
                       Text(
-                        'Add them as a friend to race together.',
+                        '@${c.username}',
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
+                        style: V13.body.copyWith(color: V13.muted),
                       ),
                     ],
-                  ).nuvoEnter(),
-                  const Spacer(),
-                  if (error != null) ...[
-                    Text(error!,
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(color: context.dangerInk)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: V13.gapMd),
+                    Text(
+                      'Add them as a friend to race together.',
+                      textAlign: TextAlign.center,
+                      style: V13.body.copyWith(color: V13.muted),
+                    ),
                   ],
-                  NuvoPrimaryButton(
-                    label: !authed
-                        ? 'Sign in to connect'
-                        : 'Add friend',
-                    loading: accepting,
-                    expand: true,
-                    onPressed: accepting ? null : onAccept,
+                ),
+                const Spacer(),
+                if (error != null) ...[
+                  Text(
+                    error!,
+                    textAlign: TextAlign.center,
+                    style: V13.caption.copyWith(color: V13.danger),
                   ),
+                  const SizedBox(height: V13.gapMd),
                 ],
-              ),
+                V13Button.primary(
+                  label: !authed ? 'Sign in to connect' : 'Add friend',
+                  loading: accepting,
+                  fullWidth: true,
+                  onPressed: accepting ? null : onAccept,
+                ),
+              ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 15, color: context.themeColors.inkSubtle),
-        const SizedBox(width: 6),
-        Text(text, style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)),
-      ]),
     );
   }
 }

@@ -28,7 +28,6 @@ import 'package:nuvo/features/races/data/race_repository.dart';
 import 'package:nuvo/features/races/presentation/ai_motion_proof_screen.dart';
 import 'package:nuvo/features/races/presentation/board_moved_screen.dart';
 import 'package:nuvo/features/races/presentation/race_controller.dart';
-import 'package:nuvo/features/races/presentation/submit_proof_screen.dart';
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────
 
@@ -144,7 +143,10 @@ class _ProfileMarker extends StatelessWidget {
   final router = GoRouter(
     initialLocation: '/home',
     routes: [
-      GoRoute(path: '/home', builder: (_, _) => home ?? const SizedBox.shrink()),
+      GoRoute(
+        path: '/home',
+        builder: (_, _) => home ?? const SizedBox.shrink(),
+      ),
       GoRoute(
         path: '/race/:id/proof',
         builder: (_, _) => const _ChooserMarker(),
@@ -171,78 +173,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('canonical verifier entry', () {
-    testWidgets(
-      'G: cancel returns to origin; restarting re-enters the verifier directly',
-      (tester) async {
-        final built = _app(
-          races: [_movementRace()],
-          home: const SubmitProofScreen(raceId: 'race-move'),
-        );
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        // The proof chooser renders for direct /proof entry (deep link or
-        // fallback); Begin is the real control that opens the verifier.
-        await tester.tap(find.text('Begin'));
-        await tester.pumpAndSettle();
-        expect(_path(built.router), '/race/race-move/proof/ai-motion');
-
-        // Cancel → back to the chooser — the origin route in this harness.
-        await tester.binding.handlePopRoute();
-        await tester.pumpAndSettle();
-        expect(_path(built.router), '/home');
-        expect(find.text('Begin'), findsOneWidget);
-
-        // Restart → the canonical verifier again, not another screen.
-        await tester.tap(find.text('Begin'));
-        await tester.pumpAndSettle();
-        expect(_path(built.router), '/race/race-move/proof/ai-motion');
-      },
-    );
   });
 
   group('first-race guide', () {
-    testWidgets(
-      'D: the guide survives entry into the verifier — no early completion',
-      (tester) async {
-        final built = _app(
-          races: [_movementRace()],
-          home: const SubmitProofScreen(raceId: 'race-move'),
-          guideStep: FirstRaceGuideStep.verifySetup,
-        );
-        addTearDown(built.container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: built.container,
-            child: MaterialApp.router(routerConfig: built.router),
-          ),
-        );
-        // The coach keeps a looping pulse alive — timed pumps, not settle.
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 800));
-
-        // Coach is up on the real Begin control.
-        expect(find.text('Get in position.'), findsOneWidget);
-
-        await tester.tap(find.text('Begin'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 800));
-
-        expect(_path(built.router), '/race/race-move/proof/ai-motion');
-        // The guide must NOT complete at entry — it completes at the
-        // Profile reward moment after a real proof.
-        expect(
-          built.container.read(firstRaceGuideProvider),
-          FirstRaceGuideStep.verifySetup,
-        );
-      },
-    );
 
     testWidgets(
       'H: armed guide turns board-moved continue into the Profile reward step',
@@ -348,7 +281,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 800));
 
-        await tester.tap(find.text('Record again'));
+        await tester.tap(find.text('Go again'));
         await tester.pumpAndSettle();
         expect(_path(built.router), '/race/race-move/proof/ai-motion');
         expect(find.text('PROOF-CHOOSER'), findsNothing);

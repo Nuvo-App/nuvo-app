@@ -1,19 +1,10 @@
-import '../../../core/utils/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_motion.dart';
-import '../../../core/widgets/nuvo_confirm_dialog.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_fade_scroll.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/utils/friendly_error.dart';
+import '../../../core/v13/v13.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
@@ -22,6 +13,8 @@ import '../domain/motion_activity.dart';
 import 'motion_catalog_provider.dart';
 import 'race_controller.dart';
 
+/// `/race/:id/settings` — owner-only race settings. Edit the details, goal,
+/// and rules; archive, cancel, or delete the race behind confirm sheets.
 class RaceSettingsScreen extends ConsumerStatefulWidget {
   const RaceSettingsScreen({super.key, required this.raceId});
 
@@ -157,7 +150,10 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                 : _proofRequirement,
             proofReviewMode: _proofReviewMode,
           );
-      if (mounted) context.go('/race/${race.id}');
+      if (mounted) {
+        showV13Toast(context, 'Race updated.');
+        context.go('/race/${race.id}');
+      }
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -179,15 +175,18 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     required String title,
     required String message,
     required String confirmLabel,
+    required String toastLabel,
     required Future<void> Function() action,
+    bool destructive = false,
     bool returnToArena = false,
   }) async {
-    final confirmed = await showNuvoConfirmDialog(
+    final confirmed = await showV13ConfirmSheet(
       context,
       title: title,
-      message: message,
+      body: message,
       cancelLabel: 'Keep race',
       confirmLabel: confirmLabel,
+      destructive: destructive,
     );
     if (confirmed != true) return;
 
@@ -198,6 +197,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     try {
       await action();
       if (!mounted) return;
+      showV13Toast(context, toastLabel);
       context.go(returnToArena ? '/arena' : '/race/${widget.raceId}');
     } on ApiException catch (e) {
       if (mounted) {
@@ -220,393 +220,313 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final isOwner = _race?.creatorId == user?.id;
-    final eligibility = _race == null
-        ? null
-        : resolveCameraVerification(
-            _race!,
-            remoteDefinitions: _remoteDefinitions,
-          );
-    final isCameraRace = eligibility?.isCameraVerifiable == true;
-
-    if (_loading) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: const Center(child: NuvoLoadingIndicator()),
-      );
-    }
-
-    if (_race == null) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: SafeArea(
-          child: NuvoErrorState(
-            message: _error ?? 'Race settings could not load.',
-            onRetry: _load,
-          ),
-        ),
-      );
-    }
-
-    if (!isOwner) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: SafeArea(
-          child: NuvoErrorState(
-            message: 'Only the race creator can edit race settings.',
-            onRetry: () => context.go('/race/${widget.raceId}'),
-          ),
-        ),
-      );
-    }
 
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
-        child: NuvoFadeScroll(
-          child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: NuvoBackButton(
-                onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Edit race',
-              style: AppTextStyles.headlineLarge.copyWith(
-                fontSize: 32,
-                letterSpacing: -0.9,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Change your race details, rules, and status.',
-              style: AppTextStyles.bodyLarge.copyWith(color: context.themeColors.inkMuted),
-            ),
-            const SizedBox(height: 24),
-            _Section(
-              title: 'Basic details',
-              children: [
-                _Input(controller: _titleController, label: 'Title'),
-                _Input(
-                  controller: _descriptionController,
-                  label: 'Description',
-                  maxLines: 3,
-                ),
-                _Input(controller: _categoryController, label: 'Category'),
-              ],
-            ),
-            _Section(
-              title: 'Goal',
-              children: isCameraRace
-                  ? [
-                      _MovementSummary(eligibility: eligibility!),
-                      _Input(
-                        controller: _targetController,
-                        label: 'Target',
-                        hint: _targetHint(eligibility),
-                        keyboardType: TextInputType.number,
-                      ),
-                      _Input(
-                        controller: _startLineController,
-                        label: 'Start',
-                        hint: 'Add start date',
-                      ),
-                      _Input(
-                        controller: _finishLineController,
-                        label: 'Finish',
-                        hint: 'Add finish date',
-                      ),
-                    ]
-                  : [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _Input(
-                              controller: _targetController,
-                              label: 'Target value',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _Input(
-                              controller: _unitController,
-                              label: 'Unit',
-                            ),
-                          ),
-                        ],
-                      ),
-                      _Input(
-                        controller: _startLineController,
-                        label: 'Start',
-                        hint: 'Add start date',
-                      ),
-                      _Input(
-                        controller: _finishLineController,
-                        label: 'Finish',
-                        hint: 'Add finish date',
-                      ),
-                    ],
-            ),
-            _Section(
-              title: 'Rules',
-              children: [
-                _Input(
-                  controller: _rulesController,
-                  label: 'Race rules',
-                  hint: 'How the winner is decided.',
-                  maxLines: 5,
-                ),
-              ],
-            ),
-            if (_error != null) ...[
-              Text(
-                _error!,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.themeColors.dangerText,
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            NuvoPrimaryButton(
-              label: 'Save changes',
-              icon: Icons.check_rounded,
-              expand: true,
-              loading: _saving,
-              onPressed: _saving ? null : _save,
-            ),
-            const SizedBox(height: 12),
-            NuvoOutlineButton(
-              label: 'Back to race',
-              expand: true,
-              onPressed: _saving
-                  ? null
-                  : () => context.go('/race/${widget.raceId}'),
-            ),
-            const SizedBox(height: 26),
-            _Section(
-              title: 'Race actions',
-              children: [
-                _SettingsActionGroup(
-                  actions: [
-                    _SettingsAction(
-                      icon: Icons.archive_rounded,
-                      title: 'Archive race',
-                      subtitle: 'Move it out of active races',
-                      onPressed: _saving
-                          ? null
-                          : () => _runLifecycleAction(
-                              title: 'Archive race?',
-                              message:
-                                  'This race will leave active competition but stay in your race history.',
-                              confirmLabel: 'Archive',
-                              action: () => ref
-                                  .read(raceControllerProvider.notifier)
-                                  .archiveRace(widget.raceId),
-                            ),
-                    ),
-                    _SettingsAction(
-                      icon: Icons.cancel_outlined,
-                      title: 'Cancel race',
-                      subtitle: 'Stop this race before the finish line',
-                      onPressed: _saving
-                          ? null
-                          : () => _runLifecycleAction(
-                              title: 'Cancel race?',
-                              message:
-                                  'Cancel this race only if the start line or rules no longer apply.',
-                              confirmLabel: 'Cancel race',
-                              action: () => ref
-                                  .read(raceControllerProvider.notifier)
-                                  .cancelRace(widget.raceId),
-                            ),
-                    ),
-                    _SettingsAction(
-                      icon: Icons.delete_outline_rounded,
-                      title: 'Delete race',
-                      subtitle: 'Remove it from Arena and race history',
-                      destructive: true,
-                      onPressed: _saving
-                          ? null
-                          : () => _runLifecycleAction(
-                              title: 'Delete race?',
-                              message:
-                                  'This permanently removes the race. This action cannot be undone.',
-                              confirmLabel: 'Delete',
-                              returnToArena: true,
-                              action: () => ref
-                                  .read(raceControllerProvider.notifier)
-                                  .deleteRace(widget.raceId),
-                            ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTextStyles.titleLarge),
-          const SizedBox(height: 12),
-          ...children.expand((child) => [child, const SizedBox(height: 12)]),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsActionGroup extends StatelessWidget {
-  const _SettingsActionGroup({required this.actions});
-
-  final List<_SettingsAction> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(NuvoRadii.lg),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.themeColors.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          border: Border.all(color: context.themeColors.border, width: 1.25),
-        ),
         child: Column(
           children: [
-            for (var i = 0; i < actions.length; i++) ...[
-              actions[i],
-              if (i < actions.length - 1)
-                Divider(height: 1, indent: 66, color: context.themeColors.border),
-            ],
+            V13BackBar(
+              title: 'Edit race',
+              onBack: () => safePopOrGo(context, '/race/${widget.raceId}'),
+            ),
+            Expanded(
+              child: V13AsyncView<Race>.state(
+                status: _loading
+                    ? V13AsyncStatus.loading
+                    : _race == null
+                    ? V13AsyncStatus.error
+                    : !isOwner
+                    ? V13AsyncStatus.empty
+                    : V13AsyncStatus.data,
+                dataValue: _race,
+                errorValue: _error,
+                errorTitle: 'Could not load race settings',
+                emptyIcon: Icons.lock_outline_rounded,
+                emptyTitle: 'Only the race creator can edit race settings.',
+                emptyAction: V13Button.secondary(
+                  label: 'Back to race',
+                  onPressed: () => context.go('/race/${widget.raceId}'),
+                ),
+                onRetry: _load,
+                builder: (race) => _form(race),
+              ),
+            ),
+            if (!_loading && _race != null && isOwner)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  V13.pagePad,
+                  0,
+                  V13.pagePad,
+                  V13.gapLg,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    V13Button.primary(
+                      label: 'Save changes',
+                      icon: Icons.check_rounded,
+                      fullWidth: true,
+                      loading: _saving,
+                      onPressed: _saving ? null : _save,
+                    ),
+                    const SizedBox(height: V13.gapMd),
+                    V13Button.secondary(
+                      label: 'Back to race',
+                      fullWidth: true,
+                      onPressed: _saving
+                          ? null
+                          : () => context.go('/race/${widget.raceId}'),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
   }
-}
 
-class _SettingsAction extends StatelessWidget {
-  const _SettingsAction({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onPressed,
-    this.destructive = false,
-  });
+  Widget _form(Race race) {
+    final eligibility = resolveCameraVerification(
+      race,
+      remoteDefinitions: _remoteDefinitions,
+    );
+    final isCameraRace = eligibility.isCameraVerifiable;
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onPressed;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final titleColor = destructive
-        ? context.semanticColors.danger.on
-        : context.themeColors.ink;
-    final iconColor = titleColor;
-    final iconBackground = destructive
-        ? context.semanticColors.danger.surface
-        : context.themeColors.surface;
-    return Semantics(
-      button: true,
-      enabled: onPressed != null,
-      label: title,
-      child: NuvoPressable(
-        onTap: onPressed,
-        haptic: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapMd,
+        V13.pagePad,
+        V13.gapXxl * 2,
+      ),
+      children: [
+        Text(
+          'Change your race details, rules, and status.',
+          style: V13.body.copyWith(color: V13.muted),
+        ),
+        const SizedBox(height: V13.gapXl),
+        const V13SectionHeader(title: 'Basic details'),
+        const SizedBox(height: V13.gapMd),
+        V13TextInput(controller: _titleController, label: 'Title'),
+        const SizedBox(height: V13.gapMd),
+        _MultilineInput(
+          controller: _descriptionController,
+          label: 'Description',
+          maxLines: 3,
+        ),
+        const SizedBox(height: V13.gapMd),
+        V13TextInput(controller: _categoryController, label: 'Category'),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Goal'),
+        const SizedBox(height: V13.gapMd),
+        if (isCameraRace) ...[
+          _MovementSummary(eligibility: eligibility),
+          const SizedBox(height: V13.gapMd),
+          V13TextInput(
+            controller: _targetController,
+            label: 'Target',
+            hint: _targetHint(eligibility),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13TextInput(
+            controller: _startLineController,
+            label: 'Start',
+            hint: 'Add start date',
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13TextInput(
+            controller: _finishLineController,
+            label: 'Finish',
+            hint: 'Add finish date',
+          ),
+        ] else ...[
+          Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: iconBackground,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, color: iconColor, size: 19),
-              ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: titleColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeColors.inkMuted,
-                      ),
-                    ),
-                  ],
+                child: V13TextInput(
+                  controller: _targetController,
+                  label: 'Target value',
+                  keyboardType: TextInputType.number,
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: context.themeColors.inkSubtle,
+              const SizedBox(width: V13.gapMd),
+              Expanded(
+                child: V13TextInput(controller: _unitController, label: 'Unit'),
+              ),
+            ],
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13TextInput(
+            controller: _startLineController,
+            label: 'Start',
+            hint: 'Add start date',
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13TextInput(
+            controller: _finishLineController,
+            label: 'Finish',
+            hint: 'Add finish date',
+          ),
+        ],
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Rules'),
+        const SizedBox(height: V13.gapMd),
+        _MultilineInput(
+          controller: _rulesController,
+          label: 'Race rules',
+          hint: 'How the winner is decided.',
+          maxLines: 5,
+        ),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Race actions'),
+        const SizedBox(height: V13.gapMd),
+        V13Card(
+          padding: const EdgeInsets.symmetric(horizontal: V13.gapLg),
+          child: Column(
+            children: [
+              V13ListRow(
+                title: 'Archive race',
+                subtitle: 'Move it out of active races',
+                leading: const V13IconTile(
+                  icon: Icons.archive_rounded,
+                  color: V13.sun,
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: V13.muted,
+                ),
+                onTap: _saving
+                    ? null
+                    : () => _runLifecycleAction(
+                        title: 'Archive race?',
+                        message:
+                            'This race will leave active competition but stay in your race history.',
+                        confirmLabel: 'Archive',
+                        toastLabel: 'Race archived.',
+                        action: () => ref
+                            .read(raceControllerProvider.notifier)
+                            .archiveRace(widget.raceId),
+                      ),
+              ),
+              V13ListRow(
+                title: 'Cancel race',
+                subtitle: 'Stop this race before the finish line',
+                leading: const V13IconTile(
+                  icon: Icons.cancel_outlined,
+                  color: V13.coral,
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: V13.muted,
+                ),
+                onTap: _saving
+                    ? null
+                    : () => _runLifecycleAction(
+                        title: 'Cancel race?',
+                        message:
+                            'Cancel this race only if the start line or rules no longer apply.',
+                        confirmLabel: 'Cancel race',
+                        toastLabel: 'Race cancelled.',
+                        action: () => ref
+                            .read(raceControllerProvider.notifier)
+                            .cancelRace(widget.raceId),
+                      ),
+              ),
+              V13ListRow(
+                title: 'Delete race',
+                subtitle: 'Remove it from Arena and race history',
+                leading: const V13IconTile(
+                  icon: Icons.delete_outline_rounded,
+                  color: V13.coral,
+                ),
+                trailing: _saving
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: V13.navy,
+                        ),
+                      )
+                    : const Icon(Icons.chevron_right_rounded, color: V13.muted),
+                showDivider: false,
+                onTap: _saving
+                    ? null
+                    : () => _runLifecycleAction(
+                        title: 'Delete race?',
+                        message:
+                            'This permanently removes the race. This action cannot be undone.',
+                        confirmLabel: 'Delete',
+                        toastLabel: 'Race deleted.',
+                        destructive: true,
+                        returnToArena: true,
+                        action: () => ref
+                            .read(raceControllerProvider.notifier)
+                            .deleteRace(widget.raceId),
+                      ),
               ),
             ],
           ),
         ),
-      ),
+        if (_error != null) ...[
+          const SizedBox(height: V13.gapMd),
+          Text(_error!, style: V13.caption.copyWith(color: V13.danger)),
+        ],
+      ],
     );
   }
 }
 
-class _Input extends StatelessWidget {
-  const _Input({
+/// V13TextInput is single-line; multi-line fields reuse its chrome through
+/// this thin wrapper so Description/Rules keep the same look.
+class _MultilineInput extends StatelessWidget {
+  const _MultilineInput({
     required this.controller,
     required this.label,
     this.hint,
     this.maxLines = 1,
-    this.keyboardType,
   });
 
   final TextEditingController controller;
   final String label;
   final String? hint;
   final int maxLines;
-  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
-    return NuvoTextInput(
-      controller: controller,
-      label: label,
-      hint: hint,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: V13.bodyStrong),
+        const SizedBox(height: V13.gapSm),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          style: V13.body,
+          cursorColor: V13.blue,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: V13.body.copyWith(color: V13.muted),
+            filled: true,
+            fillColor: V13.card,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(V13.radiusButton),
+              borderSide: const BorderSide(color: V13.navy, width: V13.outline),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(V13.radiusButton),
+              borderSide: const BorderSide(color: V13.blue, width: V13.outline),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -621,30 +541,27 @@ class _MovementSummary extends StatelessWidget {
     final movement = eligibility.movementDefinition;
     final unit = _unitForEligibility(eligibility);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.themeColors.border, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return V13Card(
+      color: V13.sky,
+      child: Row(
         children: [
-          Text(
-            'Movement',
-            style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkMuted),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            movement?.title ?? 'Movement unavailable',
-            style: AppTextStyles.titleMedium,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Target is measured in $unit.',
-            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
+          const V13IconTile(icon: Icons.videocam_rounded, color: V13.card),
+          const SizedBox(width: V13.gapMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  movement?.title ?? 'Movement unavailable',
+                  style: V13.bodyStrong,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Target is measured in $unit.',
+                  style: V13.caption.copyWith(color: V13.navy),
+                ),
+              ],
+            ),
           ),
         ],
       ),

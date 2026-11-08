@@ -9,7 +9,6 @@ import 'package:go_router/go_router.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/network/conditional.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
-import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/squads/application/squad_controller.dart';
@@ -92,7 +91,11 @@ Map<String, dynamic> _detail({
       : [
           {'userId': '2', 'displayName': 'Ben Carter', 'role': 'owner'},
           {'userId': '1', 'displayName': 'Ava Long', 'role': 'admin'},
-          {'userId': '3', 'displayName': 'Cy Extremely Long Name', 'role': 'member'},
+          {
+            'userId': '3',
+            'displayName': 'Cy Extremely Long Name',
+            'role': 'member',
+          },
           {'userId': '4', 'displayName': 'Dee', 'role': 'member'},
         ];
   final races = alone
@@ -183,7 +186,8 @@ Future<void> _pump(
   }
 }
 
-String _n(Size s, String prefix) => '${prefix}_${s.width.toInt()}x${s.height.toInt()}';
+String _n(Size s, String prefix) =>
+    '${prefix}_${s.width.toInt()}x${s.height.toInt()}';
 
 void main() {
   setUpAll(loadShotFonts);
@@ -228,63 +232,6 @@ void main() {
       await tester.tap(find.text('Join with a code'));
       await tester.pumpAndSettle();
       await shot(tester, _n(size, 'crews_join'));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('detail owner races $tag', (tester) async {
-      await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), size);
-      await shot(tester, _n(size, 'crew_owner_races'));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('detail owner members $tag', (tester) async {
-      await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), size);
-      await tester.tap(find.textContaining('Members ('));
-      await tester.pumpAndSettle();
-      await shot(tester, _n(size, 'crew_owner_members'));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('detail member races $tag', (tester) async {
-      await _pump(
-        tester,
-        const CrewGroupDetailScreen(groupId: 'a'),
-        size,
-        detail: (id) => _detail(owner: false, role: 'member', name: 'Night Owls'),
-      );
-      await shot(tester, _n(size, 'crew_member_races'));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('detail member members $tag', (tester) async {
-      await _pump(
-        tester,
-        const CrewGroupDetailScreen(groupId: 'a'),
-        size,
-        detail: (id) => _detail(owner: false, role: 'member', name: 'Night Owls'),
-      );
-      await tester.tap(find.textContaining('Members ('));
-      await tester.pumpAndSettle();
-      await shot(tester, _n(size, 'crew_member_members'));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('detail alone $tag', (tester) async {
-      await _pump(
-        tester,
-        const CrewGroupDetailScreen(groupId: 'a'),
-        size,
-        detail: (id) => _detail(alone: true, name: 'Just Me'),
-      );
-      await shot(tester, _n(size, 'crew_alone'));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('add people sheet $tag', (tester) async {
-      await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), size);
-      await tester.tap(find.text('Add people').first);
-      await tester.pumpAndSettle();
-      await shot(tester, _n(size, 'crew_qr'));
       expect(tester.takeException(), isNull);
     });
 
@@ -335,7 +282,12 @@ void main() {
       // Confirm deletes and lands back on the Crews list.
       await tester.tap(btn);
       await tester.pumpAndSettle();
-      await tester.tap(find.descendant(of: find.byType(NuvoDangerButton), matching: find.text('Delete crew')).last);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Delete crew'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(deleted, ['a']);
       expect(find.text('crews-home'), findsOneWidget);
@@ -364,10 +316,8 @@ void main() {
     const size = Size(390, 844);
 
     Future<void> openAndShare(WidgetTester tester) async {
-      await _pump(tester, const CrewGroupDetailScreen(groupId: 'a'), size);
-      await tester.tap(find.text('Add people').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Share'));
+      await _pump(tester, const CrewSettingsScreen(groupId: 'a'), size);
+      await tester.tap(find.byIcon(Icons.ios_share_rounded));
       await tester.pumpAndSettle();
     }
 
@@ -382,8 +332,10 @@ void main() {
         return 'dev.fluttercommunity.plus/share/success';
       });
       addTearDown(
-        () => tester.binding.defaultBinaryMessenger
-            .setMockMethodCallHandler(channel, null),
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
       );
       await openAndShare(tester);
       expect(calls, hasLength(1));
@@ -427,7 +379,10 @@ void main() {
         );
       });
       await openAndShare(tester);
-      expect(find.text('Invite copied — paste it into a message'), findsOneWidget);
+      expect(
+        find.text('Invite copied — paste it into a message'),
+        findsOneWidget,
+      );
       expect(copied, contains('https://getnuvo.net/c/K7PQ2Ma'));
       expect(tester.takeException(), isNull);
     });

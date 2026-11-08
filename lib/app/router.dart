@@ -46,7 +46,6 @@ import '../features/races/presentation/board_moved_screen.dart';
 import '../core/config/nuvo_flags.dart';
 import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/movement_preview/rive_calibration_screen.dart';
-import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/crew/data/crew_api.dart' show PublicProfileCard;
 import '../features/crew/presentation/public_badges_screen.dart';
@@ -381,9 +380,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/race/:id/proof',
-        pageBuilder: (_, state) => _cameraPage(
+        // v13: proof entry is the Submit proof sheet on Race detail.
+        pageBuilder: (_, state) => _detailPage(
           state,
-          SubmitProofScreen(raceId: state.pathParameters['id']!),
+          RaceDetailV13Screen(
+            raceId: state.pathParameters['id']!,
+            openProofOnLoad: true,
+          ),
         ),
       ),
       GoRoute(

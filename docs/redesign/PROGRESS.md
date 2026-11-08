@@ -15,9 +15,11 @@ Branch: `redesign/v13` (base `motion-ota-tuning` 0a6f761). Plan: `FEASIBILITY.md
 - S2 v13 shell (merge 967a175): Crew tab label on the /pass route (auth_gate protects /pass; /crew redirects), V13TabBar, light-only. CI runs the pre-v13 suite with NUVO_V13=false.
 - S5 Compete/New race/Race detail/Submit proof (merge f5637f3), S4 Arena (merge 51a2226), S7 Profile cluster (merge 8ca2475) + orchestrator polish (befa31d, c9ab97b): screenshots reviewed with real fonts; fixed collapsed progress bars, extra blue actions, profile section spacing, duplicate delete-account row.
 
+- S6 Crew tab + crew page (merge af91a93), S8 Activity + auth/onboarding/splash restyle (merge 1a1eac6). Orchestrator QA fixes: composer empty name field + live "auto" chips (7cc3453), toast/overlay underline (995c17a), compact V13Button no longer stretches, race detail full-width CTA.
+- S9 cleanup (merge, this commit): NUVO_V13 flag removed; 39 lib files that became unreachable from lib/main.dart deleted (import-graph walk, tool in redesign-orch/tools/unreachable.py); 46 test files that only covered deleted screens removed, mixed logic tests pruned case-by-case; shell_motion_test now drives V13TabBar. Full suite: 2242 tests, 16 known pre-existing failures, 0 new.
+
 ## In progress
-- S6 Crew tab + crew page, S8 Activity/onboarding/auth restyle (Devin, 2 at a time on free SWE-2 with auto-resume on rate limits).
-- Next: S9 delete old screens + remove flag, S10 QA.
+- S10 restyle of the remaining secondary screens (Devin r1 social, r2 races, r3 badges/teach), then final QA.
 
 ## Blocked / needs Akshay
 - Production Worker deploy + D1 migrations 0048+ (dev only until approved).
