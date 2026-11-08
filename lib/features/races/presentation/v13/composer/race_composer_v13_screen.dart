@@ -396,7 +396,11 @@ class _NameStepState extends State<_NameStep> {
   @override
   void initState() {
     super.initState();
-    _ctrl = TextEditingController(text: widget.draft.resolvedTitle);
+    // Start empty for a fresh race (the hint shows an example); only a name
+    // the person (or a prefill) actually chose is carried in.
+    _ctrl = TextEditingController(
+      text: widget.draft.hasCustomName ? widget.draft.resolvedTitle : '',
+    );
     _ctrl.addListener(() {
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 350), _interpret);
@@ -447,9 +451,9 @@ class _NameStepState extends State<_NameStep> {
     final guess = _guess;
     final chips = <Widget>[
       if (guess?.activity != null)
-        V13Chip(label: guess!.activity!.title, auto: true, onTap: () {}),
+        V13Chip(label: guess!.activity!.title, auto: true, onTap: _commit),
       if (guess != null && guess.inferredFields.contains(RaceField.target))
-        V13Chip(label: '${guess.targetValue}', auto: true, onTap: () {}),
+        V13Chip(label: '${guess.targetValue}', auto: true, onTap: _commit),
       if (guess != null && guess.inferredFields.contains(RaceField.format))
         V13Chip(
           label: switch (guess.format) {
@@ -459,10 +463,10 @@ class _NameStepState extends State<_NameStep> {
             _ => 'First to',
           },
           auto: true,
-          onTap: () {},
+          onTap: _commit,
         ),
       if (guess?.deadline != null)
-        V13Chip(label: guess!.deadline!, auto: true, onTap: () {}),
+        V13Chip(label: guess!.deadline!, auto: true, onTap: _commit),
     ];
     return _StepShell(
       question: 'What are you racing?',
@@ -762,7 +766,7 @@ class _MovementTile extends StatelessWidget {
       semanticLabel: label,
       child: Container(
         decoration: BoxDecoration(
-          color: selected ? V13.blue : V13.card,
+          color: selected ? V13.navy : V13.card,
           borderRadius: BorderRadius.circular(V13.radiusCard),
           border: Border.all(color: V13.navy, width: V13.outline),
           boxShadow: selected ? null : V13.shadow3,

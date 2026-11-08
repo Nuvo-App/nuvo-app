@@ -151,7 +151,8 @@ Map<String, dynamic> _s(String id, String name, int rank, int pts,
       'isYou': you,
     };
 
-class _SquadRepo implements SquadRepository {
+class _SquadRepo extends SquadRepository {
+  _SquadRepo() : super(SquadApi(), SecureTokenStore(), AuthApi());
   @override
   Future<Conditional<List<CrewGroup>>> list({String? etag}) async {
     final raw = {
