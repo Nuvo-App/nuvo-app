@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import '../helpers/screenshot.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -122,6 +123,7 @@ Widget _app(_StubRaceRepo repo, {required Widget home}) => ProviderScope(
 );
 
 void main() {
+  setUpAll(loadShotFonts);
   testWidgets('Compete: header, live races, hidden open section', (
     tester,
   ) async {
@@ -183,6 +185,7 @@ void main() {
     expect(find.text('Maya Miles'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('80 pts'), findsOneWidget);
+    await shot(tester, 'v13_compete_populated');
   });
 
   testWidgets('Race detail: podium, rows, join CTA for non-participant', (
