@@ -617,13 +617,13 @@ class _TrendingSection extends ConsumerWidget {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: V13.blue,
+                  color: V13.card,
                   borderRadius: BorderRadius.circular(V13.radiusPill),
                   border: Border.all(color: V13.navy, width: V13.outline),
                 ),
                 child: Text(
                   'Start',
-                  style: V13.label.copyWith(color: V13.card),
+                  style: V13.label.copyWith(color: V13.navy),
                 ),
               ),
             ),

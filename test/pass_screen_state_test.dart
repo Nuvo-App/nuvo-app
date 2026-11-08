@@ -38,15 +38,17 @@ class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'user-1',
-        email: 'test@getnuvo.net',
-        fullName: 'Test User',
-        username: 'testuser',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 
   @override
   Future<PassInfo> getMemberPass() async => _passInfo;
@@ -59,16 +61,18 @@ class _DemoAuthRepo extends AuthRepository {
   _DemoAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'demo-viewer-1',
-        email: 'demo-viewer@example.com',
-        isDemo: true,
-        fullName: 'Maya Chen',
-        username: 'maya',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'demo-viewer-1',
+      email: 'demo-viewer@example.com',
+      isDemo: true,
+      fullName: 'Maya Chen',
+      username: 'maya',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 
   @override
   Future<PassInfo> getMemberPass() async => _passInfo;
@@ -76,7 +80,7 @@ class _DemoAuthRepo extends AuthRepository {
 
 class _PassRaceRepo extends RaceRepository {
   _PassRaceRepo({this.races = const [], this.throws = false})
-      : super(RaceApi(), SecureTokenStore(), AuthApi());
+    : super(RaceApi(), SecureTokenStore(), AuthApi());
 
   final List<Race> races;
   final bool throws;
@@ -95,7 +99,7 @@ class _PassRaceRepo extends RaceRepository {
 /// can be exercised independently.
 class _FeedRepo extends CrewActivityRepository {
   _FeedRepo(this.items, {this.throws = false})
-      : super(CrewActivityApi(), SecureTokenStore(), AuthApi());
+    : super(CrewActivityApi(), SecureTokenStore(), AuthApi());
 
   final List<CrewActivityItem> items;
   final bool throws;
@@ -104,8 +108,10 @@ class _FeedRepo extends CrewActivityRepository {
   int feedCalls = 0;
 
   @override
-  Future<List<CrewActivityItem>> getFeed(
-      {int limit = 40, String? cursor}) async {
+  Future<List<CrewActivityItem>> getFeed({
+    int limit = 40,
+    String? cursor,
+  }) async {
     feedCalls++;
     if (throws) throw const ApiException(503, 'Service Unavailable');
     return items;
@@ -167,7 +173,8 @@ class _FakeCrewRepo implements CrewRepository {
   }
 
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
   @override
   Future<ConnectOutcome> add(String userId) async => ConnectOutcome.active;
   @override
@@ -187,6 +194,15 @@ class _FakeCrewRepo implements CrewRepository {
   Future<void> blockUser(String userId) async {}
   @override
   Future<void> unblockUser(String userId) async {}
+  @override
+  Future<PublicUserActivity> getUserActivity(String userId) =>
+      throw UnimplementedError();
+  @override
+  Future<void> muteUser(String userId) async {}
+  @override
+  Future<void> unmuteUser(String userId) async {}
+  @override
+  Future<List<PublicUser>> getBlocked() async => const [];
 }
 
 class _FakeNotifRepo implements NotificationRepository {
@@ -199,6 +215,7 @@ class _FakeNotifRepo implements NotificationRepository {
     if (throws) throw const ApiException(503, 'Service Unavailable');
     return const NotificationPage(items: [], unreadCount: 0);
   }
+
   @override
   Future<void> markRead(String id) async {}
   @override
@@ -225,18 +242,23 @@ Widget _buildApp({
 }) {
   return ProviderScope(
     overrides: [
-      raceRepositoryProvider
-          .overrideWithValue(racesRepo ?? _PassRaceRepo(races: races)),
-      crewRepositoryProvider.overrideWithValue(_FakeCrewRepo(
-        throws: crewThrows,
-        searchResults: searchResults,
-        searchThrows: searchThrows,
-        members: members,
-      )),
-      crewActivityRepositoryProvider
-          .overrideWithValue(feedRepo ?? _FeedRepo(feed)),
-      notificationRepositoryProvider
-          .overrideWithValue(_FakeNotifRepo(throws: notifThrows)),
+      raceRepositoryProvider.overrideWithValue(
+        racesRepo ?? _PassRaceRepo(races: races),
+      ),
+      crewRepositoryProvider.overrideWithValue(
+        _FakeCrewRepo(
+          throws: crewThrows,
+          searchResults: searchResults,
+          searchThrows: searchThrows,
+          members: members,
+        ),
+      ),
+      crewActivityRepositoryProvider.overrideWithValue(
+        feedRepo ?? _FeedRepo(feed),
+      ),
+      notificationRepositoryProvider.overrideWithValue(
+        _FakeNotifRepo(throws: notifThrows),
+      ),
       authControllerProvider.overrideWith(
         (ref) => AuthController(demo ? _DemoAuthRepo() : _FakeAuthRepo()),
       ),
@@ -268,19 +290,18 @@ Future<void> _openSearch(WidgetTester tester) async {
 }
 
 void main() {
-
   group('PassScreen tab stability', () {
     /// The selector is a fixed region: switching lenses may only change
     /// what's below it. Any tab-conditional widget above the tabs (a live
     /// card, a spacer, different padding) shows up here as a moved Y.
-    testWidgets('tab selector stays pixel-stable across both tabs',
-        (tester) async {
+    testWidgets('tab selector stays pixel-stable across both tabs', (
+      tester,
+    ) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(demo: true));
       await _settleDemo(tester);
 
-      double tabY(String label) =>
-          tester.getTopLeft(find.text(label)).dy;
+      double tabY(String label) => tester.getTopLeft(find.text(label)).dy;
       final peopleY = tabY('People');
       final activityY = tabY('Activity');
 
@@ -307,16 +328,19 @@ void main() {
     /// before it was compacted. The compact item must be >= 30% smaller.
     const oldPassedYouItemHeight = 193.0;
 
-    testWidgets('a "just passed you" item is at least 30% more compact',
-        (tester) async {
+    testWidgets('a "just passed you" item is at least 30% more compact', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 3200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: PresentationDemoData.races('user-1'),
-        feed: PresentationDemoData.crewActivity('user-1'),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          races: PresentationDemoData.races('user-1'),
+          feed: PresentationDemoData.crewActivity('user-1'),
+        ),
+      );
       await _settleDemo(tester);
       await tester.tap(find.text('Activity'));
       await tester.pump();
@@ -334,8 +358,9 @@ void main() {
   });
 
   group('PassScreen populated demo', () {
-    testWidgets('every lens renders real content, no dead canvas',
-        (tester) async {
+    testWidgets('every lens renders real content, no dead canvas', (
+      tester,
+    ) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(demo: true));
       await _settleDemo(tester);
@@ -348,10 +373,7 @@ void main() {
       await tester.tap(find.text('Activity'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(
-        find.text('Jules Carter is now your friend'),
-        findsOneWidget,
-      );
+      expect(find.text('Jules Carter is now your friend'), findsOneWidget);
       expect(find.text('just passed you in Pushup Battle'), findsOneWidget);
       expect(find.text('Races'), findsNothing);
     });
@@ -366,13 +388,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    testWidgets('People lists the races running with the crew',
-        (tester) async {
+    testWidgets('People lists the races running with the crew', (tester) async {
       _tallViewport(tester);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: PresentationDemoData.races('user-1'),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          races: PresentationDemoData.races('user-1'),
+        ),
+      );
       await _settleDemo(tester);
 
       expect(find.text('Racing with your friends'), findsOneWidget);
@@ -383,21 +406,23 @@ void main() {
       expect(find.text('Races'), findsNothing);
     });
 
-    testWidgets('a crew with only finished races says so on People',
-        (tester) async {
+    testWidgets('a crew with only finished races says so on People', (
+      tester,
+    ) async {
       _tallViewport(tester);
-      final finished = PresentationDemoData.races('user-1')
-          .where((r) => r.status == 'completed')
-          .toList();
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: finished,
-      ));
+      final finished = PresentationDemoData.races(
+        'user-1',
+      ).where((r) => r.status == 'completed').toList();
+      await tester.pumpWidget(
+        _buildApp(members: PresentationDemoData.crewMembers(), races: finished),
+      );
       await _settleDemo(tester);
 
       expect(
-        find.text('No races running with your friends right now. Start one '
-            'from Compete.'),
+        find.text(
+          'No races running with your friends right now. Start one '
+          'from Compete.',
+        ),
         findsOneWidget,
       );
       expect(find.text('Races'), findsNothing);
@@ -409,11 +434,13 @@ void main() {
       tester.platformDispatcher.textScaleFactorTestValue = 1.4;
       addTearDown(tester.view.reset);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: PresentationDemoData.races('user-1'),
-        feed: PresentationDemoData.crewActivity('user-1'),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          races: PresentationDemoData.races('user-1'),
+          feed: PresentationDemoData.crewActivity('user-1'),
+        ),
+      );
       await _settleDemo(tester);
       expect(tester.takeException(), isNull);
 
@@ -425,23 +452,28 @@ void main() {
 
     testWidgets('a live race heads People', (tester) async {
       _tallViewport(tester);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: PresentationDemoData.races('user-1'),
-        feed: PresentationDemoData.crewActivity('user-1'),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          races: PresentationDemoData.races('user-1'),
+          feed: PresentationDemoData.crewActivity('user-1'),
+        ),
+      );
       await _settleDemo(tester);
 
       expect(find.text('LIVE'), findsWidgets);
     });
 
-    testWidgets('reaction chips render on reactionable items in Activity',
-        (tester) async {
+    testWidgets('reaction chips render on reactionable items in Activity', (
+      tester,
+    ) async {
       _tallViewport(tester);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        feed: PresentationDemoData.crewActivity('user-1'),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          feed: PresentationDemoData.crewActivity('user-1'),
+        ),
+      );
       await _settleDemo(tester);
       await openLens(tester, 'Activity');
       for (final g in ['🔥', '👏', '💪']) {
@@ -449,16 +481,19 @@ void main() {
       }
     });
 
-    testWidgets('tapping a reaction chip adds then removes the reaction',
-        (tester) async {
+    testWidgets('tapping a reaction chip adds then removes the reaction', (
+      tester,
+    ) async {
       _tallViewport(tester);
       final feed = PresentationDemoData.crewActivity('user-1');
       final repo = _FeedRepo(feed);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        feed: feed,
-        feedRepo: repo,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          feed: feed,
+          feedRepo: repo,
+        ),
+      );
       await _settleDemo(tester);
       await openLens(tester, 'Activity');
 
@@ -480,18 +515,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('demo session renders fixtures when every request fails',
-        (tester) async {
+    testWidgets('demo session renders fixtures when every request fails', (
+      tester,
+    ) async {
       _tallViewport(tester);
       final feedRepo = _FeedRepo(const [], throws: true);
       final racesRepo = _PassRaceRepo(throws: true);
-      await tester.pumpWidget(_buildApp(
-        demo: true,
-        crewThrows: true,
-        notifThrows: true,
-        feedRepo: feedRepo,
-        racesRepo: racesRepo,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          demo: true,
+          crewThrows: true,
+          notifThrows: true,
+          feedRepo: feedRepo,
+          racesRepo: racesRepo,
+        ),
+      );
       await _settleDemo(tester);
 
       // Presentation mode must be network-independent — the feed repo is
@@ -504,14 +542,12 @@ void main() {
       expect(find.byType(NuvoErrorState), findsNothing);
     });
 
-    testWidgets('non-demo session surfaces the feed error and retries',
-        (tester) async {
+    testWidgets('non-demo session surfaces the feed error and retries', (
+      tester,
+    ) async {
       _tallViewport(tester);
       final feedRepo = _FeedRepo(const [], throws: true);
-      await tester.pumpWidget(_buildApp(
-        crewThrows: true,
-        feedRepo: feedRepo,
-      ));
+      await tester.pumpWidget(_buildApp(crewThrows: true, feedRepo: feedRepo));
       await _settleDemo(tester);
       // A real account keeps production semantics — failed loads surface an
       // error state with a retry path.
@@ -519,14 +555,17 @@ void main() {
       expect(find.byType(NuvoErrorState), findsWidgets);
     });
 
-    testWidgets('person sheet flips between identity and competition',
-        (tester) async {
+    testWidgets('person sheet flips between identity and competition', (
+      tester,
+    ) async {
       _tallViewport(tester);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: PresentationDemoData.races('user-1'),
-        feed: PresentationDemoData.crewActivity('user-1'),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          members: PresentationDemoData.crewMembers(),
+          races: PresentationDemoData.races('user-1'),
+          feed: PresentationDemoData.crewActivity('user-1'),
+        ),
+      );
       await _settleDemo(tester);
       await openLens(tester, 'Activity');
 
@@ -556,8 +595,9 @@ void main() {
       expect(find.text('VS'), findsNothing);
     });
 
-    testWidgets('brand-new user gets true empty states on every lens',
-        (tester) async {
+    testWidgets('brand-new user gets true empty states on every lens', (
+      tester,
+    ) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp());
       await _settleDemo(tester);
@@ -565,15 +605,19 @@ void main() {
       // People — find someone, and nothing is racing yet.
       expect(find.text('Find people'), findsOneWidget);
       expect(
-        find.text('No races running with your friends right now. Start one '
-            'from Compete.'),
+        find.text(
+          'No races running with your friends right now. Start one '
+          'from Compete.',
+        ),
         findsOneWidget,
       );
 
       await openLens(tester, 'Activity');
       expect(
-        find.text("Race, finish, set a personal best — your friends' moves "
-            'land here.'),
+        find.text(
+          "Race, finish, set a personal best — your friends' moves "
+          'land here.',
+        ),
         findsOneWidget,
       );
     });
@@ -609,17 +653,19 @@ void main() {
     testWidgets('successful search shows results', (tester) async {
       _tallViewport(tester);
       await tester.pumpWidget(
-        _buildApp(searchResults: const [
-          CrewSearchResult(
-            user: PublicUser(
-              id: 'u2',
-              displayName: 'John Doe',
-              username: 'john',
-              initials: 'JD',
+        _buildApp(
+          searchResults: const [
+            CrewSearchResult(
+              user: PublicUser(
+                id: 'u2',
+                displayName: 'John Doe',
+                username: 'john',
+                initials: 'JD',
+              ),
+              connectionStatus: CrewConnectionStatus.none,
             ),
-            connectionStatus: CrewConnectionStatus.none,
-          ),
-        ]),
+          ],
+        ),
       );
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump();

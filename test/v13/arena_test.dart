@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import '../helpers/screenshot.dart';
 import 'package:nuvo/features/races/presentation/v13/submit_proof_sheet.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/features/arena/data/arena_api.dart';
@@ -401,6 +402,7 @@ Future<void> _navPumps(WidgetTester tester) async {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 void main() {
+  setUpAll(loadShotFonts);
   testWidgets('populated Arena renders header, race card, nudge, stats, '
       'heat map, and achievements', (tester) async {
     _tallViewport(tester);
@@ -458,6 +460,7 @@ void main() {
     expect(find.text('ACHIEVEMENTS'), findsOneWidget);
     expect(find.text('2 of 10'), findsOneWidget);
     expect(find.text('Off the Line'), findsOneWidget);
+    await shot(tester, 'v13_arena_populated');
     expect(tester.takeException(), isNull);
   });
 

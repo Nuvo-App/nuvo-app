@@ -9,10 +9,15 @@ Branch: `redesign/v13` (base `motion-ota-tuning` 0a6f761). Plan: `FEASIBILITY.md
 - W3 worker races (276f4c5, merge 47b40fa): GET /races/open, GET /leaderboard?scope=friends, racesTogether on GET /crew, racerCount on activities, viewerContext.previousRank; friends of any racer may read/join crew_only races (blocks respected). 550/550 worker tests. Not yet deployed to dev.
 - S3 design system (ba9bf12, merge b7b350f): lib/core/v13 tokens/motion/26 widgets, kNuvoV13 flag constant, openPerson helper; 41 widget tests.
 
+- W1 worker profile (709ba8f + crew-race fix, merge 2c96265): migration 0048, bio/favorite movement/activity-map/who-can-race-me prefs, day streaks, public profile bundle (mutuals, versus, friendship badges, locked achievements), GET /users/:id/activity, mutes (feed + notification suppression).
+- W2 worker crews (bbc2ed7, merge 9eccde0): migration 0049, crew identity, week/all-time standings, discover/preview, join requests + approve/decline, mute, report crew, recurring crew races + auto-join + cron spawn, badge_earned feed items, mutuals on requests. 586/586 worker tests.
+- Dev deploy: nuvo-api-dev version 848b2d12 (dev D1 now at 0049; 0044-0047 were also pending on dev and applied there). Production untouched.
+- S2 v13 shell (merge 967a175): Crew tab label on the /pass route (auth_gate protects /pass; /crew redirects), V13TabBar, light-only. CI runs the pre-v13 suite with NUVO_V13=false.
+- S5 Compete/New race/Race detail/Submit proof (merge f5637f3), S4 Arena (merge 51a2226), S7 Profile cluster (merge 8ca2475) + orchestrator polish (befa31d, c9ab97b): screenshots reviewed with real fonts; fixed collapsed progress bars, extra blue actions, profile section spacing, duplicate delete-account row.
+
 ## In progress
-- W1 worker profile, W2 worker crews (Devin).
-- S2 flag + v13 shell, S4 Arena, S5 Compete/New race/Race detail/Submit proof (Devin, parallel). Screen stages don't edit router.dart; the orchestrator wires routes at merge.
-- Queued: S6 Crew, S7 Profile, S8 Activity/onboarding (machine has 4 CPUs, so at most 3 Flutter agents run at once).
+- S6 Crew tab + crew page, S8 Activity/onboarding/auth restyle (Devin, 2 at a time on free SWE-2 with auto-resume on rate limits).
+- Next: S9 delete old screens + remove flag, S10 QA.
 
 ## Blocked / needs Akshay
 - Production Worker deploy + D1 migrations 0048+ (dev only until approved).

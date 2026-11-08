@@ -146,6 +146,9 @@ abstract final class V13 {
     height: height ?? 1.3,
     letterSpacing: letterSpacing,
     fontFeatures: tabular ? const [FontFeature.tabularFigures()] : null,
+    // Overlays (toasts, +N) render above any Material; without this the
+    // framework's fallback style underlines the text.
+    decoration: TextDecoration.none,
   );
 
   /// Screen titles — 26/800 ("title left" in top bars).

@@ -8,6 +8,7 @@ import { appleServiceConfig, retryPendingAppleRevocations } from './lib/apple';
 import { purgeExpiredAuthData } from './lib/dataRetention';
 import { sweepRaceLifecycle } from './domain/raceFinalize';
 import { notifyLifecycleTransitions, runNotificationJob } from './domain/notificationPolicy';
+import { sweepRecurringSquadRaces } from './domain/squadRecurring';
 import { claimDueJobs } from './domain/notificationJobs';
 import { authRouter } from './routes/auth';
 import { profileRouter } from './routes/profile';
@@ -536,6 +537,15 @@ const worker = Object.assign(app, {
           await notifyLifecycleTransitions(env, (p) => ctx.waitUntil(p), transitions);
         } catch (err) {
           console.error('[cron] race lifecycle sweep failed:', (err as Error).message);
+        }
+        // Crew recurring races: spawn today's instance per definition. The
+        // sweep is idempotent per UTC day and only ever sends notifications
+        // through the policy layer (which honors prefs + crew mutes).
+        try {
+          const spawned = await sweepRecurringSquadRaces(env, (p) => ctx.waitUntil(p));
+          if (spawned > 0) console.log(JSON.stringify({ evt: 'recurring_spawned', n: spawned }));
+        } catch (err) {
+          console.error('[cron] recurring race sweep failed:', (err as Error).message);
         }
         try {
           const jobs = await claimDueJobs(env.DB);

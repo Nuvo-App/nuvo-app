@@ -44,15 +44,17 @@ class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'user-1',
-        email: 'test@getnuvo.net',
-        fullName: 'Test User',
-        username: 'testuser',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 
   @override
   Future<PassInfo> getMemberPass() async => _passInfo;
@@ -65,16 +67,18 @@ class _DemoAuthRepo extends AuthRepository {
   _DemoAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
-        id: 'demo-viewer-1',
-        email: 'demo-viewer@example.com',
-        isDemo: true,
-        fullName: 'Maya Chen',
-        username: 'maya',
-        onboardingComplete: true,
-        hasMemberPass: true,
-        termsAccepted: true,
-      ));
+  Future<RestoreResult> restoreSession() async => const RestoreOk(
+    AuthUser(
+      id: 'demo-viewer-1',
+      email: 'demo-viewer@example.com',
+      isDemo: true,
+      fullName: 'Maya Chen',
+      username: 'maya',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 
   @override
   Future<PassInfo> getMemberPass() async => _passInfo;
@@ -82,7 +86,7 @@ class _DemoAuthRepo extends AuthRepository {
 
 class _PassRaceRepo extends RaceRepository {
   _PassRaceRepo({this.races = const [], this.throws = false})
-      : super(RaceApi(), SecureTokenStore(), AuthApi());
+    : super(RaceApi(), SecureTokenStore(), AuthApi());
 
   final List<Race> races;
   final bool throws;
@@ -101,7 +105,7 @@ class _PassRaceRepo extends RaceRepository {
 /// can be exercised independently.
 class _FeedRepo extends CrewActivityRepository {
   _FeedRepo(this.items, {this.throws = false})
-      : super(CrewActivityApi(), SecureTokenStore(), AuthApi());
+    : super(CrewActivityApi(), SecureTokenStore(), AuthApi());
 
   final List<CrewActivityItem> items;
   final bool throws;
@@ -110,8 +114,10 @@ class _FeedRepo extends CrewActivityRepository {
   int feedCalls = 0;
 
   @override
-  Future<List<CrewActivityItem>> getFeed(
-      {int limit = 40, String? cursor}) async {
+  Future<List<CrewActivityItem>> getFeed({
+    int limit = 40,
+    String? cursor,
+  }) async {
     feedCalls++;
     if (throws) throw const ApiException(503, 'Service Unavailable');
     return items;
@@ -175,7 +181,8 @@ class _FakeCrewRepo implements CrewRepository {
   }
 
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
   @override
   Future<ConnectOutcome> add(String userId) async => ConnectOutcome.active;
   @override
@@ -195,6 +202,15 @@ class _FakeCrewRepo implements CrewRepository {
   Future<void> blockUser(String userId) async {}
   @override
   Future<void> unblockUser(String userId) async {}
+  @override
+  Future<PublicUserActivity> getUserActivity(String userId) =>
+      throw UnimplementedError();
+  @override
+  Future<void> muteUser(String userId) async {}
+  @override
+  Future<void> unmuteUser(String userId) async {}
+  @override
+  Future<List<PublicUser>> getBlocked() async => const [];
 }
 
 class _FakeNotifRepo implements NotificationRepository {
@@ -207,13 +223,12 @@ class _FakeNotifRepo implements NotificationRepository {
     if (throws) throw const ApiException(503, 'Service Unavailable');
     return const NotificationPage(items: [], unreadCount: 0);
   }
+
   @override
   Future<void> markRead(String id) async {}
   @override
   Future<void> markAllRead() async {}
 }
-
-
 
 Future<void> _settleDemo(WidgetTester tester) async {
   for (var i = 0; i < 3; i++) {
@@ -229,8 +244,14 @@ const _sizes = [
   Size(430, 932),
 ];
 
-Future<void> _pump(WidgetTester t, Size size, double inset, Brightness b,
-    double scale, int lens) async {
+Future<void> _pump(
+  WidgetTester t,
+  Size size,
+  double inset,
+  Brightness b,
+  double scale,
+  int lens,
+) async {
   t.view.physicalSize = size;
   t.view.devicePixelRatio = 1;
   t.view.padding = FakeViewPadding(top: 47, bottom: inset);
@@ -245,32 +266,38 @@ Future<void> _pump(WidgetTester t, Size size, double inset, Brightness b,
       ),
     ],
   );
-  await t.pumpWidget(ProviderScope(
-    overrides: [
-      raceRepositoryProvider.overrideWithValue(
-          _PassRaceRepo(races: PresentationDemoData.races('user-1'))),
-      crewRepositoryProvider.overrideWithValue(
+  await t.pumpWidget(
+    ProviderScope(
+      overrides: [
+        raceRepositoryProvider.overrideWithValue(
+          _PassRaceRepo(races: PresentationDemoData.races('user-1')),
+        ),
+        crewRepositoryProvider.overrideWithValue(
           _FakeCrewRepo(
-          members: PresentationDemoData.crewMembers(),
-          requests: lens == 2
-              ? PresentationDemoData.crewRequestPage()
-              : const CrewRequestPage(),
-        )),
-      crewActivityRepositoryProvider.overrideWithValue(
-          _FeedRepo(PresentationDemoData.crewActivity('user-1'))),
-      notificationRepositoryProvider.overrideWithValue(_FakeNotifRepo()),
-      authControllerProvider
-          .overrideWith((ref) => AuthController(_FakeAuthRepo())),
-    ],
-    child: MaterialApp.router(
-      routerConfig: router,
-      theme: b == Brightness.dark ? ThemeData.dark() : ThemeData.light(),
-      builder: (c, child) => MediaQuery(
-        data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(scale)),
-        child: child!,
+            members: PresentationDemoData.crewMembers(),
+            requests: lens == 2
+                ? PresentationDemoData.crewRequestPage()
+                : const CrewRequestPage(),
+          ),
+        ),
+        crewActivityRepositoryProvider.overrideWithValue(
+          _FeedRepo(PresentationDemoData.crewActivity('user-1')),
+        ),
+        notificationRepositoryProvider.overrideWithValue(_FakeNotifRepo()),
+        authControllerProvider.overrideWith(
+          (ref) => AuthController(_FakeAuthRepo()),
+        ),
+      ],
+      child: MaterialApp.router(
+        routerConfig: router,
+        theme: b == Brightness.dark ? ThemeData.dark() : ThemeData.light(),
+        builder: (c, child) => MediaQuery(
+          data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
       ),
     ),
-  ));
+  );
   await _settleDemo(t);
   if (lens == 1) {
     await t.tap(find.text('Activity'));
@@ -303,13 +330,17 @@ void main() {
       for (final b in Brightness.values) {
         for (final scale in [1.0, 1.3]) {
           for (final lens in [0, 1, 2]) {
-            final name = '${size.width.toInt()}x${size.height.toInt()} '
+            final name =
+                '${size.width.toInt()}x${size.height.toInt()} '
                 'inset$inset ${b.name} x$scale ${const ["people", "activity", "requests"][lens]}';
             testWidgets('crew at a glance $name', (t) async {
               await _pump(t, size, inset, b, scale, lens);
               expect(t.takeException(), isNull);
               if (b == Brightness.light && scale == 1.0 && inset == 34) {
-                await shot(t, 'friends_${const ["people", "activity", "requests"][lens]}_${size.width.toInt()}x${size.height.toInt()}');
+                await shot(
+                  t,
+                  'friends_${const ["people", "activity", "requests"][lens]}_${size.width.toInt()}x${size.height.toInt()}',
+                );
               }
               final navTop = t.getTopLeft(find.byType(NuvoBottomNav)).dy;
               final fade = find.byKey(const ValueKey('nuvo-bottom-fade'));
@@ -318,10 +349,14 @@ void main() {
               // Natural flow: sections stack with fixed spacing and scroll under
               // the bottom fade. The first screen is filled and no blank band
               // opens between consecutive sections.
-              final foldFit =
-                  t.renderObject<RenderSliverFoldFit>(find.byType(SliverFoldFit));
-              expect(foldFit.lastAdjustment, 0,
-                  reason: 'fold fitting must not move anything on this page');
+              final foldFit = t.renderObject<RenderSliverFoldFit>(
+                find.byType(SliverFoldFit),
+              );
+              expect(
+                foldFit.lastAdjustment,
+                0,
+                reason: 'fold fitting must not move anything on this page',
+              );
               final sections = <Rect>[];
               foldFit.visitChildren((c) {
                 if (c is RenderFoldGap) return;
@@ -334,16 +369,26 @@ void main() {
               var used = 0.0;
               for (var i = 0; i < sections.length; i++) {
                 if (sections[i].top >= navTop) break;
-                used = sections[i].bottom < navTop ? sections[i].bottom : navTop;
+                used = sections[i].bottom < navTop
+                    ? sections[i].bottom
+                    : navTop;
                 if (i > 0) {
                   final gap = sections[i].top - sections[i - 1].bottom;
-                  expect(gap, lessThanOrEqualTo(40),
-                      reason: 'blank band of $gap between sections '
-                          '${sections[i - 1]} and ${sections[i]}');
+                  expect(
+                    gap,
+                    lessThanOrEqualTo(40),
+                    reason:
+                        'blank band of $gap between sections '
+                        '${sections[i - 1]} and ${sections[i]}',
+                  );
                 }
               }
-              expect(used / navTop, greaterThanOrEqualTo(0.9),
-                  reason: 'first screen only ${(used / navTop * 100).round()}% used');
+              expect(
+                used / navTop,
+                greaterThanOrEqualTo(0.9),
+                reason:
+                    'first screen only ${(used / navTop * 100).round()}% used',
+              );
               for (final e in find.byType(Text).evaluate()) {
                 final rect = t.getRect(find.byWidget(e.widget));
                 if (rect.bottom <= 0 || rect.top >= navTop) continue;
@@ -354,16 +399,25 @@ void main() {
                   final ro = e.renderObject;
                   final inLive = find
                       .ancestor(
-                          of: find.byWidget(e.widget),
-                          matching: find.byType(NuvoLiveRaceCard))
+                        of: find.byWidget(e.widget),
+                        matching: find.byType(NuvoLiveRaceCard),
+                      )
                       .evaluate()
                       .isNotEmpty;
                   // Race titles inside the live card are names that may
                   // single-line ellipsize.
-                  if (ro is RenderParagraph && !_isStandingsLine(ro.text.toPlainText()) && rect.bottom <= navTop && !inLive && !_isName(txt)) {
+                  if (ro is RenderParagraph &&
+                      !_isStandingsLine(ro.text.toPlainText()) &&
+                      rect.bottom <= navTop &&
+                      !inLive &&
+                      !_isName(txt)) {
                     // ignore: unnecessary_statements
-                    expect(ro.didExceedMaxLines, isFalse,
-                        reason: '"${ro.text.toPlainText()}" ellipsized $rect ancestors: ${_chain(e)}');
+                    expect(
+                      ro.didExceedMaxLines,
+                      isFalse,
+                      reason:
+                          '"${ro.text.toPlainText()}" ellipsized $rect ancestors: ${_chain(e)}',
+                    );
                   }
                 }
               }

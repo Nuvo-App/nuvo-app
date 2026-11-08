@@ -8,7 +8,7 @@ class V13ProgressBar extends StatelessWidget {
   const V13ProgressBar({
     super.key,
     required this.value,
-    this.height = 14,
+    this.height = 18,
     this.color = V13.navy,
     this.trackColor = V13.card,
     this.animate = true,
@@ -34,8 +34,9 @@ class V13ProgressBar extends StatelessWidget {
     return Semantics(
       label: semanticLabel ?? 'Progress ${(target * 100).round()} percent',
       child: Container(
+        width: double.infinity,
         height: height,
-        padding: const EdgeInsets.all(2.5),
+        padding: const EdgeInsets.all(2),
         decoration: BoxDecoration(
           color: trackColor,
           borderRadius: BorderRadius.circular(V13.radiusPill),

@@ -132,7 +132,9 @@ crewRouter.get('/', async (c) => {
 });
 
 // GET /crew/requests — incoming pending requests + outgoing requests I sent.
-// `outgoing` is additive: older clients simply ignore the field.
+// `outgoing` is additive: older clients simply ignore the field. Each
+// incoming row also carries `mutualCount`/`mutualNames` — the friends I
+// share with the requester (≤2 names, "You both know Maya and Jules").
 crewRouter.get('/requests', async (c) => {
   const userId = c.get('userId');
   const [incoming, outgoing] = await Promise.all([
@@ -151,12 +153,43 @@ crewRouter.get('/requests', async (c) => {
       .bind(userId, userId)
       .all<CrewUserRow>(),
   ]);
+
+  // Mutuals: people who are active friends of BOTH me and the requester.
+  const requesterIds = incoming.results.map((r) => r.requested_by ?? r.id).filter(Boolean) as string[];
+  const mutuals = new Map<string, { count: number; names: string[] }>();
+  if (requesterIds.length > 0) {
+    const marks = requesterIds.map(() => '?').join(',');
+    const rows = await c.env.DB.prepare(
+      `SELECT a.user_id AS requester_id, p.full_name, p.username
+       FROM crew_connections a
+       JOIN crew_connections b ON b.user_id = ? AND b.crew_user_id = a.crew_user_id AND b.status = 'active'
+       LEFT JOIN profiles p ON p.user_id = a.crew_user_id
+       WHERE a.user_id IN (${marks}) AND a.status = 'active'
+       ORDER BY a.created_at ASC`,
+    )
+      .bind(userId, ...requesterIds)
+      .all<{ requester_id: string; full_name: string | null; username: string | null }>();
+    for (const row of rows.results) {
+      const entry = mutuals.get(row.requester_id) ?? { count: 0, names: [] };
+      entry.count += 1;
+      if (entry.names.length < 2) {
+        entry.names.push(row.full_name ?? (row.username ? `@${row.username}` : 'Nuvo member'));
+      }
+      mutuals.set(row.requester_id, entry);
+    }
+  }
+
   return c.json({
     ok: true,
-    requests: incoming.results.map((r) => ({
-      ...serializeCrewUser(r),
-      requestedBy: r.requested_by,
-    })),
+    requests: incoming.results.map((r) => {
+      const m = mutuals.get(r.requested_by ?? r.id);
+      return {
+        ...serializeCrewUser(r),
+        requestedBy: r.requested_by,
+        mutualCount: m?.count ?? 0,
+        mutualNames: m?.names ?? [],
+      };
+    }),
     outgoing: outgoing.results.map(serializeCrewUser),
   });
 });
@@ -233,7 +266,7 @@ crewRouter.get('/feed', async (c) => {
 
   // Validator over the same scope as the queries below (see eventQuery /
   // noteQuery WHERE clauses), plus a 60s bucket.
-  const [evStamp, noteStamp] = await Promise.all([
+  const [evStamp, noteStamp, actStamp] = await Promise.all([
     db
       .prepare(
         `WITH scoped AS (
@@ -272,6 +305,23 @@ crewRouter.get('/feed', async (c) => {
       )
       .bind(userId)
       .first<{ n: number; at: string | null; unread: number | null; rn: number; rat: string | null }>(),
+    // badge_earned rows live in crew_activity (0049). A schema without the
+    // table stamps as empty and the query below is skipped.
+    (async () => {
+      try {
+        return await db
+          .prepare(
+            `SELECT COUNT(*) as n, MAX(ca.created_at) as at
+             FROM crew_activity ca
+             WHERE ca.actor_user_id IN (SELECT crew_user_id FROM crew_connections
+                                        WHERE user_id = ? AND status = 'active')`,
+          )
+          .bind(userId)
+          .first<{ n: number; at: string | null }>();
+      } catch {
+        return null;
+      }
+    })(),
   ]);
 
   // Muted actors / muted crews drop out of the feed entirely. The stamps
@@ -291,6 +341,7 @@ crewRouter.get('/feed', async (c) => {
       'feed', limit, encodeURIComponent(cursor ?? ''),
       evStamp?.n, evStamp?.at, evStamp?.rn, evStamp?.rat,
       noteStamp?.n, noteStamp?.at, noteStamp?.unread, noteStamp?.rn, noteStamp?.rat,
+      actStamp?.n ?? 0, actStamp?.at ?? '',
       userMute.n, userMute.latest, crewMute.n, crewMute.latest,
       stalenessBucket(Date.now(), 60_000),
     ),
@@ -349,6 +400,46 @@ crewRouter.get('/feed', async (c) => {
      ORDER BY n.created_at DESC
      LIMIT ?`,
   );
+
+  // Friends' badge_earned activity (crew_activity, 0049) — same friend scope
+  // and blocked/muted exclusion as race events. Reactions don't apply to
+  // these rows yet, so the item ships an empty reactions object.
+  interface FeedActivityRow {
+    id: string;
+    kind: string;
+    actor_user_id: string;
+    payload_json: string | null;
+    created_at: string;
+    actor_name: string | null;
+    actor_avatar: string | null;
+  }
+  let activities: FeedActivityRow[] = [];
+  if (actStamp) {
+    const actQuery = db.prepare(
+      `SELECT ca.id, ca.kind, ca.actor_user_id, ca.payload_json, ca.created_at,
+              p.full_name as actor_name, p.avatar_url as actor_avatar
+       FROM crew_activity ca
+       LEFT JOIN profiles p ON p.user_id = ca.actor_user_id
+       WHERE ca.actor_user_id IN (SELECT crew_user_id FROM crew_connections
+                                  WHERE user_id = ? AND status = 'active')
+         AND ca.actor_user_id NOT IN (SELECT blocked_user_id FROM blocked_users WHERE user_id = ?)
+         AND ca.actor_user_id NOT IN (SELECT user_id FROM blocked_users WHERE blocked_user_id = ?)
+         ${muteActorClause ? `AND ${muteActorClause('ca.actor_user_id')}` : ''}
+         ${cursor ? 'AND ca.created_at < ?' : ''}
+       ORDER BY ca.created_at DESC
+       LIMIT ?`,
+    );
+    activities = (
+      await actQuery
+        .bind(
+          userId, userId, userId,
+          ...(muteActorClause ? [userId] : []),
+          ...(cursor ? [cursor] : []),
+          limit + 1,
+        )
+        .all<FeedActivityRow>()
+    ).results;
+  }
 
   const eventBinds = [
     userId, userId, userId, userId, userId,
@@ -438,6 +529,29 @@ crewRouter.get('/feed', async (c) => {
       read: row.read_at != null,
       reactions: parseJsonObject(row.reactions) as Record<string, number>,
       myReaction: row.my_reaction,
+    });
+  }
+  for (const row of activities) {
+    items.push({
+      id: `act:${row.id}`,
+      type: row.kind === 'badge_earned' ? 'badge_earned' : row.kind,
+      occurredAt: row.created_at,
+      actor: {
+        id: row.actor_user_id,
+        displayName: row.actor_name ?? 'Nuvo member',
+        profilePhotoUrl: row.actor_avatar,
+      },
+      raceId: null,
+      raceTitle: null,
+      title: null,
+      summary: null,
+      payload: parseJsonObject(row.payload_json),
+      entityType: 'crew_activity',
+      entityId: row.id,
+      destination: { type: 'profile', id: row.actor_user_id },
+      read: true,
+      reactions: {},
+      myReaction: null,
     });
   }
 
