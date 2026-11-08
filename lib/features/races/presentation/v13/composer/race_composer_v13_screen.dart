@@ -71,8 +71,7 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
   void _update(RaceDraft d) => setState(() => _draft = d);
 
   void _next() {
-    // Load friends on the way INTO the invite step (index 2), not on the way
-    // out of it — otherwise the step always renders "No friends yet".
+    // Load friends on the way INTO the invite step (index 2).
     if (_step + 1 == 2) _loadFriends();
     setState(() {
       _step = (_step + 1).clamp(0, 3);
@@ -150,12 +149,9 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       activityId: payload['activityId'] as String?,
       metric: payload['metric'] as String,
       format: payload['format'] as String,
-      recurrence: payload['recurrence'] as String,
       targetUnit: payload['targetUnit'] as String,
       proofMode: payload['proofMode'] as String,
       scoreDirection: payload['scoreDirection'] as String?,
-      // The finish line the user picked — without this the server falls back
-      // to its default window and the race page disagrees with step 4.
       finishLineAt: payload['finishLineAt'] as String?,
       attemptDurationSeconds: payload['attemptDurationSeconds'] as int?,
       attemptLimit: payload['attemptLimit'] as int?,
@@ -498,17 +494,11 @@ class _NameStepState extends State<_NameStep> {
               style: V13.bodyStrong,
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _commit(),
-              // The card is the field's frame — kill every themed border so
-              // focus doesn't draw a second ring inside it.
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                disabledBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
                 filled: false,
-                isDense: false,
                 hintText: 'First to 100 Pushups',
                 hintStyle: TextStyle(color: V13.muted),
               ),
@@ -552,6 +542,14 @@ class _SetupStep extends ConsumerWidget {
     RaceFormat.timedAttempt: 'Timed battle',
   };
 
+  /// Timed battle attempt lengths — (seconds, chip label).
+  static const _attemptLengths = [
+    (15, '15 s'),
+    (30, '30 s'),
+    (60, '60 s'),
+    (120, '2 min'),
+  ];
+
   Future<void> _teach(BuildContext context) async {
     final name = await showV13Sheet<String>(
       context,
@@ -580,14 +578,22 @@ class _SetupStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customOn = NuvoFlags.customMotionOn;
+    // Manual goals can only run the logged formats; a taught custom movement
+    // is camera-verified like any preset and gets all four modes rather than
+    // whatever the previously selected preset happened to support.
     final modes = draft.isManual
         ? const [RaceFormat.firstToGoal, RaceFormat.mostInWindow]
-        : draft.activity.supportedFormats
-              .where(_modeLabels.containsKey)
-              .toList();
-    final finishOptions = draft.isDeadlineMode
-        ? const ['today', '3 days', '1 week', '2 weeks']
-        : const <String>[];
+        : draft.isCustom
+            ? _modeLabels.keys.toList()
+            : draft.activity.supportedFormats
+                  .where(_modeLabels.containsKey)
+                  .toList();
+    // Every mode shows a FINISH LINE section — required for the deadline
+    // modes, optional on First to (None bounds nothing; the race ends when
+    // somebody reaches the goal).
+    final finishOptions = draft.format == RaceFormat.firstToGoal
+        ? const ['none', '1 week', '2 weeks']
+        : const ['today', '3 days', '1 week', '2 weeks'];
 
     return _StepShell(
       question: 'Set it up.',
@@ -607,7 +613,7 @@ class _SetupStep extends ConsumerWidget {
             crossAxisSpacing: V13.gapSm,
             childAspectRatio: 1,
             children: [
-              for (final a in catalog.take(11))
+              for (final a in catalog)
                 _MovementTile(
                   icon: a.icon,
                   label: a.title,
@@ -640,6 +646,12 @@ class _SetupStep extends ConsumerWidget {
                   draft.copyWith(
                     goalKind: RaceGoalKind.manual,
                     metric: RaceMetric.reps,
+                    // Manual goals log progress by hand — there are no
+                    // camera attempts, so an attempt format becomes Most
+                    // total (the finish line is kept).
+                    format: draft.format.isAttemptBased
+                        ? RaceFormat.mostInWindow
+                        : draft.format,
                     clearCustom: true,
                     markEdited: {RaceField.goalKind},
                   ),
@@ -729,6 +741,89 @@ class _SetupStep extends ConsumerWidget {
             ),
             const SizedBox(height: V13.gapLg),
           ],
+          if (draft.format.usesAttemptDuration) ...[
+            Text('ATTEMPT LENGTH', style: V13.label),
+            const SizedBox(height: V13.gapMd),
+            Wrap(
+              spacing: V13.gapSm,
+              runSpacing: V13.gapSm,
+              children: [
+                for (final (secs, label) in _attemptLengths)
+                  V13Chip(
+                    label: label,
+                    selected: draft.attemptDurationSeconds == secs,
+                    onTap: () => onUpdate(
+                      draft.copyWith(
+                        attemptDurationSeconds: secs,
+                        markEdited: {RaceField.timing},
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: V13.gapLg),
+            Text('ATTEMPTS', style: V13.label),
+            const SizedBox(height: V13.gapMd),
+            Wrap(
+              spacing: V13.gapSm,
+              runSpacing: V13.gapSm,
+              children: [
+                V13Chip(
+                  label: 'Unlimited',
+                  selected: draft.attemptLimit == null,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      clearAttemptLimit: true,
+                      markEdited: {RaceField.timing},
+                    ),
+                  ),
+                ),
+                for (final n in const [1, 3, 5])
+                  V13Chip(
+                    label: '$n',
+                    selected: draft.attemptLimit == n,
+                    onTap: () => onUpdate(
+                      draft.copyWith(
+                        attemptLimit: n,
+                        markEdited: {RaceField.timing},
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: V13.gapLg),
+          ],
+          if (draft.format.isAttemptBased) ...[
+            Text('WIN DIRECTION', style: V13.label),
+            const SizedBox(height: V13.gapMd),
+            Wrap(
+              spacing: V13.gapSm,
+              runSpacing: V13.gapSm,
+              children: [
+                V13Chip(
+                  label: 'Most wins',
+                  selected: !draft.lowerWins,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      scoreDirection: 'higher',
+                      markEdited: {RaceField.scoreDirection},
+                    ),
+                  ),
+                ),
+                V13Chip(
+                  label: 'Lowest wins',
+                  selected: draft.lowerWins,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      scoreDirection: 'lower',
+                      markEdited: {RaceField.scoreDirection},
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: V13.gapLg),
+          ],
           if (finishOptions.isNotEmpty) ...[
             Text('FINISH LINE', style: V13.label),
             const SizedBox(height: V13.gapMd),
@@ -738,15 +833,26 @@ class _SetupStep extends ConsumerWidget {
               children: [
                 for (final phrase in finishOptions)
                   V13Chip(
-                    label: phrase == 'today' ? 'Today' : 'In $phrase',
-                    selected: _finishMatches(phrase),
+                    label: phrase == 'none'
+                        ? 'None'
+                        : phrase == 'today'
+                            ? 'Today'
+                            : 'In $phrase',
+                    selected: phrase == 'none'
+                        ? draft.finishLineAt == null
+                        : _finishMatches(phrase),
                     onTap: () => onUpdate(
-                      draft.copyWith(
-                        finishLineAt: deadlineUtcFromPhrase(
-                          phrase,
-                        )?.toIso8601String(),
-                        markEdited: {RaceField.timing},
-                      ),
+                      phrase == 'none'
+                          ? draft.copyWith(
+                              clearTiming: true,
+                              markEdited: {RaceField.timing},
+                            )
+                          : draft.copyWith(
+                              finishLineAt: deadlineUtcFromPhrase(
+                                phrase,
+                              )?.toIso8601String(),
+                              markEdited: {RaceField.timing},
+                            ),
                     ),
                   ),
               ],
@@ -1116,10 +1222,29 @@ class _ReviewStep extends StatelessWidget {
           _reviewRow('Movement', draft.displayActivityName, () => onJump(1)),
           const V13Divider(),
           _reviewRow('Mode', mode, () => onJump(1)),
+          if (draft.format.usesAttemptDuration) ...[
+            const V13Divider(),
+            _reviewRow(
+              'Attempt length',
+              formatDurationShort(draft.attemptDurationSeconds ?? 0),
+              () => onJump(1),
+            ),
+            const V13Divider(),
+            _reviewRow(
+              'Attempts',
+              draft.attemptLimit == null
+                  ? 'Unlimited'
+                  : '${draft.attemptLimit}',
+              () => onJump(1),
+            ),
+          ],
           const V13Divider(),
           _reviewRow(
             'Finish line',
-            _finishLine() ?? 'First to the goal wins it',
+            _finishLine() ??
+                (draft.format == RaceFormat.firstToGoal
+                    ? 'First to the goal wins it'
+                    : 'Required — tap to set'),
             () => onJump(1),
           ),
           const V13Divider(),
