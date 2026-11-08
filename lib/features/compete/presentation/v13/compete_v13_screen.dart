@@ -1,3 +1,4 @@
+import '../../../onboarding/presentation/first_use_guide.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -91,6 +92,25 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
   @override
   void initState() {
     super.initState();
+    // The pre-v13 first-race coach tour pointed at the old composer, which no
+    // longer exists. A new account still lands here (auth_gate routes the
+    // first run to /compete) where "New race" is the obvious next step, so
+    // any composer-era guide step is retired — persisted per account, which
+    // also lets later launches open on Arena.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final step = ref.read(firstRaceGuideProvider);
+      const retired = {
+        FirstRaceGuideStep.competeStart,
+        FirstRaceGuideStep.composerName,
+        FirstRaceGuideStep.composerActivity,
+        FirstRaceGuideStep.composerGoal,
+        FirstRaceGuideStep.composerRacers,
+        FirstRaceGuideStep.composerReview,
+        FirstRaceGuideStep.raceDetail,
+      };
+      if (retired.contains(step)) completeFirstRaceGuide(ref);
+    });
     _scroll.addListener(() {
       final show =
           !_scroll.hasClients ||

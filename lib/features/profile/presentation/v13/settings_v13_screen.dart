@@ -661,7 +661,7 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
             ),
           if (canReplayDemo || kDebugMode)
             V13ListRow(
-              title: 'Replay the guide',
+              title: 'Replay the intro',
               leading: const V13IconTile(
                 icon: Icons.replay_rounded,
                 color: V13.sun,

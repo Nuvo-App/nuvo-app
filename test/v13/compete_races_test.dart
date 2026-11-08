@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import '../helpers/screenshot.dart';
+import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 import 'package:nuvo/features/races/presentation/v13/composer/race_composer_v13_screen.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -144,6 +145,26 @@ void main() {
     // No open races → the whole section hides.
     expect(find.text('Join a race'), findsNothing);
     expect(find.text('Leaderboard'), findsNothing);
+  });
+
+  testWidgets('Compete retires a pending pre-v13 guide step', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final container = ProviderContainer(
+      overrides: _overrides(_StubRaceRepo(races: const [])),
+    );
+    addTearDown(container.dispose);
+    container.read(firstRaceGuideProvider.notifier).state =
+        FirstRaceGuideStep.competeStart;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: CompeteV13Screen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(container.read(firstRaceGuideProvider), FirstRaceGuideStep.complete);
   });
 
   testWidgets('Compete: open races + leaderboard render when served', (
