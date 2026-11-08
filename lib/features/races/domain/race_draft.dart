@@ -346,10 +346,11 @@ class RaceDraft {
   }
 
   /// Finish-line / attempt fields shared by camera and manual payloads —
-  /// emitted only when the format actually uses them so first-to-goal races
-  /// stay byte-identical to the pre-V2 contract even on a stale draft.
+  /// emitted only when set so a race with no finish line stays
+  /// byte-identical to the pre-V2 contract even on a stale draft. A
+  /// finish line is optional on first-to-goal and required elsewhere.
   Map<String, dynamic> _timingPayload() => {
-    if (format.usesDeadline && finishLineAt != null && finishLineAt!.isNotEmpty)
+    if (finishLineAt != null && finishLineAt!.isNotEmpty)
       'finishLineAt': finishLineAt,
     if (format.usesAttemptDuration && attemptDurationSeconds != null)
       'attemptDurationSeconds': attemptDurationSeconds,

@@ -314,4 +314,43 @@ void main() {
       expect(find.text(mode), findsOneWidget, reason: mode);
     }
   });
+
+  testWidgets('test_gap14_first_to_optional_finish_line', (tester) async {
+    // Draft + payload: None (the default) sends no finishLineAt — the
+    // payload stays byte-identical to today; opting in sends it like the
+    // deadline modes.
+    final none = draftFromIdea('First to 100 pushups')!;
+    expect(none.format, RaceFormat.firstToGoal);
+    expect(none.toCreatePayload().containsKey('finishLineAt'), isFalse);
+    final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+    expect(
+      none.copyWith(finishLineAt: deadline).toCreatePayload()['finishLineAt'],
+      deadline,
+    );
+
+    _size(tester);
+    final bodies = <Map<String, dynamic>>[];
+    final repo = _WireRaceRepo(onBody: bodies.add);
+    await tester.pumpWidget(_app(repo, home: const RaceComposerV13Screen()));
+    await tester.pumpAndSettle();
+    await _toSetup(tester);
+
+    // First to offers None / 1 week / 2 weeks — None is the default.
+    await tester.scrollUntilVisible(
+      find.text('None'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('In 1 week'), findsOneWidget);
+    expect(find.text('In 2 weeks'), findsOneWidget);
+
+    await _tapVisible(tester, 'In 1 week');
+    await _toReview(tester);
+    await tester.tap(find.text('Start race'));
+    await tester.pumpAndSettle();
+
+    expect(bodies, hasLength(1));
+    expect(bodies.single['format'], 'first_to_goal');
+    expect(bodies.single['finishLineAt'], isNotNull);
+  });
 }

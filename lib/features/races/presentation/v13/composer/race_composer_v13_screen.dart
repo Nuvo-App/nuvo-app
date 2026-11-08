@@ -580,9 +580,12 @@ class _SetupStep extends ConsumerWidget {
             : draft.activity.supportedFormats
                   .where(_modeLabels.containsKey)
                   .toList();
-    final finishOptions = draft.isDeadlineMode
-        ? const ['today', '3 days', '1 week', '2 weeks']
-        : const <String>[];
+    // Every mode shows a FINISH LINE section — required for the deadline
+    // modes, optional on First to (None bounds nothing; the race ends when
+    // somebody reaches the goal).
+    final finishOptions = draft.format == RaceFormat.firstToGoal
+        ? const ['none', '1 week', '2 weeks']
+        : const ['today', '3 days', '1 week', '2 weeks'];
 
     return _StepShell(
       question: 'Set it up.',
@@ -822,15 +825,26 @@ class _SetupStep extends ConsumerWidget {
               children: [
                 for (final phrase in finishOptions)
                   V13Chip(
-                    label: phrase == 'today' ? 'Today' : 'In $phrase',
-                    selected: _finishMatches(phrase),
+                    label: phrase == 'none'
+                        ? 'None'
+                        : phrase == 'today'
+                            ? 'Today'
+                            : 'In $phrase',
+                    selected: phrase == 'none'
+                        ? draft.finishLineAt == null
+                        : _finishMatches(phrase),
                     onTap: () => onUpdate(
-                      draft.copyWith(
-                        finishLineAt: deadlineUtcFromPhrase(
-                          phrase,
-                        )?.toIso8601String(),
-                        markEdited: {RaceField.timing},
-                      ),
+                      phrase == 'none'
+                          ? draft.copyWith(
+                              clearTiming: true,
+                              markEdited: {RaceField.timing},
+                            )
+                          : draft.copyWith(
+                              finishLineAt: deadlineUtcFromPhrase(
+                                phrase,
+                              )?.toIso8601String(),
+                              markEdited: {RaceField.timing},
+                            ),
                     ),
                   ),
               ],
