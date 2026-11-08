@@ -149,6 +149,16 @@ export function manualConfigFromBody(
   const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
   const format = FORMATS.has(rawFormat as RaceFormat) ? (rawFormat as RaceFormat) : 'first_to_goal';
 
+  // Strict rules (rules_version >= 1): a custom goal is scored by logged
+  // totals — camera attempt formats mean nothing without the camera.
+  // v0 keeps accepting them so existing attempt-format rows keep working.
+  if (
+    rulesVersionFromBody(body) >= 1 &&
+    (format === 'best_attempt' || format === 'timed_attempt')
+  ) {
+    return { error: 'Custom goals race First to or Most total.' };
+  }
+
   // A goal amount is only required for a race to a goal; window / attempt
   // formats are decided by score, so any client-sent target is a placeholder.
   const rawTarget = intValue(body, 'targetValue', 'target_value');
