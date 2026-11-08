@@ -184,6 +184,8 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                 ),
                 children: [
                   _Header(
+                    firstName: _firstName(user?.fullName),
+                    summary: _summary(live, user?.id),
                     onNewRace: () => context.push('/races/new'),
                     onJoinCode: () => context.push('/races/join'),
                     focus: _YouRightNow.pick(live, user?.id) == null
@@ -258,40 +260,102 @@ class _Header extends StatelessWidget {
     required this.onNewRace,
     required this.onJoinCode,
     this.focus,
+    this.firstName,
+    this.summary,
   });
   final VoidCallback onNewRace;
   final VoidCallback onJoinCode;
 
   /// "You right now" — the one race that most needs you. Optional.
   final Widget? focus;
+  final String? firstName;
+
+  /// One line of state: "2 live · 1 chasing you".
+  final String? summary;
 
   @override
   Widget build(BuildContext context) {
-    // One composition: title row (with the secondary "Code" action beside
-    // it, not floating below), the focus strip when there's a contest, then
-    // the single primary CTA. Consistent 16pt rhythm throughout.
+    // One calm composition, content first: greeting + state line, the focus
+    // strip when there's a contest, then the coloured Start hero with the
+    // code link inside it. No floating actions, no blank band.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: Text('Compete', style: V13.title)),
-            V13Button.secondary(
-              label: 'Join with code',
-              icon: Icons.vpn_key_rounded,
-              size: V13ButtonSize.small,
-              onPressed: onJoinCode,
-            ),
-          ],
+        Text(
+          firstName == null ? 'Compete' : 'Ready, $firstName?',
+          style: V13.title,
         ),
+        if (summary != null) ...[
+          const SizedBox(height: 2),
+          Text(summary!, style: V13.body.copyWith(color: V13.muted)),
+        ],
         const SizedBox(height: V13.gapLg),
-        if (focus != null) ...[focus!, const SizedBox(height: V13.gapLg)],
-        V13Button.primary(
-          label: 'New race',
-          icon: Icons.flag_rounded,
-          size: V13ButtonSize.large,
-          fullWidth: true,
-          onPressed: onNewRace,
+        if (focus != null) ...[focus!, const SizedBox(height: V13.gapMd)],
+        V13Card(
+          color: V13.blue,
+          shadow: V13.shadow6,
+          onTap: onNewRace,
+          semanticLabel: 'Start a race',
+          padding: const EdgeInsets.all(V13.gapLg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Start a race',
+                      style: V13.cardTitle.copyWith(color: V13.card),
+                    ),
+                  ),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: V13.card,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: V13.navy, width: V13.outline),
+                    ),
+                    child: const Icon(Icons.flag_rounded, color: V13.navy),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick a move, set the rules, invite friends.',
+                style: V13.body.copyWith(
+                  color: V13.card.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: V13.gapMd),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onJoinCode,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.vpn_key_rounded,
+                      size: 16,
+                      color: V13.card.withValues(alpha: 0.9),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Have a code? Join with a code',
+                        style: V13.bodyStrong.copyWith(
+                          color: V13.card,
+                          decoration: TextDecoration.underline,
+                          decorationColor: V13.card,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -940,4 +1004,24 @@ class _YouRightNow extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _firstName(String? full) {
+  final f = full?.trim().split(RegExp(r'\s+')).first ?? '';
+  return f.isEmpty ? null : f;
+}
+
+/// "2 live · 1 chasing you" — counts from the races already on screen.
+String? _summary(List<Race> live, String? userId) {
+  if (live.isEmpty) return 'No live races yet \u2014 start one.';
+  var chased = 0;
+  if (userId != null) {
+    for (final r in live) {
+      if (r.participants.length > 1 && rankForUser(r, userId) == 1) chased++;
+    }
+  }
+  return [
+    '${live.length} live',
+    if (chased > 0) '$chased chasing you',
+  ].join(' \u00b7 ');
 }

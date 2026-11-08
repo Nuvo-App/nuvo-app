@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../motion.dart';
 import '../tokens.dart';
+import 'v13_sheet.dart';
 
 /// One tab in [V13TabBar].
 class V13TabItem {
@@ -94,11 +95,8 @@ class V13TabBar extends StatelessWidget {
       items.length,
     );
 
-    return Padding(
-      padding: EdgeInsets.only(
-        top: topBreath,
-        bottom: dockBottomGap(context),
-      ),
+    final dock = Padding(
+      padding: EdgeInsets.only(top: topBreath, bottom: dockBottomGap(context)),
       child: Center(
         heightFactor: 1,
         child: Container(
@@ -152,6 +150,22 @@ class V13TabBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+    // Slides off-screen (with a little overshoot on the way back) while any
+    // sheet is open; returns when the last one closes.
+    return ValueListenableBuilder<int>(
+      valueListenable: v13ChromeHidden,
+      builder: (context, hidden, child) => AnimatedSlide(
+        offset: hidden > 0 ? const Offset(0, 1.6) : Offset.zero,
+        duration: reduce
+            ? Duration.zero
+            : (hidden > 0
+                  ? const Duration(milliseconds: 260)
+                  : V13Motion.medium),
+        curve: hidden > 0 ? Curves.easeInBack : V13Motion.spring,
+        child: child,
+      ),
+      child: dock,
     );
   }
 }

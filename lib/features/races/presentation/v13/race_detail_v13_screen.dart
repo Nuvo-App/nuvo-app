@@ -448,7 +448,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     }
     return Scaffold(
       backgroundColor: V13.bg,
-      body: SafeArea(bottom: false, child: content),
+      // The race body draws its own full-bleed hero under the status bar;
+      // loading / error states keep the safe area.
+      body: race != null ? content : SafeArea(bottom: false, child: content),
     );
   }
 
@@ -495,58 +497,47 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
 
     return Column(
       children: [
-        V13BackBar(
-          title: race.displayTitle,
-          onBack: () => safePopOrGo(context, '/compete'),
-          trailing: [
-            V13IconButton(
-              icon: Icons.more_horiz_rounded,
-              onTap: _openMenu,
-              semanticLabel: 'Race actions',
-            ),
-          ],
-        ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
             color: V13.blue,
+            edgeOffset: MediaQuery.paddingOf(context).top,
             child: ListView(
               controller: _scroll,
-              padding: EdgeInsets.fromLTRB(
-                V13.pagePad,
-                V13.gapSm,
-                V13.pagePad,
-                MediaQuery.paddingOf(context).bottom + 120,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(context).bottom + 120,
               ),
               children: [
-                enter(_metaChips(race, chase, completed), 'meta'),
-                const SizedBox(height: V13.gapLg),
-                if (showHero) ...[
-                  enter(
-                    KeyedSubtree(
-                      key: _heroKey,
-                      child: _youHero(
-                        race,
-                        me,
-                        chase,
-                        sorted,
-                        onSubmit: canVerify ? submit : null,
-                      ),
-                    ),
-                    'hero',
+                KeyedSubtree(
+                  key: _heroKey,
+                  child: _topHero(
+                    race,
+                    me,
+                    chase,
+                    sorted,
+                    completed: completed,
+                    onSubmit: showHero && canVerify ? submit : null,
                   ),
-                  const SizedBox(height: V13.gapSection),
-                ],
-                enter(
-                  completed && race.finalStandings.isNotEmpty
-                      ? _finalStandings(race, uid)
-                      : _standings(race, sorted, uid),
-                  'standings',
                 ),
-                const SizedBox(height: V13.gapSection),
-                enter(_activity(race, canOpenProofs), 'activity'),
-                const SizedBox(height: V13.gapSection),
-                enter(_about(race, active), 'about'),
+                const SizedBox(height: V13.gapXl),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      enter(
+                        completed && race.finalStandings.isNotEmpty
+                            ? _finalStandings(race, uid)
+                            : _standings(race, sorted, uid),
+                        'standings',
+                      ),
+                      const SizedBox(height: V13.gapSection),
+                      enter(_activity(race, canOpenProofs), 'activity'),
+                      const SizedBox(height: V13.gapSection),
+                      enter(_about(race, active), 'about'),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -630,6 +621,72 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     );
   }
 
+  // ── Top hero ────────────────────────────────────────────────────────────
+
+  /// Full-bleed hero in the race's colour: back + menu, big title, meta
+  /// chips, and (for racers) the big number, place, chase line and Submit —
+  /// one surface with a rounded bottom that flows into the standings.
+  Widget _topHero(
+    Race race,
+    RaceParticipant? me,
+    ChaseContext? chase,
+    List<RaceParticipant> sorted, {
+    required bool completed,
+    VoidCallback? onSubmit,
+  }) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Container(
+      decoration: BoxDecoration(
+        color: V13.raceColor(race.id),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(V13.radiusCardLg + 8),
+        ),
+        border: const Border(
+          bottom: BorderSide(color: V13.navy, width: V13.outline),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        V13.pagePad,
+        top + V13.gapSm,
+        V13.pagePad,
+        V13.gapXl,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              V13IconButton(
+                icon: Icons.arrow_back_rounded,
+                onTap: () => safePopOrGo(context, '/compete'),
+                semanticLabel: 'Back',
+              ),
+              const Spacer(),
+              V13IconButton(
+                icon: Icons.more_horiz_rounded,
+                onTap: _openMenu,
+                semanticLabel: 'Race actions',
+              ),
+            ],
+          ),
+          const SizedBox(height: V13.gapLg),
+          Text(
+            race.displayTitle,
+            style: V13.title,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: V13.gapMd),
+          _metaChips(race, chase, completed),
+          if (me != null && !completed) ...[
+            const SizedBox(height: V13.gapXl),
+            _youHero(race, me, chase, sorted, onSubmit: onSubmit),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ── YOU hero ────────────────────────────────────────────────────────────
 
   String _chaseLine(Race race, ChaseContext? chase, List<RaceParticipant> all) {
@@ -651,102 +708,96 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     final type = raceMeasurementType(race);
     final reps = type == MotionMeasurementType.repetitions;
     final reduce = MediaQuery.disableAnimationsOf(context);
-    return V13Card(
-      color: V13.raceColor(race.id),
-      padding: const EdgeInsets.all(V13.gapLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('YOU', style: V13.label.copyWith(color: V13.navy)),
-              const Spacer(),
-              if (rank != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: V13.card,
-                    borderRadius: BorderRadius.circular(V13.radiusPill),
-                    border: Border.all(color: V13.navy, width: V13.outline),
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('YOU', style: V13.label.copyWith(color: V13.navy)),
+            const Spacer(),
+            if (rank != null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: V13.card,
+                  borderRadius: BorderRadius.circular(V13.radiusPill),
+                  border: Border.all(color: V13.navy, width: V13.outline),
+                ),
+                child: Text(
+                  '${raceOrdinal(rank)} of ${sorted.length}',
+                  style: V13.bodyStrong.copyWith(fontSize: 14),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: V13.gapSm),
+        // Count up to the current value. Reps get a big number + unit;
+        // time / distance use the shared formatter so units never drift.
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: me.progressValue.toDouble()),
+          duration: reduce ? Duration.zero : const Duration(milliseconds: 700),
+          curve: Curves.easeOutCubic,
+          builder: (_, v, _) {
+            final n = v.round();
+            if (!reps) {
+              return Text(
+                raceScoreLabel(race, n),
+                style: V13.hugeNumber.copyWith(fontSize: 48),
+                maxLines: 1,
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text('$n', style: V13.hugeNumber.copyWith(fontSize: 64)),
+                const SizedBox(width: V13.gapSm),
+                Flexible(
                   child: Text(
-                    '${raceOrdinal(rank)} of ${sorted.length}',
-                    style: V13.bodyStrong.copyWith(fontSize: 14),
+                    hasGoal
+                        ? '/ ${race.targetValue} ${raceDisplayUnit(race)}'
+                        : raceDisplayUnit(race),
+                    style: V13.numberSm.copyWith(color: V13.navy),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-            ],
-          ),
+              ],
+            );
+          },
+        ),
+        if (hasGoal) ...[
           const SizedBox(height: V13.gapSm),
-          // Count up to the current value. Reps get a big number + unit;
-          // time / distance use the shared formatter so units never drift.
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: me.progressValue.toDouble()),
-            duration: reduce
-                ? Duration.zero
-                : const Duration(milliseconds: 700),
-            curve: Curves.easeOutCubic,
-            builder: (_, v, _) {
-              final n = v.round();
-              if (!reps) {
-                return Text(
-                  raceScoreLabel(race, n),
-                  style: V13.hugeNumber.copyWith(fontSize: 48),
-                  maxLines: 1,
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text('$n', style: V13.hugeNumber.copyWith(fontSize: 64)),
-                  const SizedBox(width: V13.gapSm),
-                  Flexible(
-                    child: Text(
-                      hasGoal
-                          ? '/ ${race.targetValue} ${raceDisplayUnit(race)}'
-                          : raceDisplayUnit(race),
-                      style: V13.numberSm.copyWith(color: V13.navy),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              );
-            },
+          V13ProgressBar(
+            value: raceProgressPercent(race, me) / 100,
+            trackColor: V13.card,
           ),
-          if (hasGoal) ...[
-            const SizedBox(height: V13.gapSm),
-            V13ProgressBar(
-              value: raceProgressPercent(race, me) / 100,
-              trackColor: V13.card,
-            ),
-          ],
-          const SizedBox(height: V13.gapMd),
-          Text(_chaseLine(race, chase, sorted), style: V13.bodyStrong),
-          if (race.attemptLimit != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              '${race.viewerContext?.attemptsUsed ?? 0} of ${race.attemptLimit} attempts used',
-              style: V13.caption.copyWith(color: V13.navy),
-            ),
-          ],
-          // Stage S5 slot: the timed-battle countdown / "start attempt"
-          // entry point mounts here, right above Submit proof.
-          raceDetailAttemptSlot(context, race),
-          if (onSubmit != null) ...[
-            const SizedBox(height: V13.gapLg),
-            V13Button.primary(
-              label: 'Submit proof',
-              icon: Icons.check_rounded,
-              fullWidth: true,
-              onPressed: onSubmit,
-            ),
-          ],
         ],
-      ),
+        const SizedBox(height: V13.gapMd),
+        Text(_chaseLine(race, chase, sorted), style: V13.bodyStrong),
+        if (race.attemptLimit != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            '${race.viewerContext?.attemptsUsed ?? 0} of ${race.attemptLimit} attempts used',
+            style: V13.caption.copyWith(color: V13.navy),
+          ),
+        ],
+        // Stage S5 slot: the timed-battle countdown / "start attempt"
+        // entry point mounts here, right above Submit proof.
+        raceDetailAttemptSlot(context, race),
+        if (onSubmit != null) ...[
+          const SizedBox(height: V13.gapLg),
+          V13Button.primary(
+            label: 'Submit proof',
+            icon: Icons.check_rounded,
+            fullWidth: true,
+            onPressed: onSubmit,
+          ),
+        ],
+      ],
     );
   }
 

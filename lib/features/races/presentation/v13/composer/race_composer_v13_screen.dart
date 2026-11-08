@@ -668,39 +668,45 @@ class _SetupStep extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: V13.gapMd),
-          // The two non-preset paths read as first-class options.
-          _OptionCard(
-            icon: Icons.edit_note_rounded,
-            color: V13.sun,
-            title: 'Custom goal',
-            body: 'Anything you can log \u2014 books, steps, study hours.',
-            selected: draft.isManual,
-            onTap: () => onUpdate(
-              draft.copyWith(
-                goalKind: RaceGoalKind.manual,
-                metric: RaceMetric.reps,
-                // Manual goals log progress by hand — there are no
-                // camera attempts, so an attempt format becomes Most
-                // total (the finish line is kept).
-                format: draft.format.isAttemptBased
-                    ? RaceFormat.mostInWindow
-                    : draft.format,
-                clearCustom: true,
-                markEdited: {RaceField.goalKind},
+          // The two non-preset paths, side by side and compact.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _OptionCard(
+                  icon: Icons.edit_note_rounded,
+                  color: V13.sun,
+                  title: 'Custom goal',
+                  body: 'Log anything',
+                  selected: draft.isManual,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      goalKind: RaceGoalKind.manual,
+                      metric: RaceMetric.reps,
+                      format: draft.format.isAttemptBased
+                          ? RaceFormat.mostInWindow
+                          : draft.format,
+                      clearCustom: true,
+                      markEdited: {RaceField.goalKind},
+                    ),
+                  ),
+                ),
               ),
-            ),
+              if (customOn) ...[
+                const SizedBox(width: V13.gapSm),
+                Expanded(
+                  child: _OptionCard(
+                    icon: Icons.auto_awesome_rounded,
+                    color: V13.lilac,
+                    title: 'Custom move',
+                    body: 'Teach Nuvo',
+                    selected: draft.isCustom,
+                    onTap: () => _teach(context),
+                  ),
+                ),
+              ],
+            ],
           ),
-          if (customOn) ...[
-            const SizedBox(height: V13.gapSm),
-            _OptionCard(
-              icon: Icons.auto_awesome_rounded,
-              color: V13.lilac,
-              title: 'Custom movement',
-              body: 'Teach Nuvo a new move \u2014 record it 3 times.',
-              selected: draft.isCustom,
-              onTap: () => _teach(context),
-            ),
-          ],
           const SizedBox(height: V13.gapLg),
           if (draft.isCustom && !draft.hasVerifierSpec) ...[
             V13Card.dashed(
@@ -729,28 +735,32 @@ class _SetupStep extends ConsumerWidget {
             _ManualFields(draft: draft, onUpdate: onUpdate),
             const SizedBox(height: V13.gapLg),
           ],
-          Text('MODE', style: V13.label),
-          const SizedBox(height: V13.gapMd),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: V13.gapSm,
-            crossAxisSpacing: V13.gapSm,
-            childAspectRatio: 1.3,
-            children: [
-              for (final f in modes)
-                _ModeTile(
-                  format: f,
-                  label: _modeLabels[f]!,
-                  selected: draft.format == f,
-                  onTap: () => onUpdate(
-                    draft.copyWith(format: f, markEdited: {RaceField.format}),
+          _CollapsibleRow(
+            key: const ValueKey('mode-row'),
+            label: 'Mode',
+            value: _modeLabels[draft.format] ?? '',
+            icon: _ModeTile._icon(draft.format),
+            child: GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: V13.gapSm,
+              crossAxisSpacing: V13.gapSm,
+              childAspectRatio: 1.3,
+              children: [
+                for (final f in modes)
+                  _ModeTile(
+                    format: f,
+                    label: _modeLabels[f]!,
+                    selected: draft.format == f,
+                    onTap: () => onUpdate(
+                      draft.copyWith(format: f, markEdited: {RaceField.format}),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: V13.gapLg),
+          const SizedBox(height: V13.gapSm),
           if (draft.format.usesScoreTarget) ...[
             Text('GOAL', style: V13.label),
             const SizedBox(height: V13.gapMd),
@@ -872,42 +882,50 @@ class _SetupStep extends ConsumerWidget {
             const SizedBox(height: V13.gapLg),
           ],
           if (finishOptions.isNotEmpty) ...[
-            Text('FINISH LINE', style: V13.label),
-            const SizedBox(height: V13.gapMd),
-            Wrap(
-              spacing: V13.gapSm,
-              runSpacing: V13.gapSm,
+            Row(
               children: [
-                for (final phrase in finishOptions)
-                  V13Chip(
-                    label: phrase == 'none'
-                        ? 'None'
-                        : phrase == 'today'
-                        ? 'Today'
-                        : 'In $phrase',
-                    selected: phrase == 'none'
-                        ? draft.finishLineAt == null
-                        : _finishMatches(phrase),
-                    onTap: () => onUpdate(
-                      phrase == 'none'
-                          ? draft.copyWith(
-                              clearTiming: true,
-                              markEdited: {RaceField.timing},
-                            )
-                          : draft.copyWith(
-                              finishLineAt: deadlineUtcFromPhrase(
-                                phrase,
-                              )?.toIso8601String(),
-                              markEdited: {RaceField.timing},
-                            ),
-                    ),
-                  ),
-                V13Chip(
-                  label: _customFinish() ?? 'Pick date',
-                  selected: _customFinish() != null,
-                  onTap: () => _pickDate(context),
-                ),
+                const Icon(Icons.event_rounded, size: 18, color: V13.navy),
+                const SizedBox(width: V13.gapSm),
+                Text('FINISH LINE', style: V13.label),
               ],
+            ),
+            const SizedBox(height: V13.gapSm),
+            SizedBox(
+              child: Wrap(
+                spacing: V13.gapSm,
+                runSpacing: V13.gapSm,
+                children: [
+                  for (final phrase in finishOptions)
+                    V13Chip(
+                      label: phrase == 'none'
+                          ? 'None'
+                          : phrase == 'today'
+                          ? 'Today'
+                          : 'In $phrase',
+                      selected: phrase == 'none'
+                          ? draft.finishLineAt == null
+                          : _finishMatches(phrase),
+                      onTap: () => onUpdate(
+                        phrase == 'none'
+                            ? draft.copyWith(
+                                clearTiming: true,
+                                markEdited: {RaceField.timing},
+                              )
+                            : draft.copyWith(
+                                finishLineAt: deadlineUtcFromPhrase(
+                                  phrase,
+                                )?.toIso8601String(),
+                                markEdited: {RaceField.timing},
+                              ),
+                      ),
+                    ),
+                  V13Chip(
+                    label: _customFinish() ?? 'Pick date',
+                    selected: _customFinish() != null,
+                    onTap: () => _pickDate(context),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -1464,14 +1482,42 @@ class _ReviewStep extends StatelessWidget {
                 const SizedBox(height: V13.gapMd),
                 Text(
                   _titleCase(draft.resolvedTitle),
-                  style: V13.cardTitle,
+                  style: V13.cardTitle.copyWith(fontSize: 28),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(draft.winStatement, style: V13.body),
+                const SizedBox(height: V13.gapLg),
+                Row(
+                  children: [
+                    V13IconTile(
+                      icon: draft.isManual
+                          ? Icons.edit_note_rounded
+                          : draft.isCustom
+                          ? Icons.auto_awesome_rounded
+                          : draft.activity.icon,
+                      color: V13.card,
+                    ),
+                    const Spacer(),
+                    V13Pill(
+                      label: _finishLine() == null
+                          ? 'No finish line'
+                          : 'Ends ${_finishLine()}',
+                      icon: Icons.schedule_rounded,
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: V13.gapMd),
+          Text(
+            invitedCount == 0
+                ? 'Next: it goes live, and you can share the link with anyone.'
+                : 'Next: it goes live and your $invitedCount '
+                      '${invitedCount == 1 ? 'friend gets' : 'friends get'} an invite.',
+            style: V13.caption,
           ),
           const SizedBox(height: V13.gapLg),
           _reviewRow('Movement', draft.displayActivityName, () => onJump(1)),
@@ -1632,10 +1678,8 @@ class _OptionCard extends StatelessWidget {
               ],
             ),
           ),
-          Icon(
-            selected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
-            color: selected ? V13.blue : V13.muted,
-          ),
+          if (selected)
+            const Icon(Icons.check_circle_rounded, color: V13.blue, size: 20),
         ],
       ),
     );
@@ -1781,6 +1825,72 @@ class _MovementSearchSheetState extends State<_MovementSearchSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A one-line row showing the current value; tap to expand its picker.
+class _CollapsibleRow extends StatefulWidget {
+  const _CollapsibleRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.child,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  State<_CollapsibleRow> createState() => _CollapsibleRowState();
+}
+
+class _CollapsibleRowState extends State<_CollapsibleRow> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        V13Card(
+          onTap: () => setState(() => _open = !_open),
+          semanticLabel: '${widget.label}: ${widget.value}',
+          padding: const EdgeInsets.all(V13.gapMd),
+          child: Row(
+            children: [
+              Icon(widget.icon, size: 20, color: V13.navy),
+              const SizedBox(width: V13.gapMd),
+              Text(widget.label, style: V13.body),
+              const Spacer(),
+              Text(widget.value, style: V13.bodyStrong),
+              const SizedBox(width: V13.gapXs),
+              AnimatedRotation(
+                turns: _open ? 0.5 : 0,
+                duration: V13Motion.fast,
+                curve: V13Motion.spring,
+                child: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: V13.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: V13Motion.fast,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _open
+              ? Padding(
+                  padding: const EdgeInsets.only(top: V13.gapSm),
+                  child: widget.child,
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 }

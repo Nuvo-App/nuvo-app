@@ -10,6 +10,9 @@ Widget _wrap(Widget child) => ProviderScope(
 );
 
 void main() {
+  // Sheets left open by earlier tests must not keep the dock hidden.
+  setUp(() => v13ChromeHidden.value = 0);
+
   group('tokens', () {
     test('raceColor is stable for the same id and inside the palette', () {
       for (final id in ['race-1', 'abc', 'pushup-monday', '42']) {

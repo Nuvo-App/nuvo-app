@@ -6,12 +6,31 @@ import 'v13_list_row.dart';
 import 'v13_pressable.dart';
 
 /// The v13 bottom sheet: rounded top, navy outline, drag handle.
+/// Shared "chrome hidden" signal: > 0 while any v13 sheet is open. The
+/// floating dock listens and slides away, so a sheet's content is never
+/// hidden behind it. One mechanism for every sheet — no per-screen hacks.
+final ValueNotifier<int> v13ChromeHidden = ValueNotifier<int>(0);
+
 Future<T?> showV13Sheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+}) async {
+  v13ChromeHidden.value++;
+  try {
+    return await _showSheet<T>(context, builder: builder);
+  } finally {
+    v13ChromeHidden.value = (v13ChromeHidden.value - 1).clamp(0, 1 << 20);
+  }
+}
+
+Future<T?> _showSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
 }) {
   return showModalBottomSheet<T>(
     context: context,
+    // Above the whole shell (dock included), not inside the tab's navigator.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     // The app theme gives every modal sheet its own drag handle + bordered

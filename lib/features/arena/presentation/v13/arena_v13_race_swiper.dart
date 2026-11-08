@@ -69,7 +69,8 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
 
   /// ~318 px card + 12 px gap → 330 px page as a fraction of the viewport.
   PageController _ensureController(double viewportWidth) {
-    final fraction = math.min(1.0, 330.0 / viewportWidth);
+    // Centred card at ~88% of the width; neighbours peek in on both sides.
+    const fraction = 0.88;
     final current = _controller;
     if (current == null) {
       return _controller = PageController(viewportFraction: fraction);
@@ -106,7 +107,7 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
     final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
     final cardHeight = ArenaRaceSwiper.height * (0.55 + 0.45 * textScale);
     return Padding(
-      padding: const EdgeInsets.only(left: V13.pagePad),
+      padding: EdgeInsets.zero,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final controller = _ensureController(constraints.maxWidth);
@@ -119,7 +120,7 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
                 child: PageView.builder(
                   controller: controller,
                   clipBehavior: Clip.none,
-                  padEnds: false,
+                  padEnds: true,
                   itemCount: pageCount,
                   onPageChanged: (i) => setState(() => _page = i),
                   itemBuilder: (context, i) {
@@ -136,10 +137,9 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
                                 : () => widget.onPlusDone!(shown[i].race.id),
                           );
                     return Padding(
-                      padding: const EdgeInsets.only(
-                        right: V13.gapMd,
-                        bottom: 8,
-                      ),
+                      // Balanced gutters; the extra 6pt on the right/bottom
+                      // is the hard shadow's room.
+                      padding: const EdgeInsets.fromLTRB(5, 0, 11, 8),
                       child: child,
                     );
                   },
@@ -148,6 +148,7 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
               if (pageCount > 1) ...[
                 const SizedBox(height: V13.gapMd),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // At most 8 dots; with more pages each dot covers a
                     // stretch of them so the row never runs off screen.

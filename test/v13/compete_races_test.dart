@@ -155,9 +155,10 @@ void main() {
       _app(_StubRaceRepo(races: [_race()]), home: const CompeteV13Screen()),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Compete'), findsOneWidget);
-    expect(find.text('New race'), findsOneWidget);
-    expect(find.text('Join with code'), findsOneWidget);
+    // Greeting + state line, then the Start a race hero (code link inside).
+    expect(find.textContaining('Ready,'), findsOneWidget);
+    expect(find.text('Start a race'), findsOneWidget);
+    expect(find.text('Have a code? Join with a code'), findsOneWidget);
     expect(find.text('Live races'), findsOneWidget);
     expect(find.text('Pushup Race'), findsWidgets);
     // No open races → the whole section hides.
@@ -432,19 +433,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // Camera-verifiable pushup → segmented chooser shows both.
-    expect(find.text('Camera'), findsOneWidget);
-    expect(find.text('Manual'), findsOneWidget);
+    // AI-verified movement → camera only, on every rules version (manual
+    // stays server-side for old installed apps, but this app never offers
+    // it for a movement the camera can verify).
+    expect(find.text('Manual'), findsNothing);
+    expect(find.text('Start camera proof'), findsOneWidget);
     await shot(tester, 'v13_submit_sheet');
-    await tester.tap(find.text('Manual'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Log proof'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Add a photo — proof is required for this race.'),
-      findsOneWidget,
-    );
-    expect(find.text('Keeps you at 2nd.'), findsOneWidget);
   });
 
   testWidgets('test_gap8_manual_tab_hidden_on_camera_only_race', (
@@ -475,8 +469,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Camera'), findsOneWidget);
-    expect(find.text('Manual'), findsOneWidget);
+    // Legacy rules too: AI-verified movements are camera-only in this app.
+    expect(find.text('Manual'), findsNothing);
+    expect(find.text('Start camera proof'), findsOneWidget);
   });
 }
 
