@@ -70,7 +70,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
 
   /// The take crossed its finish line. No goal means never — the athlete
   /// ends the take with Done, which is what actually submits the count.
-  bool get _reachedTarget => _target != null && _last.count >= _target!;
+  bool get _reachedTarget => _target != null && _last.count >= _target;
 
   @override
   int? get targetValue => _target;
