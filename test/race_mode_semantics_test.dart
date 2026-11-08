@@ -264,6 +264,43 @@ void main() {
   });
 
   group('TIMED_BATTLE', () {
+    test('test_gap17_timed_lower_direction_label', () {
+      // Direction-aware: a lower-wins timed battle never reads "Most".
+      expect(timedAttemptRuleLine('lower', 30), 'Lowest in 30s wins');
+      expect(timedAttemptRuleLine('higher', 30), 'Most in 30s wins');
+      expect(timedAttemptRuleLine('higher', 60), 'Most in 1 min wins');
+      // A missing/zero duration never prints "0s" — the label falls back
+      // to the plain mode name (keeping the direction when it matters).
+      expect(timedAttemptRuleLine('higher', null), 'Timed battle');
+      expect(timedAttemptRuleLine('higher', 0), 'Timed battle');
+      expect(
+        timedAttemptRuleLine('lower', null),
+        'Timed battle — lowest score wins',
+      );
+      // statusLine routes through the same rule line.
+      final ctx = VerifierRaceContext.forRace(
+        makeRace(
+          format: 'timed_attempt',
+          scoringRule: 'minimum_attempt',
+          scoreDirection: 'lower',
+          attemptDurationSeconds: 30,
+          participants: [participant(userId: 'me', score: 0)],
+        ),
+        'me',
+      );
+      expect(ctx.statusLine, 'Lowest in 30s wins');
+      final noDuration = VerifierRaceContext.forRace(
+        makeRace(
+          format: 'timed_attempt',
+          scoringRule: 'maximum_attempt',
+          participants: [participant(userId: 'me', score: 0)],
+        ),
+        'me',
+      );
+      expect(noDuration.statusLine, 'Timed battle');
+      expect(noDuration.statusLine, isNot(contains('0s')));
+    });
+
     test('attempt duration + score to beat', () {
       final race = makeRace(
         format: 'timed_attempt',
