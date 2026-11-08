@@ -267,35 +267,31 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // One composition: title row (with the secondary "Code" action beside
+    // it, not floating below), the focus strip when there's a contest, then
+    // the single primary CTA. Consistent 16pt rhythm throughout.
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Compete', style: V13.title),
-        const SizedBox(height: V13.gapLg),
-        if (focus != null) ...[focus!, const SizedBox(height: V13.gapLg)],
         Row(
           children: [
-            Expanded(
-              child: V13Button.primary(
-                label: 'New race',
-                icon: Icons.flag_rounded,
-                onPressed: onNewRace,
-              ),
+            Expanded(child: Text('Compete', style: V13.title)),
+            V13Button.secondary(
+              label: 'Join with code',
+              icon: Icons.vpn_key_rounded,
+              size: V13ButtonSize.small,
+              onPressed: onJoinCode,
             ),
           ],
         ),
-        const SizedBox(height: V13.gapMd),
-        V13Pressable(
-          onTap: onJoinCode,
-          pressDepth: 1.5,
-          semanticLabel: 'Join with a code',
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              'Join with a code',
-              style: V13.bodyStrong.copyWith(color: V13.blue),
-            ),
-          ),
+        const SizedBox(height: V13.gapLg),
+        if (focus != null) ...[focus!, const SizedBox(height: V13.gapLg)],
+        V13Button.primary(
+          label: 'New race',
+          icon: Icons.flag_rounded,
+          size: V13ButtonSize.large,
+          fullWidth: true,
+          onPressed: onNewRace,
         ),
       ],
     );
@@ -349,8 +345,9 @@ class _LiveRaceCard extends ConsumerWidget {
             children: [
               Container(
                 height: 10,
-                decoration: const BoxDecoration(
-                  color: V13.coral,
+                decoration: BoxDecoration(
+                  // The race's own base colour, not always coral.
+                  color: V13.raceColor(race.id),
                   border: Border(
                     bottom: BorderSide(color: V13.navy, width: V13.outline),
                   ),

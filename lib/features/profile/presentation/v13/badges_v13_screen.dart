@@ -270,20 +270,15 @@ class _BadgesV13ScreenState extends ConsumerState<BadgesV13Screen> {
   Widget _filterChips() {
     const filters = ['All', 'Earned', 'Locked', 'Racing', 'Winning', 'Streaks'];
     final visible = filters.where((f) => _countFor(f) > 0).toList();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var i = 0; i < visible.length; i++) ...[
-            if (i > 0) const SizedBox(width: V13.gapSm),
-            V13Chip(
-              label: visible[i],
-              selected: _filter == visible[i],
-              onTap: () => setState(() => _filter = visible[i]),
-            ),
-          ],
-        ],
-      ),
+    return V13ChipRow(
+      children: [
+        for (final f in visible)
+          V13Chip(
+            label: f,
+            selected: _filter == f,
+            onTap: () => setState(() => _filter = f),
+          ),
+      ],
     );
   }
 

@@ -155,7 +155,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Compete'), findsOneWidget);
     expect(find.text('New race'), findsOneWidget);
-    expect(find.text('Join with a code'), findsOneWidget);
+    expect(find.text('Join with code'), findsOneWidget);
     expect(find.text('Live races'), findsOneWidget);
     expect(find.text('Pushup Race'), findsWidgets);
     // No open races → the whole section hides.

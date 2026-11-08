@@ -134,7 +134,7 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
           icon: Icons.ios_share_rounded,
           onPressed: invite == null
               ? null
-              : () => Share.share('Add me on Nuvo — ${invite.url}'),
+              : () => shareMyNuvoLink(context, invite.url),
         ),
         const SizedBox(height: V13.gapMd),
         V13Button.secondary(
@@ -679,4 +679,23 @@ class _ReticlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ReticlePainter oldDelegate) => false;
+}
+
+/// The one way Nuvo shares "add me" — My code's "Share your code" and
+/// Profile's "Share profile" both call this, so the link and copy can't
+/// drift. Opens the iOS share sheet (anchored to [context] for iPad); if the
+/// sheet can't open, copies the link and says so.
+Future<void> shareMyNuvoLink(BuildContext context, String url) async {
+  final box = context.findRenderObject() as RenderBox?;
+  try {
+    await Share.share(
+      'Add me on Nuvo — $url',
+      sharePositionOrigin: box == null
+          ? null
+          : box.localToGlobal(Offset.zero) & box.size,
+    );
+  } catch (_) {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) showV13Toast(context, 'Link copied.');
+  }
 }

@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'my_nuvo_code_v13_screen.dart' show shareMyNuvoLink;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/demo/presentation_demo.dart';
 import '../../../../core/v13/v13.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../../../crew/application/crew_controller.dart';
-import '../../../pass/application/member_pass_provider.dart';
 import '../../../races/data/race_models.dart';
 import '../../../races/domain/race_display.dart';
 import '../../../races/presentation/race_controller.dart';
@@ -126,22 +126,20 @@ class ProfileV13Screen extends ConsumerWidget {
     await ref.read(progressionControllerProvider.notifier).load();
   }
 
+  /// Same link as My code (a minted personal invite) through the same share
+  /// helper, so Share profile and Share your code can never diverge.
   Future<void> _shareProfile(BuildContext context, WidgetRef ref) async {
-    String? url = ref.read(memberPassProvider).info?.shareUrl;
-    if (url == null || url.isEmpty) {
-      try {
-        final MintedInvite invite = await ref
-            .read(inviteRepositoryProvider)
-            .mintMyCrewInvite();
-        url = invite.url;
-      } catch (_) {
-        if (context.mounted) {
-          showV13Toast(context, "Couldn't get your profile link. Try again.");
-        }
-        return;
+    try {
+      final MintedInvite invite = await ref
+          .read(inviteRepositoryProvider)
+          .mintMyCrewInvite();
+      if (!context.mounted) return;
+      await shareMyNuvoLink(context, invite.url);
+    } catch (_) {
+      if (context.mounted) {
+        showV13Toast(context, "Couldn't get your profile link. Try again.");
       }
     }
-    await Share.share('Race me on Nuvo — $url');
   }
 
   List<Race> _finishedHistory(List<Race> races, String? userId) {

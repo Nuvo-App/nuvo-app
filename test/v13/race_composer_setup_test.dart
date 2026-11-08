@@ -215,23 +215,26 @@ void main() {
     await tester.pumpAndSettle();
     await _toSetup(tester);
 
-    // The grid is lazy inside the step ListView — scroll down, collecting
-    // every movement label until the trailing Custom tiles are in view.
+    // Setup shows the main movements as tiles plus "More", which opens a
+    // searchable sheet of the FULL range — every movement must be reachable.
     final titles = motionActivityDefinitions.map((d) => d.title).toSet();
+    await _tapVisible(tester, 'More');
     final found = <String>{};
     var guard = 0;
-    while (find.text('Custom goal').evaluate().isEmpty && guard++ < 40) {
+    final sheetList = find.byType(Scrollable).last;
+    while (guard++ < 40) {
       for (final t in titles) {
         if (find.text(t).evaluate().isNotEmpty) found.add(t);
       }
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+      if (found.containsAll(titles)) break;
+      await tester.drag(sheetList, const Offset(0, -250));
       await tester.pump();
     }
-    for (final t in titles) {
-      if (find.text(t).evaluate().isNotEmpty) found.add(t);
-    }
     expect(found, containsAll(titles));
-    expect(find.text('Custom'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Search movements'))).pop();
+    await tester.pumpAndSettle();
+    // Custom movement + Custom goal are first-class option cards.
+    expect(find.text('Custom movement'), findsOneWidget);
     expect(find.text('Custom goal'), findsOneWidget);
   });
 
