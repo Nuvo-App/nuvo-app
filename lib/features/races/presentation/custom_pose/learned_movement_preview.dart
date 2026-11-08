@@ -3,8 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_geometry.dart';
+import '../../../../core/v13/v13.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
 import 'pose_skeleton_overlay.dart';
@@ -66,8 +65,8 @@ class _LearnedMovementPreviewState extends State<LearnedMovementPreview> {
     return Container(
       height: _previewHeight,
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        color: V13.navy,
+        borderRadius: BorderRadius.circular(V13.radiusCardLg),
       ),
       child: CustomPaint(
         painter: _LearnedMovementPainter(
@@ -231,11 +230,11 @@ class _LearnedMovementPainter extends CustomPainter {
     }
 
     final jointPaint = Paint()
-      ..color = NuvoColors.white.withValues(alpha: 0.9)
+      ..color = V13.white.withValues(alpha: 0.9)
       ..style = PaintingStyle.fill;
 
     final bonePaint = Paint()
-      ..color = NuvoColors.white.withValues(alpha: 0.55)
+      ..color = V13.white.withValues(alpha: 0.55)
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
 

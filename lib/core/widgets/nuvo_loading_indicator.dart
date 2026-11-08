@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../v13/v13.dart';
 
 /// Brand-colored loading indicator — replaces bare `CircularProgressIndicator()`
 /// per the Nuvo App Design Guide's "no part of the app that doesn't feel
@@ -38,7 +38,7 @@ class _NuvoLoadingIndicatorState extends State<NuvoLoadingIndicator>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.color ?? NuvoColors.blue;
+    final color = widget.color ?? V13.blue;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {

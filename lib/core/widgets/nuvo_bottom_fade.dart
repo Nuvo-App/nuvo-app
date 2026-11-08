@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nuvo/core/theme/app_colors.dart';
+import 'package:nuvo/core/v13/v13.dart';
 
 /// ~28pt page-colored gradient laid over the bottom edge of a scrolling body
 /// so a row that continues below the fold eases out instead of being sliced.
@@ -11,7 +11,7 @@ class NuvoBottomFade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final page = context.themeColors.page;
+    const page = V13.bg;
     return Positioned(
       left: 0,
       right: 0,

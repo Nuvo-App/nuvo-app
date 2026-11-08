@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
+import '../core/v13/v13.dart';
 import '../core/theme/nuvo_responsive.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/notifications/application/push_service.dart';
@@ -202,7 +202,7 @@ Widget _webPreviewBuilder(BuildContext context, Widget? child) {
   final content = child ?? const SizedBox.shrink();
   if (width <= 600) return content;
   return Container(
-    color: NuvoColors.page,
+    color: V13.bg,
     child: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 430),
