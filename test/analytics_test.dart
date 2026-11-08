@@ -242,6 +242,8 @@ void main() {
         'method': 'google', // remembered from signupStarted
         'reason': 'cancelled',
       });
+      expect(sink.events[18].properties, {'ms': 450});
+      expect(sink.events[19].properties, {'reason': 'no_person'});
       expect(sink.events[20].properties, {
         'outcome': 'verified',
         'detected_value': '10-49', // bucketed, not the raw count
@@ -310,6 +312,55 @@ void main() {
       );
       expect(analytics.isConfigured, isFalse); // start failure ⇒ inert
       analytics.raceJoined(); // must not throw
+    });
+  });
+
+  group('camera + proof events', () {
+    test('camera_ready carries only the open-to-ready ms', () async {
+      final sink = _RecordingSink();
+      final analytics = await _analyticsWith(sink);
+
+      analytics.cameraReady(ms: 812);
+
+      expect(sink.events.single.event, 'camera_ready');
+      expect(sink.events.single.properties, {'ms': 812});
+    });
+
+    test('calibration_failed carries only the reason enum', () async {
+      final sink = _RecordingSink();
+      final analytics = await _analyticsWith(sink);
+
+      analytics.calibrationFailed(reason: 'missing_landmarks');
+
+      expect(sink.events.single.event, 'calibration_failed');
+      expect(sink.events.single.properties, {'reason': 'missing_landmarks'});
+    });
+
+    test('proof_result buckets detected_value and drops null props',
+        () async {
+      final sink = _RecordingSink();
+      final analytics = await _analyticsWith(sink);
+
+      analytics.proofResult(
+        outcome: 'verified',
+        detectedValue: 120,
+        durationS: 45,
+      );
+      expect(sink.events.single.event, 'proof_result');
+      expect(sink.events.single.properties, {
+        'outcome': 'verified',
+        'detected_value': '100+', // bucketed, never the raw count
+        'duration_s': 45,
+      });
+
+      analytics.proofResult(
+        outcome: 'submit_failed',
+        failureReason: 'http_503',
+      );
+      expect(sink.events.last.properties, {
+        'outcome': 'submit_failed',
+        'failure_reason': 'http_503',
+      });
     });
   });
 

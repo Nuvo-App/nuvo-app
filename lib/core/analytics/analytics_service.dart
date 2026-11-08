@@ -338,12 +338,13 @@ class AnalyticsService {
   void proofStarted({required String activityId}) =>
       track('proof_started', {'activity_id': activityId});
 
-  /// TODO(camera): fired from the AI Motion verifier once its preview is
-  /// live — see the call-site list in docs/ANALYTICS.md. Not wired here
-  /// because that file is owned by another stage.
+  /// The AI Motion camera reached its live ready state — [ms] is the
+  /// screen-open → first-preview latency, fired once per open.
   void cameraReady({int? ms}) => track('camera_ready', {'ms': ms});
 
-  /// TODO(camera): same — see docs/ANALYTICS.md. [reason] enum.
+  /// A camera take ended unverified. [reason] is the verifier's internal
+  /// failure enum (`missing_landmarks`, `hold_broken`, `shot_not_confirmed`,
+  /// …), never a user-facing message.
   void calibrationFailed({String? reason}) =>
       track('calibration_failed', {'reason': reason});
 

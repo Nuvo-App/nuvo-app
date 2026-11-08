@@ -89,8 +89,8 @@ pages (`story_p0..7`), `10` notifications.
 | `race_completed` | — | A submit returns `raceCompleted` — the user's race finished. |
 | `race_abandoned` | — | An open attempt is released with no proof bound. |
 | `proof_started` | `activity_id` (movement enum or `unknown`) | AI Motion entry point or photo evidence attached. |
-| `camera_ready` | `ms` | **TODO — not wired yet** (see below). |
-| `calibration_failed` | `reason` | **TODO — not wired yet** (see below). |
+| `camera_ready` | `ms` | The AI Motion preview reaches its live ready state — `ms` is screen-open to first `cameraReady`, once per open (lens flips/resumes don't refire). |
+| `calibration_failed` | `reason` | An AI Motion take finishes unverified — `reason` is the verifier's internal failure enum (`missing_landmarks`, `pushup_framing_too_close`, `hold_broken`, `shot_not_confirmed`, `no_verified_repetitions`, `target_not_met`, remote/object diagnostics, `unknown`). |
 | `proof_result` | `outcome`: `verified` \| `needs_review` \| `pending` \| `rejected` \| `submit_failed`; `failure_reason` (status code); `detected_value` bucket `0` \| `1-9` \| `10-49` \| `50-99` \| `100+`; `duration_s` | Every submit lands or throws — all four controller proof paths. |
 | `push_registered` | — | The device token sync lands on the server. |
 | `push_register_failed` | `reason`: `denied` \| `error` | Permission denied or the token sync reports failure. |
@@ -98,21 +98,30 @@ pages (`story_p0..7`), `10` notifications.
 | `screen_loaded` | `screen`, `ms` | First frame on the 5 key screens: `compete`, `arena`, `race_detail`, `activity`, `settings`. |
 | `api_error` | `route` (logical tag), `status` | `ApiException` at controller submit/join seams. Max 5/session. |
 
-### TODO — camera events behind helpers, exact call sites for the next stage
+### Camera funnel call sites
 
-`ai_motion_proof_screen*.dart` is owned by another stage right now, so these
-two events exist as helpers only — wire them inside the verifier when that
-file is unfrozen:
+All three camera events are wired in
+`lib/features/races/presentation/ai_motion_proof_screen_io.dart` and the
+`RaceController` submit seams it calls:
 
-- `cameraReady(ms:)` — call in `ai_motion_proof_screen_io.dart` where the
-  camera preview first renders a live frame (measure from screen open to
-  first frame; `ms` = elapsed).
-- `calibrationFailed(reason:)` — call in `ai_motion_proof_screen_io.dart`
-  where calibration/baseline detection gives up (the "couldn't calibrate"
-  error path); `reason` should be the internal failure enum, not a message.
-
-`proof_result` already lands via `RaceController` submit seams — no camera
-file needs to emit it.
+- `cameraReady(ms:)` — inside `_initializeCamera`, on the success path that
+  first sets `AiMotionProofStatus.cameraReady`. Guarded by
+  `_cameraReadyTracked` so it fires once per screen open; `ms` is measured
+  from `_screenOpenedAt` (set at State init). Lens flips, lifecycle resumes,
+  and Record-again re-entries don't re-emit.
+- `calibrationFailed(reason:)` — inside `_finishRecording`, at each of the
+  three `aiFailed` transitions (object composition, custom pose, and
+  preset/remote branches). The reason is the verifier's internal failure
+  enum — `_objectUpdate?.diagnostic ?? 'shot_not_confirmed'` for basketball,
+  `acceptedResult.finalFailureReason ?? _runtime.failedRuleReason` for
+  custom, `_runtime.failedRuleReason` for preset/remote — with `unknown`
+  when the runtime recorded none. Never a user-facing message.
+- `proof_result` — lands via `_emitProofOutcome` / `_emitProofFailure` on
+  the four controller submit paths (`submitProof`, `submitAiMotionProof`,
+  `submitObjectCompositionProof`, `submitCustomPoseProof`), once per landed
+  or thrown submit. The camera file deliberately never emits it — doing so
+  would double-fire. `race_started` likewise stays on `startAttempt`;
+  `_ensureOpenAttempt`'s silent binds don't count.
 
 ## Crash reporting (Crashlytics)
 
