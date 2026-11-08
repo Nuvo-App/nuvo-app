@@ -282,7 +282,7 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
                 ),
                 const SizedBox(height: V13.gapMd),
                 SizedBox(
-                  height: 116,
+                  height: 108,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(

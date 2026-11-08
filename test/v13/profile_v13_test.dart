@@ -569,7 +569,7 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 300));
     }
-    expect(find.text('Paste a Nuvo link'), findsOneWidget);
+    expect(find.text('Or paste a Nuvo link'), findsOneWidget);
   });
 }
 

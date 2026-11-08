@@ -53,8 +53,21 @@ class V13TabBar extends StatelessWidget {
   /// Section gap reserved below a scroll view's last row, on top of the dock.
   static const double scrollClearance = 16;
 
-  /// Width of one tab slot.
-  static const double slotWidth = 76;
+  /// Widest a tab slot gets — the dock hugs its content instead of
+  /// running edge to edge.
+  static const double maxSlotWidth = 76;
+
+  /// Minimum side gap between the dock and the screen edges.
+  static const double sideInset = 16;
+
+  static const double _inner = 4;
+
+  /// Slot width for a screen [width]: [maxSlotWidth], shrunk on narrow
+  /// phones (iPhone SE 1st gen) so the dock always keeps [sideInset].
+  static double slotWidthFor(double width, int count) {
+    final room = width - sideInset * 2 - (V13.outline + _inner) * 2;
+    return math.min(maxSlotWidth, room / count);
+  }
 
   /// Gap between the dock and the bottom edge when there's no home indicator.
   static const double _minBottomGap = 12;
@@ -75,7 +88,11 @@ class V13TabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final reduce = MediaQuery.disableAnimationsOf(context);
     final index = currentIndex.clamp(0, items.length - 1);
-    const inner = 4.0;
+    const inner = _inner;
+    final slotWidth = slotWidthFor(
+      MediaQuery.sizeOf(context).width,
+      items.length,
+    );
 
     return Padding(
       padding: EdgeInsets.only(
@@ -85,6 +102,7 @@ class V13TabBar extends StatelessWidget {
       child: Center(
         heightFactor: 1,
         child: Container(
+          key: const ValueKey('v13-dock'),
           decoration: BoxDecoration(
             color: V13.card,
             borderRadius: BorderRadius.circular(V13.radiusPill),
