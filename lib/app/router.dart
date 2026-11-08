@@ -7,6 +7,7 @@
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
 import '../core/config/v13.dart';
+import '../features/notifications/presentation/v13/activity_v13_screen.dart';
 import '../features/social/presentation/v13/crew_tab_v13_screen.dart';
 import '../features/squads/presentation/v13/crew_page_v13_screen.dart';
 import '../features/profile/presentation/v13/badges_v13_screen.dart';
@@ -243,8 +244,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/notifications',
-        pageBuilder: (_, state) =>
-            _detailPage(state, const NotificationsScreen()),
+        pageBuilder: (_, state) => _detailPage(
+          state,
+          kNuvoV13 ? const ActivityV13Screen() : const NotificationsScreen(),
+        ),
       ),
       GoRoute(
         path: '/settings',

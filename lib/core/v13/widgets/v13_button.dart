@@ -160,7 +160,10 @@ class V13Button extends StatelessWidget {
       padding: EdgeInsets.symmetric(
         horizontal: size == V13ButtonSize.small ? V13.gapLg : V13.gapXl,
       ),
-      alignment: Alignment.center,
+      // Only a full-width button may center inside spare space: a Container
+      // with an alignment grows to fill loose constraints, which would make
+      // every compact button stretch inside an Align/Column.
+      alignment: fullWidth ? Alignment.center : null,
       decoration: BoxDecoration(
         color: fill,
         borderRadius: borderRadius,
