@@ -334,7 +334,6 @@ class RaceDraft {
       'activityId': activity.activityId,
       'metric': metric.backendValue,
       'format': format.backendValue,
-      'recurrence': recurrence.backendValue,
       'proofRequirement': 'ai_check',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
@@ -371,7 +370,6 @@ class RaceDraft {
       'targetUnit': unit,
       'metric': 'reps',
       'format': format.backendValue,
-      'recurrence': recurrence.backendValue,
       // Proof contract: Nuvo is evidence-based — anything the camera can't
       // verify automatically requires a photo on every submission.
       'proofRequirement': 'photo_video',

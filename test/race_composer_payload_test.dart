@@ -77,5 +77,20 @@ void main() {
       );
       expect(best.toCreatePayload()['scoreDirection'], 'lower');
     });
+
+    test('test_gap12_payload_omits_recurrence', () {
+      // Recurrence stays a draft field but never leaves the composer —
+      // the Worker defaults a race to no recurrence.
+      final preset = draftFromIdea('First to 100 pushups')!.copyWith(
+        recurrence: RaceRecurrence.daily,
+      );
+      expect(preset.toCreatePayload().containsKey('recurrence'), isFalse);
+
+      final manual = draftFromIdea('First to 10 cartwheels')!.copyWith(
+        recurrence: RaceRecurrence.weekly,
+      );
+      expect(manual.isManual, isTrue);
+      expect(manual.toCreatePayload().containsKey('recurrence'), isFalse);
+    });
   });
 }

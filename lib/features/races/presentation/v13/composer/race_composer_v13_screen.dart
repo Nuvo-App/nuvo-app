@@ -144,7 +144,6 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       activityId: payload['activityId'] as String?,
       metric: payload['metric'] as String,
       format: payload['format'] as String,
-      recurrence: payload['recurrence'] as String,
       targetUnit: payload['targetUnit'] as String,
       proofMode: payload['proofMode'] as String,
       scoreDirection: payload['scoreDirection'] as String?,
