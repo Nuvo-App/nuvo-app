@@ -1,18 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/v13/v13.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/count_up_text.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/nuvo_motion.dart';
 import '../domain/proof_status.dart';
 
 class BoardMovedArgs {
@@ -48,9 +40,10 @@ class BoardMovedArgs {
   final bool aiMotionProof;
 }
 
-/// Full-screen payoff shown right after a proof resolves. A verified result is
-/// a fully-green celebration with a counting-up rank and a burst; anything not
-/// verified stays calm and light. Every number comes from the proof response.
+/// Full-screen payoff shown right after a proof resolves. The v13 reward
+/// moment: a big "+N" in hero type, a rank pop when the standing changed,
+/// and confetti when the racer took the lead. Pending and failed verdicts
+/// stay calm. Every number comes from the proof response.
 class BoardMovedScreen extends StatefulWidget {
   const BoardMovedScreen({super.key, required this.raceId, required this.args});
 
@@ -78,6 +71,12 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
 
   int get _spotsMoved => _movedUp ? (args.rankBefore! - args.rankAfter!) : 0;
 
+  /// Confetti condition — the racer took the lead with this proof.
+  bool get _tookLead =>
+      _isVerified &&
+      args.rankAfter == 1 &&
+      (args.rankBefore == null || args.rankBefore != 1);
+
   String get _valueLabel =>
       '${args.value}${args.unit != null ? ' ${args.unit}' : ''}';
 
@@ -96,20 +95,24 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
     return 'Holding #${args.rankAfter}';
   }
 
+  String get _againRoute => args.aiMotionProof
+      ? '/race/$raceId/proof/ai-motion'
+      : '/race/$raceId/proof';
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_isNotVerified) {
-        HapticFeedback.lightImpact();
+        V13Haptics.light();
       } else if (_isPending) {
-        HapticFeedback.selectionClick();
+        V13Haptics.select();
       } else {
-        HapticFeedback.mediumImpact();
+        V13Haptics.confirm();
         // A second, lighter tick as the count-up lands.
         Future.delayed(const Duration(milliseconds: 620), () {
-          if (mounted) HapticFeedback.selectionClick();
+          if (mounted) V13Haptics.select();
         });
       }
     });
@@ -117,114 +120,108 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isNotVerified) return _NotVerifiedView(raceId: raceId, args: args);
-    if (_isPending) return _PendingView(raceId: raceId, args: args);
+    if (_isNotVerified) {
+      return _NotVerifiedView(raceId: raceId, againRoute: _againRoute);
+    }
+    if (_isPending) return _PendingView(raceId: raceId);
 
     final hasRank = args.rankAfter != null;
 
     return Scaffold(
-      backgroundColor: NuvoColors.success,
+      backgroundColor: V13.bg,
       body: Stack(
         children: [
-          const Positioned.fill(child: _Burst()),
+          if (_tookLead)
+            const Positioned.fill(child: IgnorePointer(child: V13Confetti())),
           SafeArea(
             child: Column(
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(28, 40, 28, 24),
+                    padding: const EdgeInsets.fromLTRB(
+                      V13.gapXxl,
+                      V13.gapSection,
+                      V13.gapXxl,
+                      V13.gapXxl,
+                    ),
                     child: Column(
                       children: [
-                        _CheckMedallion()
+                        const _CheckMedallion()
                             .animate()
                             .scale(
                               begin: const Offset(0.6, 0.6),
                               end: const Offset(1, 1),
-                              duration: 460.ms,
-                              curve: Curves.easeOutBack,
+                              duration: V13Motion.medium,
+                              curve: V13Motion.spring,
                             )
                             .fadeIn(duration: 200.ms),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: V13.gapXl),
                         Text(
                           'MOVE VERIFIED',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            letterSpacing: 1.4,
-                          ),
+                          style: V13.label.copyWith(color: V13.blue),
                         ).animate(delay: 120.ms).fadeIn(duration: 260.ms),
-                        if (!hasRank) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            '$_valueLabel completed.',
-                            style: AppTextStyles.headlineMedium.copyWith(
-                              color: Colors.white,
+                        const SizedBox(height: V13.gapMd),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '+${args.value}',
+                              style: V13.hugeNumber.copyWith(fontSize: 72),
                             ),
+                            if (args.unit != null)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: V13.gapSm,
+                                  bottom: 10,
+                                ),
+                                child: Text(
+                                  args.unit!,
+                                  style: V13.numberSm.copyWith(
+                                    color: V13.muted,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ).animate(delay: 180.ms).fadeIn(duration: 280.ms),
+                        if (!hasRank) ...[
+                          const SizedBox(height: V13.gapSm),
+                          Text(
+                            'Added to your total.',
+                            style: V13.body.copyWith(color: V13.muted),
                             textAlign: TextAlign.center,
-                          ).animate(delay: 180.ms).fadeIn(duration: 280.ms),
+                          ).animate(delay: 260.ms).fadeIn(duration: 280.ms),
                         ],
                         if (hasRank) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: V13.gapLg),
                           _RankReveal(
                             before: _movedUp ? args.rankBefore : null,
                             after: args.rankAfter!,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: V13.gapSm),
                           Text(
                             _rankSupportLabel,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white.withValues(alpha: 0.82),
-                            ),
+                            style: V13.body.copyWith(color: V13.muted),
                             textAlign: TextAlign.center,
                           ).animate(delay: 380.ms).fadeIn(duration: 280.ms),
-                          const SizedBox(height: 24),
-                          Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.16),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '+$_valueLabel',
-                                      style: AppTextStyles.titleLarge.copyWith(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      'Added to your total',
-                                      style: AppTextStyles.bodyMedium.copyWith(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.72,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                              .animate(delay: 460.ms)
-                              .fadeIn(duration: 300.ms)
-                              .shimmer(
-                                delay: 900.ms,
-                                duration: 1400.ms,
-                                color: Colors.white.withValues(alpha: 0.35),
-                              ),
+                          const SizedBox(height: V13.gapLg),
+                          V13Pill(
+                            label: '+$_valueLabel added to your total',
+                            color: V13.mint,
+                            icon: Icons.check_rounded,
+                          ).animate(delay: 460.ms).fadeIn(duration: 300.ms),
                         ],
                       ],
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                  padding: const EdgeInsets.fromLTRB(
+                    V13.gapXxl,
+                    V13.gapSm,
+                    V13.gapXxl,
+                    V13.gapXxl,
+                  ),
                   // First-race guide: this verified proof is the story's
                   // payoff — continue lands on Profile to point at the
                   // earned progress instead of dropping back on the race.
@@ -235,37 +232,20 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                           FirstRaceGuideStep.profileReward;
                       return Column(
                         children: [
-                          NuvoSuccessButton(
-                            label: guided
-                                ? 'See your progress'
-                                : 'View race',
-                            expand: true,
+                          V13Button.primary(
+                            label: guided ? 'See your progress' : 'View race',
+                            icon: Icons.flag_rounded,
+                            fullWidth: true,
                             onPressed: () => context.go(
                               guided ? '/profile' : '/race/$raceId',
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          NuvoPressable(
-                            onTap: () => context.go(
-                              args.aiMotionProof
-                                  ? '/race/$raceId/proof/ai-motion'
-                                  : '/race/$raceId/proof',
-                            ),
-                            haptic: false,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                              ),
-                              child: Text(
-                                'Record again',
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: Colors.white.withValues(
-                                    alpha: 0.85,
-                                  ),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
+                          const SizedBox(height: V13.gapMd),
+                          V13Button.secondary(
+                            label: 'Go again',
+                            icon: Icons.replay_rounded,
+                            fullWidth: true,
+                            onPressed: () => context.go(_againRoute),
                           ),
                         ],
                       );
@@ -281,28 +261,28 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
   }
 }
 
+/// The reward medallion — a mint check in a navy-outlined circle with the
+/// signature hard shadow.
 class _CheckMedallion extends StatelessWidget {
+  const _CheckMedallion();
+
   @override
   Widget build(BuildContext context) => Container(
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: V13.mint,
       shape: BoxShape.circle,
-      boxShadow: [
-        BoxShadow(
-          color: NuvoColors.successShadow.withValues(alpha: 0.4),
-          blurRadius: 0,
-          offset: const Offset(0, 5),
-        ),
-      ],
+      border: Border.all(color: V13.navy, width: V13.outlineThick),
+      boxShadow: V13.shadow4,
     ),
-    child: const Icon(Icons.check_rounded, color: NuvoColors.success, size: 40),
+    child: const Icon(Icons.check_rounded, color: V13.navy, size: 44),
   );
 }
 
 class _RankReveal extends StatelessWidget {
   const _RankReveal({this.before, required this.after});
+
   final int? before;
   final int after;
 
@@ -313,26 +293,18 @@ class _RankReveal extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             if (before != null) ...[
-              Text(
-                '#$before',
-                style: AppTextStyles.number(
-                  24,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
+              Text('#$before', style: V13.number.copyWith(color: V13.muted)),
+              const SizedBox(width: V13.gapMd),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: V13.navy,
+                size: 20,
               ),
-              const SizedBox(width: 14),
-              const NuvoIcon(NuvoIconType.arrow, color: Colors.white, size: 18),
-              const SizedBox(width: 14),
+              const SizedBox(width: V13.gapMd),
             ],
-            CountUpText(
-              value: after,
-              prefix: '#',
-              duration: const Duration(milliseconds: 560),
-              style: AppTextStyles.number(
-                52,
-                color: Colors.white,
-                weight: FontWeight.w900,
-              ),
+            Text(
+              '#$after',
+              style: V13.hugeNumber.copyWith(fontSize: 56, color: V13.blue),
             ),
           ],
         )
@@ -347,109 +319,46 @@ class _RankReveal extends StatelessWidget {
   }
 }
 
-/// Lightweight radiating confetti burst behind the medallion.
-class _Burst extends StatefulWidget {
-  const _Burst();
-  @override
-  State<_Burst> createState() => _BurstState();
-}
-
-class _BurstState extends State<_Burst> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..forward();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _c,
-    builder: (_, _) =>
-        CustomPaint(painter: _BurstPainter(_c.value), size: Size.infinite),
-  );
-}
-
-class _BurstPainter extends CustomPainter {
-  _BurstPainter(this.t);
-  final double t;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.32);
-    final rnd = math.Random(7);
-    final eased = Curves.easeOut.transform(t);
-    for (var i = 0; i < 26; i++) {
-      final angle = (i / 26) * math.pi * 2 + rnd.nextDouble();
-      final dist = (60 + rnd.nextDouble() * 180) * eased;
-      final p = center + Offset(math.cos(angle), math.sin(angle)) * dist;
-      final opacity = (1 - t).clamp(0.0, 1.0);
-      canvas.drawCircle(
-        p,
-        3 + rnd.nextDouble() * 3,
-        Paint()..color = Colors.white.withValues(alpha: opacity * 0.5),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BurstPainter old) => old.t != t;
-}
-
 // ── Pending view — logged, awaiting a verdict ────────────────────────────────
 
 class _PendingView extends StatelessWidget {
-  const _PendingView({required this.raceId, required this.args});
+  const _PendingView({required this.raceId});
+
   final String raceId;
-  final BoardMovedArgs args;
 
   @override
   Widget build(BuildContext context) {
-    final warning = context.semanticColors.warning;
     return Scaffold(
-      backgroundColor: warning.surface,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: NuvoBackButton(
-                  onPressed: () => context.go('/race/$raceId'),
-                ),
-              ),
+            V13BackBar(
+              title: 'Proof',
+              onBack: () => context.go('/race/$raceId'),
             ),
             Expanded(
               child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(28),
+                  padding: const EdgeInsets.all(V13.gapXxl),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.hourglass_bottom_rounded,
-                        color: warning.bright,
-                        size: 44,
+                      const V13IconTile(
+                        icon: Icons.hourglass_bottom_rounded,
+                        color: V13.sun,
+                        size: 72,
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: V13.gapLg),
                       Text(
                         'Move logged — under review',
-                        style: AppTextStyles.headlineMedium.copyWith(
-                          color: warning.on,
-                        ),
+                        style: V13.sectionHead,
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: V13.gapSm),
                       Text(
                         "We'll update the board once it's confirmed.",
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: warning.on,
-                        ),
+                        style: V13.body.copyWith(color: V13.muted),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -458,10 +367,16 @@ class _PendingView extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: NuvoPrimaryButton(
+              padding: const EdgeInsets.fromLTRB(
+                V13.gapXxl,
+                V13.gapSm,
+                V13.gapXxl,
+                V13.gapXxl,
+              ),
+              child: V13Button.primary(
                 label: 'View race',
-                expand: true,
+                icon: Icons.flag_rounded,
+                fullWidth: true,
                 onPressed: () => context.go('/race/$raceId'),
               ),
             ),
@@ -475,50 +390,45 @@ class _PendingView extends StatelessWidget {
 // ── Not-verified view — calm, not a celebration ─────────────────────────────
 
 class _NotVerifiedView extends StatelessWidget {
-  const _NotVerifiedView({required this.raceId, required this.args});
+  const _NotVerifiedView({required this.raceId, required this.againRoute});
+
   final String raceId;
-  final BoardMovedArgs args;
+  final String againRoute;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: NuvoBackButton(
-                  onPressed: () => context.go('/race/$raceId'),
-                ),
-              ),
+            V13BackBar(
+              title: 'Proof',
+              onBack: () => context.go('/race/$raceId'),
             ),
             Expanded(
               child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(28),
+                  padding: const EdgeInsets.all(V13.gapXxl),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.cancel_rounded,
-                        color: NuvoColors.danger,
-                        size: 44,
+                      const V13IconTile(
+                        icon: Icons.cancel_rounded,
+                        color: V13.coral,
+                        size: 72,
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: V13.gapLg),
                       Text(
                         'Proof needs another try',
-                        style: AppTextStyles.headlineLarge,
+                        style: V13.sectionHead,
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: V13.gapSm),
                       Text(
-                        'We couldn’t verify this proof. Try again with your whole body in frame and good light.',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: context.themeColors.inkMuted,
-                        ),
+                        'We couldn’t verify this proof. Try again with your '
+                        'whole body in frame and good light.',
+                        style: V13.body.copyWith(color: V13.muted),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -527,22 +437,24 @@ class _NotVerifiedView extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              padding: const EdgeInsets.fromLTRB(
+                V13.gapXxl,
+                V13.gapSm,
+                V13.gapXxl,
+                V13.gapXxl,
+              ),
               child: Column(
                 children: [
-                  NuvoPrimaryButton(
+                  V13Button.primary(
                     label: 'Try again',
-                    expand: true,
-                    onPressed: () => context.go(
-                      args.aiMotionProof
-                          ? '/race/$raceId/proof/ai-motion'
-                          : '/race/$raceId/proof',
-                    ),
+                    icon: Icons.replay_rounded,
+                    fullWidth: true,
+                    onPressed: () => context.go(againRoute),
                   ),
-                  const SizedBox(height: 12),
-                  NuvoTertiaryButton(
+                  const SizedBox(height: V13.gapMd),
+                  V13Button.secondary(
                     label: 'Back to race',
-                    expand: true,
+                    fullWidth: true,
                     onPressed: () => context.go('/race/$raceId'),
                   ),
                 ],
