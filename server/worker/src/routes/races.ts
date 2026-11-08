@@ -715,7 +715,7 @@ async function loadViewerVisibilityContext(
 /// shape from a single source of truth.
 function shapeRaceResponse(
   race: RaceRow,
-  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[]; levels?: ReadonlyMap<string, number> },
+  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[]; levels?: ReadonlyMap<string, number>; viewerPreviousRank?: number | null },
   viewerUserId: string | undefined,
   visibilityCtx: { allowedIds: Set<string>; blockedEitherWay: Set<string> },
   submissionResult?: SubmissionResult,
@@ -782,6 +782,7 @@ function shapeRaceResponse(
     attemptsUsed: viewerAttempts?.used ?? 0,
     openAttemptId: viewerAttempts?.openAttemptId ?? null,
     viewerUserId,
+    viewerPreviousRank: collections.viewerPreviousRank ?? null,
     now,
   });
 
@@ -979,7 +980,7 @@ async function buildRaceResponse(
       }
     : undefined;
 
-  const [participants, moves, invite, finalStandings, release] = await Promise.all([
+  const [participants, moves, invite, finalStandings, release, viewerPrevRank] = await Promise.all([
     db.prepare(
       `SELECT rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
@@ -1017,6 +1018,18 @@ async function buildRaceResponse(
       : race.activity_id
       ? stableReleaseForActivity(db, race.activity_id, viewerUserId)
       : Promise.resolve(null),
+    // The viewer's rank before their latest verified proof — the trend
+    // baseline for viewerContext.previousRank.
+    viewerUserId
+      ? db
+          .prepare(
+            `SELECT previous_rank FROM move_logs
+             WHERE race_id = ? AND user_id = ? AND status != 'removed' AND previous_rank IS NOT NULL
+             ORDER BY created_at DESC, id DESC LIMIT 1`,
+          )
+          .bind(race.id, viewerUserId)
+          .first<{ previous_rank: number | null }>()
+      : Promise.resolve(null),
   ]);
 
   const [visibilityCtx, levels] = await Promise.all([
@@ -1028,7 +1041,7 @@ async function buildRaceResponse(
   ]);
   return shapeRaceResponse(
     race,
-    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results, levels },
+    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results, levels, viewerPreviousRank: viewerPrevRank?.previous_rank ?? null },
     viewerUserId,
     visibilityCtx,
     submissionResult,
@@ -1101,19 +1114,19 @@ async function buildRaceResponsesBatch(
   // per-race ordering is preserved).
   const idChunks: string[][] = [];
   for (let i = 0; i < ids.length; i += 90) idChunks.push(ids.slice(i, i + 90));
-  const chunked = async <T>(sql: (marks: string) => string, ): Promise<T[]> => {
+  const chunked = async <T>(sql: (marks: string) => string, leadingBinds: unknown[] = []): Promise<T[]> => {
     const out: T[] = [];
     for (const chunk of idChunks) {
       const res = await db
         .prepare(sql(chunk.map(() => '?').join(', ')))
-        .bind(...chunk)
+        .bind(...leadingBinds, ...chunk)
         .all<T>();
       out.push(...res.results);
     }
     return out;
   };
 
-  const [participants, moves, invites, standings, visibilityCtx] = await Promise.all([
+  const [participants, moves, invites, standings, prevRankRows, visibilityCtx] = await Promise.all([
     chunked<ParticipantRow & { race_id: string }>((marks) =>
       `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
@@ -1140,6 +1153,17 @@ async function buildRaceResponsesBatch(
        LEFT JOIN profiles p ON p.user_id = fs.user_id
        WHERE fs.race_id IN (${marks})
        ORDER BY fs.race_id, fs.rank_position ASC`),
+    // The viewer's rank before their latest verified proof in each race —
+    // feeds viewerContext.previousRank on every list row.
+    chunked<{ race_id: string; previous_rank: number | null }>(
+      (marks) =>
+        `SELECT ml.race_id, ml.previous_rank
+         FROM move_logs ml
+         WHERE ml.user_id = ? AND ml.race_id IN (${marks})
+           AND ml.status != 'removed' AND ml.previous_rank IS NOT NULL
+         ORDER BY ml.race_id, ml.created_at DESC, ml.id DESC`,
+      [viewerUserId],
+    ),
     loadViewerVisibilityContext(db, viewerUserId),
   ]);
   const participantsRows = { results: participants };
@@ -1154,6 +1178,14 @@ async function buildRaceResponsesBatch(
   const movesByRace = groupByRaceId(movesRows.results, 20);
   const invitesByRace = groupByRaceId(invitesRows.results);
   const standingsByRace = groupByRaceId(standingsRows.results);
+  // Rows arrive per-race newest-first, so the first seen per race is the
+  // viewer's latest move there.
+  const prevRankByRace = new Map<string, number>();
+  for (const row of prevRankRows) {
+    if (!prevRankByRace.has(row.race_id) && row.previous_rank != null) {
+      prevRankByRace.set(row.race_id, row.previous_rank);
+    }
+  }
   const levels = await levelsForUsers(db, [
     ...participantsRows.results.map((p) => p.user_id),
     ...standingsRows.results.map((s) => s.user_id),
@@ -1168,6 +1200,7 @@ async function buildRaceResponsesBatch(
         invite: (invitesByRace.get(race.id) ?? [])[0] ?? null,
         finalStandings: standingsByRace.get(race.id) ?? [],
         levels,
+        viewerPreviousRank: prevRankByRace.get(race.id) ?? null,
       },
       viewerUserId,
       visibilityCtx,
@@ -1287,6 +1320,119 @@ racesRouter.get('/', async (c) => {
       } catch (rowErr) {
         const rowMessage = rowErr instanceof Error ? rowErr.message : String(rowErr);
         console.error('[races] GET /races skipping corrupt race:', row.id, rowMessage);
+      }
+    }
+  }
+  return c.json({ ok: true, races });
+});
+
+// GET /races/open — joinable races created by or containing the viewer's
+// active friends, which the viewer has never joined. Powers the Compete
+// "Join a race" cards (docs/redesign/specs/COMPETE_RACES.md §1.3, §7).
+// Rows carry the exact shape of GET /races rows; POST /races/:id/join is
+// the join path (friends of any racer may enter a crew_only race — see
+// checkRaceJoinEligibility in lib/raceAccess.ts).
+racesRouter.get('/open', async (c) => {
+  const userId = c.get('userId');
+  const rows = await c.env.DB.prepare(
+    `SELECT DISTINCT r.* FROM races r
+     WHERE r.deleted_at IS NULL
+       AND r.status = 'active'
+       -- still joinable: a race whose finish line passed is closed even
+       -- before the lazy finalize lands (raceIsOpenToJoin parity)
+       AND (r.end_at IS NULL OR r.end_at > ${SQLITE_NOW_ISO})
+       AND r.creator_id != ?1
+       -- never a member (a 'left' row would rejoin fine, but resurfacing a
+       -- race the viewer already left is noise; a 'removed' row can't join)
+       AND NOT EXISTS (
+         SELECT 1 FROM race_members mine
+         WHERE mine.race_id = r.id AND mine.user_id = ?1
+       )
+       -- at least one active racer is the viewer's friend, and that friend
+       -- link is not blocked in either direction
+       AND EXISTS (
+         SELECT 1 FROM race_members fm
+         JOIN crew_connections cc ON cc.status = 'active'
+           AND ((cc.user_id = ?1 AND cc.crew_user_id = fm.user_id)
+             OR (cc.user_id = fm.user_id AND cc.crew_user_id = ?1))
+         WHERE fm.race_id = r.id AND fm.status = 'active'
+           AND NOT EXISTS (
+             SELECT 1 FROM blocked_users bf
+             WHERE (bf.user_id = ?1 AND bf.blocked_user_id = fm.user_id)
+                OR (bf.user_id = fm.user_id AND bf.blocked_user_id = ?1)
+           )
+       )
+       -- a block with the creator closes the race entirely (access rules)
+       AND NOT EXISTS (
+         SELECT 1 FROM blocked_users bc
+         WHERE (bc.user_id = ?1 AND bc.blocked_user_id = r.creator_id)
+            OR (bc.user_id = r.creator_id AND bc.blocked_user_id = ?1)
+       )
+       -- only visibilities POST /races/:id/join can actually enter:
+       -- crew_only (friends-of-a-racer) and open public_demo
+       AND (r.visibility = 'crew_only'
+            OR (r.visibility = 'public_demo' AND r.public_join_enabled = 1))
+     ORDER BY r.created_at DESC
+     LIMIT 20`,
+  )
+    .bind(userId)
+    .all<RaceRow>();
+
+  // Conditional GET over the same signals the batch response reads, scoped
+  // to the capped id set. The WHERE already excludes lazy-finalize races,
+  // so no write hides behind this validator.
+  const ids = rows.results.map((r) => r.id);
+  const nowMs = Date.now();
+  const etagParts: Array<string | number | null> = [
+    'races-open', userId, ids.join(','),
+    stalenessBucket(nowMs, 60_000),
+  ];
+  if (ids.length > 0) {
+    const marks = ids.map(() => '?').join(', ');
+    const sig = await c.env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '') FROM race_members
+            WHERE status = 'active' AND race_id IN (${marks})) AS members,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), '') || ':' || COALESCE(SUM(rank_cache), 0)
+                || ':' || COALESCE(SUM(progress_value), 0) FROM race_progress
+            WHERE race_id IN (${marks})) AS progress,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(SUM(status = 'verified'), 0)
+                || ':' || COALESCE(SUM(status = 'rejected'), 0) || ':' || COALESCE(SUM(LENGTH(COALESCE(summary, ''))), 0)
+                FROM move_logs WHERE status != 'removed' AND race_id IN (${marks})) AS moves,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(rank_position), 0) || ':' || COALESCE(SUM(score_value), 0)
+            FROM race_final_standings WHERE race_id IN (${marks})) AS standings`,
+    )
+      .bind(...ids, ...ids, ...ids, ...ids)
+      .first<Record<string, string | null>>();
+    let maxVersion = 0;
+    let maxUpdated = '';
+    const phases: string[] = [];
+    for (const r of rows.results) {
+      maxVersion = Math.max(maxVersion, r.version ?? 0);
+      if ((r.updated_at ?? '') > maxUpdated) maxUpdated = r.updated_at ?? '';
+      phases.push(effectiveRaceStatus(r.status, r.start_at, r.end_at, new Date(nowMs)).charAt(0));
+    }
+    etagParts.push(
+      maxVersion, maxUpdated, phases.join(''),
+      sig?.members ?? null, sig?.progress ?? null, sig?.moves ?? null, sig?.standings ?? null,
+    );
+  }
+  const nm = conditional(c, weakEtag(...etagParts));
+  if (nm) return nm;
+
+  let races: unknown[];
+  try {
+    races = await buildRaceResponsesBatch(c.env, userId, rows.results);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[races] GET /races/open batch failed, falling back per-race:', message);
+    races = [];
+    for (const row of rows.results) {
+      try {
+        races.push(await buildRaceResponse(c.env, userId, row));
+      } catch (rowErr) {
+        const rowMessage = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        console.error('[races] GET /races/open skipping corrupt race:', row.id, rowMessage);
       }
     }
   }

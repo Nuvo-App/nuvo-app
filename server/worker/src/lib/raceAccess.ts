@@ -7,7 +7,8 @@
  * Read levels:
  *   owner       — race creator; full read + invite code
  *   member      — active race_member; full read + invite code
- *   crew        — creator's crew reading a crew_only race (no invite code)
+ *   crew        — a friend of the creator or of any active racer reading a
+ *                 crew_only race (no invite code)
  *   public      — any signed-in user reading a public_demo race
  *   denied      — no read
  *
@@ -79,6 +80,41 @@ export async function isCrewOf(
   return Boolean(row);
 }
 
+/**
+ * Whether the viewer is an active friend of ANY active racer in this race —
+ * the additive v13 path behind GET /races/open: a crew_only race containing
+ * a friend is readable and joinable by that friend's friends even when the
+ * creator is a stranger. A racer blocked with the viewer in either direction
+ * cannot supply the link (blocking stays the only privacy control), and
+ * callers still check isBlockedEitherWay with the creator first.
+ */
+export async function isCrewOfAnyParticipant(
+  db: D1Database,
+  viewerUserId: string,
+  raceId: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT rm.id FROM race_members rm
+       WHERE rm.race_id = ? AND rm.status = 'active'
+         AND EXISTS (
+           SELECT 1 FROM crew_connections cc
+           WHERE cc.status = 'active'
+             AND ((cc.user_id = ? AND cc.crew_user_id = rm.user_id)
+               OR (cc.user_id = rm.user_id AND cc.crew_user_id = ?))
+             AND NOT EXISTS (
+               SELECT 1 FROM blocked_users b
+               WHERE (b.user_id = ? AND b.blocked_user_id = rm.user_id)
+                  OR (b.user_id = rm.user_id AND b.blocked_user_id = ?)
+             )
+         )
+       LIMIT 1`,
+    )
+    .bind(raceId, viewerUserId, viewerUserId, viewerUserId, viewerUserId)
+    .first<{ id: string }>();
+  return Boolean(row);
+}
+
 export async function resolveRaceAccess(
   db: D1Database,
   race: RaceAccessRow,
@@ -111,7 +147,11 @@ export async function resolveRaceAccess(
   if (await isBlockedEitherWay(db, userId, race.creator_id)) return done('denied');
 
   if (race.visibility === 'public_demo') return done('public');
-  if (race.visibility === 'crew_only' && (await isCrewOf(db, userId, race.creator_id))) {
+  if (
+    race.visibility === 'crew_only' &&
+    ((await isCrewOf(db, userId, race.creator_id)) ||
+      (await isCrewOfAnyParticipant(db, userId, race.id)))
+  ) {
     return done('crew');
   }
   // private + invite_code races are only readable after membership — the
@@ -156,9 +196,10 @@ export async function checkRaceJoinEligibility(
         status: 403,
       };
     case 'crew_only':
-      return (await isCrewOf(db, userId, race.creator_id))
+      return (await isCrewOf(db, userId, race.creator_id)) ||
+        (await isCrewOfAnyParticipant(db, userId, race.id))
         ? { ok: true }
-        : { ok: false, error: 'This race is only open to the creator\'s friends', status: 403 };
+        : { ok: false, error: 'This race is only open to friends of the people in it', status: 403 };
     case 'public_demo':
       return race.public_join_enabled
         ? { ok: true }

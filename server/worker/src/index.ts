@@ -23,6 +23,7 @@ import { verificationSessionsRouter } from './routes/verificationSessions';
 import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
 import { progressionRouter } from './routes/progression';
+import { leaderboardRouter } from './routes/leaderboard';
 import { crewRouter } from './routes/crew';
 import { squadsRouter } from './routes/squads';
 import { reportsRouter } from './routes/reports';
@@ -288,7 +289,30 @@ app.get('/races/activities', async (c) => {
       aliases: metadataStringList(entry.metadata?.aliases, 8) ??
         entry.legacy?.aliases ?? [],
     }));
-    const etag = `\"${catalog.catalogVersion}:${activities.length}\"`;
+    // racerCount = distinct users who joined a still-active, non-deleted
+    // race of that activity within the last 7 days — the "[N] racing" count
+    // on Compete's trending-moves cards. Decorative: a stats failure must
+    // never blank the catalog, so it degrades to zeroes.
+    const racerCounts = new Map<string, number>();
+    try {
+      const counts = await c.env.DB.prepare(
+        `SELECT r.activity_id AS id, COUNT(DISTINCT rm.user_id) AS n
+         FROM race_members rm
+         JOIN races r ON r.id = rm.race_id
+         WHERE r.status = 'active' AND r.deleted_at IS NULL
+           AND rm.status = 'active'
+           AND rm.joined_at >= datetime('now', '-7 days')
+           AND r.activity_id IS NOT NULL
+         GROUP BY r.activity_id`,
+      ).all<{ id: string; n: number }>();
+      for (const row of counts.results) racerCounts.set(row.id, row.n);
+    } catch (err) {
+      console.error('[activities] racerCount query failed; defaulting to zero:', err instanceof Error ? err.message : String(err));
+    }
+    for (const a of activities) {
+      (a as { racerCount?: number }).racerCount = racerCounts.get(a.id) ?? 0;
+    }
+    const etag = `\"${catalog.catalogVersion}:${activities.length}:${activities.map((a) => racerCounts.get(a.id) ?? 0).join(',')}\"`;
     c.header('ETag', etag);
     c.header('Cache-Control', 'public, max-age=300');
     if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
@@ -308,7 +332,7 @@ app.get('/races/activities', async (c) => {
       etag: 'legacy-catalog',
       count: RACE_ACTIVITY_CATALOG.length,
       supported: RACE_ACTIVITY_CATALOG.filter((a) => a.availability === 'supported').map((a) => a.id),
-      activities: RACE_ACTIVITY_CATALOG,
+      activities: RACE_ACTIVITY_CATALOG.map((a) => ({ ...a, racerCount: 0 })),
       registryFallback: true,
     });
   }
@@ -390,6 +414,7 @@ app.route('/progression', progressionRouter);
 
 // ── Social routes ─────────────────────────────────────────────────────────────
 app.route('/users', usersRouter);
+app.route('/leaderboard', leaderboardRouter);
 app.route('/crew', crewRouter);
 app.route('/squads', squadsRouter);
 app.route('/invites', invitesRouter);
