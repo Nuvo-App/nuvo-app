@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../config/legal_links.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_text_styles.dart';
+import '../v13/v13.dart';
 
 /// "By continuing, you agree to our Terms of Service and Privacy Policy" —
 /// the sign-in / sign-up footer. Both links open in the external browser.
@@ -11,10 +10,7 @@ class NuvoLegalFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = AppTextStyles.bodySmall.copyWith(
-      color: context.themeColors.inkMuted,
-      fontSize: 12,
-    );
+    final style = V13.caption;
     return Column(
       children: [
         Text(
@@ -65,11 +61,12 @@ class NuvoLegalLink extends StatelessWidget {
             widthFactor: 1,
             child: Text(
               label,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.blue,
+              style: V13.caption.copyWith(
+                color: V13.blue,
                 fontWeight: FontWeight.w700,
                 fontSize: fontSize,
                 decoration: TextDecoration.underline,
+                decorationColor: V13.blue,
               ),
             ),
           ),

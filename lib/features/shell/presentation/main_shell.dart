@@ -28,7 +28,7 @@ import '../../profile/presentation/widgets/level_up_dialog.dart';
 /// inset — and each tab's body extends to the screen's bottom edge, visible
 /// in the dock's horizontal margins while scrolling. Because the dock
 /// overlays content, scrollable screens must end their scroll views with
-/// `NuvoBottomNav.bottomPadding(context)` so the last row clears it.
+/// `V13TabBar.bottomPadding(context)` so the last row clears it.
 /// Scaffold already folds the nav's rendered height into the body's
 /// `MediaQuery.padding.bottom` — `bottomPadding` only adds the shared
 /// section gap on top of that; never re-add the dock or the safe inset
@@ -286,10 +286,7 @@ class _DockOcclusion extends StatelessWidget {
     return IgnorePointer(
       child: Container(
         key: const ValueKey('nuvo-dock-occlusion'),
-        height:
-            MediaQuery.paddingOf(context).bottom +
-            NuvoBottomNav.navDockGap +
-            NuvoBottomNav.navTopBreath,
+        height: MediaQuery.paddingOf(context).bottom + V13TabBar.topBreath,
         color: V13.bg,
       ),
     );

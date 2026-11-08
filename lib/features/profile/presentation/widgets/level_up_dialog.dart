@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_geometry.dart';
-import '../../../../core/theme/app_shadows.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/nuvo_button.dart';
-import '../../../../core/widgets/nuvo_motion.dart';
+import '../../../../core/v13/v13.dart';
 import '../../../../core/widgets/nuvo_number_flow.dart';
 import '../../data/progression_models.dart';
 import 'nuvo_badges.dart';
@@ -19,85 +13,51 @@ Future<void> showLevelUpMoment(
   NuvoBadge? badge,
 }) {
   // One firm tap of haptics — the moment is physical, not noisy.
-  HapticFeedback.mediumImpact();
+  V13Haptics.confirm();
   return showDialog<void>(
     context: context,
-    barrierColor: context.themeColors.inkShadow.withValues(alpha: 0.5),
+    barrierColor: V13.navy.withValues(alpha: 0.45),
     builder: (ctx) {
-      final c = ctx.themeColors;
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(color: c.border, width: 2),
-            boxShadow: AppShadows.hardOffset(
-              c.inkShadow,
-              offset: const Offset(6, 6),
+      return _MomentFrame(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'LEVEL UP',
+              style: V13.label.copyWith(color: V13.blue, fontSize: 12),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+            const SizedBox(height: V13.gapSm),
+            _RollingLevel(
+              level: level,
+              style: V13.hugeNumber.copyWith(fontSize: 64),
+            ),
+            if (badge != null) ...[
+              const SizedBox(height: V13.gapMd),
+              Text('REWARD', style: V13.label.copyWith(fontSize: 10)),
+              const SizedBox(height: V13.gapSm),
+              NuvoBadgeDisc(badge: badge, size: 64),
+              const SizedBox(height: V13.gapSm),
               Text(
-                'LEVEL UP',
-                style: AppTextStyles.labelUppercase(
-                  12,
-                  color: context.themeColors.accent,
-                ).copyWith(color: context.themeColors.accent),
+                badge.name,
+                style: V13.bodyStrong,
+                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: NuvoSpacing.sm),
-              NuvoPop(
-                trigger: level,
-                intensity: 1.2,
-                child: _RollingLevel(
-                  level: level,
-                  style: AppTextStyles.number(
-                    64,
-                    color: c.ink,
-                    weight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (badge != null) ...[
-                const SizedBox(height: NuvoSpacing.md),
+              if (badge.description != null) ...[
+                const SizedBox(height: 4),
                 Text(
-                  'UNLOCKED',
-                  style: AppTextStyles.labelUppercase(
-                    10,
-                    color: c.inkSubtle,
-                  ).copyWith(color: c.inkSubtle),
-                ),
-                const SizedBox(height: NuvoSpacing.sm),
-                NuvoBadgeDisc(badge: badge, size: 64),
-                const SizedBox(height: NuvoSpacing.sm),
-                Text(
-                  badge.name,
-                  style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+                  badge.description!,
+                  style: V13.caption,
                   textAlign: TextAlign.center,
                 ),
-                if (badge.description != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    badge.description!,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: c.inkMuted,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
               ],
-              const SizedBox(height: NuvoSpacing.xl),
-              NuvoPrimaryButton(
-                label: 'Keep racing',
-                expand: true,
-                onPressed: () => Navigator.of(ctx).pop(),
-              ),
             ],
-          ),
+            const SizedBox(height: V13.gapXl),
+            V13Button.primary(
+              label: 'Nice',
+              fullWidth: true,
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
         ),
       );
     },
@@ -110,68 +70,84 @@ Future<void> showAchievementMoment(
   BuildContext context, {
   required NuvoBadge badge,
 }) {
-  HapticFeedback.mediumImpact();
+  V13Haptics.confirm();
   return showDialog<void>(
     context: context,
-    barrierColor: context.themeColors.inkShadow.withValues(alpha: 0.5),
+    barrierColor: V13.navy.withValues(alpha: 0.45),
     builder: (ctx) {
-      final c = ctx.themeColors;
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(color: c.border, width: 2),
-            boxShadow: AppShadows.hardOffset(
-              c.inkShadow,
-              offset: const Offset(6, 6),
+      return _MomentFrame(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'ACHIEVEMENT EARNED',
+              style: V13.label.copyWith(color: V13.blue, fontSize: 12),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+            const SizedBox(height: V13.gapMd),
+            NuvoAchievementBadge(badge: badge, size: 72),
+            const SizedBox(height: V13.gapSm),
+            Text(
+              badge.name,
+              style: V13.bodyStrong,
+              textAlign: TextAlign.center,
+            ),
+            if (badge.description != null) ...[
+              const SizedBox(height: 4),
               Text(
-                'ACHIEVEMENT EARNED',
-                style: AppTextStyles.labelUppercase(
-                  12,
-                  color: context.themeColors.accent,
-                ).copyWith(color: context.themeColors.accent),
-              ),
-              const SizedBox(height: NuvoSpacing.md),
-              NuvoPop(
-                trigger: badge.unlockId,
-                intensity: 1.15,
-                child: NuvoAchievementBadge(badge: badge, size: 72),
-              ),
-              const SizedBox(height: NuvoSpacing.sm),
-              Text(
-                badge.name,
-                style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+                badge.description!,
+                style: V13.caption,
                 textAlign: TextAlign.center,
               ),
-              if (badge.description != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  badge.description!,
-                  style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: NuvoSpacing.xl),
-              NuvoPrimaryButton(
-                label: 'Keep racing',
-                expand: true,
-                onPressed: () => Navigator.of(ctx).pop(),
-              ),
             ],
-          ),
+            const SizedBox(height: V13.gapXl),
+            V13Button.primary(
+              label: 'Nice',
+              fullWidth: true,
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
         ),
       );
     },
   );
+}
+
+/// The shared reward-moment frame: a [V13Card] floating over the dimmed
+/// page with a [V13Confetti] burst behind it. Confetti lives inside the
+/// dialog (not the page overlay) so it paints above the barrier.
+class _MomentFrame extends StatelessWidget {
+  const _MomentFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        children: [
+          const Positioned.fill(child: IgnorePointer(child: V13Confetti())),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: V13Card(
+                radius: V13.radiusCardLg,
+                shadow: V13.shadow6,
+                padding: const EdgeInsets.fromLTRB(
+                  V13.gapXxl,
+                  28,
+                  V13.gapXxl,
+                  V13.gapXxl,
+                ),
+                child: child,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// LEVEL N−1 rolls into LEVEL N — the climb is the point, so the moment

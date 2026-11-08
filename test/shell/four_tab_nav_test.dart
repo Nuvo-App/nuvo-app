@@ -1,16 +1,16 @@
-// The nav is four equal destinations — Arena, Compete, Friends, Profile — and
-// the retired Verify tab's old /move links redirect.
+// The nav is four equal destinations — Arena, Compete, Crew, Profile — and
+// the retired Verify tab's old /move links redirect. The rendered bar is
+// V13TabBar; the destination table lives in core/widgets/bottom_nav.dart.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nuvo/app/router.dart';
-import 'package:nuvo/core/theme/app_theme.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/core/widgets/bottom_nav.dart';
 
-Future<List<int>> _pumpDock(
+Future<List<int>> _pumpBar(
   WidgetTester tester, {
   int current = 0,
-  bool dark = false,
   double scale = 1.0,
   Size size = const Size(320, 568),
 }) async {
@@ -20,7 +20,6 @@ Future<List<int>> _pumpDock(
   final taps = <int>[];
   await tester.pumpWidget(
     MaterialApp(
-      theme: dark ? AppTheme.dark() : AppTheme.light(),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(scale),
@@ -29,7 +28,15 @@ Future<List<int>> _pumpDock(
         child: child!,
       ),
       home: Scaffold(
-        bottomNavigationBar: NuvoBottomNav(
+        bottomNavigationBar: V13TabBar(
+          items: [
+            for (final d in activeDestinations)
+              V13TabItem(
+                label: d.label,
+                icon: d.icon,
+                selectedIcon: d.selectedIcon,
+              ),
+          ],
           currentIndex: current,
           onTap: taps.add,
         ),
@@ -56,34 +63,31 @@ void main() {
     ]);
   });
 
-  for (final dark in [false, true]) {
-    for (final scale in [1.0, 1.4]) {
-      testWidgets(
-        'dock: 4 slots, 44pt+ targets, no overflow (dark=$dark, scale=$scale)',
-        (tester) async {
-          final taps = await _pumpDock(tester, dark: dark, scale: scale);
-          expect(tester.takeException(), isNull);
-          for (var i = 0; i < 4; i++) {
-            final r = tester.getRect(find.byKey(ValueKey('nuvo-nav-slot-$i')));
-            expect(r.width, greaterThanOrEqualTo(44));
-            expect(r.height, greaterThanOrEqualTo(44));
-          }
-          await tester.tap(find.byKey(const ValueKey('nuvo-nav-slot-2')));
-          await tester.tap(find.byKey(const ValueKey('nuvo-nav-slot-3')));
-          expect(taps, [2, 3]);
-        },
-      );
-    }
+  for (final scale in [1.0, 1.4]) {
+    testWidgets('bar: 4 slots, 44pt+ targets, no overflow (scale=$scale)', (
+      tester,
+    ) async {
+      final taps = await _pumpBar(tester, scale: scale);
+      expect(tester.takeException(), isNull);
+      for (var i = 0; i < 4; i++) {
+        final r = tester.getRect(find.byKey(ValueKey('v13-tab-slot-$i')));
+        expect(r.width, greaterThanOrEqualTo(44));
+        expect(r.height, greaterThanOrEqualTo(44));
+      }
+      await tester.tap(find.byKey(const ValueKey('v13-tab-slot-2')));
+      await tester.tap(find.byKey(const ValueKey('v13-tab-slot-3')));
+      expect(taps, [2, 3]);
+    });
   }
 
-  testWidgets('exactly one selected pill, labelled, on the current tab', (
+  testWidgets('every destination keeps its label, regardless of selection', (
     tester,
   ) async {
     for (var i = 0; i < 4; i++) {
-      await _pumpDock(tester, current: i);
-      expect(find.byKey(const ValueKey('nuvo-nav-indicator')), findsOneWidget);
-      expect(find.text(nuvoDestinations[i].label), findsOneWidget);
-      expect(find.byType(Text), findsOneWidget);
+      await _pumpBar(tester, current: i);
+      for (final d in activeDestinations) {
+        expect(find.text(d.label), findsOneWidget);
+      }
     }
   });
 
