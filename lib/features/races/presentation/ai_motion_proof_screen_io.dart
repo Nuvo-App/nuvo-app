@@ -1118,6 +1118,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       if (_usesCustomRuntimeOutput) {
         _customUpdate = output.customPoseUpdate;
       }
+      // A hold that stayed out of position past the break tolerance is
+      // over — end the take exactly as Done does so what banked submits.
+      if (output.holdBroken) {
+        _debugLog('holdBroken state=${output.validatorState}');
+        unawaited(_finishRecording());
+        return;
+      }
       _skeletonHold.show(frame, DateTime.now());
       _scheduleSkeletonExpiry();
       // Mirror a newly awarded rep as live feedback. Reads the validator's

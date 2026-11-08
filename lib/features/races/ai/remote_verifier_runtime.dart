@@ -11,6 +11,10 @@ enum RemoteRuntimeState {
   repAccepted,
   holdProgress,
   completed,
+
+  /// A hold attempt ended — out of position past the break tolerance.
+  /// Terminal: the runtime keeps reporting it and never resumes.
+  holdBroken,
   runtimeError,
 }
 
@@ -76,6 +80,7 @@ abstract class RemoteVerifierRuntime {
     'missing_required_regions' =>
       'Step back until the required body regions are visible.',
     'hold_form_lost' => 'Hold the position steadily to keep the count moving.',
+    'hold_broken' => 'The hold broke — finishing up.',
     'waiting_for_start' => 'Start from the ready position.',
     'sequence_pose_lost' =>
       'Stay in frame — the sequence restarts when pose is lost.',
@@ -187,18 +192,36 @@ class AlternatingRepV1Runtime extends RemoteVerifierRuntime {
 class HoldV1Runtime extends RemoteVerifierRuntime {
   HoldV1Runtime({required super.spec, required super.target});
 
+  /// Same contract as [HoldTimerStateMachine]: a hold is one unbroken
+  /// attempt — more than this much continuous time out of position ends it.
+  static const maxBreakMs = HoldTimerStateMachine.maxBreakMs;
+
   DateTime? _startedAt;
   DateTime? _lastFrame;
+  DateTime? _breakStartedAt;
   int _heldMs = 0;
+  bool _broken = false;
 
   @override
   RemoteVerifierUpdate update(NuvoPoseFrame frame) {
     if (!_started) start();
+    if (_broken) return _brokenUpdate();
     if (!_all(spec.holdRules, frame)) {
       _startedAt = null;
       _lastFrame = null;
+      // The break clock only exists once the hold has banked time — a
+      // take that never got into position has nothing to break.
+      if (_heldMs > 0) {
+        _breakStartedAt ??= frame.createdAt;
+        if (frame.createdAt.difference(_breakStartedAt!).inMilliseconds >
+            maxBreakMs) {
+          _broken = true;
+          return _brokenUpdate();
+        }
+      }
       return notReady('hold_form_lost');
     }
+    _breakStartedAt = null;
     final previous = _lastFrame;
     _lastFrame = frame.createdAt;
     _startedAt ??= frame.createdAt;
@@ -212,11 +235,15 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
         ? 0.0
         : math.min(1, _heldMs / targetMs).toDouble();
     final complete = target != null && _heldMs >= targetMs;
+    // The banked seconds live on [count] so a broken or finished hold
+    // reports what it held through currentValue/finish — before this they
+    // were only in the update payload and the runtime always answered 0.
+    count = (_heldMs / 1000).floor();
     return RemoteVerifierUpdate(
       state: complete
           ? RemoteRuntimeState.completed
           : RemoteRuntimeState.holdProgress,
-      count: (_heldMs / 1000).floor(),
+      count: count,
       progress: progress,
       confidence: 0.86,
       guidance: complete ? 'Target complete.' : 'Hold steady.',
@@ -224,6 +251,16 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
       elapsedMs: _heldMs,
     );
   }
+
+  RemoteVerifierUpdate _brokenUpdate() => RemoteVerifierUpdate(
+    state: RemoteRuntimeState.holdBroken,
+    count: count,
+    progress: targetProgress,
+    confidence: 0.86,
+    guidance: 'The hold broke — finishing up.',
+    diagnostic: 'hold_broken',
+    elapsedMs: _heldMs,
+  );
 }
 
 /// Executes a strict linear `sequence_match_v1` phase chain.
@@ -417,8 +454,11 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
     final isHold = spec.measurementType == 'duration';
     final accepted = !isHold && count > before;
     final complete = target != null && result.isVerified;
+    final holdBroken = _validator.holdBroken;
     return RemoteVerifierUpdate(
-      state: complete
+      state: holdBroken
+          ? RemoteRuntimeState.holdBroken
+          : complete
           ? RemoteRuntimeState.completed
           : accepted
           ? RemoteRuntimeState.repAccepted
@@ -429,7 +469,11 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
       progress: targetProgress,
       confidence: _validator.confidence,
       guidance: complete ? 'Target complete.' : result.coachingText,
-      diagnostic: accepted ? 'rep_accepted' : _validator.failedRuleReason,
+      diagnostic: holdBroken
+          ? 'hold_broken'
+          : accepted
+          ? 'rep_accepted'
+          : _validator.failedRuleReason,
       elapsedMs: isHold ? count * 1000 : 0,
       metrics: _validator.debugValues,
     );

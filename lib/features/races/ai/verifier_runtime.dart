@@ -50,6 +50,7 @@ class VerifierUpdate {
     required this.debugValues,
     required this.validatorState,
     required this.failedRuleReason,
+    this.holdBroken = false,
     this.customPoseUpdate,
   });
 
@@ -64,6 +65,7 @@ class VerifierUpdate {
     debugValues: output.debugValues,
     validatorState: output.validatorState,
     failedRuleReason: output.failedRuleReason,
+    holdBroken: output.holdBroken,
   );
 
   final VerifierType type;
@@ -76,6 +78,10 @@ class VerifierUpdate {
   final Map<String, double> debugValues;
   final String validatorState;
   final String failedRuleReason;
+
+  /// A hold attempt ended terminally — the screen finishes the take with
+  /// what banked, the same path as Done. Always false for rep movements.
+  final bool holdBroken;
   final CustomPoseRuntimeUpdate? customPoseUpdate;
 }
 
@@ -205,6 +211,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
     if (frame.hasPoints(_spec.requiredLandmarks)) _validPoseFrames++;
     final update = _runtime.update(frame);
     _lastUpdate = update;
+    final holdBroken = update.state == RemoteRuntimeState.holdBroken;
     return VerifierUpdate(
       type: VerifierType.presetPose,
       selectedMovement: _movement,
@@ -218,10 +225,11 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
         'progress': update.progress,
         'elapsedMs': update.elapsedMs.toDouble(),
       },
-      validatorState: update.state.name,
+      validatorState: holdBroken ? 'hold_broken' : update.state.name,
       failedRuleReason: update.state == RemoteRuntimeState.notReady
           ? update.diagnostic
           : '',
+      holdBroken: holdBroken,
     );
   }
 
