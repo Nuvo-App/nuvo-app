@@ -128,6 +128,7 @@ class ProfileRecord {
     required this.finished,
     required this.wins,
     this.winRatePercent,
+    this.streakDays,
   });
 
   final int active;
@@ -137,11 +138,16 @@ class ProfileRecord {
   /// Integer percent; null when [finished] is 0.
   final int? winRatePercent;
 
+  /// Consecutive-day proof streak; absent on older servers — callers hide
+  /// the streak UI rather than rendering zero.
+  final int? streakDays;
+
   factory ProfileRecord.fromJson(Map<String, dynamic> json) => ProfileRecord(
         active: jInt(json['active']) ?? 0,
         finished: jInt(json['finished']) ?? 0,
         wins: jInt(json['wins']) ?? 0,
         winRatePercent: (jDouble(json['winRatePercent']))?.round(),
+        streakDays: jInt(json['streakDays']),
       );
 }
 
