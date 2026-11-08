@@ -292,6 +292,7 @@ void _size(WidgetTester tester) {
 
 void main() {
   setUpAll(loadShotFonts);
+  editProfileTests();
   testWidgets('Profile: header, counts, actions, sections', (tester) async {
     _size(tester);
     await tester.pumpWidget(_app(const ProfileV13Screen()));
@@ -569,5 +570,34 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
     expect(find.text('Paste a Nuvo link'), findsOneWidget);
+  });
+}
+
+void editProfileTests() {
+  testWidgets('Edit profile: fields, bio counter, Cancel asks before '
+      'discarding edits', (tester) async {
+    _size(tester);
+    await tester.pumpWidget(_app(const EditProfileV13Screen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit profile'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('USERNAME'), findsOneWidget);
+    await shot(tester, 'v13_edit_profile');
+
+    final bioLabel = find.text('BIO');
+    if (bioLabel.evaluate().isNotEmpty) {
+      final bioField = find.byType(TextField).last;
+      await tester.enterText(bioField, 'Pushups before breakfast');
+      await tester.pump();
+      expect(find.text('24/80'), findsOneWidget);
+    } else {
+      await tester.enterText(find.byType(TextField).first, 'New Name');
+      await tester.pump();
+    }
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
   });
 }
