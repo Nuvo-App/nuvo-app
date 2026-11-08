@@ -598,7 +598,7 @@ class _SetupStep extends ConsumerWidget {
             crossAxisSpacing: V13.gapSm,
             childAspectRatio: 1,
             children: [
-              for (final a in catalog.take(11))
+              for (final a in catalog)
                 _MovementTile(
                   icon: a.icon,
                   label: a.title,

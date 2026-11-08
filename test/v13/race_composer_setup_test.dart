@@ -13,10 +13,12 @@ import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
+import 'package:nuvo/core/config/nuvo_flags.dart';
 import 'package:nuvo/features/races/data/motion_catalog.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
+import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/presentation/motion_catalog_provider.dart';
 import 'package:nuvo/features/races/presentation/race_controller.dart';
 import 'package:nuvo/features/races/presentation/v13/composer/race_composer_v13_screen.dart';
@@ -200,5 +202,34 @@ void main() {
     expect(bodies.single['attemptDurationSeconds'], 30);
     expect(bodies.single['attemptLimit'], 3);
     expect(bodies.single['finishLineAt'], isNotNull);
+  });
+
+  testWidgets('test_gap9_all_available_movements_rendered', (tester) async {
+    _size(tester);
+    NuvoFlags.customMotion.value = true;
+    addTearDown(() => NuvoFlags.customMotion.value = false);
+    final repo = _WireRaceRepo(onBody: (_) {});
+    await tester.pumpWidget(_app(repo, home: const RaceComposerV13Screen()));
+    await tester.pumpAndSettle();
+    await _toSetup(tester);
+
+    // The grid is lazy inside the step ListView — scroll down, collecting
+    // every movement label until the trailing Custom tiles are in view.
+    final titles = motionActivityDefinitions.map((d) => d.title).toSet();
+    final found = <String>{};
+    var guard = 0;
+    while (find.text('Custom goal').evaluate().isEmpty && guard++ < 40) {
+      for (final t in titles) {
+        if (find.text(t).evaluate().isNotEmpty) found.add(t);
+      }
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+      await tester.pump();
+    }
+    for (final t in titles) {
+      if (find.text(t).evaluate().isNotEmpty) found.add(t);
+    }
+    expect(found, containsAll(titles));
+    expect(find.text('Custom'), findsOneWidget);
+    expect(find.text('Custom goal'), findsOneWidget);
   });
 }
