@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rive/rive.dart';
 
+import '../../../../core/v13/v13.dart';
 import 'nuvo_motion_viewport.dart';
 import 'nuvo_rive_calibration.dart';
 
@@ -147,42 +148,55 @@ class _RiveCalibrationScreenState extends State<RiveCalibrationScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showV13Toast(context, message);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Rive rig calibration'),
-        actions: [
-          IconButton(
-            tooltip: 'Reset rig',
-            onPressed: _resetRig,
-            icon: const Icon(Icons.restart_alt),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
-        children: [
-          _buildRigPreview(),
-          const SizedBox(height: 16),
-          _buildActionPanel(),
-          const SizedBox(height: 20),
-          _buildJointSection('LEFT ARM', _leftArm),
-          _buildJointSection('RIGHT ARM', _rightArm),
-          _buildJointSection('LEFT LEG', _leftLeg),
-          _buildJointSection('RIGHT LEG', _rightLeg),
-          _buildJointSection('BODY', _body),
-          const SizedBox(height: 20),
-          _buildJointSection(
-            'ADVANCED / SEGMENT LENGTH',
-            NuvoRiveCalibrationContract.scaleProperties,
-          ),
-        ],
+      backgroundColor: V13.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            V13BackBar(
+              title: 'Rive rig calibration',
+              trailing: [
+                V13IconButton(
+                  icon: Icons.restart_alt,
+                  shape: V13IconButtonShape.square,
+                  semanticLabel: 'Reset rig',
+                  onTap: _resetRig,
+                ),
+              ],
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  V13.pagePad,
+                  V13.gapMd,
+                  V13.pagePad,
+                  40,
+                ),
+                children: [
+                  _buildRigPreview(),
+                  const SizedBox(height: V13.gapLg),
+                  _buildActionPanel(),
+                  const SizedBox(height: V13.gapXl),
+                  _buildJointSection('LEFT ARM', _leftArm),
+                  _buildJointSection('RIGHT ARM', _rightArm),
+                  _buildJointSection('LEFT LEG', _leftLeg),
+                  _buildJointSection('RIGHT LEG', _rightLeg),
+                  _buildJointSection('BODY', _body),
+                  const SizedBox(height: V13.gapXl),
+                  _buildJointSection(
+                    'ADVANCED / SEGMENT LENGTH',
+                    NuvoRiveCalibrationContract.scaleProperties,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -227,60 +241,61 @@ class _RiveCalibrationScreenState extends State<RiveCalibrationScreen> {
   Widget _buildActionPanel() {
     final closedSaved = NuvoJumpingJackCalibrationStore.closed != null;
     final openSaved = NuvoJumpingJackCalibrationStore.open != null;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            FilledButton.tonal(
-              onPressed: _resetRig,
-              child: const Text('RESET'),
-            ),
-            OutlinedButton(
-              onPressed: _instance == null
-                  ? null
-                  : () => _savePose(closed: true),
-              child: const Text('SAVE CLOSED'),
-            ),
-            OutlinedButton(
-              onPressed: _instance == null
-                  ? null
-                  : () => _savePose(closed: false),
-              child: const Text('SAVE OPEN'),
-            ),
-            TextButton(
-              onPressed: closedSaved ? () => _showPose(closed: true) : null,
-              child: const Text('SHOW CLOSED'),
-            ),
-            TextButton(
-              onPressed: openSaved ? () => _showPose(closed: false) : null,
-              child: const Text('SHOW OPEN'),
-            ),
-            OutlinedButton(
-              onPressed: closedSaved ? () => _copyPose(closed: true) : null,
-              child: const Text('COPY CLOSED'),
-            ),
-            OutlinedButton(
-              onPressed: openSaved ? () => _copyPose(closed: false) : null,
-              child: const Text('COPY OPEN'),
-            ),
+    return V13Card(
+      padding: const EdgeInsets.all(V13.gapMd),
+      child: Wrap(
+        spacing: V13.gapSm,
+        runSpacing: V13.gapSm,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          V13Button.secondary(
+            label: 'RESET',
+            size: V13ButtonSize.small,
+            onPressed: _resetRig,
+          ),
+          V13Button.secondary(
+            label: 'SAVE CLOSED',
+            size: V13ButtonSize.small,
+            onPressed: _instance == null ? null : () => _savePose(closed: true),
+          ),
+          V13Button.secondary(
+            label: 'SAVE OPEN',
+            size: V13ButtonSize.small,
+            onPressed: _instance == null
+                ? null
+                : () => _savePose(closed: false),
+          ),
+          V13Button.ghost(
+            label: 'SHOW CLOSED',
+            size: V13ButtonSize.small,
+            onPressed: closedSaved ? () => _showPose(closed: true) : null,
+          ),
+          V13Button.ghost(
+            label: 'SHOW OPEN',
+            size: V13ButtonSize.small,
+            onPressed: openSaved ? () => _showPose(closed: false) : null,
+          ),
+          V13Button.secondary(
+            label: 'COPY CLOSED',
+            size: V13ButtonSize.small,
+            onPressed: closedSaved ? () => _copyPose(closed: true) : null,
+          ),
+          V13Button.secondary(
+            label: 'COPY OPEN',
+            size: V13ButtonSize.small,
+            onPressed: openSaved ? () => _copyPose(closed: false) : null,
+          ),
+          Text(
+            'CLOSED: ${closedSaved ? 'SAVED' : 'NOT SAVED'}',
+            style: V13.label,
+          ),
+          Text('OPEN: ${openSaved ? 'SAVED' : 'NOT SAVED'}', style: V13.label),
+          if (_loadError != null)
             Text(
-              'CLOSED: ${closedSaved ? 'SAVED' : 'NOT SAVED'}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              'Calibration error: $_loadError',
+              style: V13.caption.copyWith(color: V13.danger),
             ),
-            Text(
-              'OPEN: ${openSaved ? 'SAVED' : 'NOT SAVED'}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            if (_loadError != null)
-              Text(
-                'Calibration error: $_loadError',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -290,17 +305,14 @@ class _RiveCalibrationScreenState extends State<RiveCalibrationScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(bottom: V13.gapSm),
           child: Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
+            style: V13.label.copyWith(fontSize: 12, color: V13.navy),
           ),
         ),
         for (final property in properties) _buildPropertyEditor(property),
-        const SizedBox(height: 12),
+        const SizedBox(height: V13.gapMd),
       ],
     );
   }
@@ -309,39 +321,57 @@ class _RiveCalibrationScreenState extends State<RiveCalibrationScreen> {
     final value = _values[property] ?? 0;
     final min = NuvoRiveCalibrationContract.minimum(property);
     final max = NuvoRiveCalibrationContract.maximum(property);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: V13.gapSm),
+      child: V13Card(
+        padding: const EdgeInsets.fromLTRB(V13.gapMd, 10, V13.gapMd, V13.gapSm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(property, style: const TextStyle(fontFamily: 'monospace')),
-                Text(value.toStringAsFixed(2)),
+                Text(
+                  property,
+                  style: V13.caption.copyWith(
+                    color: V13.navy,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+                Text(
+                  value.toStringAsFixed(2),
+                  style: V13.numberSm.copyWith(fontSize: 14),
+                ),
               ],
             ),
-            Slider(
-              value: value.clamp(min, max),
-              min: min,
-              max: max,
-              onChanged: _instance == null
-                  ? null
-                  : (next) => _setProperty(property, next),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: V13.blue,
+                thumbColor: V13.blue,
+                inactiveTrackColor: V13.divider,
+                overlayColor: V13.blue.withValues(alpha: 0.12),
+              ),
+              child: Slider(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                onChanged: _instance == null
+                    ? null
+                    : (next) => _setProperty(property, next),
+              ),
             ),
             Wrap(
-              spacing: 4,
+              spacing: V13.gapXs,
               children: [
                 for (final amount in const [-5.0, -1.0, 1.0, 5.0])
-                  OutlinedButton(
+                  V13Button.ghost(
+                    label: amount > 0
+                        ? '+${amount.toInt()}'
+                        : '${amount.toInt()}',
+                    size: V13ButtonSize.small,
                     onPressed: _instance == null
                         ? null
                         : () => _nudge(property, amount),
-                    child: Text(
-                      amount > 0 ? '+${amount.toInt()}' : '${amount.toInt()}',
-                    ),
                   ),
               ],
             ),

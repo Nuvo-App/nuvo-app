@@ -130,9 +130,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
         for (final c in _controllers) {
           c.clear();
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('New code sent')));
+        showV13Toast(context, 'New code sent');
         _startResendCooldown();
       }
     } on ApiException catch (e) {
@@ -168,86 +166,88 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
               child: NuvoScrollBottomFade(
                 child:
                     SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            V13IconButton(
-                              icon: Icons.arrow_back,
-                              shape: V13IconButtonShape.square,
-                              semanticLabel: 'Back',
-                              onTap: () => safePopOrGo(context, '/auth/email'),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              'Check your email',
-                              style: V13.title.copyWith(
-                                fontSize: 32,
-                                letterSpacing: -0.9,
+                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              V13IconButton(
+                                icon: Icons.arrow_back,
+                                shape: V13IconButtonShape.square,
+                                semanticLabel: 'Back',
+                                onTap: () =>
+                                    safePopOrGo(context, '/auth/email'),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Enter the 6-digit code we sent to ${widget.email}.',
-                              style: V13.body.copyWith(
-                                color: V13.muted,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            V13OtpInput(controllers: _controllers),
-                            if (_error != null) ...[
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 24),
                               Text(
-                                _error!,
-                                style: V13.caption.copyWith(
-                                  fontSize: 13,
-                                  color: V13.danger,
+                                'Check your email',
+                                style: V13.title.copyWith(
+                                  fontSize: 32,
+                                  letterSpacing: -0.9,
                                 ),
                               ),
-                            ],
-                            const SizedBox(height: 22),
-                            Center(
-                              child: Text(
-                                "Didn't get a code?",
-                                style: V13.caption.copyWith(fontSize: 13),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Enter the 6-digit code we sent to ${widget.email}.',
+                                style: V13.body.copyWith(
+                                  color: V13.muted,
+                                  fontSize: 15,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            GestureDetector(
-                              onTap: (_resending || _resendCooldownLeft > 0)
-                                  ? null
-                                  : _resend,
-                              behavior: HitTestBehavior.opaque,
-                              child: Center(
-                                child: Text(
-                                  _resending
-                                      ? 'Sending...'
-                                      : _resendCooldownLeft > 0
-                                      ? 'Resend code in ${_resendCooldownLeft}s'
-                                      : 'Resend code',
+                              const SizedBox(height: 32),
+                              V13OtpInput(controllers: _controllers),
+                              if (_error != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _error!,
                                   style: V13.caption.copyWith(
                                     fontSize: 13,
-                                    color:
-                                        (_resending || _resendCooldownLeft > 0)
-                                        ? V13.muted
-                                        : V13.blue,
-                                    fontWeight: FontWeight.w700,
+                                    color: V13.danger,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 22),
+                              Center(
+                                child: Text(
+                                  "Didn't get a code?",
+                                  style: V13.caption.copyWith(fontSize: 13),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: (_resending || _resendCooldownLeft > 0)
+                                    ? null
+                                    : _resend,
+                                behavior: HitTestBehavior.opaque,
+                                child: Center(
+                                  child: Text(
+                                    _resending
+                                        ? 'Sending...'
+                                        : _resendCooldownLeft > 0
+                                        ? 'Resend code in ${_resendCooldownLeft}s'
+                                        : 'Resend code',
+                                    style: V13.caption.copyWith(
+                                      fontSize: 13,
+                                      color:
+                                          (_resending ||
+                                              _resendCooldownLeft > 0)
+                                          ? V13.muted
+                                          : V13.blue,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        )
+                        .animate()
+                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                        .slideY(
+                          begin: 0.04,
+                          end: 0,
+                          duration: 320.ms,
+                          curve: Curves.easeOutCubic,
                         ),
-                      )
-                      .animate()
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.04,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
               ),
             ),
 

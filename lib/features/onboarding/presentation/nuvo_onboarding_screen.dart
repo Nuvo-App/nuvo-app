@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/demo/presentation_demo.dart';
-import '../../../core/theme/app_colors.dart' show NuvoThemeColors;
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
@@ -152,14 +151,6 @@ NuvoBadge _demoBadgeState(
   statKey: base.statKey,
   threshold: base.threshold,
   progressValue: progressValue ?? base.progressValue,
-);
-
-/// The onboarding pages render in the light-chrome visual language
-/// (NuvoColors.* constants throughout). Badge widgets read themeColors —
-/// pin light so a dark-mode device never drops dark panels onto this page.
-Widget _asLightChrome(Widget child) => Theme(
-  data: ThemeData(extensions: const [NuvoThemeColors.light]),
-  child: child,
 );
 
 /// The canonical Nuvo first-use onboarding — runs AFTER account creation and
@@ -2343,144 +2334,142 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
                     )
                   : 1.0;
               final hatIn = _segment(_goalAt, _goalEnd);
-              return _asLightChrome(
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'EXAMPLE',
-                      style: V13.label
-                          .copyWith(fontSize: 13, letterSpacing: 0.8)
-                          .copyWith(
-                            color: V13.muted,
-                            letterSpacing: 1.8,
-                            fontSize: 10,
-                          ),
-                    ),
-                    SizedBox(height: widget.compact ? 8 : 12),
-                    Opacity(
-                      opacity: cardIn,
-                      child: Transform.translate(
-                        offset: Offset(0, 16 * (1 - cardIn)),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            V13Face(
-                              photoUrl: user?.profilePhotoUrl,
-                              size: widget.compact ? 56 : 72,
-                              isMe: true,
-                              name: name,
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: V13.bodyStrong
-                                        .copyWith(fontSize: 17)
-                                        .copyWith(
-                                          color: V13.navy,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: V13.blue.withValues(alpha: .12),
-                                    borderRadius: BorderRadius.circular(99),
-                                  ),
-                                  child: Text(
-                                    'LEVEL 8',
-                                    style: V13.label
-                                        .copyWith(
-                                          fontSize: 13,
-                                          letterSpacing: 0.8,
-                                        )
-                                        .copyWith(
-                                          color: V13.blue,
-                                          letterSpacing: 1.6,
-                                          fontSize: 10.5,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'EXAMPLE',
+                    style: V13.label
+                        .copyWith(fontSize: 13, letterSpacing: 0.8)
+                        .copyWith(
+                          color: V13.muted,
+                          letterSpacing: 1.8,
+                          fontSize: 10,
                         ),
-                      ),
-                    ),
-                    SizedBox(height: widget.compact ? 10 : 14),
-                    // A mid-level featured set — the real badge visual. Each
-                    // gets an equal flex slot so names never push past 320.
-                    Row(
-                      children: [
-                        for (var i = 0; i < featured.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          Expanded(
-                            child: Opacity(
-                              opacity: ((featuredIn - i * .3) / .7).clamp(
-                                0.0,
-                                1.0,
-                              ),
-                              child: _FeaturedBadge(
-                                badge: _demoBadgeState(
-                                  featured[i],
-                                  unlocked: true,
+                  ),
+                  SizedBox(height: widget.compact ? 8 : 12),
+                  Opacity(
+                    opacity: cardIn,
+                    child: Transform.translate(
+                      offset: Offset(0, 16 * (1 - cardIn)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          V13Face(
+                            photoUrl: user?.profilePhotoUrl,
+                            size: widget.compact ? 56 : 72,
+                            isMe: true,
+                            name: name,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: V13.bodyStrong
+                                      .copyWith(fontSize: 17)
+                                      .copyWith(
+                                        color: V13.navy,
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                 ),
-                                compact: widget.compact,
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: V13.blue.withValues(alpha: .12),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                child: Text(
+                                  'LEVEL 8',
+                                  style: V13.label
+                                      .copyWith(
+                                        fontSize: 13,
+                                        letterSpacing: 0.8,
+                                      )
+                                      .copyWith(
+                                        color: V13.blue,
+                                        letterSpacing: 1.6,
+                                        fontSize: 10.5,
+                                      ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: widget.compact ? 10 : 14),
+                  // A mid-level featured set — the real badge visual. Each
+                  // gets an equal flex slot so names never push past 320.
+                  Row(
+                    children: [
+                      for (var i = 0; i < featured.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 8),
+                        Expanded(
+                          child: Opacity(
+                            opacity: ((featuredIn - i * .3) / .7).clamp(
+                              0.0,
+                              1.0,
+                            ),
+                            child: _FeaturedBadge(
+                              badge: _demoBadgeState(
+                                featured[i],
+                                unlocked: true,
+                              ),
+                              compact: widget.compact,
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
-                    SizedBox(height: widget.compact ? 12 : 16),
-                    // First Move — the goal every fresh account actually
-                    // starts with — earns live as a demonstration.
-                    Opacity(
-                      opacity: goalIn,
-                      child: Transform.translate(
-                        offset: Offset(0, 12 * (1 - goalIn)),
-                        child: _GoalRow(
-                          badge: _demoBadgeState(
-                            def('first_move'),
-                            unlocked: earned,
-                            progressValue: earned ? 1 : 0,
-                          ),
-                          earned: earned,
-                          earnPop: earnPop,
-                          compact: widget.compact,
+                    ],
+                  ),
+                  SizedBox(height: widget.compact ? 12 : 16),
+                  // First Move — the goal every fresh account actually
+                  // starts with — earns live as a demonstration.
+                  Opacity(
+                    opacity: goalIn,
+                    child: Transform.translate(
+                      offset: Offset(0, 12 * (1 - goalIn)),
+                      child: _GoalRow(
+                        badge: _demoBadgeState(
+                          def('first_move'),
+                          unlocked: earned,
+                          progressValue: earned ? 1 : 0,
                         ),
+                        earned: earned,
+                        earnPop: earnPop,
+                        compact: widget.compact,
                       ),
                     ),
-                    SizedBox(height: widget.compact ? 8 : 10),
-                    // And the longer goal: Hat Trick sits at 0 / 3 — the user
-                    // builds wins, the explanation never implies they have
-                    // any yet.
-                    Opacity(
-                      opacity: hatIn,
-                      child: Transform.translate(
-                        offset: Offset(0, 12 * (1 - hatIn)),
-                        child: _GoalRow(
-                          badge: _demoBadgeState(
-                            def('hat_trick'),
-                            progressValue: 0,
-                          ),
-                          compact: widget.compact,
+                  ),
+                  SizedBox(height: widget.compact ? 8 : 10),
+                  // And the longer goal: Hat Trick sits at 0 / 3 — the user
+                  // builds wins, the explanation never implies they have
+                  // any yet.
+                  Opacity(
+                    opacity: hatIn,
+                    child: Transform.translate(
+                      offset: Offset(0, 12 * (1 - hatIn)),
+                      child: _GoalRow(
+                        badge: _demoBadgeState(
+                          def('hat_trick'),
+                          progressValue: 0,
                         ),
+                        compact: widget.compact,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),
@@ -2836,20 +2825,18 @@ class _CrewPageState extends State<_CrewPage>
                 ),
               ),
               if (badgeIcon != null) ...[
-                _asLightChrome(
-                  NuvoAchievementBadge(
-                    badge: NuvoBadge(
-                      unlockId: 'crew-demo-$badgeIcon',
-                      type: 'achievement',
-                      key: badgeIcon,
-                      name: '',
-                      requiredLevel: 0,
-                      unlocked: true,
-                      featured: true,
-                      iconKey: badgeIcon,
-                    ),
-                    size: 24,
+                NuvoAchievementBadge(
+                  badge: NuvoBadge(
+                    unlockId: 'crew-demo-$badgeIcon',
+                    type: 'achievement',
+                    key: badgeIcon,
+                    name: '',
+                    requiredLevel: 0,
+                    unlocked: true,
+                    featured: true,
+                    iconKey: badgeIcon,
                   ),
+                  size: 24,
                 ),
                 const SizedBox(width: 8),
               ],
@@ -3037,9 +3024,7 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
           if (firstGoal != null)
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: widget.compact ? 300 : 330),
-              child: _asLightChrome(
-                _GoalRow(badge: firstGoal, compact: widget.compact),
-              ),
+              child: _GoalRow(badge: firstGoal, compact: widget.compact),
             ),
           SizedBox(height: widget.compact ? 12 : 20),
           NuvoFlipText(
