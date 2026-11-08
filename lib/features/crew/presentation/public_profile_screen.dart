@@ -74,9 +74,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
       }
     }
     try {
-      final card = await ref
-          .read(crewRepositoryProvider)
-          .getUser(widget.userId);
+      final card = await ref.read(crewRepositoryProvider).getUser(widget.userId);
       if (mounted) setState(() => _card = card);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -84,22 +82,20 @@ class _State extends ConsumerState<PublicProfileScreen> {
   }
 
   PublicUser _asUser(PublicProfileCard c) => PublicUser(
-    id: c.id,
-    displayName: c.displayName,
-    username: c.username,
-    memberId: c.memberId,
-    initials: c.initials,
-    profilePhotoUrl: c.profilePhotoUrl,
-  );
+        id: c.id,
+        displayName: c.displayName,
+        username: c.username,
+        memberId: c.memberId,
+        initials: c.initials,
+        profilePhotoUrl: c.profilePhotoUrl,
+      );
 
   Future<void> _connect() async {
     final card = _card;
     if (card == null) return;
     setState(() => _busy = true);
     try {
-      final outcome = await ref
-          .read(crewControllerProvider.notifier)
-          .add(_asUser(card));
+      final outcome = await ref.read(crewControllerProvider.notifier).add(_asUser(card));
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -110,11 +106,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
               : CrewConnectionStatus.pendingOutgoing,
         );
       });
-      _snack(
-        outcome == ConnectOutcome.active
-            ? 'Added to your friends.'
-            : 'Request sent.',
-      );
+      _snack(outcome == ConnectOutcome.active
+          ? 'Added to your friends.'
+          : 'Request sent.');
     } on ApiException catch (e) {
       if (mounted) {
         setState(() => _busy = false);
@@ -133,9 +127,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
     if (card == null) return;
     setState(() => _busy = true);
     try {
-      await ref
-          .read(crewControllerProvider.notifier)
-          .acceptRequest(_asUser(card));
+      await ref.read(crewControllerProvider.notifier).acceptRequest(_asUser(card));
       if (mounted) {
         setState(() {
           _busy = false;
@@ -212,8 +204,8 @@ class _State extends ConsumerState<PublicProfileScreen> {
         lastActiveAt: c.lastActiveAt,
       );
 
-  void _snack(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _snack(String m) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(m)));
 
   void _exit() {
     if (context.canPop()) {
@@ -284,9 +276,8 @@ class _State extends ConsumerState<PublicProfileScreen> {
             const SizedBox(height: 6),
             Text(
               'What\u2019s wrong? This goes to the Nuvo review team.',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.themeColors.inkSubtle,
-              ),
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: context.themeColors.inkSubtle),
             ),
             Align(
               alignment: Alignment.centerLeft,
@@ -300,7 +291,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
               controller: controller,
               maxLines: 3,
               maxLength: 500,
-              decoration: const InputDecoration(hintText: 'Optional details'),
+              decoration: const InputDecoration(
+                hintText: 'Optional details',
+              ),
             ),
             const SizedBox(height: 8),
             NuvoPrimaryButton(
@@ -397,10 +390,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
         );
       }
       return Center(
-        child: NuvoErrorState(
-          message: "Couldn't load this profile.",
-          onRetry: _load,
-        ),
+        child: NuvoErrorState(message: "Couldn't load this profile.", onRetry: _load),
       );
     }
     final card = _card;
@@ -411,48 +401,46 @@ class _State extends ConsumerState<PublicProfileScreen> {
     final shown = _publicFeaturedBadges(card);
     return SafeArea(
       top: false,
-      child: NuvoScrollBottomFade(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          children: [
-            _hero(card).nuvoEnter(),
-            // Same progression plane as the self profile — the level climb and
-            // the canonical racing record share one ice-blue field. When their
-            // badges dock on its edge the field keeps clear room beneath.
-            if (card.level != null || card.racesFinished != null) ...[
-              const SizedBox(height: 20),
-              _PublicProgressionPlane(
-                card: card,
-                docksBadges: shown.isNotEmpty,
-              ).nuvoEnter(),
-            ],
-            // Earned artifacts straddle the plane's bottom edge at their
-            // centerline — trophies earned FROM the progression system,
-            // same 50/50 breakout as the self profile.
-            if (hasPlane && shown.isNotEmpty)
-              SizedBox(
-                height: 28,
-                child: OverflowBox(
-                  alignment: Alignment.bottomCenter,
-                  maxHeight: 64,
-                  child: _PublicDockedBadges(badges: shown),
-                ),
-              ),
-            // Earned collection — featured first; tap opens the earned-only
-            // collection (locked progress stays self-only).
-            if ((card.achievementsEarned ?? 0) > 0) ...[
-              if (!hasPlane || shown.isEmpty) const SizedBox(height: 24),
-              _PublicAchievements(card: card, shown: shown),
-            ],
-            _racesWithYou(card),
-            // Racing together — races I'm in that this person races too,
-            // derived from RaceController's cache (no extra fetch).
-            _sharedRaces(),
-            const SizedBox(height: 24),
-            _cta(card),
+      child: NuvoScrollBottomFade(child: ListView(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        children: [
+          _hero(card).nuvoEnter(),
+          // Same progression plane as the self profile — the level climb and
+          // the canonical racing record share one ice-blue field. When their
+          // badges dock on its edge the field keeps clear room beneath.
+          if (card.level != null || card.racesFinished != null) ...[
+            const SizedBox(height: 20),
+            _PublicProgressionPlane(
+              card: card,
+              docksBadges: shown.isNotEmpty,
+            ).nuvoEnter(),
           ],
-        ),
-      ),
+          // Earned artifacts straddle the plane's bottom edge at their
+          // centerline — trophies earned FROM the progression system,
+          // same 50/50 breakout as the self profile.
+          if (hasPlane && shown.isNotEmpty)
+            SizedBox(
+              height: 28,
+              child: OverflowBox(
+                alignment: Alignment.bottomCenter,
+                maxHeight: 64,
+                child: _PublicDockedBadges(badges: shown),
+              ),
+            ),
+          // Earned collection — featured first; tap opens the earned-only
+          // collection (locked progress stays self-only).
+          if ((card.achievementsEarned ?? 0) > 0) ...[
+            if (!hasPlane || shown.isEmpty) const SizedBox(height: 24),
+            _PublicAchievements(card: card, shown: shown),
+          ],
+          _racesWithYou(card),
+          // Racing together — races I'm in that this person races too,
+          // derived from RaceController's cache (no extra fetch).
+          _sharedRaces(),
+          const SizedBox(height: 24),
+          _cta(card),
+        ],
+      )),
     );
   }
 
@@ -543,8 +531,8 @@ class _State extends ConsumerState<PublicProfileScreen> {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color:
-                      crewPresenceFor(card.lastActiveAt) == CrewPresence.active
+                  color: crewPresenceFor(card.lastActiveAt) ==
+                          CrewPresence.active
                       ? context.semanticColors.success.on
                       : context.themeColors.inkDim,
                   shape: BoxShape.circle,
@@ -554,8 +542,8 @@ class _State extends ConsumerState<PublicProfileScreen> {
               Text(
                 crewPresenceLabel(card.lastActiveAt)!,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color:
-                      crewPresenceFor(card.lastActiveAt) == CrewPresence.active
+                  color: crewPresenceFor(card.lastActiveAt) ==
+                          CrewPresence.active
                       ? context.semanticColors.success.on
                       : context.themeColors.inkSubtle,
                   fontWeight: FontWeight.w600,
@@ -681,50 +669,50 @@ class _State extends ConsumerState<PublicProfileScreen> {
       stateKey: card.connectionStatus,
       child: switch (card.connectionStatus) {
         CrewConnectionStatus.connected => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _Badge(
-              icon: Icons.check_circle_rounded,
-              label: 'Friends',
-              color: NuvoColors.success,
-            ),
-            const SizedBox(height: 14),
-            NuvoPrimaryButton(
-              label: 'Race ${card.displayName.split(' ').first}',
-              icon: Icons.flag_rounded,
-              expand: true,
-              onPressed: () => context.push(
-                '/races/new',
-                extra: RaceCreatePrefill.pushups.copyWith(
-                  withUser: _asUser(card),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _Badge(
+                icon: Icons.check_circle_rounded,
+                label: 'Friends',
+                color: NuvoColors.success,
+              ),
+              const SizedBox(height: 14),
+              NuvoPrimaryButton(
+                label: 'Race ${card.displayName.split(' ').first}',
+                icon: Icons.flag_rounded,
+                expand: true,
+                onPressed: () => context.push(
+                  '/races/new',
+                  extra: RaceCreatePrefill.pushups.copyWith(
+                    withUser: _asUser(card),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            NuvoTertiaryButton(
-              label: 'Remove friend',
-              expand: true,
-              onPressed: _busy ? null : _remove,
-            ),
-          ],
-        ),
+              const SizedBox(height: 10),
+              NuvoTertiaryButton(
+                label: 'Remove friend',
+                expand: true,
+                onPressed: _busy ? null : _remove,
+              ),
+            ],
+          ),
         CrewConnectionStatus.pendingOutgoing => const _Badge(
-          icon: Icons.schedule_rounded,
-          label: 'Request sent',
-          color: NuvoColors.warning,
-        ),
+            icon: Icons.schedule_rounded,
+            label: 'Request sent',
+            color: NuvoColors.warning,
+          ),
         CrewConnectionStatus.pendingIncoming => NuvoPrimaryButton(
-          label: 'Accept friend request',
-          expand: true,
-          loading: _busy,
-          onPressed: _busy ? null : _accept,
-        ),
+            label: 'Accept friend request',
+            expand: true,
+            loading: _busy,
+            onPressed: _busy ? null : _accept,
+          ),
         CrewConnectionStatus.none => NuvoPrimaryButton(
-          label: 'Add friend',
-          expand: true,
-          loading: _busy,
-          onPressed: _busy ? null : _connect,
-        ),
+            label: 'Add friend',
+            expand: true,
+            loading: _busy,
+            onPressed: _busy ? null : _connect,
+          ),
       },
     );
   }
@@ -821,19 +809,12 @@ class _Badge extends StatelessWidget {
         color: context.tintOf(color),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: context.onTintOf(color)),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: AppTextStyles.labelLarge.copyWith(
-              color: context.onTintOf(color),
-            ),
-          ),
-        ],
-      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 18, color: context.onTintOf(color)),
+        const SizedBox(width: 8),
+        Text(label,
+            style: AppTextStyles.labelLarge.copyWith(color: context.onTintOf(color))),
+      ]),
     );
   }
 }
@@ -843,10 +824,7 @@ class _Badge extends StatelessWidget {
 /// system. The public contract shows level and the 0..1 fraction only;
 /// absolute XP never leaves the owner's own profile.
 class _PublicProgressionPlane extends StatelessWidget {
-  const _PublicProgressionPlane({
-    required this.card,
-    required this.docksBadges,
-  });
+  const _PublicProgressionPlane({required this.card, required this.docksBadges});
 
   final PublicProfileCard card;
 
@@ -972,11 +950,11 @@ class _PubStatsStrip extends StatelessWidget {
   }
 
   Widget _divider(NuvoThemeColors c) => Container(
-    width: 1,
-    height: 32,
-    color: c.ink.withValues(alpha: 0.12),
-    margin: const EdgeInsets.symmetric(horizontal: 4),
-  );
+        width: 1,
+        height: 32,
+        color: c.ink.withValues(alpha: 0.12),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+      );
 }
 
 class _PubStat extends StatelessWidget {
@@ -1007,9 +985,9 @@ class _PubStat extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             label,
-            style: AppTextStyles.labelUppercase(
-              10,
-            ).copyWith(color: c.inkSubtle),
+            style: AppTextStyles.labelUppercase(10).copyWith(
+              color: c.inkSubtle,
+            ),
           ),
         ],
       ),
@@ -1173,8 +1151,8 @@ class _SharedResultRow extends StatelessWidget {
     final result = won
         ? 'You won'
         : theirs
-        ? '$first won'
-        : 'Finished';
+            ? '$first won'
+            : 'Finished';
     return Column(
       children: [
         if (showDivider) Divider(height: 1, color: c.divider, indent: 14),
@@ -1200,11 +1178,17 @@ class _SharedResultRow extends StatelessWidget {
                 Text(
                   result,
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: won ? context.blueInk : c.inkSubtle,
+                    color: won
+                        ? context.blueInk
+                        : c.inkSubtle,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, size: 16, color: c.inkDim),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: c.inkDim,
+                ),
               ],
             ),
           ),

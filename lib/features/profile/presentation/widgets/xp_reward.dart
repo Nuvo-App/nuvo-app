@@ -19,10 +19,8 @@ const kXpPersonalBest = 5;
 const kXpDiscovery = 5;
 
 /// What one race paid out — fetched lazily by finished-race surfaces.
-final raceXpProvider = FutureProvider.family<NuvoRaceXp, String>((
-  ref,
-  raceId,
-) async {
+final raceXpProvider =
+    FutureProvider.family<NuvoRaceXp, String>((ref, raceId) async {
   final token = await ref.read(secureTokenStoreProvider).getAccessToken();
   if (token == null) return const NuvoRaceXp(lines: [], totalXp: 0);
   return ref.read(progressionApiProvider).getRaceXp(token, raceId);

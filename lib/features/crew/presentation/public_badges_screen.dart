@@ -57,9 +57,7 @@ class _State extends ConsumerState<PublicBadgesScreen> {
       }
     }
     try {
-      final card = await ref
-          .read(crewRepositoryProvider)
-          .getUser(widget.userId);
+      final card = await ref.read(crewRepositoryProvider).getUser(widget.userId);
       if (mounted) setState(() => _card = card);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -85,97 +83,97 @@ class _State extends ConsumerState<PublicBadgesScreen> {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final card = _card;
-    final earned = (card?.earned ?? const <NuvoBadge>[]).where(_inTab).toList();
+    final earned = (card?.earned ?? const <NuvoBadge>[])
+        .where(_inTab)
+        .toList();
     final usedTabs = nuvoAchievementTabs.keys.where((tab) {
       final cat = nuvoAchievementTabs[tab];
       if (cat == null || cat.isEmpty) return true;
-      return (card?.earned ?? const <NuvoBadge>[]).any(
-        (b) => cat == 'special'
-            ? nuvoSpecialCategories.contains(b.category)
-            : b.category == cat,
-      );
+      return (card?.earned ?? const <NuvoBadge>[]).any((b) =>
+          cat == 'special'
+              ? nuvoSpecialCategories.contains(b.category)
+              : b.category == cat);
     }).toList();
 
     return Scaffold(
       backgroundColor: c.page,
       body: SafeArea(
-        child: NuvoScrollBottomFade(
-          child: ListView(
-            // Same pushed-page clearance as the self collection — the last
-            // row rests visibly above the edge even without a bottom inset.
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
-            children: [
-              NuvoBackHeader(
-                title: 'Achievements',
-                onBack: () => safePopOrGo(context, '/u/${widget.userId}'),
+        child: NuvoScrollBottomFade(child: ListView(
+          // Same pushed-page clearance as the self collection — the last
+          // row rests visibly above the edge even without a bottom inset.
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
+          children: [
+            NuvoBackHeader(
+              title: 'Achievements',
+              onBack: () => safePopOrGo(context, '/u/${widget.userId}'),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              card != null
+                  ? '${card.displayName.split(' ').first} earned these racing.'
+                  : 'Earned by racing.',
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${card?.earned.length ?? 0} / ${card?.achievementsTotal ?? '?'} earned',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.blue,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(height: 6),
-              Text(
-                card != null
-                    ? '${card.displayName.split(' ').first} earned these racing.'
-                    : 'Earned by racing.',
-                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${card?.earned.length ?? 0} / ${card?.achievementsTotal ?? '?'} earned',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: NuvoColors.blue,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: NuvoSpacing.lg),
-              if (usedTabs.length > 1)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: NuvoSpacing.lg),
-                  child: SizedBox(
-                    height: 34 * MediaQuery.textScalerOf(context).scale(1),
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        for (final tab in usedTabs) ...[
-                          _TabChip(
-                            label: tab,
-                            selected: _tab == tab,
-                            onTap: () => setState(() => _tab = tab),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
+            ),
+            const SizedBox(height: NuvoSpacing.lg),
+            if (usedTabs.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: NuvoSpacing.lg),
+                child: SizedBox(
+                  height:
+                      34 * MediaQuery.textScalerOf(context).scale(1),
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      for (final tab in usedTabs) ...[
+                        _TabChip(
+                          label: tab,
+                          selected: _tab == tab,
+                          onTap: () => setState(() => _tab = tab),
+                        ),
+                        const SizedBox(width: 8),
                       ],
-                    ),
+                    ],
                   ),
                 ),
-              if (card == null && _error == null)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40),
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: NuvoColors.blue,
-                    ),
+              ),
+            if (card == null && _error == null)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: NuvoColors.blue,
                   ),
-                )
-              else if (card == null)
-                NuvoErrorState(
-                  message: "Couldn't load their achievements.",
-                  onRetry: _load,
-                )
-              else if (earned.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Text(
-                    _tab == 'All'
-                        ? 'No achievements earned yet.'
-                        : 'Nothing earned here yet.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-                  ),
-                )
-              else
-                NuvoBadgeGrid(badges: earned, onTap: _openDetail),
-            ],
-          ),
-        ),
+                ),
+              )
+            else if (card == null)
+              NuvoErrorState(
+                message: "Couldn't load their achievements.",
+                onRetry: _load,
+              )
+            else if (earned.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Text(
+                  _tab == 'All'
+                      ? 'No achievements earned yet.'
+                      : 'Nothing earned here yet.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+                ),
+              )
+            else
+              NuvoBadgeGrid(badges: earned, onTap: _openDetail),
+          ],
+        )),
       ),
     );
   }

@@ -120,7 +120,11 @@ Color nuvoBadgeAccent(NuvoBadge badge) {
 /// The same silhouette renders on Profile, the collection, Crew person
 /// sheets, and the unlock moment.
 class NuvoAchievementBadge extends StatelessWidget {
-  const NuvoAchievementBadge({super.key, required this.badge, this.size = 56});
+  const NuvoAchievementBadge({
+    super.key,
+    required this.badge,
+    this.size = 56,
+  });
 
   final NuvoBadge badge;
   final double size;
@@ -160,19 +164,19 @@ class NuvoAchievementBadge extends StatelessWidget {
       child: Center(
         child: badge.unlocked
             ? (numeral != null
-                  ? Text(
-                      numeral,
-                      style: AppTextStyles.displaySmall.copyWith(
-                        color: glyph,
-                        fontSize: size * 0.34,
-                        height: 1,
-                      ),
-                    )
-                  : Icon(
-                      nuvoBadgeIconFor(badge.iconKey),
-                      size: size * 0.44,
+                ? Text(
+                    numeral,
+                    style: AppTextStyles.displaySmall.copyWith(
                       color: glyph,
-                    ))
+                      fontSize: size * 0.34,
+                      height: 1,
+                    ),
+                  )
+                : Icon(
+                    nuvoBadgeIconFor(badge.iconKey),
+                    size: size * 0.44,
+                    color: glyph,
+                  ))
             : Icon(
                 Icons.lock_outline_rounded,
                 size: size * 0.40,
@@ -210,8 +214,8 @@ class NuvoBadgeDisc extends StatelessWidget {
           this.badge.unlocked
               ? 'EARNED'
               : this.badge.requiredLevel > 0
-              ? 'LVL ${this.badge.requiredLevel}'
-              : 'LOCKED',
+                  ? 'LVL ${this.badge.requiredLevel}'
+                  : 'LOCKED',
           style: AppTextStyles.labelUppercase(
             9,
             color: this.badge.unlocked ? c.inkSubtle : c.inkDim,
@@ -337,83 +341,82 @@ class NuvoBadgeGrid extends StatelessWidget {
     double statusHeight,
     double badgeSize,
   ) {
-    return PressableScale(
-      onTap: onTap == null ? null : () => onTap!(badge),
-      scale: 0.95,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            alignment: Alignment.center,
+        return PressableScale(
+          onTap: onTap == null ? null : () => onTap!(badge),
+          scale: 0.95,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Opacity(
-                opacity: badge.unlocked ? 1 : 0.6,
-                child: NuvoAchievementBadge(badge: badge, size: badgeSize),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Opacity(
+                    opacity: badge.unlocked ? 1 : 0.6,
+                    child: NuvoAchievementBadge(badge: badge, size: badgeSize),
+                  ),
+                  if (badge.featured)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: NuvoColors.blue,
+                          border: Border.all(color: c.page, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: NuvoColors.white,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              if (badge.featured)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: NuvoColors.blue,
-                      border: Border.all(color: c.page, width: 2),
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 12,
-                      color: NuvoColors.white,
-                    ),
+              const SizedBox(height: 6),
+              // Long names scale down to fit the tile instead of ellipsizing.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  badge.name,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: badge.unlocked ? c.ink : c.inkDim,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 3),
+              SizedBox(
+                height: statusHeight,
+                child: Center(
+                  child: !badge.unlocked && badge.goalProgress > 0
+                ? SizedBox(
+                  width: 52,
+                  child: NuvoProgressBar(
+                    value: badge.goalProgress,
+                    height: 4,
+                    color: context.themeColors.accent,
+                    trackColor: c.track,
+                  ),
+                )
+                : Text(
+                  badge.unlocked ? 'Earned' : 'Locked',
+                  style: AppTextStyles.labelUppercase(
+                    9,
+                    color: badge.unlocked ? c.inkSubtle : c.inkDim,
+                  ).copyWith(
+                    color: badge.unlocked ? c.inkSubtle : c.inkDim,
                   ),
                 ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          // Long names scale down to fit the tile instead of ellipsizing.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              badge.name,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: badge.unlocked ? c.ink : c.inkDim,
-                fontWeight: FontWeight.w800,
-              ),
-              maxLines: 1,
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 3),
-          SizedBox(
-            height: statusHeight,
-            child: Center(
-              child: !badge.unlocked && badge.goalProgress > 0
-                  ? SizedBox(
-                      width: 52,
-                      child: NuvoProgressBar(
-                        value: badge.goalProgress,
-                        height: 4,
-                        color: context.themeColors.accent,
-                        trackColor: c.track,
-                      ),
-                    )
-                  : Text(
-                      badge.unlocked ? 'Earned' : 'Locked',
-                      style:
-                          AppTextStyles.labelUppercase(
-                            9,
-                            color: badge.unlocked ? c.inkSubtle : c.inkDim,
-                          ).copyWith(
-                            color: badge.unlocked ? c.inkSubtle : c.inkDim,
-                          ),
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
+        );
   }
 }
 
@@ -450,98 +453,98 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: NuvoSpacing.sm),
-            NuvoAchievementBadge(badge: badge, size: 72),
-            const SizedBox(height: NuvoSpacing.md),
+          NuvoAchievementBadge(badge: badge, size: 72),
+          const SizedBox(height: NuvoSpacing.md),
+          Text(
+            badge.name,
+            style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
+            textAlign: TextAlign.center,
+          ),
+          if (badge.description != null) ...[
+            const SizedBox(height: 6),
             Text(
-              badge.name,
-              style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
+              badge.description!,
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
               textAlign: TextAlign.center,
             ),
-            if (badge.description != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                badge.description!,
-                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-                textAlign: TextAlign.center,
+          ],
+          const SizedBox(height: NuvoSpacing.lg),
+          if (badge.unlocked)
+            Text(
+              badge.unlockedAt != null && badge.unlockedAt != 'demo'
+                  ? 'Earned ${badge.unlockedAt!.split('T').first}'
+                  : 'Earned',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: context.themeColors.accent,
+                fontWeight: FontWeight.w800,
               ),
-            ],
+            )
+          else if (badge.threshold != null && badge.threshold! > 0)
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: NuvoProgressBar(
+                        value: badge.goalProgress,
+                        height: 8,
+                        color: context.themeColors.accent,
+                        trackColor: c.track,
+                      ),
+                    ),
+                    const SizedBox(width: NuvoSpacing.sm),
+                    Text(
+                      '${badge.progressValue} / ${badge.threshold}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: c.inkSubtle,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                if (badge.threshold! - badge.progressValue == 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'One to go.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeColors.accent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          if (onFeature != null) ...[
             const SizedBox(height: NuvoSpacing.lg),
-            if (badge.unlocked)
-              Text(
-                badge.unlockedAt != null && badge.unlockedAt != 'demo'
-                    ? 'Earned ${badge.unlockedAt!.split('T').first}'
-                    : 'Earned',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.themeColors.accent,
-                  fontWeight: FontWeight.w800,
+            NuvoPressable(
+              onTap: onFeature,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  color: badge.featured ? c.surface : NuvoColors.blue,
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  border: Border.all(color: c.inkShadow, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.inkShadow,
+                      offset: const Offset(3, 3),
+                      blurRadius: 0,
+                    ),
+                  ],
                 ),
-              )
-            else if (badge.threshold != null && badge.threshold! > 0)
-              Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: NuvoProgressBar(
-                          value: badge.goalProgress,
-                          height: 8,
-                          color: context.themeColors.accent,
-                          trackColor: c.track,
-                        ),
-                      ),
-                      const SizedBox(width: NuvoSpacing.sm),
-                      Text(
-                        '${badge.progressValue} / ${badge.threshold}',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: c.inkSubtle,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (badge.threshold! - badge.progressValue == 1)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'One to go.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeColors.accent,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            if (onFeature != null) ...[
-              const SizedBox(height: NuvoSpacing.lg),
-              NuvoPressable(
-                onTap: onFeature,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  decoration: BoxDecoration(
-                    color: badge.featured ? c.surface : NuvoColors.blue,
-                    borderRadius: BorderRadius.circular(NuvoRadii.md),
-                    border: Border.all(color: c.inkShadow, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: c.inkShadow,
-                        offset: const Offset(3, 3),
-                        blurRadius: 0,
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    badge.featured ? 'Unfeature' : 'Feature on Profile',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: badge.featured ? c.ink : NuvoColors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
+                child: Text(
+                  badge.featured ? 'Unfeature' : 'Feature on Profile',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: badge.featured ? c.ink : NuvoColors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-            ],
+            ),
+          ],
           ],
         ),
       ),

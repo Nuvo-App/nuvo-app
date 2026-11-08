@@ -127,9 +127,7 @@ class CrewController extends StateNotifier<CrewState> {
 
   Future<void> load({bool force = true}) {
     final at = _loadedAt;
-    if (!force &&
-        at != null &&
-        DateTime.now().difference(at) < _cacheLifetime) {
+    if (!force && at != null && DateTime.now().difference(at) < _cacheLifetime) {
       return Future.value();
     }
     if (_loadInFlight case final request?) return request;
@@ -171,11 +169,8 @@ class CrewController extends StateNotifier<CrewState> {
     final account = _cacheAccount();
     if (account == null) return;
     try {
-      final entry = await cache!.read(
-        account,
-        _snapshotDomain,
-        maxAge: _snapshotMaxAge,
-      );
+      final entry =
+          await cache!.read(account, _snapshotDomain, maxAge: _snapshotMaxAge);
       final data = entry?.data;
       if (data is! Map<String, dynamic>) return;
       final crewRaw = data['crew'];
@@ -185,12 +180,10 @@ class CrewController extends StateNotifier<CrewState> {
       }
       final members = _users(crewRaw['crew']);
       final ids = members.map((u) => u.id).toSet();
-      final requests = _users(
-        reqRaw['requests'],
-      ).where((u) => !ids.contains(u.id)).toList();
-      final outgoing = _users(
-        reqRaw['outgoing'],
-      ).where((u) => !ids.contains(u.id)).toList();
+      final requests =
+          _users(reqRaw['requests']).where((u) => !ids.contains(u.id)).toList();
+      final outgoing =
+          _users(reqRaw['outgoing']).where((u) => !ids.contains(u.id)).toList();
       // Discard if signed out / switched meanwhile, or a network result won.
       if (!mounted || generation != _generation || _loadedAt != null) return;
       if (state.hasData) return;
@@ -263,8 +256,7 @@ class CrewController extends StateNotifier<CrewState> {
         members = results.$1;
         page = results.$2;
       }
-      if (!mounted || generation != _generation || revision != _revision)
-        return;
+      if (!mounted || generation != _generation || revision != _revision) return;
       if (crewRes != null) {
         if (crewRes.notModified) {
           members = state.members;
@@ -276,12 +268,8 @@ class CrewController extends StateNotifier<CrewState> {
       }
       members = members!;
       final ids = members.map((user) => user.id).toSet();
-      final requests = page.incoming
-          .where((user) => !ids.contains(user.id))
-          .toList();
-      final outgoing = page.outgoing
-          .where((user) => !ids.contains(user.id))
-          .toList();
+      final requests = page.incoming.where((user) => !ids.contains(user.id)).toList();
+      final outgoing = page.outgoing.where((user) => !ids.contains(user.id)).toList();
       _loadedAt = DateTime.now();
       state = CrewState(
         members: members,
@@ -289,29 +277,30 @@ class CrewController extends StateNotifier<CrewState> {
         outgoing: outgoing,
         pendingUserIds: state.pendingUserIds,
         relationships: {
-          for (final id in state.relationships.keys)
-            id: CrewConnectionStatus.none,
-          for (final user in outgoing)
-            user.id: CrewConnectionStatus.pendingOutgoing,
-          for (final user in requests)
-            user.id: CrewConnectionStatus.pendingIncoming,
+          for (final id in state.relationships.keys) id: CrewConnectionStatus.none,
+          for (final user in outgoing) user.id: CrewConnectionStatus.pendingOutgoing,
+          for (final user in requests) user.id: CrewConnectionStatus.pendingIncoming,
           for (final user in members) user.id: CrewConnectionStatus.connected,
         },
       );
       if (account != null && _crewRaw != null) {
         cache!
-            .write(account, _snapshotDomain, {
-              'crew': _crewRaw,
-              'requests': {
-                'requests': [for (final u in page.incoming) _userJson(u)],
-                'outgoing': [for (final u in page.outgoing) _userJson(u)],
+            .write(
+              account,
+              _snapshotDomain,
+              {
+                'crew': _crewRaw,
+                'requests': {
+                  'requests': [for (final u in page.incoming) _userJson(u)],
+                  'outgoing': [for (final u in page.outgoing) _userJson(u)],
+                },
               },
-            }, etag: _crewEtag)
+              etag: _crewEtag,
+            )
             .catchError((_) {});
       }
     } catch (error) {
-      if (!mounted || generation != _generation || revision != _revision)
-        return;
+      if (!mounted || generation != _generation || revision != _revision) return;
       // A demo session must never surface a network error — if the session
       // resolved as presentation mode mid-flight, fixtures win over the
       // failure.
@@ -346,8 +335,7 @@ class CrewController extends StateNotifier<CrewState> {
         refreshing: false,
         error: "Couldn't refresh your friends. Try again.",
       );
-      if (error is ApiException && error.statusCode == 401)
-        onSessionExpired?.call();
+      if (error is ApiException && error.statusCode == 401) onSessionExpired?.call();
     }
   }
 
@@ -358,46 +346,31 @@ class CrewController extends StateNotifier<CrewState> {
     if (trimmed.isEmpty) return const [];
     final results = isPresentationDemo()
         ? PresentationDemoData.crewMembers()
-              .where(
-                (user) => '${user.displayName} ${user.username ?? ''}'
-                    .toLowerCase()
-                    .contains(trimmed.toLowerCase()),
-              )
-              .map(
-                (user) => CrewSearchResult(
-                  user: user,
-                  connectionStatus: state.relationshipFor(user.id),
-                ),
-              )
-              .toList()
+            .where((user) => '${user.displayName} ${user.username ?? ''}'
+                .toLowerCase().contains(trimmed.toLowerCase()))
+            .map((user) => CrewSearchResult(
+              user: user,
+              connectionStatus: state.relationshipFor(user.id),
+            )).toList()
         : await _repo.search(trimmed);
     if (!mounted || generation != _generation) return const [];
     if (revision == _revision) {
-      state = state.copyWith(
-        relationships: {
-          ...state.relationships,
-          for (final result in results)
-            if (!state.pendingUserIds.contains(result.user.id))
-              result.user.id: result.connectionStatus,
-        },
-      );
+      state = state.copyWith(relationships: {
+        ...state.relationships,
+        for (final result in results)
+          if (!state.pendingUserIds.contains(result.user.id))
+            result.user.id: result.connectionStatus,
+      });
     }
     return results;
   }
 
-  Future<T> _mutate<T>(
-    String id,
-    String action,
-    Future<T> Function() write,
-    void Function(T result) apply,
-  ) {
+  Future<T> _mutate<T>(String id, String action, Future<T> Function() write,
+      void Function(T result) apply) {
     final existing = _mutations[id];
     if (existing != null) {
-      if (existing.action == action)
-        return existing.future.then((value) => value as T);
-      return Future.error(
-        const ApiException(409, 'A friend update is still in progress.'),
-      );
+      if (existing.action == action) return existing.future.then((value) => value as T);
+      return Future.error(const ApiException(409, 'A friend update is still in progress.'));
     }
     final generation = _generation;
     state = state.copyWith(pendingUserIds: {...state.pendingUserIds, id});
@@ -420,9 +393,7 @@ class CrewController extends StateNotifier<CrewState> {
       } finally {
         if (mounted && generation == _generation) {
           _mutations.remove(id);
-          state = state.copyWith(
-            pendingUserIds: {...state.pendingUserIds}..remove(id),
-          );
+          state = state.copyWith(pendingUserIds: {...state.pendingUserIds}..remove(id));
         }
       }
     });
@@ -431,78 +402,58 @@ class CrewController extends StateNotifier<CrewState> {
   }
 
   Future<ConnectOutcome> add(PublicUser user) => _mutate(
-    user.id,
-    'add',
-    () async =>
-        isPresentationDemo() ? ConnectOutcome.active : await _repo.add(user.id),
+    user.id, 'add',
+    () async => isPresentationDemo() ? ConnectOutcome.active : await _repo.add(user.id),
     (outcome) {
       final connected = outcome == ConnectOutcome.active;
       state = state.copyWith(
-        members: connected
-            ? [user, ...state.members.where((m) => m.id != user.id)]
-            : null,
-        requests: connected
-            ? state.requests.where((r) => r.id != user.id).toList()
-            : null,
+        members: connected ? [user, ...state.members.where((m) => m.id != user.id)] : null,
+        requests: connected ? state.requests.where((r) => r.id != user.id).toList() : null,
         outgoing: connected
             ? state.outgoing.where((o) => o.id != user.id).toList()
             : [user, ...state.outgoing.where((o) => o.id != user.id)],
-        relationships: {
-          ...state.relationships,
-          user.id: connected
-              ? CrewConnectionStatus.connected
-              : CrewConnectionStatus.pendingOutgoing,
-        },
-        loading: false,
-        refreshing: false,
+        relationships: {...state.relationships, user.id: connected
+            ? CrewConnectionStatus.connected : CrewConnectionStatus.pendingOutgoing},
+        loading: false, refreshing: false,
       );
       if (connected) onRequestResolved?.call(user.id);
     },
   );
 
   Future<void> acceptRequest(PublicUser user) => _mutate<void>(
-    user.id,
-    'accept',
-    () async {
-      if (!isPresentationDemo()) await _repo.acceptRequest(user.id);
-    },
+    user.id, 'accept',
+    () async { if (!isPresentationDemo()) await _repo.acceptRequest(user.id); },
     (_) {
       state = state.copyWith(
         members: [user, ...state.members.where((m) => m.id != user.id)],
         requests: state.requests.where((r) => r.id != user.id).toList(),
         outgoing: state.outgoing.where((o) => o.id != user.id).toList(),
-        relationships: {
-          ...state.relationships,
-          user.id: CrewConnectionStatus.connected,
-        },
-        loading: false,
-        refreshing: false,
+        relationships: {...state.relationships, user.id: CrewConnectionStatus.connected},
+        loading: false, refreshing: false,
       );
       onRequestResolved?.call(user.id);
     },
   );
 
-  Future<void> declineRequest(PublicUser user) =>
-      _mutate<void>(user.id, 'decline', () async {
-        if (!isPresentationDemo()) await _repo.declineRequest(user.id);
-      }, (_) => _forget(user.id));
+  Future<void> declineRequest(PublicUser user) => _mutate<void>(
+    user.id, 'decline',
+    () async { if (!isPresentationDemo()) await _repo.declineRequest(user.id); },
+    (_) => _forget(user.id),
+  );
 
-  Future<void> remove(String userId) =>
-      _mutate<void>(userId, 'remove', () async {
-        if (!isPresentationDemo()) await _repo.remove(userId);
-      }, (_) => _forget(userId));
+  Future<void> remove(String userId) => _mutate<void>(
+    userId, 'remove',
+    () async { if (!isPresentationDemo()) await _repo.remove(userId); },
+    (_) => _forget(userId),
+  );
 
   void _forget(String userId) {
     state = state.copyWith(
       members: state.members.where((m) => m.id != userId).toList(),
       requests: state.requests.where((r) => r.id != userId).toList(),
       outgoing: state.outgoing.where((o) => o.id != userId).toList(),
-      relationships: {
-        ...state.relationships,
-        userId: CrewConnectionStatus.none,
-      },
-      loading: false,
-      refreshing: false,
+      relationships: {...state.relationships, userId: CrewConnectionStatus.none},
+      loading: false, refreshing: false,
     );
     onRequestResolved?.call(userId);
   }
@@ -530,60 +481,44 @@ class CrewController extends StateNotifier<CrewState> {
 }
 
 final _crewApiProvider = Provider<CrewApi>((_) => CrewApi());
-final crewRepositoryProvider = Provider<CrewRepository>(
-  (ref) => CrewSyncRepository(
-    ref.watch(_crewApiProvider),
-    ref.watch(secureTokenStoreProvider),
-    ref.watch(authApiProvider),
-  ),
-);
+final crewRepositoryProvider = Provider<CrewRepository>((ref) => CrewSyncRepository(
+  ref.watch(_crewApiProvider), ref.watch(secureTokenStoreProvider), ref.watch(authApiProvider),
+));
 
-final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>(
-  (ref) {
-    final controller = CrewController(
-      ref.watch(crewRepositoryProvider),
-      isPresentationDemo: () =>
-          isPresentationDemoUser(ref.read(authControllerProvider).user),
-      cache: ref.watch(cacheStoreProvider),
-      accountId: () => ref.read(authControllerProvider).user?.id,
-      // A crew change can reveal a co-racer's identity — mark races stale; the
-      // controller refetches when something is watching, never blindly.
-      onMutated: () => ref.read(raceControllerProvider.notifier).markStale(),
-      onRequestResolved: (id) => ref
-          .read(notificationControllerProvider.notifier)
-          .resolveCrewRequest(id),
-      onSessionExpired: () =>
-          ref.read(authControllerProvider.notifier).sessionExpired(),
-    );
-    var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
-    // Deferred: a synchronous mutation during the kickoff would modify other
-    // providers while this one is still initializing (Riverpod asserts).
-    if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
-      Future(() => controller.load(force: false));
-    }
-    ref.listen<AuthState>(authControllerProvider, (prev, next) {
-      if (prev?.user?.id != next.user?.id || prev?.status != next.status) {
-        final prevId = prev?.user?.id;
-        controller.clear(
-          wipeAccountId: prevId != null && next.user?.id != prevId
-              ? prevId
-              : null,
-        );
-        demo = isPresentationDemoUser(next.user);
-        if (next.status == AuthStatus.authenticated)
-          controller.load(force: false);
-      }
-    });
-    ref.listen<bool>(presentationModeEnabledProvider, (_, _) {
-      final current = isPresentationDemoUser(
-        ref.read(authControllerProvider).user,
+final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>((ref) {
+  final controller = CrewController(
+    ref.watch(crewRepositoryProvider),
+    isPresentationDemo: () => isPresentationDemoUser(ref.read(authControllerProvider).user),
+    cache: ref.watch(cacheStoreProvider),
+    accountId: () => ref.read(authControllerProvider).user?.id,
+    // A crew change can reveal a co-racer's identity — mark races stale; the
+    // controller refetches when something is watching, never blindly.
+    onMutated: () => ref.read(raceControllerProvider.notifier).markStale(),
+    onRequestResolved: (id) => ref.read(notificationControllerProvider.notifier).resolveCrewRequest(id),
+    onSessionExpired: () => ref.read(authControllerProvider.notifier).sessionExpired(),
+  );
+  var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
+  // Deferred: a synchronous mutation during the kickoff would modify other
+  // providers while this one is still initializing (Riverpod asserts).
+  if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+    Future(() => controller.load(force: false));
+  }
+  ref.listen<AuthState>(authControllerProvider, (prev, next) {
+    if (prev?.user?.id != next.user?.id || prev?.status != next.status) {
+      final prevId = prev?.user?.id;
+      controller.clear(
+        wipeAccountId: prevId != null && next.user?.id != prevId ? prevId : null,
       );
-      if (demo == current) return;
-      demo = current;
-      controller.clear();
-      if (ref.read(authControllerProvider).status == AuthStatus.authenticated)
-        controller.load(force: true);
-    });
-    return controller;
-  },
-);
+      demo = isPresentationDemoUser(next.user);
+      if (next.status == AuthStatus.authenticated) controller.load(force: false);
+    }
+  });
+  ref.listen<bool>(presentationModeEnabledProvider, (_, _) {
+    final current = isPresentationDemoUser(ref.read(authControllerProvider).user);
+    if (demo == current) return;
+    demo = current;
+    controller.clear();
+    if (ref.read(authControllerProvider).status == AuthStatus.authenticated) controller.load(force: true);
+  });
+  return controller;
+});
