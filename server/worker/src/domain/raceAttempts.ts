@@ -154,6 +154,48 @@ export async function bindableOpenAttempt(
   return attempt;
 }
 
+/** Epoch ms for either stored timestamp shape: JS ISO ('T…Z') or SQLite
+ * CURRENT_TIMESTAMP ('YYYY-MM-DD HH:MM:SS', which is UTC — JS would
+ * otherwise read it as local time). */
+function storedMs(value: string): number {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  return new Date(normalized.endsWith('Z') ? normalized : `${normalized}Z`).getTime();
+}
+
+/**
+ * Review-accept binding: which attempt a pending proof belongs to is decided
+ * by WHEN the proof was produced (move.created_at), not by what happens to
+ * be open at review time. An attempt counts when the proof's instant sits
+ * inside its bind window — attempt start ≤ proof time ≤ deadline + submit
+ * grace (or the untimed TTL). The attempt may already read 'expired': lazy
+ * expiry describes the live window, not whether the work counted.
+ */
+export async function bindableAttemptAtTime(
+  db: D1Database,
+  race: RaceRow,
+  userId: string,
+  submittedAt: string,
+): Promise<RaceAttemptRow | null> {
+  if (!formatUsesAttempts((race.format ?? race.race_type) as string)) return null;
+  const attempts = await db
+    .prepare(
+      `SELECT * FROM race_attempts
+       WHERE race_id = ? AND user_id = ? AND status IN ('open','expired')
+       ORDER BY started_at DESC`,
+    )
+    .bind(race.id, userId)
+    .all<RaceAttemptRow>();
+  const submittedMs = storedMs(submittedAt);
+  for (const attempt of attempts.results) {
+    if (storedMs(attempt.started_at) > submittedMs) continue;
+    const bindEnd = attempt.deadline_at
+      ? storedMs(attempt.deadline_at) + ATTEMPT_SUBMIT_GRACE_MS
+      : storedMs(attempt.started_at) + OPEN_ATTEMPT_TTL_MS;
+    if (submittedMs <= bindEnd) return attempt;
+  }
+  return null;
+}
+
 export async function closeAttempt(
   db: D1Database,
   attemptId: string,
