@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/v13/v13.dart';
 
 // Web placeholder for AiMotionProofScreen.
 // Camera and MLKit are mobile-only; this screen is shown on web instead.
@@ -16,67 +13,60 @@ class AiMotionProofScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              NuvoBackNavRow(
-                onBack: () => safePopOrGo(context, '/race/$raceId/proof'),
-              ),
-              const Spacer(),
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: context.semanticColors.neutral.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: context.themeColors.border,
-                          width: 1.5,
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.phone_iphone_rounded,
-                        color: context.themeColors.ink,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      'Camera verification runs\non the mobile app',
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: NuvoColors.navy,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            V13BackBar(
+              title: 'AI Motion Proof',
+              onBack: () => safePopOrGo(context, '/race/$raceId/proof'),
+            ),
+            const Spacer(),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const V13IconTile(
+                    icon: Icons.phone_iphone_rounded,
+                    color: V13.sky,
+                    size: 64,
+                    radius: V13.radiusTileLg,
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    'Camera verification runs\non the mobile app',
+                    style: V13.sectionHead,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
                       'Use the Nuvo mobile app to verify this movement with the camera.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
-                      ),
+                      style: V13.body.copyWith(color: V13.muted),
                       textAlign: TextAlign.center,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Spacer(),
-              NuvoPrimaryButton(
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                V13.pagePad,
+                0,
+                V13.pagePad,
+                V13.gapLg,
+              ),
+              child: V13Button.primary(
                 label: 'Back to proof',
                 icon: Icons.arrow_back_rounded,
-                expand: true,
+                fullWidth: true,
                 onPressed: () => safePopOrGo(context, '/race/$raceId/proof'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

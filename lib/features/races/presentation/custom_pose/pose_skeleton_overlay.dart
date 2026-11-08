@@ -1,7 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/v13/tokens.dart';
 import '../../data/ai_motion_models.dart';
 
 /// Keeps the last good pose on screen for a moment after a bad frame so the
@@ -123,7 +123,7 @@ class PoseSkeletonPainter extends CustomPainter {
     this.frame,
     required this.sourceSize,
     required this.mirrorX,
-    this.color = NuvoColors.white,
+    this.color = V13.white,
     this.glow = 0,
   });
 
@@ -192,7 +192,7 @@ class PoseSkeletonOverlay extends StatelessWidget {
     required this.frame,
     required this.sourceSize,
     required this.mirrorX,
-    this.color = NuvoColors.white,
+    this.color = V13.white,
     this.glow = 0,
   });
 
