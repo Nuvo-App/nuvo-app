@@ -144,6 +144,12 @@ export async function bindableOpenAttempt(
       await expireAttempt(db, attempt.id);
       return null;
     }
+  } else if (now.getTime() > new Date(attempt.started_at).getTime() + OPEN_ATTEMPT_TTL_MS) {
+    // An untimed attempt left open past the TTL is abandoned, not live —
+    // expire it lazily here, the same rule openAttempt already applies
+    // before declaring a fresh attempt.
+    await expireAttempt(db, attempt.id);
+    return null;
   }
   return attempt;
 }
