@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/ai/airborne_state_tracker.dart';
 import 'package:nuvo/features/races/ai/motion_validators.dart';
 import 'package:nuvo/features/races/ai/multi_phase_sequence_tracker.dart';
-import 'package:nuvo/features/races/ai/preset_motion/multi_phase_definitions.dart';
 import 'package:nuvo/features/races/data/ai_motion_models.dart';
 
 import 'replay_fixture.dart';

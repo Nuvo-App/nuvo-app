@@ -40,7 +40,8 @@ class _FakeCrewRepo implements CrewRepository {
   }
 
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
 
   @override
   Future<ConnectOutcome> add(String userId) async {
@@ -75,6 +76,15 @@ class _FakeCrewRepo implements CrewRepository {
   Future<void> blockUser(String userId) async {}
   @override
   Future<void> unblockUser(String userId) async {}
+  @override
+  Future<PublicUserActivity> getUserActivity(String userId) =>
+      throw UnimplementedError();
+  @override
+  Future<void> muteUser(String userId) async {}
+  @override
+  Future<void> unmuteUser(String userId) async {}
+  @override
+  Future<List<PublicUser>> getBlocked() async => const [];
 }
 
 const _sam = PublicUser(
@@ -191,11 +201,9 @@ void main() {
       final first = controller.add(_sam);
       expect(
         controller.remove('sam'),
-        throwsA(isA<ApiException>().having(
-          (e) => e.statusCode,
-          'statusCode',
-          409,
-        )),
+        throwsA(
+          isA<ApiException>().having((e) => e.statusCode, 'statusCode', 409),
+        ),
       );
       repo.addGate!.complete(ConnectOutcome.active);
       await first;
@@ -203,33 +211,39 @@ void main() {
   });
 
   group('CrewController load + refresh', () {
-    test('load merges members, incoming and outgoing into relationships', () async {
-      final repo = _FakeCrewRepo()
-        ..crew = const [_kim]
-        ..requestPage = const CrewRequestPage(incoming: [_sam], outgoing: [
-          PublicUser(
-            id: 'jo',
-            displayName: 'Jo Fox',
-            username: 'jo',
-            initials: 'JF',
-          ),
-        ]);
-      final controller = CrewController(repo);
-      await controller.load();
-      expect(
-        controller.state.relationshipFor('kim'),
-        CrewConnectionStatus.connected,
-      );
-      expect(
-        controller.state.relationshipFor('sam'),
-        CrewConnectionStatus.pendingIncoming,
-      );
-      expect(
-        controller.state.relationshipFor('jo'),
-        CrewConnectionStatus.pendingOutgoing,
-      );
-      expect(controller.state.outgoing.single.id, 'jo');
-    });
+    test(
+      'load merges members, incoming and outgoing into relationships',
+      () async {
+        final repo = _FakeCrewRepo()
+          ..crew = const [_kim]
+          ..requestPage = const CrewRequestPage(
+            incoming: [_sam],
+            outgoing: [
+              PublicUser(
+                id: 'jo',
+                displayName: 'Jo Fox',
+                username: 'jo',
+                initials: 'JF',
+              ),
+            ],
+          );
+        final controller = CrewController(repo);
+        await controller.load();
+        expect(
+          controller.state.relationshipFor('kim'),
+          CrewConnectionStatus.connected,
+        );
+        expect(
+          controller.state.relationshipFor('sam'),
+          CrewConnectionStatus.pendingIncoming,
+        );
+        expect(
+          controller.state.relationshipFor('jo'),
+          CrewConnectionStatus.pendingOutgoing,
+        );
+        expect(controller.state.outgoing.single.id, 'jo');
+      },
+    );
 
     test('a member never double-lists as an incoming request', () async {
       final repo = _FakeCrewRepo()
@@ -245,10 +259,7 @@ void main() {
   group('presentation demo isolation', () {
     test('demo mode never touches the repository', () async {
       final repo = _FakeCrewRepo();
-      final controller = CrewController(
-        repo,
-        isPresentationDemo: () => true,
-      );
+      final controller = CrewController(repo, isPresentationDemo: () => true);
       await controller.load();
       expect(repo.crewCalls, 0);
       // Demo members come from the fixture, not the API.
@@ -263,10 +274,7 @@ void main() {
 
     test('demo search filters fixtures without hitting the API', () async {
       final repo = _FakeCrewRepo();
-      final controller = CrewController(
-        repo,
-        isPresentationDemo: () => true,
-      );
+      final controller = CrewController(repo, isPresentationDemo: () => true);
       await controller.load();
       final results = await controller.search('priya');
       expect(repo.searchCalls, 0);

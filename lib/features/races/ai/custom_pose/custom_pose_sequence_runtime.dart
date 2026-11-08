@@ -31,7 +31,7 @@ enum CustomPoseRuntimeState {
 class CustomPoseSequenceRuntime implements VerifierRuntime {
   CustomPoseSequenceRuntime({
     required CustomPoseVerifierSpec spec,
-    this.target = 5,
+    this.target,
     this._normalizer = const PoseNormalizer(),
   }) : _spec = spec {
     try {
@@ -47,7 +47,11 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
 
   final CustomPoseVerifierSpec _spec;
   final PoseNormalizer _normalizer;
-  final int target;
+
+  /// Session finish line — null when the race format has no goal. The
+  /// runtime then reports every verified repetition instead of capping at
+  /// a placeholder target.
+  final int? target;
   late final List<PoseTemplateFrame> _indexedSequence;
   CustomPoseRuntimeState _state = CustomPoseRuntimeState.waitingForSetup;
   int _count = 0;
@@ -79,6 +83,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   bool _departedAfterReturnCount = true;
   DateTime? _startedAt;
   DateTime? _lastFrameAt;
+  DateTime? _lastCountedAt;
   String _guidance = 'Ready';
   String _failureReason = '';
 
@@ -89,10 +94,10 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   MovementDefinition get movement => supportedMovementDefinitions.first;
 
   @override
-  int get targetValue => target;
+  int? get targetValue => target;
 
   @override
-  int get currentValue => math.min(_count, target);
+  int get currentValue => target == null ? _count : math.min(_count, target!);
 
   @override
   bool get fullBodyVisible => _visibility >= _spec.minimumVisibility;
@@ -100,10 +105,13 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   @override
   String get failedRuleReason => _failureReason;
 
+  @override
+  DateTime? get lastCountedAt => _lastCountedAt;
+
   CustomPoseRuntimeState get state => _state;
 
   CustomPoseRuntimeUpdate get lastUpdate =>
-      _customUpdate(completed: _count >= target);
+      _customUpdate(completed: _reachedTarget);
 
   @override
   void start() {
@@ -136,6 +144,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     _departedAfterReturnCount = true;
     _startedAt = null;
     _lastFrameAt = null;
+    _lastCountedAt = null;
     _guidance = 'Step into frame';
     _failureReason = '';
     _state = _indexedSequence.isEmpty
@@ -652,12 +661,19 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     );
   }
 
+  /// The take crossed its finish line. No goal means never — the athlete
+  /// ends the take with Done, which is what actually submits the count.
+  bool get _reachedTarget => target != null && _count >= target!;
+
   void _countRepetition() {
     _count++;
     _completionEvents++;
+    _lastCountedAt = _lastFrameAt;
     _cooldownFramesRemaining = _cooldownFramesForSpec();
     _resetAttemptProgress();
-    _guidance = _count >= target ? 'Ready' : 'Return to your starting position';
+    _guidance = _reachedTarget
+        ? 'Ready'
+        : 'Return to your starting position';
   }
 
   int _cooldownFramesForSpec() {
@@ -690,7 +706,10 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     final validRatio = _framesAnalyzed == 0
         ? 0.0
         : _validFrames / _framesAnalyzed;
-    final targetRatio = (_count / math.max(1, target)).clamp(0.0, 1.0);
+    final target = this.target;
+    final targetRatio = target == null
+        ? (_count > 0 ? 1.0 : 0.0)
+        : (_count / math.max(1, target)).clamp(0.0, 1.0);
     final value =
         targetRatio * 0.45 +
         _sequenceProgress * 0.20 +
@@ -710,7 +729,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   }
 
   VerifierUpdate _compatUpdate() {
-    final update = _customUpdate(completed: _count >= target);
+    final update = _customUpdate(completed: _reachedTarget);
     return VerifierUpdate(
       type: VerifierType.customPoseSequence,
       selectedMovement: supportedMovementDefinitions.first,
@@ -768,14 +787,17 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     final duration = _startedAt == null || _lastFrameAt == null
         ? Duration.zero
         : _lastFrameAt!.difference(_startedAt!);
+    final target = this.target;
     final complete =
-        _count >= target &&
+        (target == null ? _count > 0 : _count >= target) &&
         _state != CustomPoseRuntimeState.invalid &&
         _validFeatureRatio >= _spec.minimumValidFeatureRatio;
     final failure = complete
         ? null
         : (_state == CustomPoseRuntimeState.invalid
               ? _failureReason
+              : target == null
+              ? 'no_verified_repetitions'
               : _count < target
               ? 'target_not_met'
               : _failureReason.isEmpty
@@ -833,7 +855,7 @@ class CustomPoseRuntimeUpdate {
 
   final CustomPoseRuntimeState state;
   final int count;
-  final int target;
+  final int? target;
   final bool completed;
   final double sequenceProgress;
   final int currentTemplateIndex;
@@ -918,7 +940,7 @@ class CustomPoseRuntimeResult {
       movementName: _string(json['movementName'], 'movementName'),
       measurementType: _string(json['measurementType'], 'measurementType'),
       count: _int(json['count'], 'count'),
-      target: _int(json['target'], 'target'),
+      target: json['target'] == null ? null : _int(json['target'], 'target'),
       verificationStatus: _string(
         json['verificationStatus'],
         'verificationStatus',
@@ -943,7 +965,9 @@ class CustomPoseRuntimeResult {
   final String movementName;
   final String measurementType;
   final int count;
-  final int target;
+
+  /// Session finish line — null when the race had no goal.
+  final int? target;
   final String verificationStatus;
   final double confidence;
   final int framesAnalyzed;

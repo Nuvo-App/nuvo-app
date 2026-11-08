@@ -1,14 +1,12 @@
-// Release hardening for the Achievements surfaces:
+// Release hardening for the public badge collection (`/u/:id/badges`):
 //
-//  1. The self + public collections must let the LAST grid tile scroll fully
-//     above the bottom safe area — badge, name, and status line all visible,
-//     no nav/home-indicator overlap, at every shipped width, dark mode, and
-//     max text scale.
-//  2. The achievement detail sheet must show exactly ONE drag/grab handle —
-//     the one the modal sheet shell renders (theme showDragHandle). Sheet
-//     content never draws its own.
-//  3. Sheet CTAs sit above the home indicator and content scrolls when text
-//     scale demands it.
+//  1. The grid must let the LAST tile scroll fully above the bottom safe
+//     area — badge and name visible, no nav/home-indicator overlap — at
+//     every shipped width and max text scale.
+//  2. The v13 detail sheet draws exactly ONE grab handle — the one the sheet
+//     frame renders — and stays inside the safe area at small sizes.
+//  3. The sheet is read-only on a friend's profile: no "Show on profile"
+//     action, and locked tiles carry catalog data only — never progress.
 //
 // Run captures with:
 //   flutter test test/achievements_hardening_test.dart \
@@ -23,32 +21,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:nuvo/core/theme/nuvo_responsive.dart';
 import 'package:nuvo/features/crew/data/crew_api.dart';
 import 'package:nuvo/features/crew/presentation/public_badges_screen.dart';
-import 'package:nuvo/features/profile/application/progression_controller.dart';
-import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/data/progression_models.dart';
-import 'package:nuvo/features/profile/presentation/badges_screen.dart';
-import 'package:nuvo/features/profile/presentation/widgets/nuvo_badges.dart';
-import 'package:nuvo/features/auth/data/secure_token_store.dart';
-import 'package:nuvo/core/widgets/pressable_scale.dart';
+import 'package:nuvo/features/profile/presentation/v13/v13_profile_shared.dart';
 
 const _captureKey = Key('badges-capture');
-
-const _progression = NuvoProgression(
-  level: 8,
-  totalXp: 1410,
-  currentLevelXp: 30,
-  nextLevelXp: 120,
-  progress: 0.25,
-  xpToNext: 90,
-  lastSeenLevel: 8,
-  featuredSlots: 3,
-  achievementsEarned: 30,
-  achievementsTotal: 43,
-);
 
 NuvoBadge _badge(
   int i, {
@@ -74,8 +53,8 @@ NuvoBadge _badge(
   );
 }
 
-/// The shipped collection — 43 achievements, mixed earned/locked across the
-/// real tab categories so the tab row + sorting path are exercised too.
+/// The shipped collection — 43 achievements, mixed categories so the filter
+/// row + layout path are exercised too.
 final _all43 = [
   for (var i = 0; i < 43; i++)
     _badge(
@@ -92,65 +71,45 @@ final _all43 = [
     ),
 ];
 
-final _few = [
-  _badge(0, featured: true),
-  _badge(1, featured: true),
-  _badge(2, unlocked: false, category: 'winning'),
+final _lockedCatalog = const [
+  PublicLockedAchievement(
+    key: 'locked_0',
+    name: 'Locked Alpha',
+    iconKey: 'bolt',
+    category: 'racing',
+  ),
+  PublicLockedAchievement(
+    key: 'locked_1',
+    name: 'Locked Beta',
+    iconKey: 'star',
+    category: 'winning',
+  ),
 ];
 
-class _SeededProgression extends ProgressionController {
-  _SeededProgression(this._b, {NuvoProgression progression = _progression})
-    : super(
-        ProgressionApi(),
-        SecureTokenStore(),
-        isPresentationDemo: () => false,
-      ) {
-    state = AsyncValue.data(progression);
-  }
-  final List<NuvoBadge> _b;
-  @override
-  Future<List<NuvoBadge>> getBadges() async => _b;
-  @override
-  Future<List<NuvoBadge>> setFeatured(List<String> unlockIds) async => [
-        for (final b in _b)
-          NuvoBadge(
-            unlockId: b.unlockId,
-            type: b.type,
-            key: b.key,
-            name: b.name,
-            description: b.description,
-            requiredLevel: b.requiredLevel,
-            metadata: b.metadata,
-            unlocked: b.unlocked,
-            unlockedAt: b.unlockedAt,
-            featured: unlockIds.contains(b.unlockId),
-            position: b.position,
-            category: b.category,
-            iconKey: b.iconKey,
-            statKey: b.statKey,
-            threshold: b.threshold,
-            progressValue: b.progressValue,
-          ),
-      ];
+PublicProfileCard _card({
+  List<NuvoBadge>? earned,
+  List<PublicLockedAchievement>? locked,
+}) {
+  final e = earned ?? const <NuvoBadge>[];
+  final l = locked ?? const <PublicLockedAchievement>[];
+  return PublicProfileCard(
+    id: 'u-rival',
+    displayName: 'Rival One',
+    username: 'rival',
+    initials: 'RO',
+    connectionStatus: CrewConnectionStatus.none,
+    level: 6,
+    levelProgress: 0.4,
+    achievementsEarned: e.length,
+    achievementsTotal: e.length + l.length,
+    earned: e,
+    lockedAchievements: l,
+  );
 }
 
-Widget _wrap(
-  Widget child, {
-  required List<NuvoBadge> badges,
-  bool dark = false,
-  double textScale = 1.0,
-  NuvoProgression progression = _progression,
-}) {
+Widget _wrap(Widget child, {double textScale = 1.0}) {
   return ProviderScope(
-    overrides: [
-      progressionControllerProvider.overrideWith(
-        (ref) => _SeededProgression(badges, progression: progression),
-      ),
-    ],
     child: MaterialApp(
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: dark ? ThemeMode.dark : ThemeMode.light,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(
           context,
@@ -163,13 +122,6 @@ Widget _wrap(
     ),
   );
 }
-
-const _sizes = [
-  ('320x568', 320.0, 568.0),
-  ('375x667', 375.0, 667.0),
-  ('390x844', 390.0, 844.0),
-  ('430x932', 430.0, 932.0),
-];
 
 void _useViewport(
   WidgetTester tester,
@@ -204,20 +156,16 @@ Future<void> _scrollToEnd(WidgetTester tester) async {
   await _settle(tester);
 }
 
-/// The outermost element of the LAST grid tile — badge + name + status.
-Finder _lastTile() => find
-    .ancestor(of: find.byType(NuvoAchievementBadge).last, matching: find.byType(PressableScale))
-    .last;
-
 /// Pill-shaped containers that read as a drag/grab handle — tight height in
-/// the 3–8px range, width 24–56. Matches both the shell's handle and any
-/// hand-drawn duplicate inside sheet content.
+/// the 3–8px range, width 24–56. Matches the v13 sheet-frame handle.
 bool _looksLikeHandle(Widget w) {
   if (w is! Container) return false;
   final c = w.constraints;
   if (c == null) return false;
-  final tightH = c.minHeight == c.maxHeight && c.minHeight >= 3 && c.minHeight <= 8;
-  final tightW = c.minWidth == c.maxWidth && c.minWidth >= 24 && c.minWidth <= 56;
+  final tightH =
+      c.minHeight == c.maxHeight && c.minHeight >= 3 && c.minHeight <= 8;
+  final tightW =
+      c.minWidth == c.maxWidth && c.minWidth >= 24 && c.minWidth <= 56;
   if (!(tightH && tightW)) return false;
   final d = w.decoration;
   return d is BoxDecoration && d.color != null;
@@ -281,105 +229,14 @@ void main() {
   });
 
   group('last row scrolls fully above the safe area', () {
-    for (final (sizeName, w, h) in _sizes) {
-      testWidgets('self collection — 43 badges $sizeName', (tester) async {
-        _useViewport(tester, w, h);
-        await tester.pumpWidget(
-          _wrap(const BadgesScreen(), badges: _all43),
-        );
-        await _settle(tester);
-        await _scrollToEnd(tester);
-        final tile = tester.getRect(_lastTile());
-        // Fully above the safe area...
-        expect(
-          tile.bottom,
-          lessThanOrEqualTo(h - 34 + 0.5),
-          reason: 'last tile bottom ${tile.bottom} must sit above the '
-              '${34}px bottom inset on $sizeName',
-        );
-        // ...with real clearance — 28px read as "clipped against the
-        // edge" on inset-less devices. Pushed pages reserve 56.
-        expect(
-          tile.bottom,
-          lessThanOrEqualTo(h - 34 - 40 + 0.5),
-          reason: 'last tile needs ≥40px of breathing room below it',
-        );
-        expect(tester.takeException(), isNull);
-        await _capture(tester, 'end-$sizeName');
-      });
-    }
-
-    testWidgets('self collection — few badges 375x667, no inset',
-        (tester) async {
-      // Home-button-class device: viewPadding.bottom is 0, so the only
-      // thing standing between the last tile and the screen edge is the
-      // list's own bottom padding.
-      _useViewport(tester, 375, 667, bottomInset: 0);
-      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
-      await _settle(tester);
-      await _scrollToEnd(tester);
-      final tile = tester.getRect(_lastTile());
-      expect(
-        tile.bottom,
-        lessThanOrEqualTo(667 - 40 + 0.5),
-        reason: 'last tile needs ≥40px of clearance above the screen edge',
-      );
-      expect(tester.takeException(), isNull);
-      await _capture(tester, 'end-375-noinset');
-    });
-
-    for (final scale in [1.2, 1.4]) {
-      testWidgets('self collection — ts $scale 320x568', (tester) async {
-        _useViewport(tester, 320, 568);
-        await tester.pumpWidget(
-          _wrap(const BadgesScreen(), badges: _all43, textScale: scale),
-        );
-        await _settle(tester);
-        await _scrollToEnd(tester);
-        final tile = tester.getRect(_lastTile());
-        expect(
-          tile.bottom,
-          lessThanOrEqualTo(568 - 34 - 40 + 0.5),
-          reason: 'last tile clipped/crowded at bottom at ts$scale',
-        );
-        expect(tester.takeException(), isNull);
-        await _capture(tester, 'ts$scale-320');
-      });
-    }
-
-    testWidgets('self collection — dark 390x844', (tester) async {
-      _useViewport(tester, 390, 844);
-      await tester.pumpWidget(
-        _wrap(const BadgesScreen(), badges: _all43, dark: true),
-      );
-      await _settle(tester);
-      await _scrollToEnd(tester);
-      final tile = tester.getRect(_lastTile());
-      expect(tile.bottom, lessThanOrEqualTo(844 - 34 - 40 + 0.5));
-      expect(tester.takeException(), isNull);
-      await _capture(tester, 'dark-390');
-    });
-
     testWidgets('public collection — 390x844', (tester) async {
       _useViewport(tester, 390, 844);
       await tester.pumpWidget(
         _wrap(
           PublicBadgesScreen(
             userId: 'u-rival',
-            card: PublicProfileCard(
-              id: 'u-rival',
-              displayName: 'Rival One',
-              username: 'rival',
-              initials: 'RO',
-              connectionStatus: CrewConnectionStatus.none,
-              level: 6,
-              levelProgress: 0.4,
-              achievementsEarned: 43,
-              achievementsTotal: 43,
-              earned: _all43.where((b) => b.unlocked).toList(),
-            ),
+            card: _card(earned: _all43.where((b) => b.unlocked).toList()),
           ),
-          badges: _all43,
         ),
       );
       await _settle(tester);
@@ -389,37 +246,25 @@ void main() {
     });
   });
 
-  group('achievement detail sheet — one handle, safe area', () {
+  group('detail sheet — one handle, read-only', () {
+    /// Pumps the screen with one earned + two locked catalog badges, then
+    /// opens a sheet by tapping the tile at [tileIndex].
     Future<void> openSheet(
       WidgetTester tester, {
-      bool unlocked = true,
+      int tileIndex = 0,
       double textScale = 1.0,
     }) async {
       await tester.pumpWidget(
         _wrap(
-          Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => NuvoAchievementDetailSheet(
-                    badge: unlocked
-                        ? _badge(0, featured: false)
-                        : _badge(9, unlocked: false),
-                    onFeature: unlocked ? () {} : null,
-                  ),
-                ),
-                child: const Text('open'),
-              ),
-            ),
+          PublicBadgesScreen(
+            userId: 'u-rival',
+            card: _card(earned: [_badge(0)], locked: _lockedCatalog),
           ),
-          badges: _few,
           textScale: textScale,
         ),
       );
       await _settle(tester);
-      await tester.tap(find.text('open'));
+      await tester.tap(find.byType(V13BadgeTile).at(tileIndex));
       await _settle(tester);
     }
 
@@ -428,270 +273,108 @@ void main() {
       await openSheet(tester);
       final sheet = find.byType(BottomSheet);
       expect(sheet, findsOneWidget);
-      // The shell's handle carries the dismiss semantics.
-      expect(
-        find.descendant(
-          of: sheet,
-          matching: find.bySemanticsLabel('Dismiss'),
-        ),
-        findsOneWidget,
-      );
-      // And there is no second hand-drawn pill anywhere in the sheet.
       final pills = tester
-          .widgetList(find.descendant(of: sheet, matching: find.byWidgetPredicate(_looksLikeHandle)))
+          .widgetList(
+            find.descendant(
+              of: sheet,
+              matching: find.byWidgetPredicate(_looksLikeHandle),
+            ),
+          )
           .length;
       expect(pills, 1, reason: 'sheet must render exactly one grab handle');
     });
 
-    testWidgets('CTA clears the home indicator', (tester) async {
+    testWidgets('earned sheet has no feature action', (tester) async {
       _useViewport(tester, 390, 844);
       await openSheet(tester);
-      final cta = tester.getRect(find.text('Feature on Profile'));
+      expect(find.text('Earned'), findsWidgets);
       expect(
-        cta.bottom,
-        lessThanOrEqualTo(844 - 34 + 0.5),
-        reason: 'sheet CTA must sit above the 34px bottom inset',
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Achievement Number 0'),
+        ),
+        findsOneWidget,
       );
+      // A friend's badges are read-only — featuring lives on your own
+      // collection only.
+      expect(find.text('Show on profile'), findsNothing);
+      expect(find.text('Feature on Profile'), findsNothing);
+      expect(find.text('Remove from profile'), findsNothing);
       expect(tester.takeException(), isNull);
       await _capture(tester, 'sheet-390');
     });
 
-    testWidgets('scrolls at 320 + ts1.4 without overflow', (tester) async {
-      _useViewport(tester, 320, 568);
-      await openSheet(tester, textScale: 1.4);
-      expect(tester.takeException(), isNull);
+    testWidgets('locked sheet shows no progress', (tester) async {
+      _useViewport(tester, 390, 844);
+      // Tile order: earned first, then the locked catalog tiles.
+      await openSheet(tester, tileIndex: 1);
+      expect(find.text('Locked'), findsWidgets);
+      expect(find.text("Rival hasn't earned this one yet."), findsOneWidget);
+      // Catalog metadata only — a friend's progress is never exposed.
       expect(
         find.descendant(
           of: find.byType(BottomSheet),
-          matching: find.byType(SingleChildScrollView),
+          matching: find.textContaining('/'),
         ),
-        findsOneWidget,
-        reason: 'sheet content must stay scrollable at max text scale',
+        findsNothing,
       );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('sheet fits 320 + ts1.4 without overflow', (tester) async {
+      _useViewport(tester, 320, 568);
+      await openSheet(tester, textScale: 1.4);
+      expect(tester.takeException(), isNull);
       await _capture(tester, 'sheet-320-ts14');
     });
-
-    testWidgets('locked achievement shows progress', (tester) async {
-      _useViewport(tester, 390, 844);
-      await openSheet(tester, unlocked: false);
-      expect(find.text('9 / 10'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('feature / unfeature round trip through the sheet',
-        (tester) async {
-      _useViewport(tester, 390, 844);
-      final badges = [
-        _badge(0, featured: true),
-        _badge(1),
-        _badge(2, unlocked: false),
-      ];
-      await tester.pumpWidget(
-        _wrap(const BadgesScreen(), badges: badges),
-      );
-      await _settle(tester);
-
-      // Open the unlocked, unfeatured tile and feature it.
-      await tester.tap(find.text('Achievement Number 1'));
-      await _settle(tester);
-      expect(find.text('Feature on Profile'), findsOneWidget);
-      await tester.tap(find.text('Feature on Profile'));
-      await _settle(tester);
-
-      // Re-open — the action flips to Unfeature and the tile carries
-      // the featured check.
-      await tester.tap(find.text('Achievement Number 1'));
-      await _settle(tester);
-      expect(find.text('Unfeature'), findsOneWidget);
-      await tester.tap(find.text('Unfeature'));
-      await _settle(tester);
-      expect(tester.takeException(), isNull);
-    });
   });
 
-  group('what is next leads the Achievements page', () {
-    final withNext = NuvoProgression(
-      level: 8,
-      totalXp: 1410,
-      currentLevelXp: 30,
-      nextLevelXp: 120,
-      progress: 0.25,
-      xpToNext: 90,
-      lastSeenLevel: 8,
-      featuredSlots: 3,
-      achievementsEarned: 30,
-      achievementsTotal: 43,
-      nextAchievement: _badge(50, unlocked: false, category: 'winning'),
-      nextUnlock: const NuvoUnlockRef(
-        unlockId: 'lvl-9',
-        level: 9,
-        type: 'badge',
-        key: 'clap',
-        name: 'Clap reaction',
-        description: 'A new reaction for your crew.',
-      ),
-    );
-
-    testWidgets('next goal and next unlock sit above the full list',
-        (tester) async {
+  group('v13 grid + filter chips', () {
+    testWidgets('Earned and Locked filters partition the grid', (tester) async {
       _useViewport(tester, 390, 844);
-      await tester.pumpWidget(
-        _wrap(const BadgesScreen(), badges: _all43, progression: withNext),
-      );
-      await _settle(tester);
-
-      expect(find.text('NEXT UP'), findsOneWidget);
-      expect(find.text('Achievement Number 50'), findsOneWidget);
-      expect(find.text('NEXT LEVEL REWARD'), findsOneWidget);
-      expect(find.text('Clap reaction'), findsOneWidget);
-      expect(find.text('Earned at Level 9'), findsOneWidget);
-      expect(find.text('All achievements'), findsOneWidget);
-
-      double y(Finder f) => tester.getTopLeft(f).dy;
-      expect(y(find.text('NEXT UP')), lessThan(y(find.text('NEXT LEVEL REWARD'))));
-      expect(
-        y(find.text('NEXT LEVEL REWARD')),
-        lessThan(y(find.text('All achievements'))),
-      );
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('no next goal or unlock — the page just opens on the list',
-        (tester) async {
-      _useViewport(tester, 390, 844);
-      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
-      await _settle(tester);
-
-      expect(find.text('NEXT UP'), findsNothing);
-      expect(find.text('NEXT LEVEL REWARD'), findsNothing);
-      expect(find.text('All achievements'), findsOneWidget);
-    });
-
-    testWidgets('survives 320px at text scale 1.4', (tester) async {
-      _useViewport(tester, 320, 568);
       await tester.pumpWidget(
         _wrap(
-          const BadgesScreen(),
-          badges: _all43,
-          progression: withNext,
-          textScale: 1.4,
+          PublicBadgesScreen(
+            userId: 'u-rival',
+            card: _card(earned: [_badge(0)], locked: _lockedCatalog),
+          ),
         ),
       );
       await _settle(tester);
-      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Locked'));
+      await _settle(tester);
+      expect(find.text('Locked Alpha'), findsOneWidget);
+      expect(find.text('Achievement Number 0'), findsNothing);
+
+      await tester.tap(find.text('Earned'));
+      await _settle(tester);
+      expect(find.text('Achievement Number 0'), findsOneWidget);
+      expect(find.text('Locked Alpha'), findsNothing);
     });
-  });
 
-  group('grid rhythm + filter chips', () {
-    // Row-to-row gap (bottom of a tile's status line -> top of the next
-    // row's badge) measured on the ORIGINAL grid (fixed childAspectRatio
-    // 0.72 + 26px mainAxisSpacing) at 390 wide, text scale 1.0.
-    const oldRowGap = 75.63;
-
-    Future<double> measureGap(WidgetTester tester, double w) async {
-      _useViewport(tester, w, 844);
+    testWidgets('category chips filter by catalog category', (tester) async {
+      _useViewport(tester, 390, 844);
       await tester.pumpWidget(
         _wrap(
-          Scaffold(
-            body: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: NuvoBadgeGrid(badges: _all43),
+          PublicBadgesScreen(
+            userId: 'u-rival',
+            card: _card(
+              earned: [_badge(0, category: 'racing')],
+              locked: _lockedCatalog,
             ),
           ),
-          badges: _all43,
         ),
       );
       await _settle(tester);
-      final tile0 = find
-          .ancestor(
-            of: find.byType(NuvoAchievementBadge).at(0),
-            matching: find.byType(PressableScale),
-          )
-          .first;
-      var textBottom = 0.0;
-      for (final e in find
-          .descendant(of: tile0, matching: find.byType(Text))
-          .evaluate()) {
-        final r = tester.getRect(find.byWidget(e.widget));
-        if (r.bottom > textBottom) textBottom = r.bottom;
-      }
-      final nextBadgeTop =
-          tester.getRect(find.byType(NuvoAchievementBadge).at(3)).top;
-      // Row alignment: tiles in a row share the same top.
-      expect(
-        tester.getRect(find.byType(NuvoAchievementBadge).at(1)).top,
-        tester.getRect(find.byType(NuvoAchievementBadge).at(0)).top,
-      );
-      expect(tester.takeException(), isNull);
-      return nextBadgeTop - textBottom;
-    }
-
-    testWidgets('row gap is at most 55% of the old gap', (tester) async {
-      final gap = await measureGap(tester, 390);
-      // ignore: avoid_print
-      print('row gap now: $gap (old: $oldRowGap)');
-      expect(gap, lessThanOrEqualTo(oldRowGap * 0.55));
-      expect(gap, greaterThan(4), reason: 'rows must not touch');
-    });
-
-    for (final (sizeName, w, h) in _sizes) {
-      for (final scale in [1.0, 1.4]) {
-        for (final dark in [false, true]) {
-          testWidgets('"All" chip fully visible $sizeName ts$scale dark=$dark',
-              (tester) async {
-            _useViewport(tester, w, h);
-            await tester.pumpWidget(
-              _wrap(
-                const BadgesScreen(),
-                badges: _all43,
-                textScale: scale,
-                dark: dark,
-              ),
-            );
-            await _settle(tester);
-            final chip = tester.getRect(find
-                .ancestor(
-                  of: find.text('All'),
-                  matching: find.byType(PressableScale),
-                )
-                .first);
-            final label = tester.getRect(find.text('All'));
-            expect(chip.left, greaterThanOrEqualTo(0));
-            expect(chip.right, lessThanOrEqualTo(w));
-            expect(label.left, greaterThanOrEqualTo(chip.left));
-            expect(label.right, lessThanOrEqualTo(chip.right));
-            // Chip is not clipped vertically by the row.
-            final row = tester.getRect(find
-                .ancestor(
-                  of: find.text('All'),
-                  matching: find.byType(ListView),
-                )
-                .first);
-            expect(chip.top, greaterThanOrEqualTo(row.top - 0.5));
-            expect(chip.bottom, lessThanOrEqualTo(row.bottom + 0.5));
-            expect(tester.takeException(), isNull);
-          });
-        }
-      }
-    }
-
-    testWidgets('selected off-screen chip scrolls into view', (tester) async {
-      _useViewport(tester, 320, 568);
-      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
+      // The chip row scrolls horizontally — pull the chip into view first.
+      await tester.ensureVisible(find.text('Winning'));
       await _settle(tester);
-      final special = find.text('Special');
-      await tester.ensureVisible(special);
-      await tester.tap(special);
+      await tester.tap(find.text('Winning'));
       await _settle(tester);
-      final r = tester.getRect(special);
-      expect(r.right, lessThanOrEqualTo(320));
-      expect(r.left, greaterThanOrEqualTo(0));
-      // And back to All (scroll the row back first, as a user would).
-      await tester.ensureVisible(find.text('All'));
-      await _settle(tester);
-      await tester.tap(find.text('All'));
-      await _settle(tester);
-      expect(tester.getRect(find.text('All')).left, greaterThanOrEqualTo(0));
+      expect(find.text('Locked Beta'), findsOneWidget);
+      expect(find.text('Locked Alpha'), findsNothing);
+      expect(find.text('Achievement Number 0'), findsNothing);
     });
   });
 }

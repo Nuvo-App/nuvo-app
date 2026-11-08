@@ -36,33 +36,138 @@ export function pushConfigured(env: PushEnv): boolean {
   return Boolean(env.FCM_SERVICE_ACCOUNT && env.FCM_PROJECT_ID);
 }
 
+/**
+ * Why a send did (or did not) reach FCM. Every outcome is distinguishable so a
+ * missing notification can be traced to ONE cause:
+ *
+ *   no_devices   the recipient has no registered, enabled device token
+ *   dormant      devices exist but FCM credentials are not configured
+ *   auth_failed  FCM credentials are configured but the OAuth exchange failed
+ *   rejected     FCM answered, and refused every device (see results[])
+ *   partial      some devices accepted, some refused
+ *   sent         FCM accepted every device (delivery to the phone is FCM/APNs'
+ *                job and is NOT confirmed here)
+ */
+export type PushOutcome =
+  | 'no_devices'
+  | 'dormant'
+  | 'auth_failed'
+  | 'rejected'
+  | 'partial'
+  | 'sent';
+
+export interface PushDeviceResult {
+  platform: string;
+  status: 'accepted' | 'rejected' | 'token_disabled' | 'error';
+  httpStatus?: number;
+  /** FCM error code, e.g. UNREGISTERED, SENDER_ID_MISMATCH, THIRD_PARTY_AUTH_ERROR. */
+  code?: string;
+}
+
+export interface PushResult {
+  outcome: PushOutcome;
+  configured: boolean;
+  devices: number;
+  accepted: number;
+  results: PushDeviceResult[];
+  error?: string;
+}
+
+interface FcmError {
+  code?: string;
+  message?: string;
+}
+
+/** Pull the machine-readable code out of an FCM v1 error body. */
+export function parseFcmError(text: string): FcmError {
+  try {
+    const body = JSON.parse(text) as {
+      error?: {
+        status?: string;
+        message?: string;
+        details?: Array<{ errorCode?: string }>;
+      };
+    };
+    const detail = body.error?.details?.find((d) => d.errorCode)?.errorCode;
+    return { code: detail ?? body.error?.status, message: body.error?.message };
+  } catch {
+    return { message: text.slice(0, 200) };
+  }
+}
+
+/**
+ * Only a response that says THIS TOKEN is dead disables it. A blanket
+ * INVALID_ARGUMENT used to disable tokens for payload problems too, which would
+ * silently kill every healthy device the first time a payload was malformed.
+ */
+export function tokenIsDead(httpStatus: number, err: FcmError): boolean {
+  if (httpStatus === 404 || err.code === 'UNREGISTERED') return true;
+  return err.code === 'INVALID_ARGUMENT' && /registration token/i.test(err.message ?? '');
+}
+
+function logPush(
+  result: PushResult,
+  userId: string,
+  category: string,
+): void {
+  const detail = result.results
+    .filter((r) => r.status !== 'accepted')
+    .map((r) => `${r.platform}:${r.httpStatus ?? '-'}/${r.code ?? r.status}`)
+    .join(',');
+  const line =
+    `[push] outcome=${result.outcome} category=${category} user=${userId} ` +
+    `devices=${result.devices} accepted=${result.accepted}` +
+    (detail ? ` failures=${detail}` : '') +
+    (result.error ? ` error=${result.error}` : '');
+  if (result.outcome === 'sent' || result.outcome === 'no_devices' || result.outcome === 'dormant') {
+    console.log(line);
+  } else {
+    console.error(line);
+  }
+}
+
 /** Returns the number of devices a push was accepted for. */
 export async function sendPush(
   env: PushEnv,
   userId: string,
   payload: PushPayload,
 ): Promise<number> {
+  return (await sendPushDetailed(env, userId, payload)).accepted;
+}
+
+/** Same send, with the full outcome. Always logs exactly one [push] line. */
+export async function sendPushDetailed(
+  env: PushEnv,
+  userId: string,
+  payload: PushPayload,
+): Promise<PushResult> {
+  const result = await attemptPush(env, userId, payload);
+  logPush(result, userId, payload.category);
+  return result;
+}
+
+async function attemptPush(
+  env: PushEnv,
+  userId: string,
+  payload: PushPayload,
+): Promise<PushResult> {
+  const configured = pushConfigured(env);
   const devices = await env.DB.prepare(
     `SELECT id, token, platform FROM device_tokens
      WHERE user_id = ? AND disabled_at IS NULL`,
   )
     .bind(userId)
     .all<DeviceRow>();
+  const base = { configured, devices: devices.results.length, accepted: 0, results: [] };
 
-  if (devices.results.length === 0) return 0;
-  if (!pushConfigured(env)) {
-    console.log(
-      `[push] dormant — would send "${payload.category}" to ${devices.results.length} device(s) for ${userId}`,
-    );
-    return 0;
-  }
+  if (devices.results.length === 0) return { ...base, outcome: 'no_devices' };
+  if (!configured) return { ...base, outcome: 'dormant' };
 
   let accessToken: string;
   try {
     accessToken = await getAccessToken(env.FCM_SERVICE_ACCOUNT!);
   } catch (err) {
-    console.error('[push] token exchange failed:', (err as Error).message);
-    return 0;
+    return { ...base, outcome: 'auth_failed', error: (err as Error).message };
   }
 
   // The badge mirrors the durable inbox — a push always lands its row first,
@@ -119,27 +224,92 @@ export async function sendPush(
     return res;
   };
 
-  let sent = 0;
+  const results: PushDeviceResult[] = [];
+  let accepted = 0;
   for (const device of devices.results) {
     try {
       const res = await deliver(device.token);
       if (res.ok) {
-        sent++;
+        accepted++;
+        results.push({ platform: device.platform, status: 'accepted', httpStatus: res.status });
+        continue;
+      }
+      const err = parseFcmError(await res.text());
+      if (tokenIsDead(res.status, err)) {
+        await env.DB.prepare(
+          'UPDATE device_tokens SET disabled_at = CURRENT_TIMESTAMP WHERE id = ?',
+        )
+          .bind(device.id)
+          .run();
+        results.push({
+          platform: device.platform,
+          status: 'token_disabled',
+          httpStatus: res.status,
+          code: err.code,
+        });
       } else {
-        const text = await res.text();
-        if (res.status === 404 || /UNREGISTERED|INVALID_ARGUMENT/.test(text)) {
-          await env.DB.prepare(
-            'UPDATE device_tokens SET disabled_at = CURRENT_TIMESTAMP WHERE id = ?',
-          )
-            .bind(device.id)
-            .run();
-        }
+        // e.g. SENDER_ID_MISMATCH (token minted by a DIFFERENT Firebase project
+        // than the Worker's FCM_PROJECT_ID), THIRD_PARTY_AUTH_ERROR (APNs key
+        // missing in Firebase), QUOTA_EXCEEDED. The token is NOT disabled.
+        results.push({
+          platform: device.platform,
+          status: 'rejected',
+          httpStatus: res.status,
+          code: err.code,
+        });
       }
     } catch (err) {
-      console.error('[push] send failed:', (err as Error).message);
+      results.push({ platform: device.platform, status: 'error', code: (err as Error).message.slice(0, 80) });
     }
   }
-  return sent;
+  const outcome: PushOutcome =
+    accepted === 0 ? 'rejected' : accepted === devices.results.length ? 'sent' : 'partial';
+  return { ...base, accepted, results, outcome };
+}
+
+export interface FcmCredentialCheck {
+  configured: boolean;
+  /** project_id inside the service-account JSON (not a secret). */
+  serviceAccountProjectId: string | null;
+  fcmProjectId: string | null;
+  /** The two project ids agree. A mismatch means every send 403s. */
+  projectsMatch: boolean | null;
+  tokenExchange: 'ok' | 'failed' | 'skipped';
+  error?: string;
+}
+
+/**
+ * Proves the FCM credentials are usable WITHOUT sending anything: parses the
+ * service account, checks its project against FCM_PROJECT_ID, and performs the
+ * OAuth token exchange. Never returns key material.
+ */
+export async function checkFcmCredentials(env: PushEnv): Promise<FcmCredentialCheck> {
+  const configured = pushConfigured(env);
+  const out: FcmCredentialCheck = {
+    configured,
+    serviceAccountProjectId: null,
+    fcmProjectId: env.FCM_PROJECT_ID ?? null,
+    projectsMatch: null,
+    tokenExchange: 'skipped',
+  };
+  if (!configured) return out;
+  try {
+    const sa = JSON.parse(env.FCM_SERVICE_ACCOUNT!) as { project_id?: string };
+    out.serviceAccountProjectId = sa.project_id ?? null;
+    out.projectsMatch = out.serviceAccountProjectId === out.fcmProjectId;
+  } catch {
+    out.tokenExchange = 'failed';
+    out.error = 'FCM_SERVICE_ACCOUNT is not valid JSON';
+    return out;
+  }
+  try {
+    await getAccessToken(env.FCM_SERVICE_ACCOUNT!);
+    out.tokenExchange = 'ok';
+  } catch (err) {
+    out.tokenExchange = 'failed';
+    out.error = (err as Error).message;
+  }
+  return out;
 }
 
 // ── FCM service-account → OAuth2 access token (JWT bearer grant) ──────────────

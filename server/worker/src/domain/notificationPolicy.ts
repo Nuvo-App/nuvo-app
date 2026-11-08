@@ -564,6 +564,22 @@ export type NuvoDomainEvent =
       raceId: string;
       raceTitle: string;
       moveId: string;
+    }
+  | {
+      type: 'squad_join_requested';
+      userId: string; // the owner/admin being asked
+      actorUserId: string; // the requester
+      actorName?: string | null;
+      squadId: string;
+      squadName: string;
+    }
+  | {
+      type: 'squad_join_approved';
+      userId: string; // the requester who's now in
+      actorUserId: string; // the admin who approved
+      actorName?: string | null;
+      squadId: string;
+      squadName: string;
     };
 
 export async function notifyEvent(
@@ -705,6 +721,43 @@ export async function notifyEvent(
           aggregateCopy: (n) => ({
             title: `${who} and ${n - 1} ${n - 1 === 1 ? 'other' : 'others'} reacted ${glyph}${on}`,
           }),
+        }),
+      ];
+    }
+
+    case 'squad_join_requested': {
+      // Someone found this crew through a friend and wants in. One row per
+      // requester per crew — a re-request just refreshes it.
+      const who = firstName(event.actorName);
+      return [
+        await deliver(env, waitUntil, {
+          userId: event.userId,
+          category: 'squad_join_request',
+          priority: 'high',
+          title: `${who} wants to join ${event.squadName}`,
+          body: 'Approve them from your crew settings.',
+          actorUserId: event.actorUserId,
+          dest: { type: 'crew', id: event.squadId },
+          entityType: 'squad',
+          entityId: event.squadId,
+          dedupeKey: `squad_join_request:${event.squadId}:${event.actorUserId}`,
+        }),
+      ];
+    }
+
+    case 'squad_join_approved': {
+      return [
+        await deliver(env, waitUntil, {
+          userId: event.userId,
+          category: 'squad_join_approved',
+          priority: 'medium',
+          title: `You're in ${event.squadName}`,
+          body: 'See the crew leaderboard and jump into a race.',
+          actorUserId: event.actorUserId,
+          dest: { type: 'crew', id: event.squadId },
+          entityType: 'squad',
+          entityId: event.squadId,
+          dedupeKey: `squad_join_approved:${event.squadId}:${event.userId}`,
         }),
       ];
     }

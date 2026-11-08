@@ -8,11 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/demo/presentation_demo.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -40,11 +36,11 @@ const _xpLesson = [
 /// badge pages have defs ready well before the user reaches them.
 final _onboardingAchievementDefsProvider =
     FutureProvider.autoDispose<Map<String, NuvoBadge>>((ref) async {
-  final badges = await ref
-      .watch(progressionControllerProvider.notifier)
-      .getBadges();
-  return {for (final b in badges) b.key: b};
-});
+      final badges = await ref
+          .watch(progressionControllerProvider.notifier)
+          .getBadges();
+      return {for (final b in badges) b.key: b};
+    });
 
 /// Display literals mirroring shipped defs — used ONLY when the collection
 /// can't be read (offline, cold start). Content matches migration 0042 so a
@@ -138,33 +134,24 @@ NuvoBadge _demoBadgeState(
   NuvoBadge base, {
   bool? unlocked,
   int? progressValue,
-}) =>
-    NuvoBadge(
-      unlockId: base.unlockId,
-      type: base.type,
-      key: base.key,
-      name: base.name,
-      description: base.description,
-      requiredLevel: base.requiredLevel,
-      metadata: base.metadata,
-      unlocked: unlocked ?? base.unlocked,
-      unlockedAt: base.unlockedAt,
-      featured: base.featured,
-      position: base.position,
-      category: base.category,
-      iconKey: base.iconKey,
-      statKey: base.statKey,
-      threshold: base.threshold,
-      progressValue: progressValue ?? base.progressValue,
-    );
-
-/// The onboarding pages render in the light-chrome visual language
-/// (NuvoColors.* constants throughout). Badge widgets read themeColors —
-/// pin light so a dark-mode device never drops dark panels onto this page.
-Widget _asLightChrome(Widget child) => Theme(
-      data: ThemeData(extensions: const [NuvoThemeColors.light]),
-      child: child,
-    );
+}) => NuvoBadge(
+  unlockId: base.unlockId,
+  type: base.type,
+  key: base.key,
+  name: base.name,
+  description: base.description,
+  requiredLevel: base.requiredLevel,
+  metadata: base.metadata,
+  unlocked: unlocked ?? base.unlocked,
+  unlockedAt: base.unlockedAt,
+  featured: base.featured,
+  position: base.position,
+  category: base.category,
+  iconKey: base.iconKey,
+  statKey: base.statKey,
+  threshold: base.threshold,
+  progressValue: progressValue ?? base.progressValue,
+);
 
 /// The canonical Nuvo first-use onboarding — runs AFTER account creation and
 /// profile/legal setup, while `onboardingComplete` is still false. Its one
@@ -338,149 +325,154 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
           if (!didPop && _page > 0) _goToPage(_page - 1);
         },
         child: Scaffold(
-        backgroundColor: NuvoColors.page,
-      body: SafeArea(
-        child: AnimatedBuilder(
-          animation: _ambientController,
-          builder: (context, _) => LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxHeight < 720;
-              final narrow = constraints.maxWidth < 360;
-              final ready = _pageReady;
-              final atmosphereReveal = _page == 0 ? (ready ? 1.0 : 0.0) : 1.0;
-              final firstName = _firstName;
-              // Warm the canonical defs read on mount — the badge pages
-              // hit a resolved cache, never a spinner.
-              ref.watch(_onboardingAchievementDefsProvider);
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _AmbientPainter(
-                        progress: _ambientController.value,
-                        opacity: atmosphereReveal * .15,
-                      ),
-                    ),
-                  ),
-                  Column(
+          backgroundColor: V13.bg,
+          body: SafeArea(
+            child: AnimatedBuilder(
+              animation: _ambientController,
+              builder: (context, _) => LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxHeight < 720;
+                  final narrow = constraints.maxWidth < 360;
+                  final ready = _pageReady;
+                  final atmosphereReveal = _page == 0
+                      ? (ready ? 1.0 : 0.0)
+                      : 1.0;
+                  final firstName = _firstName;
+                  // Warm the canonical defs read on mount — the badge pages
+                  // hit a resolved cache, never a spinner.
+                  ref.watch(_onboardingAchievementDefsProvider);
+                  return Stack(
                     children: [
-                      _OnboardingHeader(
-                        page: _page,
-                        pageCount: _pageCount,
-                        compact: compact,
-                        onBack: _page == 0 ? null : () => _goToPage(_page - 1),
-                        onSkip: (_page == 0 || _page == _lastPage)
-                            ? null
-                            : _skip,
-                        showTrailing: _page != _lastPage,
-                      ),
-                      Expanded(
-                        child: PageView(
-                          controller: _pageController,
-                          onPageChanged: (page) =>
-                              setState(() => _page = page),
-                          // The opening cinematic must not be bypassable by an
-                          // accidental swipe — only once it has settled can the
-                          // PageView move at all.
-                          physics: _page == 0 && !ready
-                              ? const NeverScrollableScrollPhysics()
-                              : const PageScrollPhysics(),
-                          children: [
-                            TickerMode(
-                              enabled: _page == 0,
-                              child: _IntroPage(
-                                firstName: firstName,
-                                compact: compact,
-                                onReady: () => _markReady(0),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 1,
-                              child: _RaceAnythingPage(
-                                compact: compact,
-                                narrow: narrow,
-                                onReady: () => _markReady(1),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 2,
-                              child: _MovePage(
-                                compact: compact,
-                                onReady: () => _markReady(2),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 3,
-                              child: _ClimbPage(
-                                firstName: firstName,
-                                compact: compact,
-                                onReady: () => _markReady(3),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 4,
-                              child: _LevelPage(
-                                compact: compact,
-                                onReady: () => _markReady(4),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 5,
-                              child: _IdentityPage(
-                                compact: compact,
-                                onReady: () => _markReady(5),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 6,
-                              child: _CrewPage(
-                                firstName: firstName,
-                                compact: compact,
-                                onReady: () => _markReady(6),
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 7,
-                              child: _ReadyPage(
-                                firstName: firstName,
-                                compact: compact,
-                                onReady: () => _markReady(7),
-                              ),
-                            ),
-                          ],
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _AmbientPainter(
+                            progress: _ambientController.value,
+                            opacity: atmosphereReveal * .15,
+                          ),
                         ),
                       ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 460),
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment.topCenter,
-                        clipBehavior: Clip.none,
-                        child: !ready
-                            ? const SizedBox.shrink()
-                            : _CtaReveal(
-                                child: _OnboardingFooter(
-                                  page: _page,
-                                  pageCount: _pageCount,
-                                  label: _buttonLabel,
-                                  loading: _page == _lastPage && _finishing,
-                                  error: _page == _lastPage
-                                      ? _finishError
-                                      : null,
-                                  onPressed:
-                                      _page == _lastPage ? _finish : _next,
-                                  compact: compact,
+                      Column(
+                        children: [
+                          _OnboardingHeader(
+                            page: _page,
+                            pageCount: _pageCount,
+                            compact: compact,
+                            onBack: _page == 0
+                                ? null
+                                : () => _goToPage(_page - 1),
+                            onSkip: (_page == 0 || _page == _lastPage)
+                                ? null
+                                : _skip,
+                            showTrailing: _page != _lastPage,
+                          ),
+                          Expanded(
+                            child: PageView(
+                              controller: _pageController,
+                              onPageChanged: (page) =>
+                                  setState(() => _page = page),
+                              // The opening cinematic must not be bypassable by an
+                              // accidental swipe — only once it has settled can the
+                              // PageView move at all.
+                              physics: _page == 0 && !ready
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const PageScrollPhysics(),
+                              children: [
+                                TickerMode(
+                                  enabled: _page == 0,
+                                  child: _IntroPage(
+                                    firstName: firstName,
+                                    compact: compact,
+                                    onReady: () => _markReady(0),
+                                  ),
                                 ),
-                              ),
+                                TickerMode(
+                                  enabled: _page == 1,
+                                  child: _RaceAnythingPage(
+                                    compact: compact,
+                                    narrow: narrow,
+                                    onReady: () => _markReady(1),
+                                  ),
+                                ),
+                                TickerMode(
+                                  enabled: _page == 2,
+                                  child: _MovePage(
+                                    compact: compact,
+                                    onReady: () => _markReady(2),
+                                  ),
+                                ),
+                                TickerMode(
+                                  enabled: _page == 3,
+                                  child: _ClimbPage(
+                                    firstName: firstName,
+                                    compact: compact,
+                                    onReady: () => _markReady(3),
+                                  ),
+                                ),
+                                TickerMode(
+                                  enabled: _page == 4,
+                                  child: _LevelPage(
+                                    compact: compact,
+                                    onReady: () => _markReady(4),
+                                  ),
+                                ),
+                                TickerMode(
+                                  enabled: _page == 5,
+                                  child: _IdentityPage(
+                                    compact: compact,
+                                    onReady: () => _markReady(5),
+                                  ),
+                                ),
+                                TickerMode(
+                                  enabled: _page == 6,
+                                  child: _CrewPage(
+                                    firstName: firstName,
+                                    compact: compact,
+                                    onReady: () => _markReady(6),
+                                  ),
+                                ),
+                                TickerMode(
+                                  enabled: _page == 7,
+                                  child: _ReadyPage(
+                                    firstName: firstName,
+                                    compact: compact,
+                                    onReady: () => _markReady(7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 460),
+                            curve: Curves.easeInOutCubic,
+                            alignment: Alignment.topCenter,
+                            clipBehavior: Clip.none,
+                            child: !ready
+                                ? const SizedBox.shrink()
+                                : _CtaReveal(
+                                    child: _OnboardingFooter(
+                                      page: _page,
+                                      pageCount: _pageCount,
+                                      label: _buttonLabel,
+                                      loading: _page == _lastPage && _finishing,
+                                      error: _page == _lastPage
+                                          ? _finishError
+                                          : null,
+                                      onPressed: _page == _lastPage
+                                          ? _finish
+                                          : _next,
+                                      compact: compact,
+                                    ),
+                                  ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
-              );
-            },
+                  );
+                },
+              ),
+            ),
           ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -523,7 +515,7 @@ class _OnboardingHeader extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     icon: const Icon(
                       Icons.arrow_back_rounded,
-                      color: NuvoColors.navy,
+                      color: V13.navy,
                       size: 24,
                     ),
                   ),
@@ -541,18 +533,20 @@ class _OnboardingHeader extends StatelessWidget {
                   ),
                   child: Text(
                     'Skip',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: V13.caption
+                        .copyWith(fontSize: 13, fontWeight: FontWeight.w500)
+                        .copyWith(
+                          color: V13.muted,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
               )
             else
               Text(
                 '${page + 1} / $pageCount',
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: NuvoColors.muted,
+                style: V13.buttonLabel.copyWith(
+                  color: V13.muted,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -597,17 +591,17 @@ class _OnboardingFooter extends StatelessWidget {
                   width: i == page ? 24 : 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: i == page ? NuvoColors.blue : NuvoColors.navy,
+                    color: i == page ? V13.blue : V13.navy,
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
             ],
           ),
           SizedBox(height: compact ? 10 : 14),
-          NuvoPrimaryButton(
+          V13Button.primary(
             label: label,
             icon: Icons.arrow_forward_rounded,
-            expand: true,
+            fullWidth: true,
             loading: loading,
             onPressed: loading ? null : onPressed,
           ),
@@ -616,7 +610,9 @@ class _OnboardingFooter extends StatelessWidget {
             Text(
               error!,
               textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
+              style: V13.caption
+                  .copyWith(fontSize: 13, fontWeight: FontWeight.w500)
+                  .copyWith(color: V13.danger),
             ),
           ],
         ],
@@ -750,11 +746,13 @@ class _IntroPageState extends State<_IntroPage>
                 NuvoFlipText(
                   name != null ? 'Ready, $name?' : 'Ready?',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: NuvoColors.navy,
-                    fontSize: widget.compact ? 32 : 40,
-                    height: 1.05,
-                  ),
+                  style: V13.title
+                      .copyWith(fontSize: 40, height: 1.04)
+                      .copyWith(
+                        color: V13.navy,
+                        fontSize: widget.compact ? 32 : 40,
+                        height: 1.05,
+                      ),
                   play: _textStarted,
                   delay: const Duration(milliseconds: 140),
                   duration: const Duration(milliseconds: 1500),
@@ -763,11 +761,13 @@ class _IntroPageState extends State<_IntroPage>
                 NuvoFlipText(
                   'Make real life a race.',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: NuvoColors.muted,
-                    height: 1.3,
-                    fontSize: widget.compact ? 16 : 19,
-                  ),
+                  style: V13.body
+                      .copyWith(fontSize: 16)
+                      .copyWith(
+                        color: V13.muted,
+                        height: 1.3,
+                        fontSize: widget.compact ? 16 : 19,
+                      ),
                   play: _textStarted,
                   delay: const Duration(milliseconds: 620),
                   duration: const Duration(milliseconds: 1700),
@@ -815,22 +815,10 @@ class _RaceExample {
 class _RaceAnythingPageState extends State<_RaceAnythingPage>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const _examples = [
-    _RaceExample(
-      title: 'First to finish 5 books',
-      metric: _booksMetric,
-    ),
-    _RaceExample(
-      title: 'First to 100 pushups',
-      metric: _pushupsMetric,
-    ),
-    _RaceExample(
-      title: 'Highest math grade',
-      metric: _gradeMetric,
-    ),
-    _RaceExample(
-      title: 'Lowest golf score',
-      metric: _golfMetric,
-    ),
+    _RaceExample(title: 'First to finish 5 books', metric: _booksMetric),
+    _RaceExample(title: 'First to 100 pushups', metric: _pushupsMetric),
+    _RaceExample(title: 'Highest math grade', metric: _gradeMetric),
+    _RaceExample(title: 'Lowest golf score', metric: _golfMetric),
   ];
   // Each example plays a full race in ~2.4s: progress runs to the finish
   // over the first ~80% and holds on the flag for the last beat.
@@ -843,8 +831,7 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
   // Golf races score in strokes, lower-is-better — the number counts down
   // like a real round coming in. Same unit the race screen shows, never
   // score-to-par.
-  static String _golfMetric(double t) =>
-      '${(88 - t * 10).round()} strokes';
+  static String _golfMetric(double t) => '${(88 - t * 10).round()} strokes';
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -918,20 +905,21 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
         children: [
           Text(
             'FLEXIRACE',
-            style: AppTextStyles.brandLabel.copyWith(
-              color: NuvoColors.blue,
-              letterSpacing: 2.2,
-            ),
+            style: V13.label
+                .copyWith(fontSize: 13, letterSpacing: 0.8)
+                .copyWith(color: V13.blue, letterSpacing: 2.2),
           ),
           const SizedBox(height: 8),
           NuvoFlipText(
             'Race anything.',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 34 : 42,
-              height: .96,
-              letterSpacing: -1.2,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 40, height: 1.04)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 34 : 42,
+                  height: .96,
+                  letterSpacing: -1.2,
+                ),
             delay: const Duration(milliseconds: 150),
             duration: const Duration(milliseconds: 1400),
           ),
@@ -941,92 +929,93 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
             // stage (Center does what the Spacer pair did) but taller text
             // at accessibility scale grows into the page's scroll instead
             // of overflowing the fixed box.
-            constraints: BoxConstraints(
-              minHeight: widget.compact ? 210 : 270,
-            ),
+            constraints: BoxConstraints(minHeight: widget.compact ? 210 : 270),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 420),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, .35),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 420),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, .35),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Column(
+                      key: ValueKey(_index),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          example.title,
+                          textAlign: TextAlign.center,
+                          style: V13.title
+                              .copyWith(fontSize: 31)
+                              .copyWith(
+                                color: V13.navy,
+                                fontSize: widget.narrow ? 24 : 28,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -.6,
+                              ),
+                        ),
+                        SizedBox(height: widget.compact ? 4 : 6),
+                        AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, _) {
+                            final progress = Curves.easeInOutCubic.transform(
+                              (_controller.value / .8).clamp(0.0, 1.0),
+                            );
+                            return Text(
+                              example.metric(progress),
+                              maxLines: 1,
+                              softWrap: false,
+                              textAlign: TextAlign.center,
+                              style: V13.cardTitle
+                                  .copyWith(fontSize: 21)
+                                  .copyWith(
+                                    color: V13.blue,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: widget.narrow ? 17 : 19,
+                                  ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  child: Column(
-                    key: ValueKey(_index),
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        example.title,
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: NuvoColors.navy,
-                          fontSize: widget.narrow ? 24 : 28,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.6,
-                        ),
-                      ),
-                      SizedBox(height: widget.compact ? 4 : 6),
-                      AnimatedBuilder(
-                        animation: _controller,
-                        builder: (context, _) {
-                          final progress = Curves.easeInOutCubic.transform(
-                            (_controller.value / .8).clamp(0.0, 1.0),
-                          );
-                          return Text(
-                            example.metric(progress),
-                            maxLines: 1,
-                            softWrap: false,
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.titleLarge.copyWith(
-                              color: NuvoColors.blue,
-                              fontWeight: FontWeight.w800,
-                              fontSize: widget.narrow ? 17 : 19,
+                  SizedBox(height: widget.compact ? 10 : 16),
+                  SizedBox(
+                    height: widget.compact ? 64 : 92,
+                    width: double.infinity,
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, _) {
+                        return CustomPaint(
+                          painter: _RacePathPainter(
+                            progress: Curves.easeInOutCubic.transform(
+                              (_controller.value / .8).clamp(0.0, 1.0),
                             ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: widget.compact ? 10 : 16),
-                SizedBox(
-                  height: widget.compact ? 64 : 92,
-                  width: double.infinity,
-                  child: AnimatedBuilder(
-                    animation: _controller,
-                    builder: (context, _) {
-                      return CustomPaint(
-                        painter: _RacePathPainter(
-                          progress: Curves.easeInOutCubic.transform(
-                            (_controller.value / .8).clamp(0.0, 1.0),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
               ),
             ),
           ),
           SizedBox(height: widget.compact ? 10 : 16),
           NuvoFlipText(
             'Set the finish line. Bring your friends.',
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.3,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.3),
             delay: const Duration(milliseconds: 700),
             duration: const Duration(milliseconds: 1600),
           ),
@@ -1062,11 +1051,10 @@ class _MovePageState extends State<_MovePage>
   static const _acceptFlash = 500 / 6200;
   static const _payoffAt = 4800 / 6200;
 
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: _duration,
-  )..addStatusListener(_onStatus)
-    ..addListener(_maybeHaptic);
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: _duration)
+        ..addStatusListener(_onStatus)
+        ..addListener(_maybeHaptic);
   bool _started = false;
   bool _readyReported = false;
   int _acceptsFelt = 0;
@@ -1137,22 +1125,23 @@ class _MovePageState extends State<_MovePage>
         children: [
           NuvoFlipText(
             'Make your move.',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 34 : 42,
-              height: .95,
-              letterSpacing: -1.2,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 40, height: 1.04)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 34 : 42,
+                  height: .95,
+                  letterSpacing: -1.2,
+                ),
             delay: const Duration(milliseconds: 180),
             duration: const Duration(milliseconds: 1400),
           ),
           SizedBox(height: widget.compact ? 8 : 12),
           NuvoFlipText(
             'Real progress becomes race progress.',
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.25,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.25),
             delay: const Duration(milliseconds: 700),
             duration: const Duration(milliseconds: 1600),
           ),
@@ -1177,7 +1166,7 @@ class _MovePageState extends State<_MovePage>
                         fallback: Icon(
                           Icons.accessibility_new_rounded,
                           size: size * .5,
-                          color: NuvoColors.navy.withValues(alpha: .3),
+                          color: V13.navy.withValues(alpha: .3),
                         ),
                       ),
                     ),
@@ -1201,7 +1190,7 @@ class _MovePageState extends State<_MovePage>
                               children: [
                                 const Icon(
                                   Icons.check_circle_rounded,
-                                  color: NuvoColors.success,
+                                  color: V13.mint,
                                   size: 18,
                                 ),
                                 const SizedBox(width: 6),
@@ -1212,8 +1201,8 @@ class _MovePageState extends State<_MovePage>
                                   child: Text(
                                     'Race finished',
                                     maxLines: 1,
-                                    style: AppTextStyles.labelLarge.copyWith(
-                                      color: NuvoColors.successOn,
+                                    style: V13.buttonLabel.copyWith(
+                                      color: V13.navy,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -1227,7 +1216,7 @@ class _MovePageState extends State<_MovePage>
                               children: [
                                 const Icon(
                                   Icons.check_circle_rounded,
-                                  color: NuvoColors.blue,
+                                  color: V13.blue,
                                   size: 18,
                                 ),
                                 const SizedBox(width: 6),
@@ -1235,8 +1224,8 @@ class _MovePageState extends State<_MovePage>
                                   child: Text(
                                     'Proof accepted',
                                     maxLines: 1,
-                                    style: AppTextStyles.labelLarge.copyWith(
-                                      color: NuvoColors.blue,
+                                    style: V13.buttonLabel.copyWith(
+                                      color: V13.blue,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -1246,11 +1235,13 @@ class _MovePageState extends State<_MovePage>
                           : Text(
                               'EXAMPLE PROOF',
                               key: const ValueKey('pending'),
-                              style: AppTextStyles.brandLabel.copyWith(
-                                color: NuvoColors.muted,
-                                letterSpacing: 1.6,
-                                fontSize: 10,
-                              ),
+                              style: V13.label
+                                  .copyWith(fontSize: 13, letterSpacing: 0.8)
+                                  .copyWith(
+                                    color: V13.muted,
+                                    letterSpacing: 1.6,
+                                    fontSize: 10,
+                                  ),
                             ),
                     ),
                     const SizedBox(height: 10),
@@ -1263,9 +1254,7 @@ class _MovePageState extends State<_MovePage>
                         boxShadow: finished
                             ? [
                                 BoxShadow(
-                                  color: NuvoColors.success.withValues(
-                                    alpha: .25,
-                                  ),
+                                  color: V13.mint.withValues(alpha: .25),
                                   blurRadius: 30,
                                 ),
                               ]
@@ -1274,11 +1263,10 @@ class _MovePageState extends State<_MovePage>
                       child: Transform.scale(
                         scale: finished
                             ? .95 +
-                                (.05 *
-                                    Curves.easeOutBack.transform(
-                                      ((t - _payoffAt) / .07)
-                                          .clamp(0.0, 1.0),
-                                    ))
+                                  (.05 *
+                                      Curves.easeOutBack.transform(
+                                        ((t - _payoffAt) / .07).clamp(0.0, 1.0),
+                                      ))
                             : 1,
                         // Fixed-width score artifact — "10 / 10" is
                         // decorative chrome, clamped so extreme text
@@ -1289,12 +1277,14 @@ class _MovePageState extends State<_MovePage>
                             value: score,
                             format: (v) => '$v / 10',
                             duration: const Duration(milliseconds: 500),
-                            style: AppTextStyles.displayMedium.copyWith(
-                              color: NuvoColors.navy,
-                              fontSize: widget.compact ? 34 : 42,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1,
-                            ),
+                            style: V13.title
+                                .copyWith(fontSize: 40, height: 1.04)
+                                .copyWith(
+                                  color: V13.navy,
+                                  fontSize: widget.compact ? 34 : 42,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -1,
+                                ),
                           ),
                         ),
                       ),
@@ -1312,18 +1302,14 @@ class _MovePageState extends State<_MovePage>
                             children: [
                               Positioned.fill(
                                 child: ColoredBox(
-                                  color: NuvoColors.navy.withValues(
-                                    alpha: .1,
-                                  ),
+                                  color: V13.navy.withValues(alpha: .1),
                                 ),
                               ),
                               FractionallySizedBox(
                                 widthFactor: score / 10,
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 280),
-                                  color: finished
-                                      ? NuvoColors.success
-                                      : NuvoColors.blue,
+                                  color: finished ? V13.mint : V13.blue,
                                 ),
                               ),
                             ],
@@ -1346,13 +1332,15 @@ class _MovePageState extends State<_MovePage>
                               textAlign: TextAlign.center,
                               maxLines: 1,
                               softWrap: false,
-                              style: AppTextStyles.brandLabel.copyWith(
-                                color: label == 'MOTION'
-                                    ? NuvoColors.blue
-                                    : NuvoColors.muted,
-                                letterSpacing: 1.4,
-                                fontSize: 10,
-                              ),
+                              style: V13.label
+                                  .copyWith(fontSize: 13, letterSpacing: 0.8)
+                                  .copyWith(
+                                    color: label == 'MOTION'
+                                        ? V13.blue
+                                        : V13.muted,
+                                    letterSpacing: 1.4,
+                                    fontSize: 10,
+                                  ),
                             ),
                           ),
                       ],
@@ -1422,13 +1410,15 @@ class _ClimbPageState extends State<_ClimbPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final headline = AppTextStyles.displayMedium.copyWith(
-      color: NuvoColors.navy,
-      fontSize: widget.compact ? 30 : 38,
-      height: .96,
-      letterSpacing: -1.4,
-      fontWeight: FontWeight.w800,
-    );
+    final headline = V13.title
+        .copyWith(fontSize: 40, height: 1.04)
+        .copyWith(
+          color: V13.navy,
+          fontSize: widget.compact ? 30 : 38,
+          height: .96,
+          letterSpacing: -1.4,
+          fontWeight: FontWeight.w800,
+        );
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(22, widget.compact ? 8 : 16, 22, 8),
       child: Column(
@@ -1453,10 +1443,9 @@ class _ClimbPageState extends State<_ClimbPage>
           NuvoFlipText(
             'That progress also builds your Nuvo.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.3,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.3),
             play: _textStarted,
             delay: const Duration(milliseconds: 400),
             duration: const Duration(milliseconds: 1300),
@@ -1610,8 +1599,8 @@ class _OvertakeSceneFrame extends StatelessWidget {
         ? lerpDouble(1.02, 1.0, drop)! + settleWobble
         : 1.0 + (.02 * grab) + (.005 * carryUp);
     final playerShadow = BoxShadow.lerp(
-      AppShadows.hardSmall.first,
-      AppShadows.hardMedium.first,
+      V13.shadow3.first,
+      V13.hardShadow(x: 5, y: 5).first,
       carriedAmount,
     )!;
 
@@ -1640,28 +1629,28 @@ class _OvertakeSceneFrame extends StatelessWidget {
                   height: pillHeight,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: NuvoColors.successSurface,
+                    color: V13.mint,
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(
-                      color: NuvoColors.success.withValues(alpha: .5),
-                    ),
+                    border: Border.all(color: V13.mint.withValues(alpha: .5)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
                         Icons.check_circle_rounded,
-                        color: NuvoColors.success,
+                        color: V13.mint,
                         size: 14,
                       ),
                       const SizedBox(width: 5),
                       Text(
                         'PROOF ACCEPTED',
-                        style: AppTextStyles.brandLabel.copyWith(
-                          color: NuvoColors.successOn,
-                          letterSpacing: 1.3,
-                          fontSize: 9.5,
-                        ),
+                        style: V13.label
+                            .copyWith(fontSize: 13, letterSpacing: 0.8)
+                            .copyWith(
+                              color: V13.navy,
+                              letterSpacing: 1.3,
+                              fontSize: 9.5,
+                            ),
                       ),
                     ],
                   ),
@@ -1766,11 +1755,10 @@ class _LevelPageState extends ConsumerState<_LevelPage>
   static const _levelUpEnd = 4600 / 5600;
   static const _unlockAt = 4700 / 5600;
 
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: _duration,
-  )..addStatusListener(_onStatus)
-    ..addListener(_maybeHaptic);
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: _duration)
+        ..addStatusListener(_onStatus)
+        ..addListener(_maybeHaptic);
   bool _started = false;
   bool _readyReported = false;
   bool _levelHapticFired = false;
@@ -1837,8 +1825,9 @@ class _LevelPageState extends ConsumerState<_LevelPage>
     // is the level-2 def (a fresh account's always is), otherwise the
     // canonical cap-badge-slot-2 contents as a labeled example.
     final live = progression?.nextUnlock;
-    final unlockName =
-        live != null && live.level == 2 ? live.name : _levelTwoUnlockFallback.name;
+    final unlockName = live != null && live.level == 2
+        ? live.name
+        : _levelTwoUnlockFallback.name;
     final unlockDesc = live != null && live.level == 2
         ? (live.description ?? '')
         : _levelTwoUnlockFallback.description;
@@ -1849,12 +1838,14 @@ class _LevelPageState extends ConsumerState<_LevelPage>
         children: [
           NuvoFlipText(
             'Every race builds\nyour Nuvo.',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 34 : 42,
-              height: .96,
-              letterSpacing: -1.2,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 40, height: 1.04)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 34 : 42,
+                  height: .96,
+                  letterSpacing: -1.2,
+                ),
             delay: const Duration(milliseconds: 180),
             duration: const Duration(milliseconds: 1400),
           ),
@@ -1902,19 +1893,20 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                   children: [
                     Text(
                       'EXAMPLE',
-                      style: AppTextStyles.brandLabel.copyWith(
-                        color: NuvoColors.muted,
-                        letterSpacing: 1.8,
-                        fontSize: 10,
-                      ),
+                      style: V13.label
+                          .copyWith(fontSize: 13, letterSpacing: 0.8)
+                          .copyWith(
+                            color: V13.muted,
+                            letterSpacing: 1.8,
+                            fontSize: 10,
+                          ),
                     ),
                     SizedBox(height: widget.compact ? 10 : 14),
                     Text(
                       'LEVEL',
-                      style: AppTextStyles.brandLabel.copyWith(
-                        color: NuvoColors.blue,
-                        letterSpacing: 2.4,
-                      ),
+                      style: V13.label
+                          .copyWith(fontSize: 13, letterSpacing: 0.8)
+                          .copyWith(color: V13.blue, letterSpacing: 2.4),
                     ),
                     const SizedBox(height: 4),
                     Transform.scale(
@@ -1922,12 +1914,14 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                       child: NuvoNumberFlow(
                         value: level,
                         duration: const Duration(milliseconds: 600),
-                        style: AppTextStyles.displayLarge.copyWith(
-                          color: NuvoColors.navy,
-                          fontSize: widget.compact ? 56 : 68,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -2,
-                        ),
+                        style: V13.title
+                            .copyWith(fontSize: 48, height: 1.02)
+                            .copyWith(
+                              color: V13.navy,
+                              fontSize: widget.compact ? 56 : 68,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -2,
+                            ),
                       ),
                     ),
                     SizedBox(height: widget.compact ? 8 : 12),
@@ -1935,10 +1929,12 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                       value: xp,
                       format: (v) => '$v / $xpGoal XP',
                       duration: const Duration(milliseconds: 400),
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: NuvoColors.blue,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: V13.cardTitle
+                          .copyWith(fontSize: 21)
+                          .copyWith(
+                            color: V13.blue,
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                     SizedBox(height: widget.compact ? 8 : 12),
                     SizedBox(
@@ -1951,7 +1947,7 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                             children: [
                               Positioned.fill(
                                 child: ColoredBox(
-                                  color: NuvoColors.navy.withValues(alpha: .1),
+                                  color: V13.navy.withValues(alpha: .1),
                                 ),
                               ),
                               FractionallySizedBox(
@@ -1960,9 +1956,7 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                                 // threshold is crossed.
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 280),
-                                  color: level == 2
-                                      ? NuvoColors.gold
-                                      : NuvoColors.blue,
+                                  color: level == 2 ? V13.gold : V13.blue,
                                 ),
                               ),
                             ],
@@ -1977,10 +1971,7 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                       height: 26,
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 240),
-                        child: _levelStatus(
-                          t,
-                          econIndex,
-                        ),
+                        child: _levelStatus(t, econIndex),
                       ),
                     ),
                     SizedBox(height: widget.compact ? 10 : 14),
@@ -2006,10 +1997,9 @@ class _LevelPageState extends ConsumerState<_LevelPage>
           SizedBox(height: widget.compact ? 12 : 20),
           NuvoFlipText(
             'Do real race things. Watch the level move.',
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.3,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.3),
             delay: const Duration(milliseconds: 700),
             duration: const Duration(milliseconds: 1600),
           ),
@@ -2026,12 +2016,12 @@ class _LevelPageState extends ConsumerState<_LevelPage>
         key: const ValueKey('leveled'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.north_rounded, color: NuvoColors.gold, size: 16),
+          const Icon(Icons.north_rounded, color: V13.gold, size: 16),
           const SizedBox(width: 4),
           Text(
             'Level up',
-            style: AppTextStyles.labelLarge.copyWith(
-              color: NuvoColors.gold,
+            style: V13.buttonLabel.copyWith(
+              color: V13.gold,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -2045,10 +2035,9 @@ class _LevelPageState extends ConsumerState<_LevelPage>
       return Text(
         'One race later…',
         key: const ValueKey('later'),
-        style: AppTextStyles.labelMedium.copyWith(
-          color: NuvoColors.muted,
-          fontWeight: FontWeight.w800,
-        ),
+        style: V13.caption
+            .copyWith(fontSize: 13, fontWeight: FontWeight.w800)
+            .copyWith(color: V13.muted, fontWeight: FontWeight.w800),
       );
     }
     if (econIndex >= 0) {
@@ -2062,10 +2051,9 @@ class _LevelPageState extends ConsumerState<_LevelPage>
               label,
               maxLines: 1,
               softWrap: false,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.navy,
-                fontWeight: FontWeight.w800,
-              ),
+              style: V13.caption
+                  .copyWith(fontSize: 13, fontWeight: FontWeight.w800)
+                  .copyWith(color: V13.navy, fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(width: 6),
@@ -2078,11 +2066,7 @@ class _LevelPageState extends ConsumerState<_LevelPage>
         key: const ValueKey('proof'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.check_circle_rounded,
-            color: NuvoColors.blue,
-            size: 15,
-          ),
+          const Icon(Icons.check_circle_rounded, color: V13.blue, size: 15),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
@@ -2090,10 +2074,9 @@ class _LevelPageState extends ConsumerState<_LevelPage>
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w800,
-              ),
+              style: V13.caption
+                  .copyWith(fontSize: 13, fontWeight: FontWeight.w800)
+                  .copyWith(color: V13.blue, fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(width: 6),
@@ -2124,10 +2107,10 @@ class _UnlockCard extends StatelessWidget {
       constraints: BoxConstraints(maxWidth: compact ? 300 : 330),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: V13.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.navy, width: 1.6),
-        boxShadow: AppShadows.hardSmall,
+        border: Border.all(color: V13.navy, width: V13.outline),
+        boxShadow: V13.shadow3,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2138,13 +2121,13 @@ class _UnlockCard extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               // Gold = the level-up payoff, not progress blue.
-              color: NuvoColors.gold.withValues(alpha: .14),
+              color: V13.gold.withValues(alpha: .14),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: NuvoColors.gold, width: 1.4),
+              border: Border.all(color: V13.gold, width: V13.outline),
             ),
             child: const Icon(
               Icons.dashboard_customize_rounded,
-              color: NuvoColors.gold,
+              color: V13.gold,
               size: 18,
             ),
           ),
@@ -2156,19 +2139,21 @@ class _UnlockCard extends StatelessWidget {
               children: [
                 Text(
                   'AT LEVEL 2',
-                  style: AppTextStyles.brandLabel.copyWith(
-                    color: NuvoColors.muted,
-                    letterSpacing: 1.4,
-                    fontSize: 9.5,
-                  ),
+                  style: V13.label
+                      .copyWith(fontSize: 13, letterSpacing: 0.8)
+                      .copyWith(
+                        color: V13.muted,
+                        letterSpacing: 1.4,
+                        fontSize: 9.5,
+                      ),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: NuvoColors.navy,
+                  style: V13.buttonLabel.copyWith(
+                    color: V13.navy,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2179,10 +2164,9 @@ class _UnlockCard extends StatelessWidget {
                     description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                      height: 1.3,
-                    ),
+                    style: V13.caption
+                        .copyWith(fontSize: 13, fontWeight: FontWeight.w500)
+                        .copyWith(color: V13.muted, height: 1.3),
                   ),
               ],
             ),
@@ -2202,15 +2186,14 @@ class _XpChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
-      color: NuvoColors.blue.withValues(alpha: .12),
+      color: V13.blue.withValues(alpha: .12),
       borderRadius: BorderRadius.circular(99),
     ),
     child: Text(
       label,
-      style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.blue,
-        fontWeight: FontWeight.w900,
-      ),
+      style: V13.caption
+          .copyWith(fontSize: 13, fontWeight: FontWeight.w800)
+          .copyWith(color: V13.blue, fontWeight: FontWeight.w900),
     ),
   );
 }
@@ -2237,11 +2220,10 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const _duration = Duration(milliseconds: 4200);
 
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: _duration,
-  )..addStatusListener(_onStatus)
-    ..addListener(_maybeHaptic);
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: _duration)
+        ..addStatusListener(_onStatus)
+        ..addListener(_maybeHaptic);
   bool _started = false;
   bool _readyReported = false;
   bool _earnHapticFired = false;
@@ -2318,11 +2300,7 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
     final defs =
         ref.watch(_onboardingAchievementDefsProvider).valueOrNull ?? const {};
     NuvoBadge def(String key) => defs[key] ?? _defFallbacks[key]!;
-    final featured = [
-      def('first_w'),
-      def('five_deep'),
-      def('personal_best'),
-    ];
+    final featured = [def('first_w'), def('five_deep'), def('personal_best')];
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(22, widget.compact ? 10 : 20, 22, 8),
       child: Column(
@@ -2330,12 +2308,14 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
         children: [
           NuvoFlipText(
             'Make your name\nmean something.',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 30 : 38,
-              height: .96,
-              letterSpacing: -1.2,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 40, height: 1.04)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 30 : 38,
+                  height: .96,
+                  letterSpacing: -1.2,
+                ),
             delay: const Duration(milliseconds: 150),
             duration: const Duration(milliseconds: 1400),
           ),
@@ -2354,149 +2334,151 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
                     )
                   : 1.0;
               final hatIn = _segment(_goalAt, _goalEnd);
-              return _asLightChrome(
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'EXAMPLE',
-                      style: AppTextStyles.brandLabel.copyWith(
-                        color: NuvoColors.muted,
-                        letterSpacing: 1.8,
-                        fontSize: 10,
-                      ),
-                    ),
-                    SizedBox(height: widget.compact ? 8 : 12),
-                    Opacity(
-                      opacity: cardIn,
-                      child: Transform.translate(
-                        offset: Offset(0, 16 * (1 - cardIn)),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            NuvoAvatar(
-                              initials: user?.avatarInitials ?? 'Y',
-                              photoUrl: user?.profilePhotoUrl,
-                              size: widget.compact
-                                  ? NuvoAvatarSizes.lg
-                                  : NuvoAvatarSizes.xl,
-                              bgColor: nuvoAvatarColorFor(user?.id ?? ''),
-                              textColor: NuvoColors.white,
-                              borderColor: NuvoColors.navy,
-                              borderWidth: 2,
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.titleMedium.copyWith(
-                                      color: NuvoColors.navy,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        NuvoColors.blue.withValues(alpha: .12),
-                                    borderRadius: BorderRadius.circular(99),
-                                  ),
-                                  child: Text(
-                                    'LEVEL 8',
-                                    style: AppTextStyles.brandLabel.copyWith(
-                                      color: NuvoColors.blue,
-                                      letterSpacing: 1.6,
-                                      fontSize: 10.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'EXAMPLE',
+                    style: V13.label
+                        .copyWith(fontSize: 13, letterSpacing: 0.8)
+                        .copyWith(
+                          color: V13.muted,
+                          letterSpacing: 1.8,
+                          fontSize: 10,
                         ),
-                      ),
-                    ),
-                    SizedBox(height: widget.compact ? 10 : 14),
-                    // A mid-level featured set — the real badge visual. Each
-                    // gets an equal flex slot so names never push past 320.
-                    Row(
-                      children: [
-                        for (var i = 0; i < featured.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          Expanded(
-                            child: Opacity(
-                              opacity:
-                                  ((featuredIn - i * .3) / .7).clamp(0.0, 1.0),
-                              child: _FeaturedBadge(
-                                badge: _demoBadgeState(
-                                  featured[i],
-                                  unlocked: true,
+                  ),
+                  SizedBox(height: widget.compact ? 8 : 12),
+                  Opacity(
+                    opacity: cardIn,
+                    child: Transform.translate(
+                      offset: Offset(0, 16 * (1 - cardIn)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          V13Face(
+                            photoUrl: user?.profilePhotoUrl,
+                            size: widget.compact ? 56 : 72,
+                            isMe: true,
+                            name: name,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: V13.bodyStrong
+                                      .copyWith(fontSize: 17)
+                                      .copyWith(
+                                        color: V13.navy,
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                 ),
-                                compact: widget.compact,
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: V13.blue.withValues(alpha: .12),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                child: Text(
+                                  'LEVEL 8',
+                                  style: V13.label
+                                      .copyWith(
+                                        fontSize: 13,
+                                        letterSpacing: 0.8,
+                                      )
+                                      .copyWith(
+                                        color: V13.blue,
+                                        letterSpacing: 1.6,
+                                        fontSize: 10.5,
+                                      ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: widget.compact ? 10 : 14),
+                  // A mid-level featured set — the real badge visual. Each
+                  // gets an equal flex slot so names never push past 320.
+                  Row(
+                    children: [
+                      for (var i = 0; i < featured.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 8),
+                        Expanded(
+                          child: Opacity(
+                            opacity: ((featuredIn - i * .3) / .7).clamp(
+                              0.0,
+                              1.0,
+                            ),
+                            child: _FeaturedBadge(
+                              badge: _demoBadgeState(
+                                featured[i],
+                                unlocked: true,
+                              ),
+                              compact: widget.compact,
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
-                    SizedBox(height: widget.compact ? 12 : 16),
-                    // First Move — the goal every fresh account actually
-                    // starts with — earns live as a demonstration.
-                    Opacity(
-                      opacity: goalIn,
-                      child: Transform.translate(
-                        offset: Offset(0, 12 * (1 - goalIn)),
-                        child: _GoalRow(
-                          badge: _demoBadgeState(
-                            def('first_move'),
-                            unlocked: earned,
-                            progressValue: earned ? 1 : 0,
-                          ),
-                          earned: earned,
-                          earnPop: earnPop,
-                          compact: widget.compact,
+                    ],
+                  ),
+                  SizedBox(height: widget.compact ? 12 : 16),
+                  // First Move — the goal every fresh account actually
+                  // starts with — earns live as a demonstration.
+                  Opacity(
+                    opacity: goalIn,
+                    child: Transform.translate(
+                      offset: Offset(0, 12 * (1 - goalIn)),
+                      child: _GoalRow(
+                        badge: _demoBadgeState(
+                          def('first_move'),
+                          unlocked: earned,
+                          progressValue: earned ? 1 : 0,
                         ),
+                        earned: earned,
+                        earnPop: earnPop,
+                        compact: widget.compact,
                       ),
                     ),
-                    SizedBox(height: widget.compact ? 8 : 10),
-                    // And the longer goal: Hat Trick sits at 0 / 3 — the user
-                    // builds wins, the explanation never implies they have
-                    // any yet.
-                    Opacity(
-                      opacity: hatIn,
-                      child: Transform.translate(
-                        offset: Offset(0, 12 * (1 - hatIn)),
-                        child: _GoalRow(
-                          badge: _demoBadgeState(
-                            def('hat_trick'),
-                            progressValue: 0,
-                          ),
-                          compact: widget.compact,
+                  ),
+                  SizedBox(height: widget.compact ? 8 : 10),
+                  // And the longer goal: Hat Trick sits at 0 / 3 — the user
+                  // builds wins, the explanation never implies they have
+                  // any yet.
+                  Opacity(
+                    opacity: hatIn,
+                    child: Transform.translate(
+                      offset: Offset(0, 12 * (1 - hatIn)),
+                      child: _GoalRow(
+                        badge: _demoBadgeState(
+                          def('hat_trick'),
+                          progressValue: 0,
                         ),
+                        compact: widget.compact,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),
           SizedBox(height: widget.compact ? 12 : 18),
           NuvoFlipText(
             'Your level and achievements go with you.',
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.3,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.3),
             delay: const Duration(milliseconds: 700),
             duration: const Duration(milliseconds: 1600),
           ),
@@ -2525,8 +2507,8 @@ class _FeaturedBadge extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: NuvoColors.navy,
+          style: V13.caption.copyWith(
+            color: V13.navy,
             fontWeight: FontWeight.w800,
             fontSize: 10.5,
           ),
@@ -2562,10 +2544,10 @@ class _GoalRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: V13.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.navy, width: 1.6),
-        boxShadow: AppShadows.hardSmall,
+        border: Border.all(color: V13.navy, width: V13.outline),
+        boxShadow: V13.shadow3,
       ),
       child: Row(
         children: [
@@ -2586,11 +2568,13 @@ class _GoalRow extends StatelessWidget {
                         badge.name.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.brandLabel.copyWith(
-                          color: NuvoColors.navy,
-                          letterSpacing: 1.2,
-                          fontSize: 11,
-                        ),
+                        style: V13.label
+                            .copyWith(fontSize: 13, letterSpacing: 0.8)
+                            .copyWith(
+                              color: V13.navy,
+                              letterSpacing: 1.2,
+                              fontSize: 11,
+                            ),
                       ),
                     ),
                     if (earned) ...[
@@ -2603,7 +2587,7 @@ class _GoalRow extends StatelessWidget {
                         decoration: BoxDecoration(
                           // Earned = gold; the tag marks an achievement, not
                           // an action.
-                          color: NuvoColors.gold,
+                          color: V13.gold,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: MediaQuery.withClampedTextScaling(
@@ -2612,11 +2596,13 @@ class _GoalRow extends StatelessWidget {
                           maxScaleFactor: 1.0,
                           child: Text(
                             'EARNED',
-                            style: AppTextStyles.brandLabel.copyWith(
-                              color: NuvoColors.navy,
-                              letterSpacing: 1.2,
-                              fontSize: 8.5,
-                            ),
+                            style: V13.label
+                                .copyWith(fontSize: 13, letterSpacing: 0.8)
+                                .copyWith(
+                                  color: V13.navy,
+                                  letterSpacing: 1.2,
+                                  fontSize: 8.5,
+                                ),
                           ),
                         ),
                       ),
@@ -2628,9 +2614,9 @@ class _GoalRow extends StatelessWidget {
                   badge.description ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
-                  ),
+                  style: V13.caption
+                      .copyWith(fontSize: 13, fontWeight: FontWeight.w500)
+                      .copyWith(color: V13.muted),
                 ),
                 const SizedBox(height: 5),
                 ClipRRect(
@@ -2641,13 +2627,14 @@ class _GoalRow extends StatelessWidget {
                       children: [
                         Positioned.fill(
                           child: ColoredBox(
-                            color: NuvoColors.navy.withValues(alpha: .1),
+                            color: V13.navy.withValues(alpha: .1),
                           ),
                         ),
                         FractionallySizedBox(
-                          widthFactor:
-                              goal > 0 ? (progress / goal).clamp(0.0, 1.0) : 0,
-                          child: const ColoredBox(color: NuvoColors.blue),
+                          widthFactor: goal > 0
+                              ? (progress / goal).clamp(0.0, 1.0)
+                              : 0,
+                          child: const ColoredBox(color: V13.blue),
                         ),
                       ],
                     ),
@@ -2663,8 +2650,8 @@ class _GoalRow extends StatelessWidget {
             maxScaleFactor: 1.15,
             child: Text(
               goal > 0 ? '$progress / $goal' : '',
-              style: AppTextStyles.labelLarge.copyWith(
-                color: earned ? NuvoColors.blue : NuvoColors.navy,
+              style: V13.buttonLabel.copyWith(
+                color: earned ? V13.blue : V13.navy,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -2765,12 +2752,14 @@ class _CrewPageState extends State<_CrewPage>
         children: [
           NuvoFlipText(
             'Better with\ncompetition.',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 32 : 40,
-              height: .96,
-              letterSpacing: -1.2,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 40, height: 1.04)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 32 : 40,
+                  height: .96,
+                  letterSpacing: -1.2,
+                ),
             delay: const Duration(milliseconds: 150),
             duration: const Duration(milliseconds: 1400),
           ),
@@ -2791,10 +2780,9 @@ class _CrewPageState extends State<_CrewPage>
           SizedBox(height: widget.compact ? 16 : 24),
           NuvoFlipText(
             'Race friends. Find rivals. Keep moving.',
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.3,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.3),
             delay: const Duration(milliseconds: 700),
             duration: const Duration(milliseconds: 1600),
           ),
@@ -2816,69 +2804,52 @@ class _CrewPageState extends State<_CrewPage>
           height: widget.compact ? 52 : 58,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: NuvoColors.surface,
+            color: V13.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: NuvoColors.navy,
-              width: isYou ? 2.2 : 1.4,
-            ),
-            boxShadow: isYou ? AppShadows.hardSmall : null,
+            border: Border.all(color: V13.navy, width: isYou ? 2.2 : 1.4),
+            boxShadow: isYou ? V13.shadow3 : null,
           ),
           child: Row(
             children: [
-              NuvoAvatar(
-                initials: name[0],
-                size: 34,
-                bgColor: isYou
-                    ? NuvoColors.blue
-                    : nuvoAvatarColorFor(name),
-                textColor: NuvoColors.white,
-              ),
+              V13Face(size: 34, isMe: isYou, name: name),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   isYou ? '$name (you)' : name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: NuvoColors.navy,
+                  style: V13.buttonLabel.copyWith(
+                    color: V13.navy,
                     fontWeight: isYou ? FontWeight.w900 : FontWeight.w700,
                   ),
                 ),
               ),
               if (badgeIcon != null) ...[
-                _asLightChrome(
-                  NuvoAchievementBadge(
-                    badge: NuvoBadge(
-                      unlockId: 'crew-demo-$badgeIcon',
-                      type: 'achievement',
-                      key: badgeIcon,
-                      name: '',
-                      requiredLevel: 0,
-                      unlocked: true,
-                      featured: true,
-                      iconKey: badgeIcon,
-                    ),
-                    size: 24,
+                NuvoAchievementBadge(
+                  badge: NuvoBadge(
+                    unlockId: 'crew-demo-$badgeIcon',
+                    type: 'achievement',
+                    key: badgeIcon,
+                    name: '',
+                    requiredLevel: 0,
+                    unlocked: true,
+                    featured: true,
+                    iconKey: badgeIcon,
                   ),
+                  size: 24,
                 ),
                 const SizedBox(width: 8),
               ],
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isYou
-                      ? NuvoColors.blue
-                      : NuvoColors.navy.withValues(alpha: .08),
+                  color: isYou ? V13.blue : V13.navy.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   'Lv. $level',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: isYou ? NuvoColors.white : NuvoColors.navy,
+                  style: V13.caption.copyWith(
+                    color: isYou ? V13.white : V13.navy,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2956,12 +2927,12 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
     final isDemo = isPresentationDemoUser(
       ref.watch(authControllerProvider).user,
     );
-    final progression =
-        isDemo ? null : ref.watch(progressionControllerProvider).valueOrNull;
+    final progression = isDemo
+        ? null
+        : ref.watch(progressionControllerProvider).valueOrNull;
     final defs = isDemo
         ? const <String, NuvoBadge>{}
-        : ref.watch(_onboardingAchievementDefsProvider).valueOrNull ??
-              const {};
+        : ref.watch(_onboardingAchievementDefsProvider).valueOrNull ?? const {};
     final level = progression?.level ?? 1;
     final current = progression?.currentLevelXp;
     final goal = progression?.nextLevelXp;
@@ -2974,7 +2945,8 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
     // onboarding makes — then the server's canonical "next up" once it's
     // earned (returning/demo-replay accounts). Null on a total read failure.
     final firstMove = defs['first_move'] ?? _defFallbacks['first_move'];
-    final fmDone = firstMove != null &&
+    final fmDone =
+        firstMove != null &&
         (firstMove.unlocked ||
             firstMove.progressValue >= (firstMove.threshold ?? 1));
     final firstGoal = fmDone ? progression?.nextAchievement : firstMove;
@@ -2988,41 +2960,43 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
           NuvoFlipText(
             name != null ? '$name, you\'re ready.' : 'You\'re ready.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 30 : 40,
-              height: 1.02,
-              letterSpacing: -1.2,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 40, height: 1.04)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 30 : 40,
+                  height: 1.02,
+                  letterSpacing: -1.2,
+                ),
             delay: const Duration(milliseconds: 200),
             duration: const Duration(milliseconds: 1500),
           ),
           SizedBox(height: widget.compact ? 14 : 24),
           Text(
             'LEVEL',
-            style: AppTextStyles.brandLabel.copyWith(
-              color: NuvoColors.blue,
-              letterSpacing: 2.6,
-            ),
+            style: V13.label
+                .copyWith(fontSize: 13, letterSpacing: 0.8)
+                .copyWith(color: V13.blue, letterSpacing: 2.6),
           ),
           const SizedBox(height: 4),
           Text(
             '$level',
-            style: AppTextStyles.displayLarge.copyWith(
-              color: NuvoColors.navy,
-              fontSize: widget.compact ? 56 : 80,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -2,
-              height: 1,
-            ),
+            style: V13.title
+                .copyWith(fontSize: 48, height: 1.02)
+                .copyWith(
+                  color: V13.navy,
+                  fontSize: widget.compact ? 56 : 80,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -2,
+                  height: 1,
+                ),
           ),
           SizedBox(height: widget.compact ? 6 : 10),
           Text(
             xpText,
-            style: AppTextStyles.titleLarge.copyWith(
-              color: NuvoColors.muted,
-              fontWeight: FontWeight.w800,
-            ),
+            style: V13.cardTitle
+                .copyWith(fontSize: 21)
+                .copyWith(color: V13.muted, fontWeight: FontWeight.w800),
           ),
           SizedBox(height: widget.compact ? 10 : 14),
           SizedBox(
@@ -3034,14 +3008,11 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: ColoredBox(
-                        color: NuvoColors.navy.withValues(alpha: .1),
-                      ),
+                      child: ColoredBox(color: V13.navy.withValues(alpha: .1)),
                     ),
                     FractionallySizedBox(
-                      widthFactor:
-                          (progression?.progress ?? 0).clamp(0.0, 1.0),
-                      child: const ColoredBox(color: NuvoColors.blue),
+                      widthFactor: (progression?.progress ?? 0).clamp(0.0, 1.0),
+                      child: const ColoredBox(color: V13.blue),
                     ),
                   ],
                 ),
@@ -3052,21 +3023,16 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
           // The first canonical goal — the promise this screen makes real.
           if (firstGoal != null)
             ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: widget.compact ? 300 : 330,
-              ),
-              child: _asLightChrome(
-                _GoalRow(badge: firstGoal, compact: widget.compact),
-              ),
+              constraints: BoxConstraints(maxWidth: widget.compact ? 300 : 330),
+              child: _GoalRow(badge: firstGoal, compact: widget.compact),
             ),
           SizedBox(height: widget.compact ? 12 : 20),
           NuvoFlipText(
             'Your first move starts now.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.3,
-            ),
+            style: V13.body
+                .copyWith(fontSize: 16)
+                .copyWith(color: V13.muted, height: 1.3),
             delay: const Duration(milliseconds: 800),
             duration: const Duration(milliseconds: 1600),
           ),
@@ -3101,21 +3067,19 @@ class _RankRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rankColor = switch (rank) {
-      '1' => NuvoColors.gold,
-      '2' => NuvoColors.silver,
-      _ => NuvoColors.bronze,
+      '1' => V13.gold,
+      '2' => V13.silver,
+      _ => V13.bronze,
     };
 
     return Container(
       height: height,
       padding: EdgeInsets.symmetric(horizontal: height * .22),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: V13.card,
         borderRadius: BorderRadius.circular(height * .27),
-        border: Border.all(color: NuvoColors.navy, width: active ? 2.4 : 1.6),
-        boxShadow:
-            shadowOverride ??
-            (active || emphasis ? AppShadows.hardSmall : null),
+        border: Border.all(color: V13.navy, width: active ? 2.4 : 1.6),
+        boxShadow: shadowOverride ?? (active || emphasis ? V13.shadow3 : null),
       ),
       child: Row(
         children: [
@@ -3123,10 +3087,9 @@ class _RankRow extends StatelessWidget {
             width: height * .38,
             child: Text(
               rank,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: rankColor,
-                fontWeight: FontWeight.w900,
-              ),
+              style: V13.bodyStrong
+                  .copyWith(fontSize: 17)
+                  .copyWith(color: rankColor, fontWeight: FontWeight.w900),
             ),
           ),
           Expanded(
@@ -3134,18 +3097,17 @@ class _RankRow extends StatelessWidget {
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.labelLarge.copyWith(
-                color: NuvoColors.navy,
+              style: V13.buttonLabel.copyWith(
+                color: V13.navy,
                 fontWeight: active ? FontWeight.w900 : FontWeight.w700,
               ),
             ),
           ),
           Text(
             score,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: NuvoColors.blue,
-              fontWeight: FontWeight.w800,
-            ),
+            style: V13.caption
+                .copyWith(fontSize: 13, fontWeight: FontWeight.w800)
+                .copyWith(color: V13.blue, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -3174,7 +3136,7 @@ void _drawNuvoFlag(
   final poleTop = anchor.dy - (24 * scale);
   final poleBottom = anchor.dy + (16 * scale);
   final polePaint = Paint()
-    ..color = NuvoColors.navy.withValues(alpha: opacity)
+    ..color = V13.navy.withValues(alpha: opacity)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2.2 * scale
     ..strokeCap = StrokeCap.round;
@@ -3202,13 +3164,13 @@ void _drawNuvoFlag(
   canvas.drawPath(
     flag,
     Paint()
-      ..color = NuvoColors.blue.withValues(alpha: opacity)
+      ..color = V13.blue.withValues(alpha: opacity)
       ..style = PaintingStyle.fill,
   );
   canvas.drawPath(
     flag,
     Paint()
-      ..color = NuvoColors.navy.withValues(alpha: opacity)
+      ..color = V13.navy.withValues(alpha: opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6 * scale
       ..strokeJoin = StrokeJoin.round
@@ -3278,18 +3240,18 @@ class _RacePathPainter extends CustomPainter {
     canvas.scale(scale);
 
     final navy = Paint()
-      ..color = NuvoColors.navy
+      ..color = V13.navy
       ..style = PaintingStyle.stroke
       ..strokeWidth = 12
       ..strokeCap = StrokeCap.round;
     final blue = Paint()
-      ..color = NuvoColors.blue
+      ..color = V13.blue
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
     canvas.drawPath(path, navy);
     canvas.drawPath(metric.extractPath(0, metric.length * progress), blue);
-    canvas.drawCircle(start.position, 8, Paint()..color = NuvoColors.blue);
+    canvas.drawCircle(start.position, 8, Paint()..color = V13.blue);
     _drawNuvoFlag(canvas, anchor: end.position, scale: 1, opacity: 1);
 
     // The racer — a dot that physically travels the path as progress moves.
@@ -3301,10 +3263,10 @@ class _RacePathPainter extends CustomPainter {
         canvas.drawCircle(
           at.position,
           11,
-          Paint()..color = NuvoColors.blue.withValues(alpha: .25),
+          Paint()..color = V13.blue.withValues(alpha: .25),
         );
-        canvas.drawCircle(at.position, 6.5, Paint()..color = NuvoColors.navy);
-        canvas.drawCircle(at.position, 3, Paint()..color = NuvoColors.white);
+        canvas.drawCircle(at.position, 6.5, Paint()..color = V13.navy);
+        canvas.drawCircle(at.position, 3, Paint()..color = V13.white);
       }
     }
 
@@ -3327,7 +3289,7 @@ class _AmbientPainter extends CustomPainter {
     if (opacity <= 0) return;
     final t = progress * math.pi * 2;
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..color = NuvoColors.page);
+    canvas.drawRect(rect, Paint()..color = V13.bg);
 
     final markCenter = Offset(size.width / 2, size.height * .43);
     final markField = Rect.fromCenter(
@@ -3340,9 +3302,9 @@ class _AmbientPainter extends CustomPainter {
       Paint()
         ..shader = RadialGradient(
           colors: [
-            NuvoColors.blue.withValues(alpha: .27 * opacity),
-            NuvoColors.blue.withValues(alpha: .13 * opacity),
-            NuvoColors.blue.withValues(alpha: 0),
+            V13.blue.withValues(alpha: .27 * opacity),
+            V13.blue.withValues(alpha: .13 * opacity),
+            V13.blue.withValues(alpha: 0),
           ],
           stops: const [0, .45, 1],
         ).createShader(markField),
@@ -3377,8 +3339,8 @@ class _AmbientPainter extends CustomPainter {
         final radius =
             (.28 + Curves.easeOut.transform(visibility) * 1.55) * quietZone;
         dotPaint.color = Color.lerp(
-          NuvoColors.blueLight.withValues(alpha: .025 * opacity),
-          NuvoColors.blue.withValues(alpha: .30 * opacity),
+          V13.sky.withValues(alpha: .025 * opacity),
+          V13.blue.withValues(alpha: .30 * opacity),
           visibility,
         )!;
         canvas.drawCircle(Offset(x, y), radius, dotPaint);

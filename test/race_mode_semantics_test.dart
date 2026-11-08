@@ -151,6 +151,46 @@ void main() {
       expect(ctx.remainingToGoal, 0);
       expect(ctx.statusLine, 'Goal reached');
     });
+
+    test('test_gapN1_first_to_camera_stops_at_goal', () {
+      // The camera auto-finishes on the same predicate the Done path uses:
+      // session count reaches the REMAINING goal — wired as
+      // hasFinishTarget + sessionTarget = remainingToGoal + sessionValue =
+      // this take's count. 20/50 means 30 more ends the recording.
+      final ctx = VerifierRaceContext.forRace(
+        makeRace(
+          targetValue: 50,
+          participants: [participant(userId: 'me', score: 20)],
+        ),
+        'me',
+      );
+      bool reached(int count) => sessionReachedFinishTarget(
+        hasFinishTarget: ctx.format.usesScoreTarget,
+        sessionTarget: ctx.remainingToGoal,
+        sessionValue: count,
+      );
+      expect(reached(29), isFalse);
+      expect(reached(30), isTrue);
+      // Only that take — never under-fires, never fires for no-goal modes.
+      expect(reached(0), isFalse);
+      expect(
+        sessionReachedFinishTarget(
+          hasFinishTarget: false,
+          sessionTarget: null,
+          sessionValue: 99,
+        ),
+        isFalse,
+      );
+      // An already-banked goal leaves nothing to reach.
+      expect(
+        sessionReachedFinishTarget(
+          hasFinishTarget: true,
+          sessionTarget: 0,
+          sessionValue: 5,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('BEST_ATTEMPT higher-wins', () {
@@ -264,6 +304,43 @@ void main() {
   });
 
   group('TIMED_BATTLE', () {
+    test('test_gap17_timed_lower_direction_label', () {
+      // Direction-aware: a lower-wins timed battle never reads "Most".
+      expect(timedAttemptRuleLine('lower', 30), 'Lowest in 30s wins');
+      expect(timedAttemptRuleLine('higher', 30), 'Most in 30s wins');
+      expect(timedAttemptRuleLine('higher', 60), 'Most in 1 min wins');
+      // A missing/zero duration never prints "0s" — the label falls back
+      // to the plain mode name (keeping the direction when it matters).
+      expect(timedAttemptRuleLine('higher', null), 'Timed battle');
+      expect(timedAttemptRuleLine('higher', 0), 'Timed battle');
+      expect(
+        timedAttemptRuleLine('lower', null),
+        'Timed battle — lowest score wins',
+      );
+      // statusLine routes through the same rule line.
+      final ctx = VerifierRaceContext.forRace(
+        makeRace(
+          format: 'timed_attempt',
+          scoringRule: 'minimum_attempt',
+          scoreDirection: 'lower',
+          attemptDurationSeconds: 30,
+          participants: [participant(userId: 'me', score: 0)],
+        ),
+        'me',
+      );
+      expect(ctx.statusLine, 'Lowest in 30s wins');
+      final noDuration = VerifierRaceContext.forRace(
+        makeRace(
+          format: 'timed_attempt',
+          scoringRule: 'maximum_attempt',
+          participants: [participant(userId: 'me', score: 0)],
+        ),
+        'me',
+      );
+      expect(noDuration.statusLine, 'Timed battle');
+      expect(noDuration.statusLine, isNot(contains('0s')));
+    });
+
     test('attempt duration + score to beat', () {
       final race = makeRace(
         format: 'timed_attempt',
@@ -314,9 +391,7 @@ void main() {
       metric: RaceMetric.reps,
       format: format,
       targetValue: 50,
-      finishLineAt: format == RaceFormat.mostInWindow
-          ? '2026-10-07T00:00:00Z'
-          : null,
+      finishLineAt: format.usesDeadline ? '2026-10-07T00:00:00Z' : null,
       attemptDurationSeconds:
           format == RaceFormat.timedAttempt ? 60 : null,
     );

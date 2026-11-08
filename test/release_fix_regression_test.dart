@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nuvo/core/widgets/otp_input.dart';
 import 'package:nuvo/features/notifications/data/notification_prefs.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/domain/race_display.dart';
@@ -186,66 +184,6 @@ void main() {
     });
   });
 
-  group('otp input', () {
-    Widget buildOtp(List<TextEditingController> controllers) =>
-        MaterialApp(
-          home: Scaffold(body: OtpInput(controllers: controllers)),
-        );
-
-    List<TextEditingController> makeControllers() =>
-        List.generate(6, (_) => TextEditingController());
-
-    testWidgets('OTP_PASTE_6_DIGITS', (tester) async {
-      final controllers = makeControllers();
-      await tester.pumpWidget(buildOtp(controllers));
-      // Pasting the full code into the first box distributes the digits.
-      await tester.enterText(find.byType(TextField).at(0), '483920');
-      await tester.pump();
-      expect(controllers.map((c) => c.text).join(), '483920');
-    });
-
-    testWidgets('OTP_PASTE_6_DIGITS from middle box', (tester) async {
-      final controllers = makeControllers();
-      await tester.pumpWidget(buildOtp(controllers));
-      await tester.enterText(find.byType(TextField).at(2), '483920');
-      await tester.pump();
-      // Digits distribute from the pasted box onward — trailing boxes
-      // truncate safely rather than overflowing.
-      expect(controllers.sublist(2).map((c) => c.text).join(), '4839');
-    });
-
-    testWidgets('OTP_TYPED_6_DIGITS', (tester) async {
-      final controllers = makeControllers();
-      await tester.pumpWidget(buildOtp(controllers));
-      for (var i = 0; i < 6; i++) {
-        await tester.enterText(find.byType(TextField).at(i), '${i + 1}');
-        await tester.pump();
-      }
-      expect(controllers.map((c) => c.text).join(), '123456');
-    });
-
-    testWidgets('OTP_BACKSPACE', (tester) async {
-      final controllers = makeControllers();
-      await tester.pumpWidget(buildOtp(controllers));
-      await tester.enterText(find.byType(TextField).at(0), '4');
-      await tester.enterText(find.byType(TextField).at(1), '8');
-      await tester.enterText(find.byType(TextField).at(1), '');
-      await tester.pump();
-      expect(controllers[1].text, isEmpty);
-      // Focus stepped back to the previous box on clear.
-      final firstField =
-          tester.widget<TextField>(find.byType(TextField).at(0));
-      expect(firstField.focusNode?.hasFocus, isTrue);
-    });
-
-    testWidgets('OTP_NON_DIGIT', (tester) async {
-      final controllers = makeControllers();
-      await tester.pumpWidget(buildOtp(controllers));
-      await tester.enterText(find.byType(TextField).at(0), 'x');
-      await tester.pump();
-      expect(controllers[0].text, isEmpty);
-    });
-  });
 
   group('notification labels', () {
     test('PROOF_DISPUTED_LABEL_HUMAN', () {

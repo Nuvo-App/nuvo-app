@@ -10,6 +10,7 @@ import {
   setFeaturedBadges,
 } from '../domain/progression';
 import { readProfileRecord } from '../domain/profileRecord';
+import { dayStreaksFor, proofsInWindow, tzShift } from '../domain/dayStreak';
 
 /** Small non-cryptographic string hash (FNV-1a, base36) for ETag parts. */
 function fnv(str: string): string {
@@ -27,12 +28,29 @@ progressionRouter.use('*', requireAuth);
 
 // GET /progression — self-healing read: the projection reconciles from
 // canonical race_events before answering, so XP can never go stale.
+// `record` also carries the v13 strip: friends count, day streaks, and proofs
+// this week (viewer-local, via ?tz= like /profile/activity).
 progressionRouter.get('/', async (c) => {
   const userId = c.get('userId');
-  const [payload, record] = await Promise.all([
+  const { tz } = tzShift(c.req.query('tz'));
+  const [payload, base, streaks, friendsRow, proofsThisWeek] = await Promise.all([
     readProgression(c.env.DB, userId),
     readProfileRecord(c.env.DB, userId),
+    dayStreaksFor(c.env.DB, userId, tz),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM crew_connections WHERE user_id = ? AND status = 'active'",
+    )
+      .bind(userId)
+      .first<{ n: number }>(),
+    proofsInWindow(c.env.DB, userId, tz, 7),
   ]);
+  const record = {
+    ...base,
+    streakDays: streaks.streakDays,
+    bestStreakDays: streaks.bestStreakDays,
+    friends: friendsRow?.n ?? 0,
+    proofsThisWeek,
+  };
   // Validator derived from the reconciled payload itself, so every input to it
   // (xp, level, stats-driven achievement progress, unlocks, featured badges,
   // newlyEarned) is covered. 5-minute bucket bounds unlock_definitions edits.

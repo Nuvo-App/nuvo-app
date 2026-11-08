@@ -1,4 +1,5 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:nuvo/core/utils/json_safe.dart';
 import '../ai/motion_v2/motion_v2_models.dart';
 import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
@@ -54,6 +55,7 @@ class Race {
     this.finalStandings = const [],
     this.submissionResult,
     this.scoreDirection = 'higher',
+    this.rulesVersion = 0,
     this.serverTime,
     this.viewerContext,
   });
@@ -114,6 +116,11 @@ class Race {
   /// 'higher' or 'lower' — whether a bigger score wins the leaderboard.
   final String scoreDirection;
 
+  /// Rules revision the race was created under (Worker `rules_version`):
+  /// 0 = legacy contract, 1 = strict rules (camera-only proof on camera
+  /// races, custom goals race First to / Most total only).
+  final int rulesVersion;
+
   /// Authoritative server clock from the response — the only clock that
   /// decides starts, deadlines, and eligibility. Device time is display only.
   final String? serverTime;
@@ -137,8 +144,7 @@ class Race {
       aiActivityType: jStr(json['aiActivityType']),
       targetUnit: jStr(json['targetUnit']),
       proofMode: jStr(json['proofMode']),
-      activityId:
-          jStr(json['activityId']) ?? jStr(json['aiActivityType']),
+      activityId: jStr(json['activityId']) ?? jStr(json['aiActivityType']),
       metric:
           jStr(json['metric']) ??
           jStr(json['targetUnit']) ??
@@ -147,8 +153,7 @@ class Race {
       scoringRule: jStr(json['scoringRule']) ?? 'cumulative_sum',
       attemptDurationSeconds: jInt(json['attemptDurationSeconds']),
       attemptLimit: jInt(json['attemptLimit']),
-      verificationMethod:
-          jStr(json['verificationMethod']) ?? 'camera_pose',
+      verificationMethod: jStr(json['verificationMethod']) ?? 'camera_pose',
       verifierType: verifierType,
       verifierVersion: jInt(json['verifierVersion']),
       verifierSpec: json['verifierSpec'] is Map
@@ -175,18 +180,22 @@ class Race {
       inviteCode: jStr(json['inviteCode']),
       createdAt: jStr(json['createdAt']) ?? '',
       updatedAt: jStr(json['updatedAt']) ?? '',
-      participants:
-          jMapList(json['participants']).map(RaceParticipant.fromJson).toList(),
-      recentProofs:
-          jMapList(json['recentProofs']).map(RaceProof.fromJson).toList(),
-      finalStandings:
-          jMapList(json['finalStandings']).map(RaceFinalStanding.fromJson).toList(),
+      participants: jMapList(
+        json['participants'],
+      ).map(RaceParticipant.fromJson).toList(),
+      recentProofs: jMapList(
+        json['recentProofs'],
+      ).map(RaceProof.fromJson).toList(),
+      finalStandings: jMapList(
+        json['finalStandings'],
+      ).map(RaceFinalStanding.fromJson).toList(),
       submissionResult: json['submissionResult'] is Map<String, dynamic>
           ? RaceSubmissionResult.fromJson(
               json['submissionResult'] as Map<String, dynamic>,
             )
           : null,
       scoreDirection: jStr(json['scoreDirection']) ?? 'higher',
+      rulesVersion: jInt(json['rulesVersion']) ?? 0,
       serverTime: jStr(json['serverTime']),
       viewerContext: json['viewerContext'] is Map<String, dynamic>
           ? RaceViewerContext.fromJson(
@@ -321,6 +330,7 @@ class PublicUser {
     this.profilePhotoUrl,
     this.lastActiveAt,
     this.level,
+    this.racesTogether,
   });
 
   final String id;
@@ -330,6 +340,11 @@ class PublicUser {
   final String initials;
   final String? addedAt;
   final String? profilePhotoUrl;
+
+  /// Shared-race count with the viewer (W3 `GET /crew` additive field) —
+  /// "Raced you N times" on the composer invite step. Null when the field
+  /// is absent (older Worker) — the row hides, never fakes.
+  final int? racesTogether;
 
   /// Server-owned Nuvo Level for identity surfaces — null when the viewer
   /// cannot see this member's full profile.
@@ -347,10 +362,9 @@ class PublicUser {
     initials: jStr(json['initials']) ?? 'N',
     addedAt: jStr(json['addedAt']),
     profilePhotoUrl: jStr(json['profilePhotoUrl']),
-    lastActiveAt: DateTime.tryParse(
-      jStr(json['lastActiveAt']) ?? '',
-    )?.toUtc(),
+    lastActiveAt: DateTime.tryParse(jStr(json['lastActiveAt']) ?? '')?.toUtc(),
     level: jInt(json['level']),
+    racesTogether: jInt(json['racesTogether']),
   );
 
   String get handleLine {
@@ -504,8 +518,7 @@ class RaceViewerContext {
         gapToLeader: jInt(json['gapToLeader']),
         gapToNextRank: jInt(json['gapToNextRank']),
         goalRemaining: jInt(json['goalRemaining']),
-        timeRemainingSeconds:
-            jInt(json['timeRemainingSeconds']),
+        timeRemainingSeconds: jInt(json['timeRemainingSeconds']),
         startsInSeconds: jInt(json['startsInSeconds']),
         isLeading: jBool(json['isLeading']) ?? false,
         isTied: jBool(json['isTied']) ?? false,
@@ -587,8 +600,9 @@ class RaceLiveState {
     unchanged: jBool(json['unchanged']) ?? false,
     serverTime: jStr(json['serverTime']),
     winnerUserId: jStr(json['winnerUserId']),
-    participants:
-        jMapList(json['participants']).map(RaceLiveParticipant.fromJson).toList(),
+    participants: jMapList(
+      json['participants'],
+    ).map(RaceLiveParticipant.fromJson).toList(),
     viewer: json['viewer'] is Map<String, dynamic>
         ? RaceViewerContext.fromJson(json['viewer'] as Map<String, dynamic>)
         : null,
@@ -789,13 +803,50 @@ class ProofVetoResult {
       );
 }
 
+/// One row of `GET /leaderboard?scope=friends|global` (W3) — the Compete
+/// weekly leaderboard. Points are the person's verified proof value over the
+/// last 7 days; rank follows competition ranking (shared rank on a tie).
+class LeaderboardEntry {
+  const LeaderboardEntry({
+    required this.userId,
+    required this.displayName,
+    this.profilePhotoUrl,
+    required this.points,
+    required this.rank,
+    required this.isMe,
+  });
+
+  final String userId;
+  final String displayName;
+  final String? profilePhotoUrl;
+  final int points;
+  final int rank;
+  final bool isMe;
+
+  factory LeaderboardEntry.fromJson(Map<String, dynamic> json) =>
+      LeaderboardEntry(
+        userId: jStr(json['userId']) ?? '',
+        displayName: jStr(json['displayName']) ?? 'Nuvo member',
+        profilePhotoUrl: jStr(json['profilePhotoUrl']),
+        points: jInt(json['points']) ?? 0,
+        rank: jInt(json['rank']) ?? 0,
+        isMe: jBool(json['isMe']) ?? false,
+      );
+}
+
 // ── Race creation prefill ─────────────────────────────────────────────────────
 
 /// Navigation extra for `/races/new`. Known entries (quick starts, "Race
 /// {name}", run-it-back) carry a structured [draft] — the title interpreter
 /// is only for USER-WRITTEN [idea] text, read once at the name step.
 class RaceCreatePrefill {
-  const RaceCreatePrefill({this.idea, this.draft, this.withUser, this.crewId, this.crewName});
+  const RaceCreatePrefill({
+    this.idea,
+    this.draft,
+    this.withUser,
+    this.crewId,
+    this.crewName,
+  });
 
   /// User-written idea text — interpreted once into a draft by the composer.
   final String? idea;
@@ -845,8 +896,26 @@ class RaceCreatePrefill {
 
 /// Builds a structured creation draft from a race's canonical fields —
 /// run-it-back/clone paths must carry fields, never re-interpret the title.
-RaceCreatePrefill prefillFromRace(Race race, {PublicUser? withUser}) {
-  final activity = motionActivityForBackendValue(race.effectiveAiActivityType);
+/// Remote and custom races keep their own activity ID and format: a race the
+/// compiled catalog doesn't know resolves through the live [catalog] first,
+/// then falls back to a verbatim remote definition — never to the first
+/// bundled preset.
+RaceCreatePrefill prefillFromRace(
+  Race race, {
+  PublicUser? withUser,
+  Iterable<MotionActivityDefinition>? catalog,
+}) {
+  if (race.isCustomVerifierRace && race.customActivityName != null) {
+    return RaceCreatePrefill(
+      draft: _customDraftFromRace(race),
+      withUser: withUser,
+    );
+  }
+  final activityId = race.effectiveAiActivityType;
+  final activity =
+      motionActivityForBackendValue(activityId) ??
+      _catalogActivityForId(catalog, activityId) ??
+      _remoteActivityFromRace(race, activityId);
   if (activity == null) {
     return RaceCreatePrefill(
       draft: RaceDraft(
@@ -869,7 +938,104 @@ RaceCreatePrefill prefillFromRace(Race race, {PublicUser? withUser}) {
       format: stored != null && activity.supportedFormats.contains(stored)
           ? stored
           : null,
+      finishLineAt: race.finishLineAt,
+      attemptDurationSeconds: race.attemptDurationSeconds,
+      attemptLimit: race.attemptLimit,
+      scoreDirection: race.scoreDirection,
     ),
     withUser: withUser,
+  );
+}
+
+/// The motion the control plane published under [activityId], when the merged
+/// catalog (bundled + remote) knows it — the server-published formats and
+/// targets ride along verbatim.
+MotionActivityDefinition? _catalogActivityForId(
+  Iterable<MotionActivityDefinition>? catalog,
+  String activityId,
+) {
+  if (catalog == null || activityId.isEmpty) return null;
+  for (final definition in catalog) {
+    if (definition.activityId == activityId) return definition;
+  }
+  return null;
+}
+
+/// A display-only remote definition for an activity ID no catalog resolves.
+/// It carries the race's own identity — backendId, metric, timing — so a
+/// rematch recreates the same motion instead of silently becoming Pushups.
+/// Every format is offered: the stored format must survive the prefill, and
+/// the server is the authority on what the motion actually supports.
+MotionActivityDefinition? _remoteActivityFromRace(Race race, String activityId) {
+  if (activityId.isEmpty) return null;
+  final isDuration = race.metric == 'seconds';
+  return MotionActivityDefinition(
+    type: MotionActivityType.remote,
+    backendId: activityId,
+    title: _humanizeActivityId(activityId),
+    metric: isDuration ? RaceMetric.seconds : RaceMetric.reps,
+    suggestedTargets: [race.targetValue ?? 1],
+    supportedFormats: RaceFormat.values,
+    aliases: const [],
+    proofLabel: _humanizeActivityId(activityId),
+    cameraInstruction: 'Keep your body in frame.',
+    instructions: const ['Keep the required body regions visible.'],
+    icon: Icons.fitness_center_rounded,
+    framingLabel: 'Follow the release framing guide',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.fullBody,
+    measurementType: isDuration
+        ? MotionMeasurementType.duration
+        : MotionMeasurementType.repetitions,
+  );
+}
+
+/// 'reach_taps' → 'Reach Taps' — a remote motion with no published name still
+/// presents itself readably instead of borrowing a preset's title.
+String _humanizeActivityId(String activityId) => activityId
+    .split(RegExp(r'[_\s]+'))
+    .where((w) => w.isNotEmpty)
+    .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+    .join(' ');
+
+/// A taught custom movement races again as itself — the verifier spec is the
+/// movement, so the draft carries the stored spec, name, format and timing
+/// verbatim. The composer's custom path re-creates the same race.
+///
+/// The draft's [RaceDraft.activity] is display-only for a custom race (the
+/// create payload is built from [RaceDraft.customActivityName] + spec), but
+/// it still feeds the composer's goal suggestion chips — so it is a synthetic
+/// remote definition named after the movement, never a borrowed preset.
+RaceDraft _customDraftFromRace(Race race) {
+  final stored = RaceFormat.fromBackendValue(race.format);
+  final name = race.customActivityName!;
+  return RaceDraft(
+    title: race.displayTitle,
+    hasCustomName: true,
+    activity: MotionActivityDefinition(
+      type: MotionActivityType.remote,
+      title: name,
+      metric: RaceMetric.reps,
+      suggestedTargets: [race.targetValue ?? 1],
+      supportedFormats: RaceFormat.values,
+      aliases: const [],
+      proofLabel: name,
+      cameraInstruction: 'Keep your body in frame.',
+      instructions: const ['Keep the required body regions visible.'],
+      icon: Icons.auto_awesome_rounded,
+      framingLabel: 'Follow the release framing guide',
+      preferredCameraView: PreferredCameraView.frontPreferred,
+      category: MovementCategory.fullBody,
+    ),
+    metric: RaceMetric.reps,
+    format: stored ?? RaceFormat.firstToGoal,
+    targetValue: race.targetValue ?? 1,
+    customActivityName: race.customActivityName,
+    verifierSpec: race.customVerifierSpec,
+    motionV2Spec: race.customMotionV2Spec,
+    finishLineAt: race.finishLineAt,
+    attemptDurationSeconds: race.attemptDurationSeconds,
+    attemptLimit: race.attemptLimit,
+    scoreDirection: race.scoreDirection,
   );
 }

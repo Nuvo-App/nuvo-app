@@ -28,6 +28,10 @@ export interface ViewerContextInput {
   attemptsUsed: number;
   openAttemptId: string | null;
   viewerUserId: string | undefined;
+  /** Rank the viewer held before their most recent verified proof
+   *  (move_logs.previous_rank of their latest move) — the trend baseline
+   *  for list-row rank arrows. */
+  viewerPreviousRank?: number | null;
   now?: Date;
 }
 
@@ -37,6 +41,8 @@ export interface RaceViewerContext {
   status: string;
   score: number;
   rank: number | null;
+  /** Rank before the viewer's most recent proof; null when they have none. */
+  previousRank: number | null;
   participantCount: number;
   leaderUserId: string | null;
   leaderScore: number | null;
@@ -120,6 +126,7 @@ export function computeViewerContext(input: ViewerContextInput): RaceViewerConte
     status,
     score: myScore,
     rank: myRank,
+    previousRank: me ? (input.viewerPreviousRank ?? null) : null,
     participantCount: standings.length,
     leaderUserId: leader?.userId ?? null,
     leaderScore,

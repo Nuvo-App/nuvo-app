@@ -1,19 +1,10 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/theme/nuvo_entrance.dart';
-import '../../../core/widgets/nuvo_back_header.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
-import '../../../core/widgets/nuvo_page.dart';
-import '../../../core/widgets/nuvo_toggle.dart';
+import '../../../core/v13/v13.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../application/push_service.dart';
 import '../data/notification_prefs.dart';
 
@@ -97,9 +88,7 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
               .map((p) => p.category == pref.category ? pref : p)
               .toList();
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't save that. Try again.")),
-        );
+        showV13Toast(context, "Couldn't save that. Try again.");
       }
     } finally {
       if (mounted) setState(() => _saving.remove(pref.category));
@@ -108,35 +97,60 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return NuvoPage(
-      topBar: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-          child: NuvoBackHeader(
-            title: 'Notifications',
-            onBack: () =>
-                context.canPop() ? context.pop() : context.go('/profile'),
-          ),
+    return Scaffold(
+      backgroundColor: V13.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const V13BackBar(title: 'Notifications', fallback: '/profile'),
+            Expanded(child: _body()),
+          ],
         ),
       ),
-      child: _body(),
     );
   }
 
   Widget _body() {
     if (_error != null) {
       return Center(
-        child: NuvoErrorState(
-          message: "Couldn't load your settings.",
-          onRetry: _load,
+        child: Padding(
+          padding: const EdgeInsets.all(V13.gapXxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 44, color: V13.muted),
+              const SizedBox(height: V13.gapLg),
+              Text(
+                "Couldn't load your settings.",
+                style: V13.sectionHead,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: V13.gapSm),
+              Text(
+                'Check your connection and try again.',
+                style: V13.caption,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: V13.gapXl),
+              V13Button.secondary(label: 'Retry', onPressed: _load),
+            ],
+          ),
         ),
       );
     }
     final prefs = _prefs;
-    if (prefs == null) return const Center(child: NuvoLoadingIndicator());
+    if (prefs == null) {
+      return ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(V13.pagePad, 6, V13.pagePad, 32),
+        children: const [
+          V13Skeleton(height: 120, radius: V13.radiusTile),
+          SizedBox(height: V13.gapXl),
+          V13Skeleton(height: 160, radius: V13.radiusTile),
+        ],
+      );
+    }
 
-    final c = context.themeColors;
     final groups = <String, List<NotificationPref>>{};
     for (final p in prefs) {
       groups.putIfAbsent(p.display.group, () => []).add(p);
@@ -145,64 +159,63 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
     return NuvoFadeScroll(
       child: ListView(
         padding: EdgeInsets.fromLTRB(
-          20,
+          V13.pagePad,
           6,
-          20,
+          V13.pagePad,
           32 + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
-          Text(
-            'Control in-app and push alerts.',
-            style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-          ),
+          Text('Control in-app and push alerts.', style: V13.caption),
           if (_osStatus == AuthorizationStatus.denied) ...[
-            const SizedBox(height: NuvoSpacing.sm),
+            const SizedBox(height: V13.gapSm),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: Border.all(color: c.border),
+                color: V13.card,
+                borderRadius: BorderRadius.circular(V13.radiusTile),
+                border: Border.all(color: V13.navy, width: V13.outline),
+                boxShadow: V13.shadow3,
               ),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.notifications_off_rounded,
                     size: 18,
-                    color: c.inkMuted,
+                    color: V13.muted,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Notifications are off on this device.',
-                      style: AppTextStyles.bodySmall.copyWith(color: c.ink),
+                      style: V13.bodyStrong,
                     ),
                   ),
-                  TextButton(
+                  V13Button.secondary(
+                    label: 'Open Settings',
+                    size: V13ButtonSize.small,
                     onPressed: () => launchUrl(Uri.parse('app-settings:')),
-                    child: const Text('Open Settings'),
                   ),
                 ],
               ),
             ),
           ],
-          const SizedBox(height: NuvoSpacing.xl),
+          const SizedBox(height: V13.gapXl),
           for (final entry in groups.entries.toList().asMap().entries) ...[
             _SectionHeader(label: entry.value.key.toUpperCase()),
-            const SizedBox(height: NuvoSpacing.sm),
+            const SizedBox(height: V13.gapSm),
             Container(
               decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: Border.all(color: c.border),
+                color: V13.card,
+                borderRadius: BorderRadius.circular(V13.radiusTile),
+                border: Border.all(color: V13.navy, width: V13.outline),
+                boxShadow: V13.shadow3,
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(NuvoRadii.md - 1),
+                borderRadius: BorderRadius.circular(V13.radiusTile - 1),
                 child: Column(
                   children: [
                     for (var i = 0; i < entry.value.value.length; i++) ...[
-                      if (i > 0)
-                        Divider(height: 1, thickness: 1, color: c.border),
+                      if (i > 0) const V13Divider(thickness: 1),
                       _PrefRow(
                         pref: entry.value.value[i],
                         saving: _saving.contains(entry.value.value[i].category),
@@ -213,8 +226,8 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
                   ],
                 ),
               ),
-            ).nuvoEnter(delay: Duration(milliseconds: 40 * entry.key)),
-            const SizedBox(height: NuvoSpacing.xl),
+            ),
+            const SizedBox(height: V13.gapXl),
           ],
         ],
       ),
@@ -231,12 +244,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final headerStyle = AppTextStyles.labelSmall.copyWith(
-      color: c.inkMuted,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 0.8,
-    );
+    final headerStyle = V13.label;
     return Row(
       children: [
         Expanded(child: Text(label, style: headerStyle)),
@@ -259,7 +267,7 @@ class _SectionHeader extends StatelessWidget {
 
 /// Width of each toggle column — the section header labels and every row
 /// share it so App and Push line up as real columns.
-const _colW = 52.0;
+const _colW = 64.0;
 
 class _PrefRow extends StatelessWidget {
   const _PrefRow({
@@ -276,7 +284,6 @@ class _PrefRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
     return Container(
       constraints: const BoxConstraints(minHeight: 52),
       padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
@@ -287,7 +294,7 @@ class _PrefRow extends StatelessWidget {
               pref.display.label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
+              style: V13.bodyStrong,
             ),
           ),
           _ToggleCell(
@@ -326,7 +333,13 @@ class _ToggleCell extends StatelessWidget {
         // phrase for screen readers ("Race starting, app notifications").
         child: Semantics(
           label: semanticLabel,
-          child: NuvoToggle(value: value, onChanged: onChanged),
+          child: IgnorePointer(
+            ignoring: onChanged == null,
+            child: Opacity(
+              opacity: onChanged == null ? .5 : 1,
+              child: V13Toggle(value: value, onChanged: onChanged ?? (_) {}),
+            ),
+          ),
         ),
       ),
     );

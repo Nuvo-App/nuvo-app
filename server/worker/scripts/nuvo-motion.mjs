@@ -22,6 +22,9 @@
 //   signals [--activity-id A] [--release-id R]
 //   activity-create <file.json>                  create a NEW motion (starts hidden)
 //   activity-update <activityId> <file.json>     edit name/targets/formats/instructions/aliases/camera/order
+//   push-status [--email E | --user-id U]       are FCM credentials usable? one user's registered devices (never tokens)
+//   push-test (--email E | --user-id U) [--send] [--title T] [--body B] [--dest-type race --dest-id ID]
+//                                               ONE notification to ONE user. Dry run unless --send.
 //   sessions-failed [--limit N]                 recent failed/incomplete recorded sessions
 //   session-get <sessionId> [--out file.json]   download one recorded pose log for tool/motion-replay.sh
 //   session-latest <activityId> [--out file.json]  newest recorded session for a motion
@@ -231,6 +234,26 @@ switch (command) {
     const file = args.filter((a) => !a.startsWith('--'))[1];
     if (!id || !file) { console.error('usage: activity-update <activityId> <file.json>'); process.exit(2); }
     print(await call('PUT', `/motion/activities/${encodeURIComponent(id)}`, JSON.parse(fs.readFileSync(file, 'utf8'))));
+    break;
+  }
+  case 'push-status': {
+    const qs = new URLSearchParams();
+    if (flag('email', null)) qs.set('email', flag('email'));
+    if (flag('user-id', null)) qs.set('userId', flag('user-id'));
+    print(await call('GET', `/push/status?${qs}`));
+    break;
+  }
+  case 'push-test': {
+    const target = {};
+    if (flag('email', null)) target.email = flag('email');
+    if (flag('user-id', null)) target.userId = flag('user-id');
+    if (!target.email && !target.userId) { console.error('usage: push-test (--email E | --user-id U) [--send] [--title T] [--body B] [--dest-type race --dest-id ID]'); process.exit(2); }
+    const dest = flag('dest-type', null) ? { type: flag('dest-type'), id: flag('dest-id', undefined) } : undefined;
+    const msg = { ...target, title: flag('title', undefined), body: flag('body', undefined), dest };
+    const dry = await call('POST', '/push/test', { ...msg, dryRun: true });
+    if (!args.includes('--send') || !dry.json?.ok) { print(dry); break; }
+    // Real send: confirm against the id the dry run resolved, so a typo can never reach someone else.
+    print(await call('POST', '/push/test', { ...msg, dryRun: false, confirmUserId: dry.json.recipient }));
     break;
   }
   case 'sessions-failed': {

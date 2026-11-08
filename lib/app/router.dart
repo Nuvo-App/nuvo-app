@@ -6,6 +6,19 @@
 // pageBuilder — see /race/:id/edit); every "open a race" tap lands on /race/:id;
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
+import '../features/notifications/presentation/v13/activity_v13_screen.dart';
+import '../features/social/presentation/v13/crew_tab_v13_screen.dart';
+import '../features/squads/presentation/v13/crew_page_v13_screen.dart';
+import '../features/profile/presentation/v13/badges_v13_screen.dart';
+import '../features/profile/presentation/v13/edit_profile_v13_screen.dart';
+import '../features/profile/presentation/v13/my_nuvo_code_v13_screen.dart';
+import '../features/profile/presentation/v13/profile_v13_screen.dart';
+import '../features/profile/presentation/v13/public_profile_v13_screen.dart';
+import '../features/profile/presentation/v13/settings_v13_screen.dart';
+import '../features/arena/presentation/v13/arena_v13_screen.dart';
+import '../features/compete/presentation/v13/compete_v13_screen.dart';
+import '../features/races/presentation/v13/composer/race_composer_v13_screen.dart';
+import '../features/races/presentation/v13/race_detail_v13_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,24 +27,16 @@ import 'package:go_router/go_router.dart';
 import '../core/widgets/bottom_nav.dart';
 import '../core/widgets/nuvo_motion.dart';
 
-import '../features/arena/presentation/arena_screen.dart';
 import '../core/widgets/keep_screen_awake.dart';
 import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
-import '../features/compete/presentation/compete_screen_fixed.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
 import '../features/onboarding/presentation/notification_permission_screen.dart';
 import '../features/onboarding/presentation/nuvo_onboarding_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
-import '../features/pass/presentation/pass_screen.dart';
-import '../features/profile/presentation/badges_screen.dart';
-import '../features/profile/presentation/edit_profile_screen.dart';
-import '../features/profile/presentation/profile_screen.dart';
-import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/data/race_models.dart' show RaceCreatePrefill;
-import '../features/races/presentation/race_composer_screen.dart';
 import '../features/races/presentation/ai_motion_proof_screen.dart';
 import '../features/races/presentation/invite_crew_screen.dart';
 import '../features/races/presentation/join_race_screen.dart';
@@ -41,18 +46,13 @@ import '../features/races/presentation/board_moved_screen.dart';
 import '../core/config/nuvo_flags.dart';
 import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/movement_preview/rive_calibration_screen.dart';
-import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/crew/data/crew_api.dart' show PublicProfileCard;
 import '../features/crew/presentation/public_badges_screen.dart';
-import '../features/crew/presentation/public_profile_screen.dart';
 import '../features/notifications/presentation/notification_prefs_screen.dart';
-import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/social/presentation/add_crew_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
 import '../features/squads/presentation/crew_groups_screen.dart';
-import '../features/social/presentation/my_nuvo_screen.dart';
-import '../features/social/presentation/qr_scan_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
 // Native interactive page transition used on all pushed routes. CupertinoPage
@@ -63,7 +63,10 @@ Page<void> _authPage(GoRouterState state, Widget child) =>
 // Camera/verification pages: the person is mid-move with the phone propped up,
 // so the screen is kept awake for as long as the page is mounted.
 Page<void> _cameraPage(GoRouterState state, Widget child) =>
-    CupertinoPage<void>(key: state.pageKey, child: KeepScreenAwake(child: child));
+    CupertinoPage<void>(
+      key: state.pageKey,
+      child: KeepScreenAwake(child: child),
+    );
 
 // Race detail: horizontal slide with slight scale for depth.
 Page<void> _detailPage(GoRouterState state, Widget child) =>
@@ -87,11 +90,12 @@ String moveRedirect(Uri uri) {
 /// The screen behind each shell destination — keyed by the canonical
 /// destination path so route → screen is declared exactly once.
 Widget _tabScreenFor(String path) {
-  final screen = switch (path) {
-    '/compete' => const CompeteScreen(),
-    '/pass' => const PassScreen(),
-    '/profile' => const ProfileScreen(),
-    _ => const ArenaScreen(),
+  final Widget screen = switch (path) {
+    '/compete' => const CompeteV13Screen(),
+    // The Crew tab keeps the /pass route (auth_gate protects /pass).
+    '/pass' => const CrewTabV13Screen(),
+    '/profile' => const ProfileV13Screen(),
+    _ => const ArenaScreenV13(),
   };
   // Debug-only trace: pairs with the [NuvoNav] tap print in MainShell so a
   // wrong-page report shows index → path → screen in the console.
@@ -138,15 +142,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           InviteScreen(token: state.pathParameters['token']!),
         ),
       ),
-      GoRoute(
-        path: '/scan',
-        pageBuilder: (_, state) => _cameraPage(state, const QrScanScreen()),
-      ),
+      GoRoute(path: '/scan', redirect: (_, _) => '/my-nuvo?tab=scan'),
       GoRoute(
         path: '/u/:id',
         pageBuilder: (_, state) => _detailPage(
           state,
-          PublicProfileScreen(userId: state.pathParameters['id']!),
+          PublicProfileV13Screen(userId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -187,21 +188,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/crews/:id',
         pageBuilder: (_, state) => _authPage(
           state,
-          CrewGroupDetailScreen(groupId: state.pathParameters['id']!),
+          CrewPageV13Screen(crewId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: '/my-nuvo',
-        pageBuilder: (_, state) => _authPage(state, const MyNuvoScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          MyNuvoCodeV13Screen(
+            initialTab: state.uri.queryParameters['tab'] == 'scan' ? 1 : 0,
+          ),
+        ),
       ),
       GoRoute(
         path: '/notifications',
-        pageBuilder: (_, state) =>
-            _detailPage(state, const NotificationsScreen()),
+        pageBuilder: (_, state) => _detailPage(
+          state,
+          const ActivityV13Screen(),
+        ),
       ),
       GoRoute(
         path: '/settings',
-        pageBuilder: (_, state) => _authPage(state, const SettingsScreen()),
+        pageBuilder: (_, state) => _authPage(state, const SettingsV13Screen()),
       ),
       GoRoute(
         path: '/settings/notifications',
@@ -280,7 +288,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, _, navigationShell) =>
             MainShell(child: navigationShell),
         branches: [
-          for (final d in nuvoDestinations)
+          for (final d in activeDestinations)
             StatefulShellBranch(
               routes: [
                 GoRoute(
@@ -292,6 +300,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
         ],
       ),
+
+      // v13: the Crew tab lives on /pass (auth_gate protects /pass); /crew
+      // is an alias for links that use the tab's label.
+      GoRoute(path: '/crew', redirect: (_, _) => '/pass'),
 
       // ── Retired Verify tab ────────────────────────────────────────────────
       // There is no Verify page any more; proof starts from Race Detail or
@@ -305,7 +317,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/races/new',
         pageBuilder: (_, state) => _authPage(
           state,
-          RaceComposerScreen(
+          RaceComposerV13Screen(
             prefill: state.extra is RaceCreatePrefill
                 ? state.extra! as RaceCreatePrefill
                 : null,
@@ -343,7 +355,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/race/:id',
         pageBuilder: (_, state) => _detailPage(
           state,
-          RaceDetailScreen(id: state.pathParameters['id']!),
+          RaceDetailV13Screen(raceId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -368,9 +380,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/race/:id/proof',
-        pageBuilder: (_, state) => _cameraPage(
+        // v13: proof entry is the Submit proof sheet on Race detail.
+        pageBuilder: (_, state) => _detailPage(
           state,
-          SubmitProofScreen(raceId: state.pathParameters['id']!),
+          RaceDetailV13Screen(
+            raceId: state.pathParameters['id']!,
+            openProofOnLoad: true,
+          ),
         ),
       ),
       GoRoute(
@@ -412,11 +428,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile/edit',
-        pageBuilder: (_, state) => _authPage(state, const EditProfileScreen()),
+        pageBuilder: (_, state) =>
+            _authPage(state, const EditProfileV13Screen()),
       ),
       GoRoute(
         path: '/profile/badges',
-        pageBuilder: (_, state) => _authPage(state, const BadgesScreen()),
+        pageBuilder: (_, state) => _authPage(state, const BadgesV13Screen()),
       ),
       if (kDebugMode)
         GoRoute(

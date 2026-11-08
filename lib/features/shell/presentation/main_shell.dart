@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../arena/presentation/arena_controller.dart';
@@ -28,7 +28,7 @@ import '../../profile/presentation/widgets/level_up_dialog.dart';
 /// inset — and each tab's body extends to the screen's bottom edge, visible
 /// in the dock's horizontal margins while scrolling. Because the dock
 /// overlays content, scrollable screens must end their scroll views with
-/// `NuvoBottomNav.bottomPadding(context)` so the last row clears it.
+/// `V13TabBar.bottomPadding(context)` so the last row clears it.
 /// Scaffold already folds the nav's rendered height into the body's
 /// `MediaQuery.padding.bottom` — `bottomPadding` only adds the shared
 /// section gap on top of that; never re-add the dock or the safe inset
@@ -48,16 +48,23 @@ class MainShell extends ConsumerStatefulWidget {
   // Nav index → shell route path, derived from the canonical destination
   // table in bottom_nav.dart — the same order the router uses to declare
   // its StatefulShellRoute branches, so nav index == branch index always.
-  static final _paths = [
-    for (final d in nuvoDestinations) d.path,
-  ];
+  static final _paths = [for (final d in activeDestinations) d.path];
 
   @override
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends ConsumerState<MainShell>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  /// Tab-switch entrance: the incoming tab fades up a few points. Driven by
+  /// one controller (no key swap) so each branch keeps its state.
+  late final AnimationController _tabIn = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1,
+  );
+  int? _lastTabIndex;
+
   /// Reentrancy guard for the level-up moment — the server flag makes it
   /// once-per-level across devices; this makes it once-per-dialog in-flight.
   bool _levelUpShowing = false;
@@ -131,6 +138,7 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabIn.dispose();
     super.dispose();
   }
 
@@ -148,8 +156,8 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   int _indexFor(String location) {
-    for (var i = 0; i < nuvoDestinations.length; i++) {
-      if (location.startsWith(nuvoDestinations[i].path)) return i;
+    for (var i = 0; i < activeDestinations.length; i++) {
+      if (location.startsWith(activeDestinations[i].path)) return i;
     }
     return 0;
   }
@@ -159,7 +167,7 @@ class _MainShellState extends ConsumerState<MainShell>
     // shows the wrong page again, this line plus the [NuvoNav] route print
     // in router.dart pin down exactly where the mapping diverges.
     assert(() {
-      final d = nuvoDestinations[index];
+      final d = activeDestinations[index];
       debugPrint('[NuvoNav] tap index=$index → ${d.label} (${d.path})');
       return true;
     }());
@@ -235,57 +243,74 @@ class _MainShellState extends ConsumerState<MainShell>
         ? (widget.child as StatefulNavigationShell).currentIndex
         : _indexFor(GoRouterState.of(context).uri.path);
 
-    final navigation = NuvoBottomNav(
+    if (_lastTabIndex != null &&
+        _lastTabIndex != currentIndex &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      _tabIn.forward(from: 0.35);
+    }
+    _lastTabIndex = currentIndex;
+
+    final Widget navigation = V13TabBar(
       key: TrackSideLayoutKeys.navigation,
-      rowKey: TrackSideLayoutKeys.navigationRow,
+      items: [
+        for (final d in activeDestinations)
+          V13TabItem(
+            label: d.label,
+            icon: d.icon,
+            selectedIcon: d.selectedIcon,
+          ),
+      ],
       currentIndex: currentIndex,
       onTap: _onTapTab,
     );
 
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       extendBody: true,
       body: SafeArea(
         bottom: false,
+        // Content scrolls behind the floating dock; every tab pads its last
+        // row by V13TabBar.bottomPadding so it can scroll fully clear.
         child: Stack(
           fit: StackFit.expand,
           children: [
-            widget.child,
-            const Positioned(
+            FadeTransition(
+              opacity: CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+              child: SlideTransition(
+                position: Tween(
+                  begin: const Offset(0, 0.012),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+                ),
+                child: widget.child,
+              ),
+            ),
+            // Soft fade behind the floating dock: content dissolves into the
+            // page colour instead of hard-cutting at the dock's edge.
+            Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: _DockOcclusion(),
+              height: MediaQuery.paddingOf(context).bottom + 32,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey('nuvo-dock-fade'),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [V13.bg.withValues(alpha: 0), V13.bg],
+                      stops: const [0, 0.55],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
       bottomNavigationBar: navigation,
-    );
-  }
-}
-
-/// Foreground occlusion for the floating dock — one shared contract for
-/// every tab. The nav widget only paints the rounded dock itself; its
-/// margins are transparent, so without this band scrolled body content
-/// showed through (and under) the dock. The band is page-colored and
-/// spans the nav's rendered extent plus the breathing strip above the dock —
-/// content scrolls behind it and re-emerges above the dock's top edge,
-/// which is what the shared `bottomPadding` scroll clearance reserves.
-/// IgnorePointer so taps still reach the nav painted on top.
-class _DockOcclusion extends StatelessWidget {
-  const _DockOcclusion();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        key: const ValueKey('nuvo-dock-occlusion'),
-        height: MediaQuery.paddingOf(context).bottom +
-            NuvoBottomNav.navDockGap +
-            NuvoBottomNav.navTopBreath,
-        color: context.themeColors.page,
-      ),
     );
   }
 }

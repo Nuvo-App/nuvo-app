@@ -210,7 +210,7 @@ CameraVerificationEligibility? _resolveRemoteRelease(
       title: activityInfo.displayName,
       metric: RaceMetric.reps,
       suggestedTargets: [activityInfo.defaultTarget],
-      supportedFormats: const [RaceFormat.firstToGoal],
+      supportedFormats: _remoteSupportedFormats(activityInfo.isDuration),
       aliases: [activityInfo.displayName.toLowerCase()],
       proofLabel: activityInfo.displayName,
       cameraInstruction: switch (camView) {
@@ -546,7 +546,7 @@ MotionActivityDefinition? _definitionFromSpec(RemoteVerifierSpec spec) {
     title: info.displayName,
     metric: isDuration ? RaceMetric.seconds : RaceMetric.reps,
     suggestedTargets: [info.defaultTarget],
-    supportedFormats: const [RaceFormat.firstToGoal],
+    supportedFormats: _remoteSupportedFormats(isDuration),
     aliases: [info.displayName.toLowerCase()],
     proofLabel: info.displayName,
     cameraInstruction: switch (_cameraViewFromSpecActivity(spec)) {
@@ -572,3 +572,19 @@ MotionActivityDefinition? _definitionFromSpec(RemoteVerifierSpec spec) {
     releaseId: spec.releaseId,
   );
 }
+
+/// Race formats a remote-published motion can be raced under, mirroring the
+/// control plane contract: rep movements offer every mode (timed battles
+/// included); a hold never runs a timed rep battle.
+List<RaceFormat> _remoteSupportedFormats(bool isDuration) => isDuration
+    ? const [
+        RaceFormat.firstToGoal,
+        RaceFormat.mostInWindow,
+        RaceFormat.bestAttempt,
+      ]
+    : const [
+        RaceFormat.firstToGoal,
+        RaceFormat.mostInWindow,
+        RaceFormat.bestAttempt,
+        RaceFormat.timedAttempt,
+      ];

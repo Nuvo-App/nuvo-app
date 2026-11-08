@@ -222,54 +222,75 @@ async function buildRealSnapshot(
   // transitions that write nothing), and participant membership/progress/ranks
   // (which do not always bump races.version). Names/avatars rely on the bucket.
   const raceIds = races.map((r) => r.id);
-  const placeholders = raceIds.map(() => '?').join(', ');
-  const raceSig = await db
-    .prepare(
-      `SELECT COUNT(*) AS n, MAX(COALESCE(version, 0)) AS v, MAX(updated_at) AS u
-       FROM races WHERE id IN (${placeholders})`,
-    )
-    .bind(...raceIds)
-    .first<{ n: number; v: number | null; u: string | null }>();
-  const memberSig = await db
-    .prepare(
-      `SELECT COUNT(*) AS n, MAX(rm.joined_at) AS j,
-              MAX(rp.updated_at) AS pu,
-              COALESCE(SUM(rp.progress_value), 0) AS pv,
-              COALESCE(SUM(rp.rank_cache), 0) AS rk
-       FROM race_members rm
-       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'`,
-    )
-    .bind(...raceIds)
-    .first<{ n: number; j: string | null; pu: string | null; pv: number; rk: number }>();
+  // D1 caps bound variables per statement at 100, so id lists are chunked.
+  const idChunks: string[][] = [];
+  for (let i = 0; i < raceIds.length; i += 90) idChunks.push(raceIds.slice(i, i + 90));
+  const marks = (ids: string[]) => ids.map(() => '?').join(', ');
+  const maxOf = <T extends number | string | null | undefined>(a: T | undefined, b: T) =>
+    a == null ? b : b == null ? a : a > b ? a : b;
+  const raceSig = { n: 0, v: null as number | null, u: null as string | null };
+  const memberSig = { n: 0, j: null as string | null, pu: null as string | null, pv: 0, rk: 0 };
+  for (const ids of idChunks) {
+    const rs = await db
+      .prepare(
+        `SELECT COUNT(*) AS n, MAX(COALESCE(version, 0)) AS v, MAX(updated_at) AS u
+         FROM races WHERE id IN (${marks(ids)})`,
+      )
+      .bind(...ids)
+      .first<{ n: number; v: number | null; u: string | null }>();
+    raceSig.n += rs?.n ?? 0;
+    raceSig.v = maxOf(raceSig.v, rs?.v ?? null);
+    raceSig.u = maxOf(raceSig.u, rs?.u ?? null);
+    const ms = await db
+      .prepare(
+        `SELECT COUNT(*) AS n, MAX(rm.joined_at) AS j,
+                MAX(rp.updated_at) AS pu,
+                COALESCE(SUM(rp.progress_value), 0) AS pv,
+                COALESCE(SUM(rp.rank_cache), 0) AS rk
+         FROM race_members rm
+         LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+         WHERE rm.race_id IN (${marks(ids)}) AND rm.status = 'active'`,
+      )
+      .bind(...ids)
+      .first<{ n: number; j: string | null; pu: string | null; pv: number; rk: number }>();
+    memberSig.n += ms?.n ?? 0;
+    memberSig.j = maxOf(memberSig.j, ms?.j ?? null);
+    memberSig.pu = maxOf(memberSig.pu, ms?.pu ?? null);
+    memberSig.pv += ms?.pv ?? 0;
+    memberSig.rk += ms?.rk ?? 0;
+  }
   const statusSig = races.map((r) => raceEffectiveStatus(r).charAt(0)).join('');
   const hit = gate(
     weakEtag(
-      'arena', 'real', raceSig?.n, raceSig?.v, raceSig?.u,
+      'arena', 'real', raceSig.n, raceSig.v, raceSig.u,
       statusSig,
-      memberSig?.n, memberSig?.j, memberSig?.pu, memberSig?.pv, memberSig?.rk,
+      memberSig.n, memberSig.j, memberSig.pu, memberSig.pv, memberSig.rk,
       stalenessBucket(),
     ),
   );
   if (hit) return hit;
 
-  // Fetch all participant rows for these races in one query.
-  const participantRows = await db
-    .prepare(
-      `SELECT rm.race_id, rm.user_id,
-              COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
-              COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              COALESCE(rp.progress_value, 0) as progress_value,
-              COALESCE(rp.progress_percent, 0) as progress_percent,
-              rp.rank_cache
-       FROM race_members rm
-       LEFT JOIN profiles p ON p.user_id = rm.user_id
-       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'
-       ORDER BY COALESCE(rp.rank_cache, 999999) ASC, rp.progress_value DESC, rm.joined_at ASC`,
-    )
-    .bind(...raceIds)
-    .all<LightParticipantRow>();
+  // Fetch all participant rows for these races (chunked, see above).
+  const participantRows: { results: LightParticipantRow[] } = { results: [] };
+  for (const ids of idChunks) {
+    const part = await db
+      .prepare(
+        `SELECT rm.race_id, rm.user_id,
+                COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
+                COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
+                COALESCE(rp.progress_value, 0) as progress_value,
+                COALESCE(rp.progress_percent, 0) as progress_percent,
+                rp.rank_cache
+         FROM race_members rm
+         LEFT JOIN profiles p ON p.user_id = rm.user_id
+         LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+         WHERE rm.race_id IN (${marks(ids)}) AND rm.status = 'active'
+         ORDER BY COALESCE(rp.rank_cache, 999999) ASC, rp.progress_value DESC, rm.joined_at ASC`,
+      )
+      .bind(...ids)
+      .all<LightParticipantRow>();
+    participantRows.results.push(...part.results);
+  }
 
   // Index participants by race_id.
   const participantsByRace = new Map<string, LightParticipantRow[]>();

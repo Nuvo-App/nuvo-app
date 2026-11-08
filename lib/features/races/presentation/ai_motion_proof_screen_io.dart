@@ -15,11 +15,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/demo/presentation_demo.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/rep_burst_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -50,6 +46,8 @@ import '../domain/motion_progress_presentation.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
 import '../domain/race_mode_semantics.dart';
+import '../domain/rep_inactivity_watch.dart';
+import '../domain/timed_attempt_take.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import 'board_moved_screen.dart';
 
@@ -171,7 +169,76 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int _debugFrameCount = 0;
   bool _autoSubmitScheduled = false;
 
+  // ── Timed battle take ────────────────────────────────────────────────────
+  // A timed_attempt race with a declared duration runs a fixed-length take:
+  // 3-2-1, a server-timed window counted down on the HUD, then the same
+  // finish path as Done. Legacy timed races without a duration keep the
+  // untimed flow — [_isTimedTake] is false for them.
+  TimedAttemptTake? _timedTake;
+
+  /// Bumped whenever a take is abandoned — an in-flight attempt-open for an
+  /// older take cancels itself instead of stranding an open attempt.
+  int _timedTakeSerial = 0;
+
+  /// The open POST for the live take (retries inside) — awaited briefly
+  /// before the proof send so the proof binds THIS attempt, not a fresh
+  /// (mistimed) one the submit path would declare.
+  Future<void>? _timedAttemptOpen;
+  Timer? _countdownTimer;
+  int? _attemptLimit;
+  int _attemptsUsed = 0;
+
+  // ── Rep inactivity prompt ────────────────────────────────────────────────
+  // Rep takes only: 30 s without a counted rep asks "Are you still there?"
+  // — a hold never arms it (stillness IS the attempt), a timed window
+  // never arms it (the take already races a deadline), and the basketball
+  // pipeline has its own shot flow. The clock anchors at take start so a
+  // take that never lands rep one still asks.
+  final _inactivityWatch = RepInactivityWatch();
+  bool _inactivityPromptOpen = false;
+  BuildContext? _inactivityDialogContext;
+
+  /// False while the app isn't in the foreground — the prompt never fires
+  /// (or queues) against a screen the athlete can't see.
+  bool _appInForeground = true;
+
   bool get _isObjectComposition => _objectCompositionSpec != null;
+
+  /// The take is a hold — stillness is the whole point, so the rep
+  /// inactivity prompt must never apply to it.
+  bool get _isHoldSession =>
+      _measure == MotionMeasurementType.duration || _runtime.movement.isHold;
+
+  /// Only an open-ended rep take gets the "Are you still there?" prompt —
+  /// holds and timed windows are excluded by what they are, not by a flag.
+  bool get _watchesRepInactivity =>
+      !_isObjectComposition && !_isHoldSession && !_isTimedTake;
+
+  /// Timed battles only: a `timed_attempt` race WITH a declared duration.
+  /// Legacy timed races have no duration — they keep the untimed flow.
+  bool get _isTimedTake =>
+      _raceContext?.format == RaceFormat.timedAttempt &&
+      (_raceContext?.attemptDurationSeconds ?? 0) > 0;
+
+  /// The race's attempt limit leaves no room for another take. A null limit
+  /// never blocks; usage comes from the server's viewer context, not a local
+  /// count.
+  bool get _attemptLimitReached => timedAttemptLimitReached(
+    attemptLimit: _attemptLimit,
+    attemptsUsed: _attemptsUsed,
+  );
+
+  /// "N of M attempts used" is shown before starting when a limit exists —
+  /// for any attempt race, not just timed ones.
+  bool get _attemptUsageShown =>
+      _raceContext?.isAttemptBased == true && _attemptLimit != null;
+
+  /// Seconds left in a timed take's window — the HUD counts this down, not
+  /// up, while the attempt is live.
+  Duration? get _timedRemaining {
+    final left = _timedTake?.secondsRemaining;
+    return left == null ? null : Duration(seconds: left);
+  }
 
   bool _isLocalPresentationRace(Race race) {
     final user = ref.read(authControllerProvider).user;
@@ -211,6 +278,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // just not shown?" from a device log.
   final _repEventLog = RepEventLog();
 
+  // Live encouragement — rotating copy pools keyed on phase, streak,
+  // elapsed time and milestone/new-best beats. Presentation only; a line
+  // can never touch the count.
+  final _encouragement = SessionEncouragement();
+  MotionProgressPhase? _lastHudPhase;
+  DateTime? _hudFlashUntil;
+  bool _newBestFlashed = false;
+
   /// Distance presentation (milestone spacing / pace) for this race's scale.
   DistancePresentationPolicy get _distancePolicy =>
       DistancePresentationPolicy.forTarget(_raceTarget);
@@ -229,11 +304,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak => _burst.isOnStreak;
 
-  String get _streakLabel {
-    if (_streakCount < 5) return 'Keep going';
-    if (_streakCount < 10) return 'Keep your streak!';
-    return 'On fire!';
-  }
+  String get _streakLabel => _encouragement.streakLine(_streakCount);
 
   /// Short decaying pulse used to thicken the skeleton the instant a rep lands.
   double get _skeletonGlow {
@@ -250,6 +321,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _targetCelebrationSeq = 0;
     _burst.reset();
     _repEventLog.clear();
+    _encouragement.reset();
+    _lastHudPhase = null;
+    _hudFlashUntil = null;
+    _newBestFlashed = false;
   }
 
   void _scheduleSkeletonExpiry() {
@@ -323,15 +398,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       final raceTarget = race.targetValue;
       final alreadyDone = myPart?.progressValue ?? 0;
       final isCustom = race.isCustomVerifierRace;
-      final target = isCustom
+      // A session only carries a finish line when the format has one. First
+      // to targets whatever is left to reach it; window and attempt formats
+      // have no goal — the session counts everything, target stays null,
+      // and the HUD shows the raw count instead of a fabricated "N / cap".
+      final int? target = race.format == 'first_to_goal'
           ? (raceTarget != null && raceTarget > 0
                 ? (raceTarget - alreadyDone).clamp(1, raceTarget)
-                : 1)
-          : race.format == 'first_to_goal'
-          ? (raceTarget != null && raceTarget > 0
-                ? (raceTarget - alreadyDone).clamp(1, raceTarget)
+                : isCustom
+                ? 1
                 : eligibility.movementDefinition?.defaultTarget ?? 1)
-          : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
+          : null;
       if (eligibility.objectCompositionSpec != null) {
         await _loadBasketballRelease(
           race: race,
@@ -444,6 +521,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _raceContext = VerifierRaceContext.forRace(race, userId);
         _raceTitle = race.title;
         _measurementType = raceMeasurementType(race).name;
+        _attemptLimit = race.attemptLimit;
+        _attemptsUsed = race.viewerContext?.attemptsUsed ?? 0;
       });
       // Skip redundant pre-camera panel — go straight to camera
       _initializeCamera();
@@ -480,7 +559,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Future<void> _loadBasketballRelease({
     required Race race,
     required CameraVerificationEligibility eligibility,
-    required int target,
+    required int? target,
     required int alreadyDone,
   }) async {
     final spec = eligibility.objectCompositionSpec!;
@@ -561,6 +640,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         );
         _raceTitle = race.title;
         _measurementType = 'repetitions';
+        _attemptLimit = race.attemptLimit;
+        _attemptsUsed = race.viewerContext?.attemptsUsed ?? 0;
       });
       _initializeCamera();
     } catch (error) {
@@ -595,7 +676,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The inactivity clock is wall time — while the app is away nothing
+    // counts and nothing should prompt either, so the check only runs
+    // against a live, on-screen take.
+    _appInForeground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.inactive) {
+      // An interrupted 3-2-1 can't honestly start the window — drop the take
+      // back to ready; the user restarts it from the camera preview. A live
+      // take is released by _resumeInterruptedRecording on the way back.
+      if (_timedTake?.countingDown == true) {
+        unawaited(_releaseTimedAttempt());
+      }
       final controller = _cameraController;
       if (controller != null && controller.value.isInitialized) {
         _stopCamera();
@@ -626,12 +717,18 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   @override
   void dispose() {
     _disposed = true;
+    // Leaving with an unsubmitted timed take releases its open attempt —
+    // a cancelled attempt never spends the limit.
+    unawaited(_releaseTimedAttempt());
     _releaseProofSettled();
     // Catch attempts abandoned before server analysis resolved.
     _finalizeSession();
     WidgetsBinding.instance.removeObserver(this);
     _recordingTimer?.cancel();
+    _countdownTimer?.cancel();
     _skeletonExpiryTimer?.cancel();
+    _inactivityWatch.disarm();
+    _dismissInactivityPrompt();
     _stopCamera();
     _objectDotProducer?.dispose();
     _poseDetector.dispose();
@@ -746,6 +843,145 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
+    // A timed take runs its 3-2-1 first — a re-tap during it or a spent
+    // attempt limit both stop here, before anything is declared.
+    if (_isTimedTake) {
+      if (_timedTake != null || _attemptLimitReached) return;
+      _startTimedCountdown();
+      return;
+    }
+
+    await _beginTake();
+  }
+
+  /// One take on a timed battle: 3-2-1 over the live preview, then the
+  /// attempt opens on the server clock and the fixed window starts ticking.
+  void _startTimedCountdown() {
+    final serial = ++_timedTakeSerial;
+    _timedTake = TimedAttemptTake(
+      durationSeconds: _raceContext!.attemptDurationSeconds!,
+      clientAttemptId: const Uuid().v4(),
+    );
+    setState(() {});
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _disposed || serial != _timedTakeSerial) {
+        timer.cancel();
+        return;
+      }
+      if (_timedTake?.tickCountdown() == true) {
+        timer.cancel();
+        unawaited(_beginTimedTake());
+      }
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// The countdown ended — open the server attempt (its `started_at` anchors
+  /// the deadline, so it goes out now) and start recording into the window.
+  Future<void> _beginTimedTake() async {
+    final take = _timedTake;
+    if (take == null) return;
+    _timedAttemptOpen = _openTimedAttempt(take);
+    await _beginTake();
+    // The camera refused the take — release whatever the open declared so
+    // the screen isn't stranded on a dead take with no way back.
+    if (_status != AiMotionProofStatus.recording) {
+      await _releaseTimedAttempt();
+    }
+  }
+
+  /// POSTs the attempt open with the take's stable client id. Retried while
+  /// the take is live — a retry reuses the same clientAttemptId, so it can
+  /// never open a second attempt — and a 409 just means an attempt is
+  /// already open, which binds this take's proof the same way.
+  Future<void> _openTimedAttempt(TimedAttemptTake take) async {
+    if (_isPresentationFixtureRace) return;
+    final serial = _timedTakeSerial;
+    // Grab the controller up front — if the take outlives the widget, ref
+    // reads throw but this object keeps working.
+    final controller = ref.read(raceControllerProvider.notifier);
+    for (var i = 0; i < 3; i++) {
+      if (_disposed || serial != _timedTakeSerial || _timedTake != take) {
+        return;
+      }
+      try {
+        final res = await controller.startAttempt(
+          widget.raceId,
+          clientAttemptId: take.clientAttemptId,
+        );
+        if (_disposed || serial != _timedTakeSerial || _timedTake != take) {
+          // The take was abandoned while the open was on the wire — release
+          // the attempt it just took so it can't sit open and block a retry.
+          unawaited(_cancelServerAttempt(controller, res.attemptId));
+          return;
+        }
+        take.markOpened(res.attemptId);
+        return;
+      } on ApiException catch (e) {
+        // Already open — the existing attempt binds this take's proof.
+        if (e.statusCode == 409) return;
+      } catch (_) {
+        // Transient — fall through to the next retry.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+  }
+
+  /// An abandoned take releases its open attempt — a cancelled attempt
+  /// never counts against the limit, so leaving before the proof lands must
+  /// not burn a slot. A proof already on the wire keeps its attempt.
+  Future<void> _releaseTimedAttempt() async {
+    if (_submitInFlight) return;
+    _timedTakeSerial++;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    final take = _timedTake;
+    _timedTake = null;
+    _timedAttemptOpen = null;
+    // The countdown timer that drives rebuilds is gone too — drop the
+    // overlay/actions right away rather than on the next incidental tick.
+    if (mounted && !_disposed) setState(() {});
+    if (take == null || !take.needsRelease || _isPresentationFixtureRace) {
+      return;
+    }
+    // Grab the controller now — once dispose() has run, ref reads throw but
+    // this object still works, so the DELETE always gets out.
+    final controller = ref.read(raceControllerProvider.notifier);
+    await _cancelServerAttempt(controller, take.openAttemptId!);
+  }
+
+  /// Best-effort attempt cancel — a failure must never mask the action the
+  /// user actually took (retry, back, dispose).
+  Future<void> _cancelServerAttempt(
+    RaceController controller,
+    String attemptId,
+  ) async {
+    try {
+      await controller.cancelAttempt(widget.raceId, attemptId);
+    } catch (_) {
+      _debugLog('timedAttemptCancelFailed');
+    }
+  }
+
+  /// Every "leave this screen" path funnels here so an abandoned timed take
+  /// releases its attempt instead of stranding it open until the deadline.
+  void _leaveScreen() {
+    unawaited(_releaseTimedAttempt());
+    safePopOrGo(context, '/race/${widget.raceId}');
+  }
+
+  /// Actually begins a take — verifier, session recorder, frame stream. For
+  /// a timed take this runs only after the 3-2-1, alongside the attempt open.
+  Future<void> _beginTake() async {
+    final controller = _cameraController;
+    final camera = _selectedCamera;
+    if (controller == null ||
+        camera == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
     if (!_isObjectComposition) _runtime.start();
     // No POST …/start: `complete` accepts a session that is still `created`.
     _elapsed = Duration.zero;
@@ -805,10 +1041,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _result = null;
     });
 
+    // Arm the inactivity clock at take start — a take that never lands a
+    // rep asks too, not just one that went quiet mid-way.
+    if (_watchesRepInactivity) {
+      _inactivityWatch.arm(DateTime.now());
+    } else {
+      _inactivityWatch.disarm();
+    }
     _recordingTimer?.cancel();
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _status == AiMotionProofStatus.recording) {
+        final hitZero = _timedTake?.tickWindow() ?? false;
         setState(() => _elapsed += const Duration(seconds: 1));
+        // The declared attempt window is over — finish exactly as Done does.
+        if (hitZero) unawaited(_finishRecording());
+        _maybePromptRepInactivity();
       }
     });
 
@@ -915,8 +1162,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         debugValues: output.debugValues,
       );
       _maybeSnapshotSession(output.count, output.validatorState);
+      final countedAt = _runtime.lastCountedAt;
+      if (countedAt != null) _inactivityWatch.noteCounted(countedAt);
       if (_usesCustomRuntimeOutput) {
         _customUpdate = output.customPoseUpdate;
+      }
+      // A hold that stayed out of position past the break tolerance is
+      // over — end the take exactly as Done does so what banked submits.
+      if (output.holdBroken) {
+        _debugLog('holdBroken state=${output.validatorState}');
+        unawaited(_finishRecording());
+        return;
       }
       _skeletonHold.show(frame, DateTime.now());
       _scheduleSkeletonExpiry();
@@ -939,15 +1195,20 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           HapticFeedback.lightImpact();
         }
       }
+      // Encouragement moments — a phase step flashes a milestone line,
+      // crossing the score-to-beat flashes a new-best line. Presentation
+      // only; it never feeds back into recognition.
+      _updateEncouragementMoments();
       // Finish line reached — fire once per recording, and only in a mode
       // that has a finish line. Attempt races never "reach" one.
-      if (!_targetCelebrated &&
-          _hasFinishTarget &&
-          _targetValue > 0 &&
-          output.count >= _targetValue) {
+      if (!_targetCelebrated && _targetReachedNow) {
         _targetCelebrated = true;
         _targetCelebrationSeq++;
         HapticFeedback.heavyImpact();
+        // A first-to session that crosses its remaining goal is done — stop
+        // recording and run the exact finish/submit path the Done button
+        // takes. _finishRecording's status guard keeps this once-only.
+        unawaited(_finishRecording());
       }
       _debugFrameCount++;
       if (_debugFrameCount == 1 || _debugFrameCount % 15 == 0) {
@@ -1000,10 +1261,127 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
   }
 
+  /// Milestone + new-best beats for the recording HUD's encouragement
+  /// line. A phase step IS the milestone; [VerifierRaceContext]'s
+  /// [VerifierRaceContext.beatsPersonalBest] is the new best. Each beat
+  /// hands the HUD one line to hold for a few seconds, then the phase
+  /// line comes back.
+  void _updateEncouragementMoments() {
+    final phase = motionProgressPhase(
+      current: _displayedRaceProgress,
+      target: _raceTarget,
+    );
+    final previous = _lastHudPhase;
+    _lastHudPhase = phase;
+    if (previous != null && phase != previous) {
+      _encouragement.triggerMilestone();
+      _hudFlashUntil = DateTime.now().add(const Duration(seconds: 4));
+      return;
+    }
+    if (!_newBestFlashed &&
+        (_raceContext?.beatsPersonalBest(_sessionContribution) ?? false)) {
+      _newBestFlashed = true;
+      _encouragement.triggerNewBest();
+      _hudFlashUntil = DateTime.now().add(const Duration(seconds: 4));
+    }
+  }
+
+  /// Once a second while a rep take is live: long enough without a counted
+  /// rep asks whether the athlete is still there. The watch decides "quiet"
+  /// — this only owns foreground gating and one-prompt-at-a-time.
+  void _maybePromptRepInactivity() {
+    if (!_appInForeground || _inactivityPromptOpen) return;
+    if (!_inactivityWatch.isSilent(DateTime.now())) return;
+    _inactivityWatch.markPrompted();
+    unawaited(_showInactivityPrompt());
+  }
+
+  /// "Are you still there?" — Keep going re-arms the clock; Finish ends the
+  /// take through [_finishRecording], the exact path Done takes. A null
+  /// answer (the route was dismissed underneath) resolves as resume — the
+  /// take was already over, or the user saw the prompt and kept moving.
+  Future<void> _showInactivityPrompt() async {
+    if (_inactivityPromptOpen || !mounted) return;
+    _inactivityPromptOpen = true;
+    final choice = await showDialog<RepInactivityChoice>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _inactivityDialogContext = dialogContext;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: V13Card(
+              radius: V13.radiusCardLg,
+              shadow: V13.shadow6,
+              padding: const EdgeInsets.all(V13.gapXxl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Are you still there?',
+                    style: V13.sectionHead,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: V13.gapSm),
+                  Text(
+                    'Nothing has counted for a bit. Keep the take going, or finish with what you have.',
+                    style: V13.caption,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: V13.gapXl),
+                  V13Button.primary(
+                    label: 'Keep going',
+                    fullWidth: true,
+                    onPressed: () => Navigator.of(
+                      dialogContext,
+                    ).pop(RepInactivityChoice.keepGoing),
+                  ),
+                  const SizedBox(height: V13.gapSm),
+                  V13Button.secondary(
+                    label: 'Finish',
+                    fullWidth: true,
+                    onPressed: () => Navigator.of(
+                      dialogContext,
+                    ).pop(RepInactivityChoice.finish),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    _inactivityDialogContext = null;
+    _inactivityPromptOpen = false;
+    // The take may have ended while the prompt was up (finish line, timed
+    // window, lifecycle) — only a still-recording take resolves a choice.
+    if (!mounted || _disposed || _status != AiMotionProofStatus.recording) {
+      return;
+    }
+    final resolution = _inactivityWatch.resolve(choice, DateTime.now());
+    if (resolution == RepInactivityResolution.endTake) {
+      unawaited(_finishRecording());
+    }
+  }
+
+  /// The take is ending without the prompt's answer — drop the dialog so
+  /// it can't hang over the result or the next take.
+  void _dismissInactivityPrompt() {
+    final dialogContext = _inactivityDialogContext;
+    if (dialogContext != null && dialogContext.mounted) {
+      Navigator.of(dialogContext).pop();
+    }
+    _inactivityDialogContext = null;
+  }
+
   Future<void> _finishRecording() async {
     if (_status != AiMotionProofStatus.recording) return;
     setState(() => _status = AiMotionProofStatus.processing);
     _recordingTimer?.cancel();
+    _inactivityWatch.disarm();
+    _dismissInactivityPrompt();
     await _stopImageStream();
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
@@ -1258,7 +1636,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   ? (_customMovementName ?? 'custom')
                   : _activityId,
               frames: List<NuvoPoseFrame>.unmodifiable(_capturedFrames),
-              targetReps: _targetValue > 0 ? _targetValue : null,
+              targetReps: (_targetValue ?? 0) > 0 ? _targetValue : null,
               durationMs: _elapsed.inMilliseconds,
             ),
           );
@@ -1537,10 +1915,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     if (optimistic != null) {
       _openOptimisticCelebration(optimistic, value, status);
     }
+    // A timed take must bind ITS attempt — if the open is still on the wire,
+    // give it a beat before the submit path's own ensure-open would declare
+    // a fresh (mistimed) attempt.
+    final pendingOpen = _timedAttemptOpen;
+    if (pendingOpen != null) {
+      try {
+        await pendingOpen.timeout(const Duration(seconds: 4));
+      } catch (_) {
+        // Failed or still pending — the submit path's ensure-open is the
+        // fallback; either way the proof is allowed to try.
+      }
+    }
     try {
       final race = await send(clientSubmissionId);
       _proofAccepted = true;
       _clientSubmissionId = null;
+      _timedTake?.markSubmitted();
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);
       if (!_optimisticCelebrationOpen) _goToCelebration(race, value, status);
@@ -1675,7 +2066,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Future<void> _recordAgain() async {
+    // A timed take abandoned here releases its open attempt — cancelling
+    // before submit never spends the limit.
+    await _releaseTimedAttempt();
     _recordingTimer?.cancel();
+    _inactivityWatch.disarm();
+    _dismissInactivityPrompt();
     await _stopImageStream();
     if (_objectCompositionSpec != null) {
       _basketballShot = BasketballShotCoordinator(
@@ -1746,9 +2142,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _status == AiMotionProofStatus.submitted;
 
   /// The verifier's own target — the REMAINING amount this session must reach
-  /// to complete the race.
-  int get _targetValue => _isObjectComposition
-      ? ((_raceTargetValue ?? 1) - _raceTotalBefore).clamp(1, 1000000).toInt()
+  /// to complete the race. Null when the format has no finish line: the
+  /// session then counts everything and reports the raw count.
+  int? get _targetValue => _isObjectComposition
+      ? (_hasFinishTarget
+            ? ((_raceTargetValue ?? 1) - _raceTotalBefore)
+                  .clamp(1, 1000000)
+                  .toInt()
+            : null)
       : _runtime.targetValue;
 
   /// Only a format that scores against a finish line gets target-reached
@@ -1758,9 +2159,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool get _hasFinishTarget => _raceContext?.format.usesScoreTarget ?? true;
 
   /// The session reached a real finish line — never true for attempt or
-  /// deadline modes, where the machine target is not a finish.
-  bool get _targetReachedNow =>
-      _hasFinishTarget && _targetValue > 0 && _currentValue >= _targetValue;
+  /// deadline modes, where there is no session target to reach.
+  bool get _targetReachedNow => sessionReachedFinishTarget(
+    hasFinishTarget: _hasFinishTarget,
+    sessionTarget: _targetValue,
+    sessionValue: _currentValue,
+  );
 
   /// What the rest-state pill names before recording — "Goal: 50 pushups"
   /// when there's a finish line, the mode's own stakes when there isn't.
@@ -1778,7 +2182,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   ContinuationProgress get _continuation => ContinuationProgress(
     startingRaceProgress: _startingRaceProgress,
-    raceTarget: _raceTargetValue ?? (_startingRaceProgress + _targetValue),
+    // No finish line means no cap on displayed progress — 0 keeps
+    // [ContinuationProgress.displayedProgress] returning the true
+    // cumulative count instead of clamping at a fabricated target.
+    raceTarget: _hasFinishTarget
+        ? (_raceTargetValue ?? (_startingRaceProgress + (_targetValue ?? 0)))
+        : 0,
   );
 
   /// The full race target (reps / seconds / metres).
@@ -1854,9 +2263,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   ///   attempt races  → the attempt itself ("14") — there is no /target
   String get _raceProgressReadout {
     final ctx = _raceContext;
-    // Custom (taught) movements included: a window / attempt race has no
-    // finish line, so it shows the running count — never "N / 60 reps".
-    if (ctx != null && !_hasFinishTarget && !_isObjectComposition) {
+    // Custom (taught) movements and shot-counting included: a window /
+    // attempt race has no finish line, so it shows the running count —
+    // never "N / 60 reps" or "N / 6 shots".
+    if (ctx != null && !_hasFinishTarget) {
       final shown = ctx.isAttemptBased
           ? _sessionContribution
           : _raceTotalBefore + _sessionContribution;
@@ -1900,13 +2310,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return _immersiveStatusScaffold();
   }
 
-  /// Full-screen dark surface for every non-camera, non-result state —
+  /// Full-screen light surface for every non-camera, non-result state —
   /// session setup, permission denial, verifier errors. Same visual family as
-  /// the camera/result scaffolds so no intermediate "old" page can flash.
+  /// the rest of the v13 shell so no intermediate "old" page can flash.
   Widget _immersiveStatusScaffold() {
     final busy = _status == AiMotionProofStatus.processing;
     return Scaffold(
-      backgroundColor: NuvoColors.navy,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1917,11 +2327,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   _immersiveIconButton(
                     icon: Icons.arrow_back_rounded,
-                    onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}'),
+                    onPressed: _leaveScreen,
                   ),
                   const SizedBox(width: 10),
-                  _pill('Goal: $_targetLabel', color: NuvoColors.blue),
+                  _pill('Goal: $_targetLabel', color: V13.card),
                 ],
               ),
             ),
@@ -1933,32 +2342,35 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (busy)
-                        const CircularProgressIndicator(
-                          color: NuvoColors.white,
-                          strokeWidth: 2,
+                        const SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: CircularProgressIndicator(
+                            color: V13.navy,
+                            strokeWidth: 3,
+                          ),
                         )
                       else
-                        Icon(
-                          _status == AiMotionProofStatus.unsupportedMovement
+                        V13IconTile(
+                          icon:
+                              _status == AiMotionProofStatus.unsupportedMovement
                               ? Icons.block_rounded
                               : Icons.videocam_off_rounded,
-                          color: NuvoColors.white.withValues(alpha: 0.85),
-                          size: 40,
+                          color: V13.card,
+                          iconColor: V13.navy,
+                          size: 64,
+                          radius: V13.radiusTileLg,
                         ),
                       const SizedBox(height: 16),
                       Text(
                         _movementTitle,
-                        style: AppTextStyles.titleLarge.copyWith(
-                          color: NuvoColors.white,
-                        ),
+                        style: V13.sectionHead,
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         _message ?? _cameraPlaceholderText,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.white.withValues(alpha: 0.72),
-                        ),
+                        style: V13.body.copyWith(color: V13.muted),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -2016,12 +2428,18 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           if (recording && _targetCelebrationSeq > 0)
             Positioned.fill(child: _targetReachedOverlay()),
 
+          // Timed battle 3-2-1 — over the live preview, before the take starts.
+          if (_timedTake?.countingDown == true)
+            Positioned.fill(
+              child: IgnorePointer(child: Center(child: _countdownOverlay())),
+            ),
+
           if (_switchingCamera)
             const Positioned.fill(
               child: IgnorePointer(
                 child: Center(
                   child: CircularProgressIndicator(
-                    color: NuvoColors.white,
+                    color: V13.white,
                     strokeWidth: 2,
                   ),
                 ),
@@ -2036,25 +2454,38 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   _immersiveIconButton(
                     icon: Icons.arrow_back_rounded,
-                    onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}'),
+                    onPressed: _leaveScreen,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _pill(
-                        recording ? _raceProgressReadout : _restStateLabel,
-                        color: recording
-                            ? (_targetReachedNow
-                                  ? NuvoColors.success
-                                  : _hasFinishTarget
-                                  ? NuvoColors.danger
-                                  : NuvoColors.blue)
-                            : NuvoColors.blue,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          _movementTitle.isEmpty
+                              ? 'AI Motion Proof'
+                              : _movementTitle,
+                          style: V13.bodyStrong.copyWith(color: V13.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        _pill(
+                          recording ? _raceProgressReadout : _restStateLabel,
+                          color: recording
+                              ? (_targetReachedNow
+                                    ? V13.mint
+                                    : _hasFinishTarget
+                                    ? V13.danger
+                                    : V13.blue)
+                              : V13.card,
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   _visibilityPill(),
                   if (_cameras.length > 1 && !recording) ...[
                     const SizedBox(width: 8),
@@ -2115,10 +2546,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         platform: defaultTargetPlatform,
       ),
       color: targetReached
-          ? NuvoColors.success
+          ? V13.mint
           : _isOnStreak
-          ? NuvoColors.brightGold
-          : NuvoColors.white,
+          ? V13.sun
+          : V13.white,
       glow: _skeletonGlow,
     );
   }
@@ -2136,26 +2567,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     vertical: 32,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoColors.success.withValues(alpha: 0.88),
-                    borderRadius: BorderRadius.circular(NuvoRadii.hero),
-                    boxShadow: AppShadows.hardMedium,
+                    color: V13.mint,
+                    borderRadius: BorderRadius.circular(V13.radiusCardLg),
+                    border: Border.all(
+                      color: V13.navy,
+                      width: V13.outlineThick,
+                    ),
+                    boxShadow: V13.shadow6,
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        _raceProgressReadout,
-                        style: AppTextStyles.displayLarge.copyWith(
-                          color: NuvoColors.white,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _raceProgressReadout,
+                          style: V13.hugeNumber.copyWith(fontSize: 56),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'FINISH LINE',
-                        style: AppTextStyles.titleLarge.copyWith(
-                          color: NuvoColors.white,
-                        ),
-                      ),
+                      Text('FINISH LINE', style: V13.sectionHead),
                     ],
                   ),
                 )
@@ -2173,35 +2604,74 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _immersiveIconButton({
-    required IconData icon,
-    required VoidCallback? onPressed,
-  }) {
-    return IconButton.filled(
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.black.withValues(alpha: 0.45),
-        foregroundColor: NuvoColors.white,
-      ),
-      icon: Icon(icon),
+  /// The 3-2-1 before a timed take — the attempt opens on the server clock
+  /// the moment it ends, so this is the last moment to get into position.
+  Widget _countdownOverlay() {
+    final remaining = _timedTake?.countdownRemaining ?? 0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$remaining',
+          style: V13.hugeNumber.copyWith(
+            fontSize: 160,
+            color: V13.white,
+            shadows: const [
+              Shadow(
+                color: Color(0xB3000000),
+                blurRadius: 24,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+        ).animate(key: ValueKey(remaining)).scale(
+          begin: const Offset(0.6, 0.6),
+          end: const Offset(1, 1),
+          duration: 300.ms,
+          curve: Curves.easeOutBack,
+        ),
+        const SizedBox(height: 12),
+        _pill('Get in position', color: V13.card),
+      ],
     );
   }
 
-  // Full-screen dark result moment for terminal verification states.
+  Widget _immersiveIconButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+    String? semanticLabel,
+  }) {
+    return V13IconButton(
+      icon: icon,
+      onTap: onPressed,
+      semanticLabel: semanticLabel,
+    );
+  }
+
+  // Full-screen result moment for terminal verification states.
   Widget _immersiveResultScaffold() {
     return Scaffold(
-      backgroundColor: NuvoColors.navy,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: Row(
                 children: [
-                  NuvoBackButton(
-                    onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}'),
+                  _immersiveIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    onPressed: _leaveScreen,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _movementTitle,
+                      style: V13.sectionHead,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
@@ -2234,18 +2704,18 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: NuvoColors.navy.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        color: V13.navy.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
       ),
       child: DefaultTextStyle(
-        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
+        style: V13.caption.copyWith(color: V13.white),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('state: ${update?.state.name ?? '--'}'),
             Text(
-              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue}',
+              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue ?? '-'}',
             ),
             Text(
               'sequence: ${(update?.sequenceProgress ?? 0).toStringAsFixed(2)}',
@@ -2259,7 +2729,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             if (update?.failureReason != null)
               Text(
                 'reset: ${update!.failureReason}',
-                style: const TextStyle(color: NuvoColors.danger),
+                style: V13.caption.copyWith(color: V13.danger),
               ),
           ],
         ),
@@ -2292,11 +2762,19 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         child: isRecording
             ? const SizedBox.expand()
             : Center(
-                child: Text(
-                  'Step into frame',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.white.withValues(alpha: 0.6),
-                    fontWeight: FontWeight.w600,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: V13.navy.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(V13.radiusPill),
+                  ),
+                  child: Text(
+                    'Put your phone down so Nuvo sees your whole body',
+                    style: V13.bodyStrong.copyWith(color: V13.white),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -2320,10 +2798,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                    Icons.verified_rounded,
-                    color: NuvoColors.blue,
-                    size: 80,
+              Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      color: V13.mint,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: V13.navy,
+                        width: V13.outlineThick,
+                      ),
+                      boxShadow: V13.shadow4,
+                    ),
+                    child: const Icon(
+                      Icons.verified_rounded,
+                      color: V13.navy,
+                      size: 44,
+                    ),
                   )
                   .animate()
                   .scale(
@@ -2334,14 +2825,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   )
                   .fadeIn(duration: 200.ms, curve: Curves.easeOut),
               const SizedBox(height: 18),
-              Text(
-                    _isObjectComposition
-                        ? '+$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}'
-                        : _usesCustomRuntimeOutput
-                        ? '+${_customCountedLabel(customResult)}'
-                        : '+${_countedLabel(result)}',
-                    style: AppTextStyles.displayLarge.copyWith(
-                      color: NuvoColors.white,
+              FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _isObjectComposition
+                          ? '+$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}'
+                          : _usesCustomRuntimeOutput
+                          ? '+${_customCountedLabel(customResult)}'
+                          : '+${_countedLabel(result)}',
+                      style: V13.hugeNumber.copyWith(fontSize: 56),
                     ),
                   )
                   .animate(delay: 80.ms)
@@ -2360,18 +2852,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     ? 'Adding to your race\u2026'
                     : _isDistanceRace && _avgPaceLabel != null
                     ? '${_avgPaceLabel!} average'
-                    : 'Camera verified',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: NuvoColors.white.withValues(alpha: 0.78),
-                ),
+                    : 'Nice set. AI Motion verified it.',
+                style: V13.bodyStrong,
+                textAlign: TextAlign.center,
               ),
               if (_serverAnalysis?.coaching.isNotEmpty == true) ...[
                 const SizedBox(height: 12),
                 Text(
                   _serverAnalysis!.coaching.first,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.white.withValues(alpha: 0.72),
-                  ),
+                  style: V13.body.copyWith(color: V13.muted),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -2397,34 +2886,34 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     Container(
                       width: 80,
                       height: 80,
-                      decoration: const BoxDecoration(
-                        color: NuvoColors.white,
+                      decoration: BoxDecoration(
+                        color: V13.card,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: V13.navy,
+                          width: V13.outlineThick,
+                        ),
+                        boxShadow: V13.shadow4,
                       ),
                       child: const Icon(
                         Icons.refresh_rounded,
-                        color: NuvoColors.navy,
+                        color: V13.navy,
                         size: 36,
                       ),
                     ),
                     const SizedBox(height: 18),
-                    Text(
-                      'Try again',
-                      style: AppTextStyles.displaySmall.copyWith(
-                        color: NuvoColors.white,
-                      ),
-                    ),
+                    Text('Try again', style: V13.title),
                     const SizedBox(height: 8),
                     Text(
                       // Race progress after this session (it continues from
                       // wherever the athlete was, and only this session's
                       // contribution was added).
                       detected > 0
-                          ? "You're at ${_progressText(_startingRaceProgress + detected, _raceTarget)}. Keep going."
+                          ? (_hasFinishTarget
+                                ? "You're at ${_progressText(_startingRaceProgress + detected, _raceTarget)}. Keep going."
+                                : 'You logged ${formatMotionTarget(_measure, _startingRaceProgress + detected, _displayUnit)}. Keep going.')
                           : 'Nothing counted this time — line yourself up and try again.',
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: NuvoColors.white.withValues(alpha: 0.78),
-                      ),
+                      style: V13.bodyStrong,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
@@ -2433,9 +2922,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                               _serverAnalysis!.failureReasons.isNotEmpty
                           ? _serverAnalysis!.failureReasons.first
                           : 'Keep the camera view clear and try again.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.white.withValues(alpha: 0.6),
-                      ),
+                      style: V13.body.copyWith(color: V13.muted),
                       textAlign: TextAlign.center,
                     ),
                     if (kDebugMode) ...[
@@ -2445,13 +2932,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         icon: const Icon(
                           Icons.ios_share_rounded,
                           size: 18,
-                          color: NuvoColors.white,
+                          color: V13.navy,
                         ),
                         label: Text(
                           'Share session',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: NuvoColors.white,
-                          ),
+                          style: V13.caption.copyWith(color: V13.navy),
                         ),
                       ),
                     ],
@@ -2475,7 +2960,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// Keyed on [_repFlashSeq] so each lands with its own animation.
   Widget _repFlashOverlay() {
     final inStreak = _streakCount >= 2;
-    final flashColor = inStreak ? NuvoColors.brightGold : NuvoColors.white;
+    final flashColor = inStreak ? V13.sun : V13.white;
     final burstText = _isDistanceRace
         ? '${_distancePolicy.metresAtMilestone(_distancePolicy.milestonesCrossed(_displayedRaceProgress))} m'
         : '+${_streakCount > 0 ? _streakCount : 1}';
@@ -2486,7 +2971,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         offset: Offset(0, 3),
       ),
       Shadow(
-        color: NuvoColors.brightGold.withValues(alpha: 0.4),
+        color: V13.sun.withValues(alpha: 0.4),
         blurRadius: 28,
         offset: Offset.zero,
       ),
@@ -2503,7 +2988,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                       // the same badge (+1 -> +2 -> +3). Distance: the
                       // checkpoint just crossed.
                       burstText,
-                      style: AppTextStyles.displayLarge.copyWith(
+                      style: V13.hugeNumber.copyWith(
                         fontSize: _isDistanceRace ? 120 : 200,
                         height: 0.9,
                         color: flashColor,
@@ -2515,24 +3000,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                       Container(
                         padding: const EdgeInsets.fromLTRB(20, 10, 24, 10),
                         decoration: BoxDecoration(
-                          color: NuvoColors.brightGold,
-                          borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                          color: V13.sun,
+                          borderRadius: BorderRadius.circular(V13.radiusPill),
+                          border: Border.all(
+                            color: V13.navy,
+                            width: V13.outline,
+                          ),
+                          boxShadow: V13.shadow3,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(
                               Icons.whatshot_rounded,
-                              color: NuvoColors.navy,
+                              color: V13.navy,
                               size: 32,
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              _streakLabel,
-                              style: AppTextStyles.headlineLarge.copyWith(
-                                color: NuvoColors.navy,
-                              ),
-                            ),
+                            Text(_streakLabel, style: V13.sectionHead),
                           ],
                         ),
                       ),
@@ -2551,10 +3036,22 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final showsPace =
         _isDistanceRace &&
         motionProgressShowsPace(MotionMeasurementType.distance, _raceTarget);
-    final phaseLine = motionProgressPhase(
+    final phase = motionProgressPhase(
       current: _displayedRaceProgress,
       target: _raceTarget,
-    ).label;
+    );
+    // A milestone/new-best beat holds the line for its flash window;
+    // otherwise the phase pool's rotating line shows.
+    final flashActive =
+        _hudFlashUntil != null && DateTime.now().isBefore(_hudFlashUntil!);
+    final phaseLine = flashActive
+        ? _encouragement.flashLine
+        : _encouragement.phaseLine(
+            phase,
+            elapsedSeconds: _elapsed.inSeconds,
+            rotationTick:
+                _elapsed.inSeconds ~/ SessionEncouragement.rotationSeconds,
+          );
     final effort = [
       if (showsPace) ?_paceLabel,
       if (showsPace) ?_intensityLabel,
@@ -2562,9 +3059,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: NuvoColors.navy.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: NuvoColors.white.withValues(alpha: 0.16)),
+        color: V13.card,
+        borderRadius: BorderRadius.circular(V13.radiusCard),
+        border: Border.all(color: V13.navy, width: V13.outline),
+        boxShadow: V13.shadow4,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -2574,24 +3072,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  _raceProgressReadout,
-                  style: AppTextStyles.displayLarge.copyWith(
-                    color: NuvoColors.white,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _raceProgressReadout,
+                    style: V13.hugeNumber.copyWith(fontSize: 44),
                   ),
                 ),
                 Text(
                   effort.isNotEmpty ? effort : phaseLine,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: NuvoColors.white,
-                  ),
+                  style: V13.bodyStrong,
                 ),
               ],
             ),
           ),
           Text(
-            _formatElapsed(_elapsed),
-            style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.white),
+            _formatElapsed(_timedRemaining ?? _elapsed),
+            style: V13.numberSm.copyWith(color: V13.muted),
           ),
         ],
       ),
@@ -2602,14 +3100,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: NuvoColors.danger.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: NuvoColors.danger.withValues(alpha: 0.45)),
+        color: V13.card,
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
+        border: Border.all(color: V13.danger, width: V13.outline),
       ),
-      child: Text(
-        message,
-        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
-      ),
+      child: Text(message, style: V13.caption.copyWith(color: V13.danger)),
     );
   }
 
@@ -2622,62 +3117,92 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       AiMotionProofStatus.setup =>
         _message != null
             ? [
-                NuvoPrimaryButton(
+                V13Button.primary(
                   label: 'Try again',
                   icon: Icons.replay_rounded,
-                  expand: true,
+                  fullWidth: true,
                   onPressed: _loadRace,
                 ),
                 const SizedBox(height: 12),
-                NuvoOutlineButton(
+                V13Button.secondary(
                   label: 'Back',
-                  expand: true,
-                  onPressed: () =>
-                      safePopOrGo(context, '/race/${widget.raceId}'),
+                  fullWidth: true,
+                  onPressed: _leaveScreen,
                 ),
               ]
             : [const SizedBox.shrink()],
       AiMotionProofStatus.unsupportedMovement => [
-        NuvoOutlineButton(
+        V13Button.secondary(
           label: 'Back',
-          expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+          fullWidth: true,
+          onPressed: _leaveScreen,
         ),
       ],
-      AiMotionProofStatus.cameraReady => [
-        NuvoPrimaryButton(
-          label: 'Start recording',
-          icon: Icons.videocam_rounded,
-          expand: true,
-          onPressed: _startRecording,
-        ),
-      ],
+      AiMotionProofStatus.cameraReady => _timedTake?.countingDown == true
+          ? [
+              // The 3-2-1 is running — the only action is backing out of it.
+              V13Button.secondary(
+                label: 'Cancel',
+                fullWidth: true,
+                onPressed: _releaseTimedAttempt,
+              ),
+            ]
+          : _attemptLimitReached
+          ? [
+              _errorMessage(
+                'All $_attemptLimit attempts used — no attempts left in this race.',
+              ),
+              const SizedBox(height: 12),
+              V13Button.secondary(
+                label: 'Back',
+                fullWidth: true,
+                onPressed: _leaveScreen,
+              ),
+            ]
+          : [
+              if (_attemptUsageShown) ...[
+                Center(
+                  child: _pill(
+                    timedAttemptsUsedLabel(_attemptLimit, _attemptsUsed),
+                    color: V13.card,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              V13Button.primary(
+                label: 'Start recording',
+                icon: Icons.videocam_rounded,
+                fullWidth: true,
+                onPressed: _startRecording,
+              ),
+            ],
       AiMotionProofStatus.recording => [
-        NuvoPrimaryButton(
-          label: 'Done',
+        V13Button.primary(
+          // A timed take finishes itself at zero — the button is the early out.
+          label: _timedTake != null ? 'Finish early' : 'Done',
           icon: Icons.check_rounded,
-          expand: true,
+          fullWidth: true,
           onPressed: _finishRecording,
         ),
         const SizedBox(height: 12),
-        NuvoOutlineButton(
+        V13Button.secondary(
           label: 'Cancel',
-          expand: true,
+          fullWidth: true,
           onPressed: _recordAgain,
         ),
       ],
       AiMotionProofStatus.aiVerified => [
-        NuvoPrimaryButton(
+        V13Button.primary(
           label: 'Add to race',
           icon: Icons.verified_rounded,
-          expand: true,
+          fullWidth: true,
           onPressed: _submitVerifiedProof,
         ),
         const SizedBox(height: 12),
-        NuvoOutlineButton(
+        V13Button.secondary(
           label: 'Record again',
           icon: Icons.replay_rounded,
-          expand: true,
+          fullWidth: true,
           onPressed: _recordAgain,
         ),
       ],
@@ -2687,33 +3212,33 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // OS settings deep link (same 'app-settings:' scheme the QR scanner
       // uses) and the way back.
       AiMotionProofStatus.permissionDenied => [
-        NuvoPrimaryButton(
+        V13Button.primary(
           label: 'Open Settings',
           icon: Icons.settings_rounded,
-          expand: true,
+          fullWidth: true,
           onPressed: () => launchUrl(Uri.parse('app-settings:')),
         ),
         const SizedBox(height: 12),
-        NuvoOutlineButton(
+        V13Button.secondary(
           label: 'Back',
-          expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+          fullWidth: true,
+          onPressed: _leaveScreen,
         ),
       ],
       AiMotionProofStatus.aiFailed || AiMotionProofStatus.cameraError => [
-        NuvoPrimaryButton(
+        V13Button.primary(
           label: _basketballPreflightFailed
               ? 'Retry verification'
               : 'Record again',
           icon: Icons.replay_rounded,
-          expand: true,
+          fullWidth: true,
           onPressed: _basketballPreflightFailed ? _loadRace : _recordAgain,
         ),
       ],
       _ => [
-        NuvoPrimaryButton(
+        V13Button.primary(
           label: loading ? 'Checking move' : 'Begin',
-          expand: true,
+          fullWidth: true,
           loading: loading,
           onPressed: null,
         ),
@@ -2722,19 +3247,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Widget _pill(String label, {required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.white,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
+    return V13Pill(
+      label: label,
+      color: color,
+      textColor: color.computeLuminance() > 0.5 ? V13.navy : V13.white,
     );
   }
 
@@ -2753,26 +3269,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         ? 'Step back into frame'
         : 'Get in position';
     final color = recording && targetReached
-        ? NuvoColors.success
+        ? V13.mint
         : recording && visible
-        ? NuvoColors.blue
-        : NuvoColors.navy;
+        ? V13.blue
+        : V13.card;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: NuvoColors.white.withValues(alpha: 0.14)),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.white,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
+    return _pill(label, color: color);
   }
 
   String get _cameraPlaceholderText {
@@ -2780,7 +3282,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return 'This movement cannot be camera verified yet.';
     }
     if (_status == AiMotionProofStatus.processing) return 'Starting camera...';
-    return 'Step into frame.';
+    return 'Put your phone down so Nuvo sees your whole body.';
   }
 
   String _formatElapsed(Duration duration) {
@@ -2793,7 +3295,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     if (_isObjectComposition) {
       return '$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}';
     }
-    final value = result?.detectedReps ?? _targetValue;
+    final value = result?.detectedReps ?? _targetValue ?? 0;
     final definition = motionActivityForBackendValue(_activityId);
     if (_isDistanceRace) return formatMotionTarget(_measure, value, 'mi');
     if (definition?.isHold == true) return '$value seconds';
@@ -2802,7 +3304,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   String _customCountedLabel(CustomPoseRuntimeResult? result) {
-    final value = result?.count ?? _targetValue;
+    final value = result?.count ?? _targetValue ?? 0;
     return '$value ${result?.movementName ?? _customMovementName ?? 'reps'}';
   }
 }
@@ -2847,7 +3349,7 @@ class _BodyGuidePainter extends CustomPainter {
       const Radius.circular(16),
     );
     final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.3)
+      ..color = V13.white.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawRRect(rect, paint);

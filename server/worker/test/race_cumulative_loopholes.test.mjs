@@ -23,6 +23,7 @@ const SCHEMA = [
   readFileSync(new URL('migrations/0042_achievements.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0043_proof_votes.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0044_custom_verifier_seed.sql', root), 'utf8'),
+  readFileSync(new URL('migrations/0050_race_rules_version.sql', root), 'utf8'),
 ];
 
 // ── D1 adapter over node:sqlite ──────────────────────────────────────────────
@@ -358,22 +359,70 @@ test('B3: absurd, zero, negative and non-numeric values never score', async () =
   w.user('A'); w.user('B');
   w.race('r1', 'A', { target_value: null });
   w.member('r1', 'B');
-  for (const bad of [1e9, 1_000_001, 100_001, 0, -5, 0.4, 'ten', null]) {
+  // The flat per-proof caps are gone (S7): only the 1,000,000 absolute
+  // ceiling bounds an honor value, plus the usual type/zero checks.
+  for (const bad of [1e9, 1_000_001, 0, -5, 0.4, 'ten', null]) {
     const res = await submit(w, 'B', 'r1', bad);
     assert.equal(res.status, 400, `value ${bad} -> ${res.status} ${res.text}`);
   }
   assert.equal(w.progress('r1', 'B'), 0);
-  assert.equal((await submit(w, 'B', 'r1', 100_000)).status, 200, 'honor units are free-form up to the cap');
+  assert.equal((await submit(w, 'B', 'r1', 100_000)).status, 200, 'honor units are free-form up to the ceiling');
+  assert.equal((await submit(w, 'B', 'r1', 150_000)).status, 200, 'the 1e6 ceiling — not the old 100k cap — is the only bound');
 });
 
-test('B3: preset rep races cap a single proof far below 1e6', async () => {
+// A registry row + stable release + channel pointer so sessions mint on the
+// activity (same seed shape as race_s07.test.mjs / final_matrix.test.mjs).
+function seedActivityRelease(w, activityId) {
+  w.exec(
+    `INSERT INTO motion_activities (id, display_name, category, proof_label, measurement_type, metric,
+       suggested_targets_json, supported_formats_json, icon_key, availability)
+     VALUES (?, ?, 'cardio', ?, 'repetitions', 'reps', '[10]', '["first_to_goal","most_in_window","best_attempt","timed_attempt"]', 'x', 'supported')`,
+    activityId, activityId, activityId,
+  );
+  const cols = w.q("SELECT name FROM pragma_table_info('verifier_releases')").map((c) => c.name);
+  const seeded = w.one("SELECT spec_json FROM verifier_releases WHERE activity_id = 'custom_pose_sequence' LIMIT 1");
+  const spec = { ...JSON.parse(seeded.spec_json), releaseId: `rel-${activityId}`, activityId };
+  const values = {
+    id: `rel-${activityId}`, activity_id: activityId, semver: '2026.09.0',
+    change_class: 'minor', engine_type: 'native_v1', spec_schema_version: 1,
+    spec_json: JSON.stringify(spec), checksum: `sum-${activityId}`,
+    required_capabilities_json: '[]', minimum_app_build: 'legacy',
+    compatibility_group: `g-${activityId}`, status: 'stable',
+  };
+  const use = cols.filter((c) => values[c] !== undefined);
+  w.exec(`INSERT INTO verifier_releases (${use.join(', ')}) VALUES (${use.map(() => '?').join(', ')})`, ...use.map((c) => values[c]));
+  w.exec("INSERT INTO activity_channel_releases (activity_id, channel, release_id, rollout_percent) VALUES (?, 'stable', ?, 100)", activityId, `rel-${activityId}`);
+}
+
+test('B3: an impossible camera count is refused by plausibility — there is no flat cap', async () => {
   const w = world();
   w.user('A');
-  w.race('r2', 'A', { target_value: null, verifier_type: null, verification_type: 'movecheck', activity_id: 'push_ups', movement_type: 'push_ups', metric: 'reps', target_unit: 'reps' });
-  w.exec("UPDATE races SET verification_method = 'camera_pose' WHERE id = 'r2'");
-  const res = await submit(w, 'A', 'r2', 50_000);
+  seedActivityRelease(w, 'push_ups');
+  const created = await w.req('A', 'POST', '/races', {
+    title: 'Pushups most', goalType: 'most_in_window', format: 'most_in_window',
+    finishLineAt: iso(HOUR), activityId: 'push_ups', aiActivityType: 'push_ups',
+    metric: 'reps', unit: 'reps', targetUnit: 'reps',
+    proofRequirement: 'ai_check', proofMode: 'ai_check', proofReviewMode: 'auto_accept',
+  });
+  assert.equal(created.status, 201, created.text);
+  const raceId = created.json.race.id;
+  const mint = await w.req('A', 'POST', `/races/${raceId}/verification-sessions`, { runtimeCapabilities: [] });
+  assert.equal(mint.status, 201, mint.text);
+  const vs = mint.json.session;
+  const done = await w.req('A', 'POST', `/verification-sessions/${vs.id}/complete`, {
+    releaseId: vs.releaseId, releaseChecksum: vs.releaseChecksum,
+    status: 'completed', resultValue: 50_000,
+  });
+  assert.equal(done.status, 200, done.text);
+  // 50,000 reps in a one-minute recording is physically impossible — refused
+  // by the rep-rate bound, not the retired 3,000-rep flat cap.
+  const res = await w.req('A', 'POST', `/races/${raceId}/proof`, {
+    proofType: 'ai_motion', metric: 'reps', value: 50_000, durationMs: 60_000,
+    clientSubmissionId: 'cs-b3', verificationSessionId: vs.id,
+    verificationStatus: 'ai_verified', activityType: 'push_ups',
+  });
   assert.equal(res.status, 400, res.text);
-  assert.match(res.json.error, /too large|range/i);
+  assert.match(res.json.error, /not possible/i);
 });
 
 // ── B4: PATCH locks ─────────────────────────────────────────────────────────

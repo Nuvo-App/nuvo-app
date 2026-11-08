@@ -12,6 +12,7 @@ const root = new URL('..', import.meta.url);
 const SCHEMA = [
   readFileSync(new URL('test/fixtures/prod_schema_2026-09-28.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0043_proof_votes.sql', root), 'utf8'),
+  readFileSync(new URL('migrations/0050_race_rules_version.sql', root), 'utf8'),
 ];
 
 function d1(sqlite, hooks = {}) {

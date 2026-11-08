@@ -262,3 +262,19 @@ The following areas must not be modified without explicit, scoped approval:
 | iOS native files (`Podfile`, `project.pbxproj`, `Info.plist`) | Corruption breaks all iOS builds |
 | Dependencies (`pubspec.yaml`, `pubspec.lock`) | Upgrades can silently break ML Kit + camera + secure storage |
 | Backend schema (`server/worker/`) | D1 schema changes can corrupt production data |
+
+---
+
+## v13 redesign note (2026-11)
+
+The v13 design (docs/redesign/PROTOTYPE_V13_SPEC.md) supersedes parts of the
+screen-ownership tables above:
+
+- Tabs are Arena, Compete, Crew, Profile. The Crew tab (route `/pass`) holds
+  both friends (person links) and crews (groups); copy still keeps the
+  friend/crew distinction.
+- Arena shows your race swiper plus stats, activity map and achievements;
+  the podium lives on Race detail.
+- Compete shows live races, friends' open races, a friends leaderboard,
+  trending moves and the trophy shelf, with "New race" as its primary action.
+- Decided adaptations are listed in docs/redesign/FEASIBILITY.md (A1–A17).

@@ -37,6 +37,37 @@ extension RaceFormatSemantics on RaceFormat {
       : 'cumulative_sum';
 }
 
+/// One line that names a timed battle's win condition — direction-aware,
+/// and honest when the attempt length is missing (a NULL duration never
+/// prints "0s"). Race detail and the verifier status line share this so
+/// the same race reads the same way everywhere.
+String timedAttemptRuleLine(String scoreDirection, int? durationSeconds) {
+  final window = durationSeconds != null && durationSeconds > 0
+      ? formatDurationShort(durationSeconds)
+      : null;
+  return switch ((scoreDirection == 'lower', window)) {
+    (true, null) => 'Timed battle — lowest score wins',
+    (false, null) => 'Timed battle',
+    (true, final w) => 'Lowest in $w wins',
+    (false, final w) => 'Most in $w wins',
+  };
+}
+
+/// Session level: this take's raw count has reached its own finish line —
+/// for first_to_goal the session target is the remaining-to-goal count, so
+/// crossing it means the take ends itself exactly as if the athlete tapped
+/// Done. Sessions with no finish line (window and attempt formats carry a
+/// null [sessionTarget]) never reach one.
+bool sessionReachedFinishTarget({
+  required bool hasFinishTarget,
+  required int? sessionTarget,
+  required int sessionValue,
+}) =>
+    hasFinishTarget &&
+    sessionTarget != null &&
+    sessionTarget > 0 &&
+    sessionValue >= sessionTarget;
+
 /// The competitive context a verifier needs to talk about the race it's
 /// measuring — built from the race payload (`viewerContext` first: it is
 /// server-computed truth; participant standings are the fallback).
@@ -184,8 +215,7 @@ class VerifierRaceContext {
           iHoldLead ? 'Beat your best: $beat' : 'Beat $beat',
       },
     RaceFormat.timedAttempt => switch (scoreToBeat) {
-        null =>
-          'Most in ${formatDurationShort(attemptDurationSeconds ?? 0)} wins',
+        null => timedAttemptRuleLine(scoreDirection, attemptDurationSeconds),
         final beat =>
           lowerWins ? 'Go under $beat' : 'Beat $beat',
       },

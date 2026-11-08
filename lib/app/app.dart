@@ -4,10 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
+import '../core/v13/v13.dart';
 import '../core/theme/nuvo_responsive.dart';
-import '../core/theme/nuvo_theme_mode.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/notifications/application/push_service.dart';
 import '../features/onboarding/data/first_use_store.dart';
@@ -25,7 +24,8 @@ bool shouldDrainPendingDestination(AuthState? prev, AuthState next) {
   final user = next.user;
   if (user == null || !user.onboardingComplete) return false;
   final becameAuthed = prev?.status != AuthStatus.authenticated;
-  final finishedOnboarding = prev?.status == AuthStatus.authenticated &&
+  final finishedOnboarding =
+      prev?.status == AuthStatus.authenticated &&
       prev?.user != null &&
       !prev!.user!.onboardingComplete;
   return becameAuthed || finishedOnboarding;
@@ -87,7 +87,9 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
       _deepLinksStarted = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(deepLinkControllerProvider).start(router);
-        ref.read(pushServiceProvider).start(router); // dormant until Firebase configured
+        ref
+            .read(pushServiceProvider)
+            .start(router); // dormant until Firebase configured
         // Push unregister must run while the access token is still valid —
         // the auth listener fires only after the store clears, which is too
         // late, so the controller invokes this hook before clearing.
@@ -109,11 +111,14 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
             FirstRaceGuideStep.idle;
         return;
       }
-      final becameAuthed = prev?.status != AuthStatus.authenticated &&
+      final becameAuthed =
+          prev?.status != AuthStatus.authenticated &&
           next.status == AuthStatus.authenticated;
       if (becameAuthed) ref.read(pushServiceProvider).onSignedIn();
       if (!shouldDrainPendingDestination(prev, next)) return;
-      final location = await ref.read(pendingDestinationStoreProvider).consume();
+      final location = await ref
+          .read(pendingDestinationStoreProvider)
+          .consume();
       if (location == null || location.isEmpty) return;
       _goWhenOutOfOnboarding(router, location);
     });
@@ -132,7 +137,8 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
       }
     });
 
-    final themeMode = ref.watch(nuvoThemeModeProvider);
+    // v13 is light-only for this release (FEASIBILITY A9).
+    final themeMode = ThemeMode.light;
     final brightness = themeMode == ThemeMode.dark
         ? Brightness.dark
         : Brightness.light;
@@ -156,9 +162,7 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
 
 Widget _appBuilder(BuildContext context, Widget? child) {
   final content = NuvoTextScaleScope(
-    child: _KeyboardDismissScope(
-      child: child ?? const SizedBox.shrink(),
-    ),
+    child: _KeyboardDismissScope(child: child ?? const SizedBox.shrink()),
   );
   if (kIsWeb) return _webPreviewBuilder(context, content);
   return content;
@@ -198,7 +202,7 @@ Widget _webPreviewBuilder(BuildContext context, Widget? child) {
   final content = child ?? const SizedBox.shrink();
   if (width <= 600) return content;
   return Container(
-    color: NuvoColors.page,
+    color: V13.bg,
     child: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 430),

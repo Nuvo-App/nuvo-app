@@ -5,11 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/otp_input.dart';
 import '../data/auth_api.dart';
 import 'auth_controller.dart';
 
@@ -133,9 +130,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
         for (final c in _controllers) {
           c.clear();
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('New code sent')));
+        showV13Toast(context, 'New code sent');
         _startResendCooldown();
       }
     } on ApiException catch (e) {
@@ -161,7 +156,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -175,14 +170,17 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              NuvoBackButton(
-                                onPressed: () =>
+                              V13IconButton(
+                                icon: Icons.arrow_back,
+                                shape: V13IconButtonShape.square,
+                                semanticLabel: 'Back',
+                                onTap: () =>
                                     safePopOrGo(context, '/auth/email'),
                               ),
                               const SizedBox(height: 24),
                               Text(
                                 'Check your email',
-                                style: AppTextStyles.headlineLarge.copyWith(
+                                style: V13.title.copyWith(
                                   fontSize: 32,
                                   letterSpacing: -0.9,
                                 ),
@@ -190,18 +188,20 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                               const SizedBox(height: 10),
                               Text(
                                 'Enter the 6-digit code we sent to ${widget.email}.',
-                                style: AppTextStyles.bodyLarge.copyWith(
-                                  color: context.themeColors.inkMuted,
+                                style: V13.body.copyWith(
+                                  color: V13.muted,
+                                  fontSize: 15,
                                 ),
                               ),
                               const SizedBox(height: 32),
-                              OtpInput(controllers: _controllers),
+                              V13OtpInput(controllers: _controllers),
                               if (_error != null) ...[
                                 const SizedBox(height: 12),
                                 Text(
                                   _error!,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: context.themeColors.dangerText,
+                                  style: V13.caption.copyWith(
+                                    fontSize: 13,
+                                    color: V13.danger,
                                   ),
                                 ),
                               ],
@@ -209,9 +209,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                               Center(
                                 child: Text(
                                   "Didn't get a code?",
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: context.themeColors.inkMuted,
-                                  ),
+                                  style: V13.caption.copyWith(fontSize: 13),
                                 ),
                               ),
                               const SizedBox(height: 6),
@@ -227,12 +225,13 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                                         : _resendCooldownLeft > 0
                                         ? 'Resend code in ${_resendCooldownLeft}s'
                                         : 'Resend code',
-                                    style: AppTextStyles.bodySmall.copyWith(
+                                    style: V13.caption.copyWith(
+                                      fontSize: 13,
                                       color:
                                           (_resending ||
                                               _resendCooldownLeft > 0)
-                                          ? context.themeColors.inkMuted
-                                          : context.themeColors.accent,
+                                          ? V13.muted
+                                          : V13.blue,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -255,10 +254,10 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
             // ── Pinned CTA ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: NuvoPrimaryButton(
+              child: V13Button.primary(
                 label: 'Verify code',
                 icon: Icons.arrow_forward_rounded,
-                expand: true,
+                fullWidth: true,
                 loading: _loading,
                 onPressed: _canVerify ? _verify : null,
               ),

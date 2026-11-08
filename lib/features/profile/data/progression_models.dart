@@ -25,16 +25,16 @@ class NuvoUnlockRef {
   final Map<String, dynamic>? metadata;
 
   factory NuvoUnlockRef.fromJson(Map<String, dynamic> json) => NuvoUnlockRef(
-        unlockId: (jStr(json['unlockId']) ?? ''),
-        level: jInt(json['level']) ?? 0,
-        type: jStr(json['type']) ?? 'badge',
-        key: jStr(json['key']) ?? '',
-        name: jStr(json['name']) ?? '',
-        description: jStr(json['description']),
-        metadata: json['metadata'] is Map<String, dynamic>
-            ? json['metadata'] as Map<String, dynamic>
-            : null,
-      );
+    unlockId: (jStr(json['unlockId']) ?? ''),
+    level: jInt(json['level']) ?? 0,
+    type: jStr(json['type']) ?? 'badge',
+    key: jStr(json['key']) ?? '',
+    name: jStr(json['name']) ?? '',
+    description: jStr(json['description']),
+    metadata: json['metadata'] is Map<String, dynamic>
+        ? json['metadata'] as Map<String, dynamic>
+        : null,
+  );
 }
 
 class NuvoBadge {
@@ -99,25 +99,25 @@ class NuvoBadge {
   }
 
   factory NuvoBadge.fromJson(Map<String, dynamic> json) => NuvoBadge(
-        unlockId: (jStr(json['unlockId']) ?? ''),
-        type: jStr(json['type']) ?? 'badge',
-        key: jStr(json['key']) ?? '',
-        name: jStr(json['name']) ?? '',
-        description: jStr(json['description']),
-        requiredLevel: jInt(json['requiredLevel']) ?? 0,
-        metadata: json['metadata'] is Map<String, dynamic>
-            ? json['metadata'] as Map<String, dynamic>
-            : null,
-        unlocked: jBool(json['unlocked']) ?? false,
-        unlockedAt: jStr(json['unlockedAt']),
-        featured: jBool(json['featured']) ?? false,
-        position: jInt(json['position']),
-        category: jStr(json['category']),
-        iconKey: jStr(json['iconKey']),
-        statKey: jStr(json['statKey']),
-        threshold: jInt(json['threshold']),
-        progressValue: jInt(json['progressValue']) ?? 0,
-      );
+    unlockId: (jStr(json['unlockId']) ?? ''),
+    type: jStr(json['type']) ?? 'badge',
+    key: jStr(json['key']) ?? '',
+    name: jStr(json['name']) ?? '',
+    description: jStr(json['description']),
+    requiredLevel: jInt(json['requiredLevel']) ?? 0,
+    metadata: json['metadata'] is Map<String, dynamic>
+        ? json['metadata'] as Map<String, dynamic>
+        : null,
+    unlocked: jBool(json['unlocked']) ?? false,
+    unlockedAt: jStr(json['unlockedAt']),
+    featured: jBool(json['featured']) ?? false,
+    position: jInt(json['position']),
+    category: jStr(json['category']),
+    iconKey: jStr(json['iconKey']),
+    statKey: jStr(json['statKey']),
+    threshold: jInt(json['threshold']),
+    progressValue: jInt(json['progressValue']) ?? 0,
+  );
 }
 
 /// Server-computed race record shown on Profile. Sibling of `progression`
@@ -128,6 +128,10 @@ class ProfileRecord {
     required this.finished,
     required this.wins,
     this.winRatePercent,
+    this.friends,
+    this.streakDays,
+    this.bestStreakDays,
+    this.proofsThisWeek,
   });
 
   final int active;
@@ -137,12 +141,23 @@ class ProfileRecord {
   /// Integer percent; null when [finished] is 0.
   final int? winRatePercent;
 
+  /// v13 strip (additive, migration 0048): friend count plus day-streak
+  /// stats derived from verified move logs. Null on older servers.
+  final int? friends;
+  final int? streakDays;
+  final int? bestStreakDays;
+  final int? proofsThisWeek;
+
   factory ProfileRecord.fromJson(Map<String, dynamic> json) => ProfileRecord(
-        active: jInt(json['active']) ?? 0,
-        finished: jInt(json['finished']) ?? 0,
-        wins: jInt(json['wins']) ?? 0,
-        winRatePercent: (jDouble(json['winRatePercent']))?.round(),
-      );
+    active: jInt(json['active']) ?? 0,
+    finished: jInt(json['finished']) ?? 0,
+    wins: jInt(json['wins']) ?? 0,
+    winRatePercent: (jDouble(json['winRatePercent']))?.round(),
+    friends: jInt(json['friends']),
+    streakDays: jInt(json['streakDays']),
+    bestStreakDays: jInt(json['bestStreakDays']),
+    proofsThisWeek: jInt(json['proofsThisWeek']),
+  );
 }
 
 class NuvoProgression {
@@ -205,23 +220,23 @@ class NuvoProgression {
   }
 
   NuvoProgression withRecord(ProfileRecord? record) => NuvoProgression(
-        level: level,
-        totalXp: totalXp,
-        currentLevelXp: currentLevelXp,
-        nextLevelXp: nextLevelXp,
-        progress: progress,
-        xpToNext: xpToNext,
-        lastSeenLevel: lastSeenLevel,
-        featuredSlots: featuredSlots,
-        achievementsEarned: achievementsEarned,
-        achievementsTotal: achievementsTotal,
-        nextUnlock: nextUnlock,
-        levelUnlock: levelUnlock,
-        nextAchievement: nextAchievement,
-        featuredBadges: featuredBadges,
-        newlyEarned: newlyEarned,
-        record: record,
-      );
+    level: level,
+    totalXp: totalXp,
+    currentLevelXp: currentLevelXp,
+    nextLevelXp: nextLevelXp,
+    progress: progress,
+    xpToNext: xpToNext,
+    lastSeenLevel: lastSeenLevel,
+    featuredSlots: featuredSlots,
+    achievementsEarned: achievementsEarned,
+    achievementsTotal: achievementsTotal,
+    nextUnlock: nextUnlock,
+    levelUnlock: levelUnlock,
+    nextAchievement: nextAchievement,
+    featuredBadges: featuredBadges,
+    newlyEarned: newlyEarned,
+    record: record,
+  );
 
   /// The server has a level the client has not yet acknowledged — the
   /// level-up moment should present exactly once.
@@ -246,7 +261,9 @@ class NuvoProgression {
             ? NuvoBadge.fromJson(json['levelUnlock'] as Map<String, dynamic>)
             : null,
         nextAchievement: json['nextAchievement'] is Map<String, dynamic>
-            ? NuvoBadge.fromJson(json['nextAchievement'] as Map<String, dynamic>)
+            ? NuvoBadge.fromJson(
+                json['nextAchievement'] as Map<String, dynamic>,
+              )
             : null,
         featuredBadges: (json['featuredBadges'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
@@ -274,19 +291,19 @@ class NuvoRaceXp {
   final List<NuvoBadge> earned;
 
   factory NuvoRaceXp.fromJson(Map<String, dynamic> json) => NuvoRaceXp(
-        lines: (json['lines'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map((l) => NuvoXpLine(
-                  label: jStr(l['label']) ?? '',
-                  xp: jInt(l['xp']) ?? 0,
-                ))
-            .toList(),
-        totalXp: jInt(json['totalXp']) ?? 0,
-        earned: (json['earned'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map(NuvoBadge.fromJson)
-            .toList(),
-      );
+    lines: (json['lines'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (l) =>
+              NuvoXpLine(label: jStr(l['label']) ?? '', xp: jInt(l['xp']) ?? 0),
+        )
+        .toList(),
+    totalXp: jInt(json['totalXp']) ?? 0,
+    earned: (json['earned'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(NuvoBadge.fromJson)
+        .toList(),
+  );
 }
 
 class NuvoXpLine {

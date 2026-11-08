@@ -59,6 +59,12 @@ export interface ProfileRow {
   is_demo: number;
   created_at: string;
   updated_at: string;
+  // v13 (migration 0048) — optional because SELECT * on a pre-0048 schema
+  // simply doesn't return them.
+  bio?: string | null;
+  favorite_movement_key?: string | null;
+  activity_map_shared?: number;
+  race_invites_from?: string;
 }
 
 export interface PassRow {
@@ -147,6 +153,7 @@ export interface RaceRow {
   verifier_release_id?: string | null;
   score_direction?: string | null;
   proof_review_mode?: string | null;
+  rules_version?: number | null;
   version?: number | null;
   is_live_session?: number | null;
   live_window_seconds?: number | null;
@@ -217,6 +224,14 @@ export interface BlockedUserRow {
   id: string;
   user_id: string;
   blocked_user_id: string;
+  created_at: string;
+}
+
+export interface UserMuteRow {
+  id: string;
+  user_id: string;
+  target_type: 'user' | 'crew';
+  target_id: string;
   created_at: string;
 }
 

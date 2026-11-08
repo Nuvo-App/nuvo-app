@@ -37,7 +37,9 @@ class _Repo implements CrewRepository, CrewConditionalSource {
   final seenEtags = <String?>[];
 
   @override
-  Future<Conditional<List<PublicUser>>> getCrewConditional({String? etag}) async {
+  Future<Conditional<List<PublicUser>>> getCrewConditional({
+    String? etag,
+  }) async {
     seenEtags.add(etag);
     await gate?.future;
     return next;
@@ -60,7 +62,8 @@ class _Repo implements CrewRepository, CrewConditionalSource {
   @override
   Future<List<CrewSearchResult>> search(String query) async => const [];
   @override
-  Future<PublicProfileCard> getUser(String userId) => throw UnimplementedError();
+  Future<PublicProfileCard> getUser(String userId) =>
+      throw UnimplementedError();
   @override
   Future<void> reportUser(String userId, {String? reason}) async {}
   @override
@@ -71,10 +74,22 @@ class _Repo implements CrewRepository, CrewConditionalSource {
   Future<void> blockUser(String userId) async {}
   @override
   Future<void> unblockUser(String userId) async {}
+  @override
+  Future<PublicUserActivity> getUserActivity(String userId) =>
+      throw UnimplementedError();
+  @override
+  Future<void> muteUser(String userId) async {}
+  @override
+  Future<void> unmuteUser(String userId) async {}
+  @override
+  Future<List<PublicUser>> getBlocked() async => const [];
 }
 
-CrewController _controller(_Repo repo, CacheStore cache, String? Function() account) =>
-    CrewController(repo, cache: cache, accountId: account);
+CrewController _controller(
+  _Repo repo,
+  CacheStore cache,
+  String? Function() account,
+) => CrewController(repo, cache: cache, accountId: account);
 
 void main() {
   test('hydrates from disk, then revalidates with the stored etag', () async {
@@ -169,11 +184,7 @@ void main() {
     final cache = CacheStore.memory();
     await cache.write('u1', 'crew_feed', {'items': <Object>[]}, etag: 'f1');
     final repo = _FeedRepo();
-    final c = CrewActivityController(
-      repo,
-      cache: cache,
-      accountId: () => 'u1',
-    );
+    final c = CrewActivityController(repo, cache: cache, accountId: () => 'u1');
     await c.load(force: true);
     expect(repo.seenEtags, ['f1']);
     expect(c.state.error, isNull);
@@ -181,7 +192,8 @@ void main() {
   });
 }
 
-class _FeedRepo implements CrewActivityRepository, CrewActivityConditionalSource {
+class _FeedRepo
+    implements CrewActivityRepository, CrewActivityConditionalSource {
   final seenEtags = <String?>[];
 
   @override
@@ -194,8 +206,10 @@ class _FeedRepo implements CrewActivityRepository, CrewActivityConditionalSource
   }
 
   @override
-  Future<List<CrewActivityItem>> getFeed({int limit = 40, String? cursor}) async =>
-      const [];
+  Future<List<CrewActivityItem>> getFeed({
+    int limit = 40,
+    String? cursor,
+  }) async => const [];
   @override
   Future<ReactionSummary> react(CrewActivityItem item, String emoji) =>
       throw UnimplementedError();

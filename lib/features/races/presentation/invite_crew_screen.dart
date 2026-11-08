@@ -1,24 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_fade_scroll.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/v13/v13.dart';
 import '../../social/presentation/race_share_sheet.dart';
 import '../data/race_models.dart';
 import 'race_controller.dart';
 
+/// `/race/:id/invite` — invite friends to a race. Search by username, add
+/// from your friends, share a link/QR, or hand out the typable invite code.
 class InviteCrewScreen extends ConsumerStatefulWidget {
   const InviteCrewScreen({super.key, required this.raceId});
 
@@ -72,11 +66,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
           code = await controller.createInviteCode(widget.raceId);
         } catch (_) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Couldn't create invite code. Try again."),
-              ),
-            );
+            showV13Toast(context, "Couldn't create invite code. Try again.");
           }
         }
       }
@@ -151,16 +141,12 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
           _race = race;
           _adding = _adding.where((id) => id != user.id).toSet();
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${user.displayName} added to race.')),
-        );
+        showV13Toast(context, '${user.displayName} added to race.');
       }
     } catch (_) {
       if (mounted) {
         setState(() => _adding = _adding.where((id) => id != user.id).toSet());
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add this friend.')),
-        );
+        showV13Toast(context, 'Could not add this friend.');
       }
     }
   }
@@ -190,179 +176,164 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     }
   }
 
+  Future<void> _copyCode() async {
+    final code = _inviteCode;
+    if (code == null) return;
+    await Clipboard.setData(ClipboardData(text: code));
+    if (mounted) showV13Toast(context, 'Code copied.');
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: const Center(child: NuvoLoadingIndicator()),
-      );
-    }
-
-    if (_race == null) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: SafeArea(
-          child: NuvoErrorState(
-            message: _error ?? 'Invite details could not load.',
-            onRetry: _load,
-          ),
-        ),
-      );
-    }
-
+    final race = _race;
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
-        child: NuvoFadeScroll(
-          child:
-              ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: NuvoBackButton(
-                        onPressed: () =>
-                            safePopOrGo(context, '/race/${widget.raceId}'),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Invite your friends',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _race!.title,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: context.themeColors.inkMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Add by username'),
-                    const SizedBox(height: 10),
-                    NuvoSearchField(
-                      controller: _searchController,
-                      hint: 'Username or member ID',
-                      searching: _searching,
-                      onChanged: _onSearchChanged,
-                    ),
-                    const SizedBox(height: 12),
-                    if (_searchError != null)
-                      _InlineState(
-                        icon: Icons.wifi_tethering_error_rounded,
-                        text: _searchError!,
-                        actionLabel: 'Try again',
-                        onPressed: () =>
-                            _onSearchChanged(_searchController.text),
-                      ),
-                    for (final user in _results)
-                      _InviteUserRow(
-                        user: user,
-                        added: _isInRace(user.id),
-                        loading: _adding.contains(user.id),
-                        onPressed: () => _addToRace(user),
-                      ),
-                    if (_results.isEmpty &&
-                        _searchController.text.trim().length >= 2 &&
-                        !_searching)
-                      const _SmallPanel(
-                        text: 'No matching Nuvo members found.',
-                      ),
-                    const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Your friends'),
-                    const SizedBox(height: 10),
-                    if (_crew.isEmpty)
-                      const _SmallPanel(
-                        text:
-                            'Add friends in Friends, or use the invite code below.',
-                      )
-                    else
-                      for (final user in _crew)
-                        _InviteUserRow(
-                          user: user,
-                          added: _isInRace(user.id),
-                          loading: _adding.contains(user.id),
-                          onPressed: () => _addToRace(user),
-                        ),
-                    const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Share a link or QR'),
-                    const SizedBox(height: 10),
-                    const _SmallPanel(
-                      text:
-                          'Anyone with the link can preview the race and join — '
-                          'no code to type.',
-                    ),
-                    const SizedBox(height: 12),
-                    NuvoPrimaryButton(
-                      label: 'Share link & QR',
-                      icon: Icons.qr_code_rounded,
-                      expand: true,
-                      onPressed: () => showRaceShareSheet(
-                        context,
-                        raceId: widget.raceId,
-                        raceTitle: _race?.title ?? 'Nuvo race',
-                      ),
-                    ),
-                    if (!isPresentationDemoCreatedRace(widget.raceId)) ...[
-                      const SizedBox(height: 20),
-                      const _SectionLabel(label: 'Or a typable code'),
-                      const SizedBox(height: 10),
-                      _InviteCodeCard(code: _inviteCode),
-                      const SizedBox(height: 14),
-                      if (_inviteCode == null)
-                        NuvoOutlineButton(
-                          label: _generating
-                              ? 'Creating…'
-                              : 'Create invite code',
-                          icon: Icons.key_rounded,
-                          expand: true,
-                          onPressed: _generating ? null : _createCode,
-                        )
-                      else
-                        NuvoCopyButton(
-                          text: _inviteCode!,
-                          label: 'Copy code',
-                          icon: Icons.copy_rounded,
-                          expand: true,
-                        ),
-                    ],
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeColors.dangerText,
-                        ),
-                      ),
-                    ],
-                  ],
-                )
-                .animate()
-                .fadeIn(duration: 220.ms, curve: Curves.easeOut)
-                .slideY(begin: 0.03, end: 0, duration: 260.ms),
+        child: Column(
+          children: [
+            V13BackBar(
+              title: 'Invite your friends',
+              onBack: () => safePopOrGo(context, '/race/${widget.raceId}'),
+            ),
+            Expanded(
+              child: V13AsyncView<Race>.state(
+                status: _loading
+                    ? V13AsyncStatus.loading
+                    : race == null
+                    ? V13AsyncStatus.error
+                    : V13AsyncStatus.data,
+                dataValue: race,
+                errorValue: _error,
+                errorTitle: 'Could not load invite details',
+                onRetry: _load,
+                onRefresh: _load,
+                builder: _body,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-}
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label.toUpperCase(),
-      style: AppTextStyles.labelMedium.copyWith(
-        color: context.themeColors.inkSubtle,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
+  Widget _body(Race race) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapMd,
+        V13.pagePad,
+        V13.gapXxl * 2,
       ),
+      children: [
+        Text(race.title, style: V13.body.copyWith(color: V13.muted)),
+        const SizedBox(height: V13.gapXl),
+        const V13SectionHeader(title: 'Add by username'),
+        const SizedBox(height: V13.gapMd),
+        V13TextInput(
+          controller: _searchController,
+          hint: 'Username or member ID',
+          prefixIcon: const Icon(Icons.search_rounded, color: V13.muted),
+          suffixIcon: _searching
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: V13.blue,
+                    ),
+                  ),
+                )
+              : null,
+          onChanged: _onSearchChanged,
+        ),
+        const SizedBox(height: V13.gapMd),
+        if (_searchError != null)
+          _InlineState(
+            icon: Icons.wifi_tethering_error_rounded,
+            text: _searchError!,
+            actionLabel: 'Try again',
+            onPressed: () => _onSearchChanged(_searchController.text),
+          ),
+        for (var i = 0; i < _results.length; i++)
+          _InviteUserRow(
+            user: _results[i],
+            added: _isInRace(_results[i].id),
+            loading: _adding.contains(_results[i].id),
+            onAdd: () => _addToRace(_results[i]),
+            onOpen: () => openPerson(context, ref, _results[i].id),
+            showDivider: i < _results.length - 1,
+          ),
+        if (_results.isEmpty &&
+            _searchController.text.trim().length >= 2 &&
+            !_searching)
+          Text('No matching Nuvo members found.', style: V13.caption),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Your friends'),
+        const SizedBox(height: V13.gapSm),
+        if (_crew.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: V13.gapMd),
+            child: Text(
+              'Add friends in Friends, or use the invite code below.',
+              style: V13.body.copyWith(color: V13.muted),
+            ),
+          )
+        else
+          for (var i = 0; i < _crew.length; i++)
+            _InviteUserRow(
+              user: _crew[i],
+              added: _isInRace(_crew[i].id),
+              loading: _adding.contains(_crew[i].id),
+              onAdd: () => _addToRace(_crew[i]),
+              onOpen: () => openPerson(context, ref, _crew[i].id),
+              showDivider: i < _crew.length - 1,
+            ),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Share a link or QR'),
+        const SizedBox(height: V13.gapMd),
+        Text(
+          'Anyone with the link can preview the race and join — '
+          'no code to type.',
+          style: V13.body.copyWith(color: V13.muted),
+        ),
+        const SizedBox(height: V13.gapMd),
+        V13Button.primary(
+          label: 'Share link & QR',
+          icon: Icons.qr_code_rounded,
+          fullWidth: true,
+          onPressed: () => showRaceShareSheet(
+            context,
+            raceId: widget.raceId,
+            raceTitle: race.title,
+          ),
+        ),
+        if (!isPresentationDemoCreatedRace(widget.raceId)) ...[
+          const SizedBox(height: V13.gapSection),
+          const V13SectionHeader(title: 'Or a typable code'),
+          const SizedBox(height: V13.gapMd),
+          _InviteCodeCard(code: _inviteCode),
+          const SizedBox(height: V13.gapMd),
+          if (_inviteCode == null)
+            V13Button.secondary(
+              label: _generating ? 'Creating…' : 'Create invite code',
+              icon: Icons.key_rounded,
+              fullWidth: true,
+              onPressed: _generating ? null : _createCode,
+            )
+          else
+            V13Button.secondary(
+              label: 'Copy code',
+              icon: Icons.copy_rounded,
+              fullWidth: true,
+              onPressed: _copyCode,
+            ),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: V13.gapMd),
+          Text(_error!, style: V13.caption.copyWith(color: V13.danger)),
+        ],
+      ],
     );
   }
 }
@@ -372,73 +343,46 @@ class _InviteUserRow extends StatelessWidget {
     required this.user,
     required this.added,
     required this.loading,
-    required this.onPressed,
+    required this.onAdd,
+    required this.onOpen,
+    required this.showDivider,
   });
 
   final PublicUser user;
   final bool added;
   final bool loading;
-  final VoidCallback onPressed;
+  final VoidCallback onAdd;
+  final VoidCallback onOpen;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 1),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 72),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: BoxDecoration(
-          color: context.themeColors.surface,
-          border: Border(
-            bottom: BorderSide(color: context.themeColors.border, width: 1),
-          ),
-        ),
-        child: Row(
-          children: [
-            NuvoAvatar(
-              initials: user.initials,
-              photoUrl: user.profilePhotoUrl,
-              size: NuvoAvatarSizes.md,
-              bgColor: nuvoAvatarColorFor(user.id),
-              textColor: NuvoColors.white,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.displayName,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.themeColors.ink,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    user.handleLine,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.themeColors.inkMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              width: 104,
-              child: NuvoOutlineButton(
-                label: loading
-                    ? '...'
-                    : added
-                    ? 'Added'
-                    : 'Add to race',
-                small: true,
-                onPressed: added || loading ? null : onPressed,
-              ),
-            ),
-          ],
-        ),
+    return V13ListRow(
+      title: user.displayName,
+      subtitle: user.handleLine,
+      showDivider: showDivider,
+      onTap: onOpen,
+      leading: V13Face(
+        photoUrl: user.profilePhotoUrl,
+        size: 40,
+        name: user.displayName,
+        onTap: onOpen,
       ),
+      trailing: loading
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: V13.blue,
+              ),
+            )
+          : added
+          ? const V13Pill(label: 'Added', color: V13.mint)
+          : V13Button.secondary(
+              label: 'Add to race',
+              size: V13ButtonSize.small,
+              onPressed: onAdd,
+            ),
     );
   }
 }
@@ -450,25 +394,19 @@ class _InviteCodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: context.themeColors.border, width: 1.5),
-      ),
+    return V13Card(
       child: Row(
         children: [
+          const V13IconTile(icon: Icons.key_rounded, color: V13.sun),
+          const SizedBox(width: V13.gapMd),
           Expanded(
             child: Text(
               code ?? 'Create a code',
-              style: AppTextStyles.headlineLarge.copyWith(
-                color: context.themeColors.ink,
-                fontSize: 24,
-              ),
+              style: code == null
+                  ? V13.body.copyWith(color: V13.muted)
+                  : V13.number,
             ),
           ),
-          Icon(Icons.key_rounded, color: context.themeColors.accent, size: 20),
         ],
       ),
     );
@@ -491,45 +429,21 @@ class _InlineState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: V13.gapSm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: context.themeColors.warningText, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
-            ),
-          ),
+          Icon(icon, color: V13.muted, size: 18),
+          const SizedBox(width: V13.gapSm),
+          Expanded(child: Text(text, style: V13.caption)),
           if (actionLabel != null && onPressed != null)
-            TextButton(
+            V13Button.ghost(
+              label: actionLabel!,
+              size: V13ButtonSize.small,
               onPressed: onPressed,
-              child: Text(
-                actionLabel!,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: context.themeColors.accent,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
             ),
         ],
       ),
-    );
-  }
-}
-
-class _SmallPanel extends StatelessWidget {
-  const _SmallPanel({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkMuted),
     );
   }
 }

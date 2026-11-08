@@ -30,10 +30,10 @@ abstract final class NuvoMotion {
   /// Horizontal travel for a tab switch — subtle, subconscious.
   static const double tabTravel = 24;
 
-  /// Vertical press translation for tappable surfaces. Sized to
-  /// [AppShadows.hardSmall] (3px): a quiet surface drops exactly onto its
-  /// shadow's resting spot, so the eye reads "pressed into place", never
-  /// "shrunk".
+  /// Vertical press translation for tappable surfaces. Sized to the 3px
+  /// hard shadow plate (`V13.shadow3`): a quiet surface drops exactly onto
+  /// its shadow's resting spot, so the eye reads "pressed into place",
+  /// never "shrunk".
   static const double pressTranslateY = 3;
 
   /// Depth a filled button travels on press — meets most of its 5px hard
@@ -145,11 +145,7 @@ class _NuvoPressableState extends State<NuvoPressable>
     }
     // Release springs: easeOutBack dips the value just past 0 so the surface
     // lifts a hair above rest before settling — the "bounce off the floor".
-    _ctrl.animateTo(
-      0,
-      duration: NuvoMotion.pressOut,
-      curve: NuvoMotion.spring,
-    );
+    _ctrl.animateTo(0, duration: NuvoMotion.pressOut, curve: NuvoMotion.spring);
   }
 
   void _tap() {
@@ -212,8 +208,7 @@ class NuvoPop extends StatefulWidget {
   State<NuvoPop> createState() => _NuvoPopState();
 }
 
-class _NuvoPopState extends State<NuvoPop>
-    with SingleTickerProviderStateMixin {
+class _NuvoPopState extends State<NuvoPop> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 260),
@@ -249,9 +244,9 @@ class _NuvoPopState extends State<NuvoPop>
         final scale = t < 0.55
             ? 1 + peak * Curves.easeOut.transform(t / 0.55)
             : 1 +
-                peak -
-                (peak + 0.02) *
-                    NuvoMotion.settle.transform((t - 0.55) / 0.45);
+                  peak -
+                  (peak + 0.02) *
+                      NuvoMotion.settle.transform((t - 0.55) / 0.45);
         return Transform.scale(scale: scale, child: child);
       },
       child: widget.child,
@@ -363,8 +358,7 @@ class _NuvoShakeState extends State<NuvoShake>
       builder: (context, child) {
         final t = _ctrl.value;
         // Damped sine — two and a half wiggles decaying to zero.
-        final dx =
-            math.sin(t * math.pi * 5) * (1 - t) * widget.amplitude;
+        final dx = math.sin(t * math.pi * 5) * (1 - t) * widget.amplitude;
         return Transform.translate(offset: Offset(dx, 0), child: child);
       },
       child: widget.child,
@@ -386,11 +380,7 @@ class _NuvoShakeState extends State<NuvoShake>
 /// are Offstage + TickerMode-disabled + excluded from focus, so they cost
 /// no frames and can't hold the keyboard while invisible.
 class NuvoTabStack extends StatefulWidget {
-  const NuvoTabStack({
-    super.key,
-    required this.index,
-    required this.children,
-  });
+  const NuvoTabStack({super.key, required this.index, required this.children});
 
   /// The visible branch index.
   final int index;
@@ -434,9 +424,7 @@ class _NuvoTabStackState extends State<NuvoTabStack>
 
   @override
   Widget build(BuildContext context) {
-    final direction = _previous < 0
-        ? 0.0
-        : (_current > _previous ? 1.0 : -1.0);
+    final direction = _previous < 0 ? 0.0 : (_current > _previous ? 1.0 : -1.0);
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, _) {
@@ -477,10 +465,7 @@ class _NuvoTabStackState extends State<NuvoTabStack>
       child = IgnorePointer(
         child: Transform.translate(
           offset: Offset(-direction * NuvoMotion.tabTravel * t, 0),
-          child: Opacity(
-            opacity: (1 - t / 0.6).clamp(0.0, 1.0),
-            child: child,
-          ),
+          child: Opacity(opacity: (1 - t / 0.6).clamp(0.0, 1.0), child: child),
         ),
       );
     }
@@ -546,9 +531,9 @@ class _NuvoReorderColumnState extends State<NuvoReorderColumn> {
   }
 
   List<Key> _orderOf(List<Widget> children) => [
-        for (final w in children)
-          if (w.key != null) w.key!,
-      ];
+    for (final w in children)
+      if (w.key != null) w.key!,
+  ];
 
   @override
   void didUpdateWidget(covariant NuvoReorderColumn oldWidget) {
@@ -681,9 +666,7 @@ class _ReorderShiftState extends State<_ReorderShift>
       animation: _ctrl,
       builder: (context, child) {
         final eased = NuvoMotion.settle.transform(_ctrl.value);
-        final dy = widget.entering
-            ? 14 * (1 - eased)
-            : _from * (1 - eased);
+        final dy = widget.entering ? 14 * (1 - eased) : _from * (1 - eased);
         final opacity = widget.entering ? eased : 1.0;
         return Transform.translate(
           offset: Offset(0, dy),

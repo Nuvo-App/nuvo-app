@@ -4,11 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_legal_footer.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import 'auth_controller.dart';
 
@@ -78,11 +75,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
         // store review works even on networks that block workers.dev.
         await ref
             .read(authControllerProvider.notifier)
-            .signInReviewer(
-              email,
-              _passwordController.text,
-              intent: intent,
-            );
+            .signInReviewer(email, _passwordController.text, intent: intent);
         // Sign-up intent: reset the persisted demo state (guide done,
         // education flags) so the replay is complete, not just the story.
         // Sign-in intent deliberately preserves everything — returning-user
@@ -143,7 +136,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NuvoTextInput(
+        V13TextInput(
           controller: _emailController,
           label: 'Email',
           hint: 'your@email.com',
@@ -161,7 +154,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
         ),
         if (_isReviewerEmail) ...[
           const SizedBox(height: 14),
-          NuvoTextInput(
+          V13TextInput(
             controller: _passwordController,
             label: 'Password',
             hint: 'Password',
@@ -186,8 +179,9 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                     (_isReviewerEmail
                         ? 'Use your reviewer account password.'
                         : "We'll email you a sign-in code."),
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: _error == null ? context.themeColors.inkMuted : context.themeColors.dangerText,
+                style: V13.caption.copyWith(
+                  fontSize: 13,
+                  color: _error == null ? V13.muted : V13.danger,
                 ),
               ),
             ),
@@ -204,9 +198,9 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
         children: [
           _buildFields(),
           const SizedBox(height: 20),
-          NuvoPrimaryButton(
+          V13Button.primary(
             label: 'Log in',
-            expand: true,
+            fullWidth: true,
             loading: _loading,
             onPressed: _canSubmit ? _submit : null,
           ),
@@ -214,7 +208,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -227,22 +221,26 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            NuvoBackButton(
-                              onPressed: () => safePopOrGo(context, '/welcome'),
+                            V13IconButton(
+                              icon: Icons.arrow_back,
+                              shape: V13IconButtonShape.square,
+                              semanticLabel: 'Back',
+                              onTap: () => safePopOrGo(context, '/welcome'),
                             ),
                             const SizedBox(height: 24),
                             Text(
                               'Enter your email',
-                              style: AppTextStyles.headlineLarge.copyWith(
+                              style: V13.title.copyWith(
                                 fontSize: 32,
                                 letterSpacing: -0.9,
                               ),
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              "We'll send a sign-in code for your Nuvo race pass.",
-                              style: AppTextStyles.bodyLarge.copyWith(
-                                color: context.themeColors.inkMuted,
+                              "We'll send a sign-in code for your member pass.",
+                              style: V13.body.copyWith(
+                                color: V13.muted,
+                                fontSize: 15,
                               ),
                             ),
                             const SizedBox(height: 30),
@@ -263,10 +261,10 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
             // ── Pinned CTA ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: NuvoPrimaryButton(
+              child: V13Button.primary(
                 label: _isReviewerEmail ? 'Sign in' : 'Send code',
                 icon: Icons.arrow_forward_rounded,
-                expand: true,
+                fullWidth: true,
                 loading: _loading,
                 onPressed: _canSubmit ? _submit : null,
               ),

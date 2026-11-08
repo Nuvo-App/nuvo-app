@@ -1,21 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:nuvo/core/widgets/nuvo_bottom_fade.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'theme_ink.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_motion.dart';
-import '../../../core/widgets/nuvo_page.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
-import '../../crew/application/crew_controller.dart';
-import '../../crew/data/crew_api.dart';
-import '../../races/data/race_models.dart' show PublicUser;
+import 'package:nuvo/core/v13/v13.dart';
+import 'package:nuvo/features/crew/application/crew_controller.dart';
+import 'package:nuvo/features/crew/data/crew_api.dart';
+import 'package:nuvo/features/races/data/race_models.dart' show PublicUser;
+
+import 'v13/crew_tab_v13_widgets.dart';
 
 /// `/crew/add` — the dedicated Add to Crew hub. One surface for every way to
 /// connect: search, scan, share your code, and the requests queue. Reuses
@@ -34,6 +28,17 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
   List<CrewSearchResult> _results = const [];
   bool _searching = false;
   String? _searchError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Same self-kick the shell gives the Crew tab — the queue is fresh even
+    // when this screen is the first social surface opened.
+    Future(() {
+      if (!mounted) return;
+      ref.read(crewControllerProvider.notifier).revalidate();
+    });
+  }
 
   @override
   void dispose() {
@@ -83,28 +88,25 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
     try {
       final outcome = await ref.read(crewControllerProvider.notifier).add(user);
       if (mounted && outcome == ConnectOutcome.pending) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Request sent.')));
+        showV13Toast(context, 'Request sent.');
       }
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add this friend.')),
-        );
-      }
+      if (mounted) showV13Toast(context, 'Could not add this friend.');
     }
   }
 
   Future<void> _accept(PublicUser user) async {
     try {
       await ref.read(crewControllerProvider.notifier).acceptRequest(user);
+      if (!mounted) return;
+      V13Haptics.confirm();
+      showV13Confetti(context);
+      showV13Toast(
+        context,
+        "You're friends with ${user.displayName.split(' ').first}.",
+      );
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't accept the request.")),
-        );
-      }
+      if (mounted) showV13Toast(context, "Couldn't accept the request.");
     }
   }
 
@@ -112,7 +114,16 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
     try {
       await ref.read(crewControllerProvider.notifier).declineRequest(user);
     } catch (_) {
-      /* best-effort */
+      if (mounted) showV13Toast(context, "Couldn't decline. Try again.");
+    }
+  }
+
+  Future<void> _cancelOutgoing(PublicUser user) async {
+    try {
+      await ref.read(crewControllerProvider.notifier).remove(user.id);
+      if (mounted) showV13Toast(context, 'Request cancelled.');
+    } catch (_) {
+      if (mounted) showV13Toast(context, "Couldn't cancel. Try again.");
     }
   }
 
@@ -121,482 +132,192 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
     final crewState = ref.watch(crewControllerProvider);
     final pending = crewState.pendingUserIds;
     final searching = _searchController.text.trim().length >= 2;
-    return NuvoPage(
-      topBar: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: Row(
-            children: [
-              NuvoBackButton(
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/pass');
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Stack(
+    return Scaffold(
+      backgroundColor: V13.bg,
+      body: SafeArea(
+        child: Column(
           children: [
-            ListView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-              children: [
-                Text('Add friend', style: AppTextStyles.displaySmall),
-                const SizedBox(height: 4),
-                Text(
-                  'Name, @username or member code.',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: context.themeColors.inkMuted)
-                      .copyWith(color: context.themeColors.inkSubtle),
+            const V13BackBar(title: 'Add friend', fallback: '/pass'),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  V13.pagePad,
+                  0,
+                  V13.pagePad,
+                  V13.gapXxl,
                 ),
-                const SizedBox(height: 16),
-                NuvoSearchField(
-                  controller: _searchController,
-                  hint: 'Search Nuvo members',
-                  searching: _searching,
-                  autofocus: true,
-                  onChanged: _onSearchChanged,
-                ),
-                const SizedBox(height: 12),
-                // The other three ways in — scan theirs, show yours, share a link.
-                Row(
-                  children: [
-                    Expanded(
-                      child: _WayIn(
-                        icon: Icons.qr_code_scanner_rounded,
-                        label: 'Scan',
-                        onTap: () => context.push('/scan'),
-                      ),
+                children: [
+                  Text('Name, @username or member code.', style: V13.caption),
+                  const SizedBox(height: V13.gapMd),
+                  V13TextInput(
+                    controller: _searchController,
+                    hint: 'Search Nuvo members',
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: V13.muted,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _WayIn(
-                        icon: Icons.qr_code_rounded,
-                        label: 'My Nuvo',
-                        onTap: () => context.push('/my-nuvo'),
+                    suffixIcon: _searching
+                        ? const Padding(
+                            padding: EdgeInsets.all(14),
+                            child: SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: V13.blue,
+                              ),
+                            ),
+                          )
+                        : null,
+                    onChanged: _onSearchChanged,
+                  ),
+                  const SizedBox(height: V13.gapMd),
+                  // The other two ways in — scan theirs, show yours.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: V13Button.secondary(
+                          label: 'Scan',
+                          icon: Icons.qr_code_scanner_rounded,
+                          fullWidth: true,
+                          onPressed: () => openScan(context),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: V13.gapMd),
+                      Expanded(
+                        child: V13Button.secondary(
+                          label: 'My Nuvo',
+                          icon: Icons.qr_code_rounded,
+                          fullWidth: true,
+                          onPressed: () => context.push('/my-nuvo'),
+                        ),
+                      ),
+                    ],
+                  ),
 
-                // ── Search results ─────────────────────────────────────────
-                if (searching) ...[
-                  const SizedBox(height: 16),
-                  if (_searchError != null && !_searching)
-                    NuvoPressable(
-                      onTap: () => _onSearchChanged(_searchController.text),
-                      haptic: false,
-                      child: _HubNote(text: _searchError!),
-                    )
-                  else if (_results.isEmpty && !_searching)
-                    const _HubNote(text: 'No matching Nuvo members found.')
+                  // ── Search results ───────────────────────────────────────
+                  if (searching)
+                    _searchResults(pending)
                   else
-                    _HubSurface(
-                      children: [
-                        for (var i = 0; i < _results.length; i++)
-                          _PersonRow(
-                            result: _results[i],
-                            busy: pending.contains(_results[i].user.id),
-                            isLast: i == _results.length - 1,
-                            onOpen: () =>
-                                context.push('/u/${_results[i].user.id}'),
-                            onAdd: () => _add(_results[i].user),
-                            onAccept: () => _accept(_results[i].user),
-                          ),
-                      ],
-                    ),
-                ] else ...[
-                  // ── Requests — people already knocking ────────────────────
-                  if (crewState.requests.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    const _HubLabel(label: 'Wants to be friends'),
-                    const SizedBox(height: 10),
-                    _HubSurface(
-                      children: [
-                        for (var i = 0; i < crewState.requests.length; i++)
-                          _RequestRow(
-                            user: crewState.requests[i],
-                            busy: pending.contains(crewState.requests[i].id),
-                            isLast: i == crewState.requests.length - 1,
-                            onAccept: () => _accept(crewState.requests[i]),
-                            onDecline: () => _decline(crewState.requests[i]),
-                          ),
-                      ],
-                    ),
-                  ],
-                  if (crewState.outgoing.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    const _HubLabel(label: 'Requests sent'),
-                    const SizedBox(height: 10),
-                    _HubSurface(
-                      children: [
-                        for (var i = 0; i < crewState.outgoing.length; i++)
-                          _SentRow(
-                            user: crewState.outgoing[i],
-                            isLast: i == crewState.outgoing.length - 1,
-                          ),
-                      ],
-                    ),
-                  ],
+                    _requests(crewState, pending),
                 ],
-              ],
+              ),
             ),
-            const NuvoBottomFade(),
           ],
         ),
       ),
     );
   }
-}
 
-class _WayIn extends StatelessWidget {
-  const _WayIn({required this.icon, required this.label, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: context.themeColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: NuvoPressable(
-        onTap: onTap,
-        haptic: false,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.themeColors.border),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: context.themeColors.ink),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: context.themeColors.ink,
-                ),
-              ),
-            ],
-          ),
+  Widget _searchResults(Set<String> pending) {
+    if (_searchError != null && !_searching) {
+      return CrewSectionError(
+        message: _searchError!,
+        onRetry: () => _onSearchChanged(_searchController.text),
+      );
+    }
+    if (_results.isEmpty) {
+      if (_searching) {
+        return const Column(
+          children: [
+            SizedBox(height: V13.gapMd),
+            V13Skeleton.box(width: double.infinity, height: 56),
+            SizedBox(height: V13.gapMd),
+            V13Skeleton.box(width: double.infinity, height: 56),
+          ],
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: V13.gapLg),
+        child: Center(
+          child: Text('No matching Nuvo members found.', style: V13.caption),
         ),
-      ),
+      );
+    }
+    return Column(
+      children: [
+        const SizedBox(height: V13.gapMd),
+        for (var i = 0; i < _results.length; i++)
+          _personRow(_results[i], pending, i == _results.length - 1),
+      ],
     );
   }
-}
 
-class _HubSurface extends StatelessWidget {
-  const _HubSurface({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.themeColors.border),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _HubLabel extends StatelessWidget {
-  const _HubLabel({required this.label});
-  final String label;
-  @override
-  Widget build(BuildContext context) =>
-      Text(label, style: AppTextStyles.sectionTitle);
-}
-
-class _HubNote extends StatelessWidget {
-  const _HubNote({required this.text});
-  final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 18),
-    child: Text(
-      text,
-      textAlign: TextAlign.center,
-      style: AppTextStyles.bodySmall.copyWith(
-        color: context.themeColors.inkSubtle,
-      ),
-    ),
-  );
-}
-
-String _handleLine(PublicUser user) {
-  final parts = <String>[];
-  if (user.username != null && user.username!.isNotEmpty) {
-    parts.add('@${user.username}');
-  }
-  if (user.memberId != null && user.memberId!.isNotEmpty) {
-    parts.add(user.memberId!);
-  }
-  return parts.join(' / ');
-}
-
-class _PersonRow extends StatelessWidget {
-  const _PersonRow({
-    required this.result,
-    required this.busy,
-    required this.isLast,
-    required this.onOpen,
-    required this.onAdd,
-    required this.onAccept,
-  });
-
-  final CrewSearchResult result;
-  final bool busy;
-  final bool isLast;
-  final VoidCallback onOpen;
-  final VoidCallback onAdd;
-  final VoidCallback onAccept;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _personRow(CrewSearchResult result, Set<String> pending, bool isLast) {
     final user = result.user;
     final mutual = result.mutualCount;
     final subtitle = [
-      if (_handleLine(user).isNotEmpty) _handleLine(user),
+      user.handleLine,
       if (mutual > 0) '$mutual mutual ${mutual == 1 ? 'friend' : 'friends'}',
     ].join(' · ');
-    return Column(
-      children: [
-        NuvoPressable(
-          onTap: onOpen,
-          haptic: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                NuvoAvatar(
-                  initials: user.initials,
-                  photoUrl: user.profilePhotoUrl,
-                  size: NuvoAvatarSizes.md,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: context.themeColors.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (subtitle.isNotEmpty)
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: context.themeColors.inkMuted)
-                              .copyWith(color: context.themeColors.inkSubtle),
-                        ),
-                    ],
-                  ),
-                ),
-                _cta(),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: context.themeColors.border, indent: 60),
-      ],
+    return V13ListRow(
+      leading: V13Face(photoUrl: user.profilePhotoUrl, name: user.displayName),
+      title: user.displayName,
+      subtitle: subtitle,
+      trailing: _cta(result, pending.contains(user.id)),
+      onTap: () => openPerson(context, ref, user.id),
+      showDivider: !isLast,
     );
   }
 
-  Widget _cta() {
-    return NuvoStateMorph(
-      stateKey: result.connectionStatus,
-      child: switch (result.connectionStatus) {
-        CrewConnectionStatus.connected => const _StatusChip(
-          label: 'Friends',
-          color: NuvoColors.success,
-        ),
-        CrewConnectionStatus.pendingOutgoing => const _StatusChip(
-          label: 'Sent',
-          color: NuvoColors.warning,
-        ),
-        CrewConnectionStatus.pendingIncoming => NuvoPrimaryButton(
-          label: 'Accept',
-          small: true,
-          horizontalPadding: 14,
-          loading: busy,
-          onPressed: busy ? null : onAccept,
-        ),
-        CrewConnectionStatus.none => NuvoPrimaryButton(
-          label: 'Add',
-          small: true,
-          horizontalPadding: 14,
-          loading: busy,
-          onPressed: busy ? null : onAdd,
-        ),
-      },
-    );
-  }
-}
-
-class _RequestRow extends StatelessWidget {
-  const _RequestRow({
-    required this.user,
-    required this.busy,
-    required this.isLast,
-    required this.onAccept,
-    required this.onDecline,
-  });
-
-  final PublicUser user;
-  final bool busy;
-  final bool isLast;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              NuvoAvatar(
-                initials: user.initials,
-                photoUrl: user.profilePhotoUrl,
-                size: NuvoAvatarSizes.md,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.themeColors.ink,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (_handleLine(user).isNotEmpty)
-                      Text(
-                        _handleLine(user),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: context.themeColors.inkMuted)
-                            .copyWith(color: context.themeColors.inkSubtle),
-                      ),
-                  ],
-                ),
-              ),
-              NuvoPrimaryButton(
-                label: 'Accept',
-                small: true,
-                horizontalPadding: 10,
-                loading: busy,
-                onPressed: busy ? null : onAccept,
-              ),
-              const SizedBox(width: 2),
-              IconButton(
-                onPressed: busy ? null : onDecline,
-                icon: Icon(
-                  Icons.close_rounded,
-                  color: context.themeColors.inkMuted,
-                  size: 20,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: context.themeColors.border, indent: 60),
-      ],
-    );
-  }
-}
-
-class _SentRow extends StatelessWidget {
-  const _SentRow({required this.user, required this.isLast});
-  final PublicUser user;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              NuvoAvatar(
-                initials: user.initials,
-                photoUrl: user.profilePhotoUrl,
-                size: NuvoAvatarSizes.md,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  user.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.themeColors.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const _StatusChip(label: 'Sent', color: NuvoColors.warning),
-            ],
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: context.themeColors.border, indent: 60),
-      ],
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
-  final String label;
-  final Color color;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: context.tintOf(color),
-      borderRadius: BorderRadius.circular(999),
-    ),
-    child: Text(
-      label,
-      style: AppTextStyles.labelMedium.copyWith(
-        color: context.onTintOf(color),
-        fontWeight: FontWeight.w800,
+  Widget _cta(CrewSearchResult result, bool busy) {
+    return switch (result.connectionStatus) {
+      CrewConnectionStatus.connected => const V13Pill(
+        label: 'Friends',
+        color: V13.mint,
       ),
-    ),
-  );
+      CrewConnectionStatus.pendingOutgoing => const V13Pill(
+        label: 'Requested',
+        color: V13.lilac,
+      ),
+      CrewConnectionStatus.pendingIncoming => V13Button.primary(
+        label: 'Accept',
+        size: V13ButtonSize.small,
+        loading: busy,
+        onPressed: busy ? null : () => _accept(result.user),
+      ),
+      CrewConnectionStatus.none => V13Button.secondary(
+        label: 'Add',
+        size: V13ButtonSize.small,
+        loading: busy,
+        onPressed: busy ? null : () => _add(result.user),
+      ),
+    };
+  }
+
+  Widget _requests(CrewState crewState, Set<String> pending) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Requests — people already knocking ──────────────────────────
+        if (crewState.requests.isNotEmpty) ...[
+          const SizedBox(height: V13.gapSection),
+          const V13SectionHeader(title: 'Wants to be friends'),
+          const SizedBox(height: V13.gapMd),
+          for (final user in crewState.requests) ...[
+            FriendRequestCard(
+              user: user,
+              mutuals: crewState.mutuals[user.id],
+              busy: pending.contains(user.id),
+              onAccept: () => _accept(user),
+              onDecline: () => _decline(user),
+            ),
+            const SizedBox(height: V13.gapMd),
+          ],
+        ],
+        if (crewState.outgoing.isNotEmpty) ...[
+          const SizedBox(height: V13.gapSection),
+          const V13SectionHeader(title: 'Requests sent'),
+          const SizedBox(height: V13.gapSm),
+          for (final user in crewState.outgoing)
+            OutgoingRequestRow(
+              user: user,
+              busy: pending.contains(user.id),
+              onCancel: () => _cancelOutgoing(user),
+            ),
+        ],
+      ],
+    );
+  }
 }

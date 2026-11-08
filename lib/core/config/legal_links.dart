@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../v13/v13.dart';
+
 /// The four legal pages. One source of truth — every screen that links to a
 /// legal page (welcome, onboarding, Settings) uses these, never a literal URL.
 abstract final class LegalLinks {
@@ -23,7 +25,6 @@ Future<bool> Function(Uri uri, LaunchMode mode)? legalLaunchOverride;
 /// Opens a legal page in the external browser (the app keeps its place, and
 /// the browser has its own back button). Says so out loud if it can't.
 Future<void> openLegalLink(BuildContext context, Uri uri) async {
-  final messenger = ScaffoldMessenger.maybeOf(context);
   var opened = false;
   try {
     opened = await (legalLaunchOverride ?? _launch)(
@@ -33,10 +34,8 @@ Future<void> openLegalLink(BuildContext context, Uri uri) async {
   } catch (_) {
     opened = false;
   }
-  if (!opened) {
-    messenger?.showSnackBar(
-      const SnackBar(content: Text("Couldn't open the link. Try again.")),
-    );
+  if (!opened && context.mounted && Overlay.maybeOf(context) != null) {
+    showV13Toast(context, "Couldn't open the link. Try again.");
   }
 }
 

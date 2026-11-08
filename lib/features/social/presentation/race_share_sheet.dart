@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import 'theme_ink.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
+import '../../../core/v13/v13.dart';
 import '../data/invite_models.dart';
 import '../social_providers.dart';
 
@@ -21,13 +18,8 @@ Future<void> showRaceShareSheet(
   required String raceId,
   required String raceTitle,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: context.themeColors.page,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+  return showV13Sheet<void>(
+    context,
     builder: (_) => _RaceShareSheet(raceId: raceId, raceTitle: raceTitle),
   );
 }
@@ -55,8 +47,9 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
   Future<void> _mint() async {
     setState(() => _error = false);
     try {
-      final invite =
-          await ref.read(inviteRepositoryProvider).mintRaceInvite(widget.raceId);
+      final invite = await ref
+          .read(inviteRepositoryProvider)
+          .mintRaceInvite(widget.raceId);
       if (mounted) setState(() => _invite = invite);
     } catch (_) {
       if (mounted) setState(() => _error = true);
@@ -70,99 +63,105 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          14,
-          24,
-          24 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Shell owns the drag handle (theme showDragHandle) — sheet
-            // content starts below it.
-            const SizedBox(height: 18),
-            Text('Share this race', style: AppTextStyles.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              'Anyone with the link can preview and join.',
-              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
-            ),
-            const SizedBox(height: 20),
-            _content(),
-          ],
-        ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapMd,
+        V13.pagePad,
+        V13.gapXl,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Share this race', style: V13.sectionHead),
+          const SizedBox(height: V13.gapXs),
+          Text(
+            'Anyone with the link can preview and join.',
+            style: V13.caption,
+          ),
+          const SizedBox(height: V13.gapLg),
+          _content(),
+        ],
       ),
     );
   }
 
   Widget _content() {
     if (_error) {
-      return Column(children: [
-        Text("Couldn't create a share link.",
-            style: AppTextStyles.bodyMedium.copyWith(color: context.dangerInk)),
-        const SizedBox(height: 12),
-        NuvoSecondaryButton(label: 'Try again', expand: true, onPressed: _mint),
-      ]);
+      return Column(
+        children: [
+          Text(
+            "Couldn't create a share link.",
+            style: V13.body.copyWith(color: V13.danger),
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13Button.secondary(
+            label: 'Try again',
+            fullWidth: true,
+            onPressed: _mint,
+          ),
+        ],
+      );
     }
     final invite = _invite;
     if (invite == null) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 40),
-        child: Center(child: NuvoLoadingIndicator()),
+        padding: EdgeInsets.symmetric(vertical: V13.gapSection),
+        child: Center(
+          child: SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(strokeWidth: 3, color: V13.blue),
+          ),
+        ),
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Center(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: NuvoColors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.themeColors.border, width: 2),
-            ),
+          child: V13Card(
+            padding: const EdgeInsets.all(V13.gapLg),
             child: QrImageView(
               data: invite.url,
               version: QrVersions.auto,
-              size: 208,
+              size: 200,
               eyeStyle: const QrEyeStyle(
                 eyeShape: QrEyeShape.square,
-                color: NuvoColors.navy,
+                color: V13.navy,
               ),
               dataModuleStyle: const QrDataModuleStyle(
                 dataModuleShape: QrDataModuleShape.square,
-                color: NuvoColors.navy,
+                color: V13.navy,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: V13.gapLg),
         if (invite.code != null) ...[
           Center(
-            child: Text(
-              'Or enter code  ${invite.code}',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: context.themeColors.inkSubtle,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            child: Text('Or enter code  ${invite.code}', style: V13.bodyStrong),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: V13.gapLg),
         ],
-        NuvoPrimaryButton(
+        V13Button.primary(
           label: 'Share link',
           icon: Icons.ios_share_rounded,
-          expand: true,
+          fullWidth: true,
           onPressed: () => Share.share(_shareMessage),
         ),
-        const SizedBox(height: 10),
-        NuvoCopyButton(text: invite.url, expand: true),
+        const SizedBox(height: V13.gapMd),
+        V13Button.secondary(
+          label: 'Copy link',
+          icon: Icons.link_rounded,
+          fullWidth: true,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: invite.url));
+            if (mounted) {
+              showV13Toast(context, 'Link copied.');
+            }
+          },
+        ),
       ],
     );
   }

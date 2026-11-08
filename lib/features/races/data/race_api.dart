@@ -614,8 +614,17 @@ class RaceApi {
     String? targetUnit,
     String? proofMode,
     String? scoreDirection,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
   }) async {
-    final body = <String, dynamic>{'title': title, 'goalType': goalType};
+    // rulesVersion 1: every race this build creates follows the strict
+    // rules (camera-only proof on camera races, custom goals race First
+    // to / Most total). Stamped here so no caller can drop it.
+    final body = <String, dynamic>{
+      'title': title,
+      'goalType': goalType,
+      'rulesVersion': 1,
+    };
     if (description != null) body['description'] = description;
     if (category != null) body['category'] = category;
     if (targetValue != null) body['targetValue'] = targetValue;
@@ -633,6 +642,10 @@ class RaceApi {
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;
     if (scoreDirection != null) body['scoreDirection'] = scoreDirection;
+    if (attemptDurationSeconds != null) {
+      body['attemptDurationSeconds'] = attemptDurationSeconds;
+    }
+    if (attemptLimit != null) body['attemptLimit'] = attemptLimit;
     final json = await _post('/races', token, body);
     return Race.fromJson(jMap(json['race']) ?? const {});
   }
@@ -677,6 +690,8 @@ class RaceApi {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'verificationMethod': 'ai',
+      // Strict rules: this build always creates rules_version 1 races.
+      'rulesVersion': 1,
       'verifierType': motionV2Spec != null
           ? motionV2VerifierType
           : customPoseVerifierType,
@@ -877,6 +892,23 @@ class RaceApi {
     return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
+  /// `GET /races/open` — joinable races created by or containing the
+  /// viewer's friends, which the viewer has never joined (W3). Same row
+  /// shape as `GET /races`.
+  Future<List<Race>> getOpenRaces(String token) async {
+    final json = await _get('/races/open', token);
+    return jMapList(json['races']).map(Race.fromJson).toList();
+  }
+
+  /// `GET /leaderboard?scope=…` — the Compete weekly leaderboard (W3).
+  Future<List<LeaderboardEntry>> getLeaderboard(
+    String token, {
+    String scope = 'friends',
+  }) async {
+    final json = await _get('/leaderboard?scope=$scope', token);
+    return jMapList(json['rows']).map(LeaderboardEntry.fromJson).toList();
+  }
+
   Future<Race> addRaceParticipant(
     String token,
     String raceId,
@@ -937,6 +969,16 @@ class RaceApi {
       'clientAttemptId': ?clientAttemptId,
     });
     return RaceAttemptResult.fromJson(json);
+  }
+
+  /// Cancel an open attempt. Only an open attempt with no bound proof can
+  /// be cancelled, and a cancelled attempt never counts against the limit.
+  Future<void> cancelAttempt(
+    String token,
+    String raceId,
+    String attemptId,
+  ) async {
+    await _delete('/races/$raceId/attempts/$attemptId', token);
   }
 
   /// One-step rematch — the server clones participants + settings into a new

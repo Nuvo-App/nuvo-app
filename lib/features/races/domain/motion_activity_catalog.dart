@@ -376,9 +376,9 @@ const motionActivityDefinitions = [
     goalPromptOverride: 'How far?',
     title: 'Treadmill Running',
     metric: RaceMetric.reps,
-    // Metres. Short goals up front (quick / sprint / testing races), then
-    // mile-scale. The composer's tappable number covers anything between.
-    suggestedTargets: [100, 200, 402, 805, 1609, 25, 50, 3219, 5000],
+    // Metres — the same targets the control plane publishes (400 m / 800 m /
+    // mile / 5k-scale). The composer's tappable number covers anything between.
+    suggestedTargets: [400, 800, 1600, 3200, 5000],
     supportedFormats: [
       RaceFormat.firstToGoal,
       RaceFormat.mostInWindow,

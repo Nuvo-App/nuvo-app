@@ -208,6 +208,8 @@ class RaceRepository {
     String? targetUnit,
     String? proofMode,
     String? scoreDirection,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
   }) => _withRefresh(
     (token) => _api.createRace(
       token,
@@ -230,6 +232,8 @@ class RaceRepository {
       targetUnit: targetUnit,
       proofMode: proofMode,
       scoreDirection: scoreDirection,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
     ),
   );
 
@@ -454,6 +458,13 @@ class RaceRepository {
   Future<Race> joinRace(String id) =>
       _withRefresh((token) => _api.joinRace(token, id));
 
+  /// `GET /races/open` — friends' joinable races the viewer never joined.
+  Future<List<Race>> getOpenRaces() => _withRefresh(_api.getOpenRaces);
+
+  /// `GET /leaderboard` — weekly proof-points board for the Compete tab.
+  Future<List<LeaderboardEntry>> getLeaderboard({String scope = 'friends'}) =>
+      _withRefresh((token) => _api.getLeaderboard(token, scope: scope));
+
   Future<Race> addRaceParticipant(String raceId, String userId) =>
       _withRefresh((token) => _api.addRaceParticipant(token, raceId, userId));
 
@@ -494,6 +505,11 @@ class RaceRepository {
     (token) =>
         _api.startAttempt(token, raceId, clientAttemptId: clientAttemptId),
   );
+
+  /// Cancel an open attempt that has no bound proof — a cancelled attempt
+  /// never spends the attempt limit.
+  Future<void> cancelAttempt(String raceId, String attemptId) =>
+      _withRefresh((token) => _api.cancelAttempt(token, raceId, attemptId));
 
   Future<Race> rematchRace(String raceId) =>
       _withRefresh((token) => _api.rematchRace(token, raceId));

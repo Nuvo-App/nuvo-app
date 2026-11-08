@@ -1,28 +1,24 @@
-import '../../../core/utils/friendly_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/network/api_base.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_fade_scroll.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/utils/friendly_error.dart';
+import '../../../core/v13/v13.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../data/race_models.dart';
 import '../domain/race_display.dart';
 import 'race_controller.dart';
+import 'v13/submit_proof_entry.dart';
 
+/// `/race/:id/proofs/:proofId` — inspect one proof. The race creator gets
+/// accept / ask-for-another / reject controls on held proof; other racers
+/// see the verdict and can veto or report. All writes keep their existing
+/// controller calls — only the chrome changed.
 class ProofReviewScreen extends ConsumerStatefulWidget {
   const ProofReviewScreen({
     super.key,
@@ -111,7 +107,15 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
             status: status,
             summary: summary.isEmpty ? null : summary,
           );
-      if (mounted) context.go('/race/${race.id}');
+      if (mounted) {
+        final message = switch (status) {
+          'accepted' => 'Proof accepted.',
+          'rejected' => 'Proof rejected.',
+          _ => 'Asked for another proof.',
+        };
+        showV13Toast(context, message);
+        context.go('/race/${race.id}');
+      }
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -140,38 +144,35 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
   ];
 
   Future<void> _vetoProof(RaceProof proof) async {
-    final reason = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: context.themeColors.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Veto this proof?', style: AppTextStyles.titleMedium),
-              const SizedBox(height: 6),
-              Text(
-                'If enough racers agree, it stops counting on the leaderboard.',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: context.themeColors.inkMuted),
+    final reason = await showV13Sheet<String>(
+      context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+          V13.pagePad,
+          V13.gapMd,
+          V13.pagePad,
+          V13.gapXl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Veto this proof?', style: V13.sectionHead),
+            const SizedBox(height: V13.gapSm),
+            Text(
+              'If enough racers agree, it stops counting on the leaderboard.',
+              style: V13.body.copyWith(color: V13.muted),
+            ),
+            const SizedBox(height: V13.gapLg),
+            for (final (value, label) in _vetoReasons) ...[
+              V13Button.secondary(
+                label: label,
+                fullWidth: true,
+                onPressed: () => Navigator.of(ctx).pop(value),
               ),
-              const SizedBox(height: 16),
-              for (final (value, label) in _vetoReasons)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: NuvoOutlineButton(
-                    label: label,
-                    expand: true,
-                    onPressed: () => Navigator.of(ctx).pop(value),
-                  ),
-                ),
+              const SizedBox(height: V13.gapSm),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -184,78 +185,33 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       // Refresh so vetoed/disputed state and any leaderboard change show up.
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result.vetoed
-                  ? 'Proof vetoed — it no longer counts.'
-                  : result.alreadyVoted
-                  ? 'You already vetoed this proof.'
-                  : 'Veto counted — ${result.vetoCount} of ${result.threshold} needed.',
-            ),
-          ),
+        showV13Toast(
+          context,
+          result.vetoed
+              ? 'Proof vetoed — it no longer counts.'
+              : result.alreadyVoted
+              ? 'You already vetoed this proof.'
+              : 'Veto counted — ${result.vetoCount} of ${result.threshold} needed.',
         );
       }
     } on ApiException catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(friendlyApiError(e))));
+        showV13Toast(context, friendlyApiError(e));
       }
     } catch (_) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not veto proof. Try again.')),
-        );
+        showV13Toast(context, 'Could not veto proof. Try again.');
       }
     }
   }
 
   Future<void> _reportProof(RaceProof proof) async {
     final controller = TextEditingController();
-    final reason = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.themeColors.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          20,
-          24,
-          24 + MediaQuery.of(ctx).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Report this move?', style: AppTextStyles.titleMedium),
-            const SizedBox(height: 6),
-            Text(
-              'What\u2019s wrong? This goes to the Nuvo review team.',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: context.themeColors.inkMuted),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              maxLines: 3,
-              maxLength: 500,
-              decoration: const InputDecoration(hintText: 'Optional details'),
-            ),
-            const SizedBox(height: 8),
-            NuvoPrimaryButton(
-              label: 'Send report',
-              icon: Icons.flag_outlined,
-              expand: true,
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            ),
-          ],
-        ),
-      ),
+    final reason = await showV13Sheet<String>(
+      context,
+      builder: (ctx) => _ReportMoveSheet(controller: controller),
     );
     if (!mounted || reason == null) return;
     try {
@@ -263,265 +219,231 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
           .read(crewRepositoryProvider)
           .reportContent(proof.id, reason: reason);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thanks — our team will take a look.')),
-        );
+        showV13Toast(context, 'Thanks — our team will take a look.');
       }
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(friendlyApiError(e))));
-      }
+      if (mounted) showV13Toast(context, friendlyApiError(e));
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't send that. Try again.")),
-        );
+        showV13Toast(context, "Couldn't send that. Try again.");
       }
     }
+  }
+
+  // Evidence fetch needs the Bearer header — the URL alone won't serve
+  // media to anyone who guesses the path.
+  ImageProvider? _evidenceImage(RaceProof proof) {
+    final media = proof.mediaUrl;
+    final token = _accessToken;
+    if (media == null || token == null) return null;
+    return CachedNetworkImageProvider(
+      media.startsWith('http') ? media : '$kNuvoApiBase$media',
+      headers: {'Authorization': 'Bearer $token'},
+    );
+  }
+
+  String _viewerStatus(RaceProof proof) {
+    if (proof.vetoState == 'vetoed') {
+      return 'Proof vetoed — does not count on the leaderboard.';
+    }
+    if (proof.vetoState == 'disputed') {
+      return 'Proof disputed — ${proof.vetoCount} veto${proof.vetoCount == 1 ? '' : 's'} so far.';
+    }
+    return switch (proof.verificationStatus) {
+      'accepted' ||
+      'verified' ||
+      'ai_verified' => 'Accepted — counts on the leaderboard.',
+      'rejected' => 'Rejected — does not count on the leaderboard.',
+      _ => 'Waiting on the race creator\'s review.',
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
-
-    if (_loading) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: const Center(child: NuvoLoadingIndicator()),
-      );
-    }
-
-    // Evidence fetch needs the Bearer header — the URL alone won't serve
-    // media to anyone who guesses the path.
-    ImageProvider? _evidenceImage(RaceProof proof) {
-      final media = proof.mediaUrl;
-      final token = _accessToken;
-      if (media == null || token == null) return null;
-      return CachedNetworkImageProvider(
-        media.startsWith('http') ? media : '$kNuvoApiBase$media',
-        headers: {'Authorization': 'Bearer $token'},
-      );
-    }
-
-    String _viewerStatus(RaceProof proof) {
-      if (proof.vetoState == 'vetoed') {
-        return 'Proof vetoed — does not count on the leaderboard.';
-      }
-      if (proof.vetoState == 'disputed') {
-        return 'Proof disputed — ${proof.vetoCount} veto${proof.vetoCount == 1 ? '' : 's'} so far.';
-      }
-      return switch (proof.verificationStatus) {
-        'accepted' || 'verified' || 'ai_verified' =>
-          'Accepted — counts on the leaderboard.',
-        'rejected' => 'Rejected — does not count on the leaderboard.',
-        _ => 'Waiting on the race creator\'s review.',
-      };
-    }
-
     final race = _race;
     final proof = _proof;
-    if (race == null || proof == null) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: SafeArea(
-          child: NuvoErrorState(
-            message: _error ?? 'Move not found.',
-            onRetry: _load,
-          ),
-        ),
-      );
-    }
+    final isOwner = race?.creatorId == user?.id;
+    final isParticipant =
+        user != null && (race?.isParticipant(user.id) ?? false);
 
     // View ≠ review: any active participant can inspect the proof; only the
     // creator sees decision controls. Non-participants get nothing.
-    final isOwner = race.creatorId == user?.id;
-    final isParticipant = user != null && race.isParticipant(user.id);
-    if (!isOwner && !isParticipant) {
-      return Scaffold(
-        backgroundColor: context.themeColors.page,
-        body: SafeArea(
-          child: NuvoErrorState(
-            message: 'Move not found.',
-            onRetry: () => context.go('/race/${widget.raceId}'),
-          ),
-        ),
-      );
-    }
+    final canView = isOwner || isParticipant;
 
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
-        child: NuvoFadeScroll(
-          child:
-            ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
-                  children: [
-                    NuvoBackNavRow(
-                      onBack: () =>
-                          safePopOrGo(context, '/race/${widget.raceId}'),
-                      title: isOwner ? 'Review move' : 'Proof',
-                    ),
-                    const SizedBox(height: 22),
-                    _MoveSummaryCard(
-                      proof: proof,
-                      race: race,
-                      evidenceImage: _evidenceImage(proof),
-                    ),
-                    const SizedBox(height: 22),
-                    // Action visibility mirrors the backend contract so the
-                    // UI never offers a mutation that will 409:
-                    //  - creator review controls only while the proof is
-                    //    HELD (pending → 'needs_review'/'submitted'); counted
-                    //    proof is disputed through veto, vetoed proof is final;
-                    //  - nobody reviews or vetoes their own proof;
-                    //  - any participant (creator included) can veto another
-                    //    racer's non-vetoed proof.
-                    if (!raceProofIsReviewable(race, proof, user?.id)) ...[
-                      Text(
-                        _viewerStatus(proof),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeColors.inkMuted,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 14),
-                      // Race-truth action: other racers can dispute whether
-                      // this proof should count. Own vetoed proofs get the
-                      // replacement path — the old record stays for audit.
-                      if (raceProofIsVetoable(race, proof, user?.id)) ...[
-                        NuvoOutlineButton(
-                          label: proof.viewerVoted
-                              ? 'You vetoed this proof'
-                              : 'Veto proof',
-                          icon: Icons.gavel_rounded,
-                          expand: true,
-                          onPressed: _saving || proof.viewerVoted
-                              ? null
-                              : () => _vetoProof(proof),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                      if (proof.userId == user?.id &&
-                          proof.vetoState == 'vetoed') ...[
-                        NuvoPrimaryButton(
-                          label: 'Submit new proof',
-                          icon: Icons.add_a_photo_outlined,
-                          expand: true,
-                          onPressed: () => context.push(
-                            '/race/${widget.raceId}/proof',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                      if (proof.userId != user?.id)
-                        Center(
-                          child: TextButton(
-                            onPressed: () => _reportProof(proof),
-                            child: Text(
-                              'Report this move',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: context.themeColors.inkMuted,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ] else ...[
-                    NuvoTextInput(
-                      controller: _summaryController,
-                      label: 'Review note (optional)',
-                      hint: 'Add a note for the submitter',
-                      maxLines: 4,
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: context.semanticColors.danger.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.semanticColors.danger.border),
-                        ),
-                        child: Text(
-                          _error!,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: context.semanticColors.danger.on,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    Text('Proof decision', style: AppTextStyles.titleMedium),
-                    const SizedBox(height: 10),
-                    NuvoSuccessButton(
-                      label: 'Accept proof',
-                      icon: Icons.check_rounded,
-                      expand: true,
-                      loading: _saving,
-                      onPressed: _saving ? null : () => _review('accepted'),
-                    ),
-                    const SizedBox(height: 12),
-                    NuvoOutlineButton(
-                      label: 'Ask for another proof',
-                      icon: Icons.rate_review_rounded,
-                      expand: true,
-                      onPressed: _saving ? null : () => _review('needs_review'),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'The racer can submit another proof after reading your note.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeColors.inkMuted,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    NuvoDangerButton(
-                      label: 'Reject proof',
-                      icon: Icons.close_rounded,
-                      expand: true,
-                      onPressed: _saving ? null : () => _review('rejected'),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'This declines the proof and keeps it out of the leaderboard.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeColors.inkMuted,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    ],
-                  ],
-                )
-                .animate()
-                .fadeIn(duration: 220.ms, curve: Curves.easeOut)
-                .slideY(begin: 0.03, end: 0, duration: 260.ms),
+        child: Column(
+          children: [
+            V13BackBar(
+              title: isOwner ? 'Review move' : 'Proof',
+              onBack: () => safePopOrGo(context, '/race/${widget.raceId}'),
+            ),
+            Expanded(
+              child: V13AsyncView<Race>.state(
+                status: _loading
+                    ? V13AsyncStatus.loading
+                    : race == null
+                    ? V13AsyncStatus.error
+                    : proof == null || !canView
+                    ? V13AsyncStatus.empty
+                    : V13AsyncStatus.data,
+                dataValue: race,
+                errorTitle: _error ?? 'Could not load move review',
+                emptyTitle: 'Move not found',
+                emptyBody:
+                    'It may have been removed, or it is not yours to see.',
+                emptyIcon: Icons.flag_outlined,
+                emptyAction: V13Button.secondary(
+                  label: 'Back to race',
+                  onPressed: () => context.go('/race/${widget.raceId}'),
+                ),
+                onRetry: _load,
+                builder: (data) => _body(data, proof!, isOwner, user?.id),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _body(Race race, RaceProof proof, bool isOwner, String? uid) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapMd,
+        V13.pagePad,
+        V13.gapXxl * 2,
+      ),
+      children: [
+        _MoveSummaryCard(
+          proof: proof,
+          race: race,
+          evidenceImage: _evidenceImage(proof),
+          onFaceTap: () => openPerson(context, ref, proof.userId),
+        ),
+        const SizedBox(height: V13.gapXl),
+        // Action visibility mirrors the backend contract so the UI never
+        // offers a mutation that will 409:
+        //  - creator review controls only while the proof is HELD (pending →
+        //    'needs_review'/'submitted'); counted proof is disputed through
+        //    veto, vetoed proof is final;
+        //  - nobody reviews or vetoes their own proof;
+        //  - any participant (creator included) can veto another racer's
+        //    non-vetoed proof.
+        if (!raceProofIsReviewable(race, proof, uid)) ...[
+          Text(
+            _viewerStatus(proof),
+            style: V13.body.copyWith(color: V13.muted),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: V13.gapMd),
+          // Race-truth action: other racers can dispute whether this proof
+          // should count. Own vetoed proofs get the replacement path — the
+          // old record stays for audit.
+          if (raceProofIsVetoable(race, proof, uid)) ...[
+            V13Button.secondary(
+              label: proof.viewerVoted ? 'You vetoed this proof' : 'Veto proof',
+              icon: Icons.gavel_rounded,
+              fullWidth: true,
+              onPressed: _saving || proof.viewerVoted
+                  ? null
+                  : () => _vetoProof(proof),
+            ),
+            const SizedBox(height: V13.gapMd),
+          ],
+          if (proof.userId == uid && proof.vetoState == 'vetoed') ...[
+            V13Button.primary(
+              label: 'Submit new proof',
+              icon: Icons.add_a_photo_outlined,
+              fullWidth: true,
+              onPressed: () => openSubmitProof(context, ref, race),
+            ),
+            const SizedBox(height: V13.gapMd),
+          ],
+          if (proof.userId != uid)
+            Center(
+              child: V13Button.ghost(
+                label: 'Report this move',
+                onPressed: () => _reportProof(proof),
+              ),
+            ),
+        ] else ...[
+          _NoteInput(
+            controller: _summaryController,
+            label: 'Review note (optional)',
+            hint: 'Add a note for the submitter',
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: V13.gapMd),
+            Text(_error!, style: V13.caption.copyWith(color: V13.danger)),
+          ],
+          const SizedBox(height: V13.gapXl),
+          Text('Proof decision', style: V13.sectionHead),
+          const SizedBox(height: V13.gapMd),
+          V13Button.primary(
+            label: 'Accept proof',
+            icon: Icons.check_rounded,
+            fullWidth: true,
+            loading: _saving,
+            onPressed: _saving ? null : () => _review('accepted'),
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13Button.secondary(
+            label: 'Ask for another proof',
+            icon: Icons.rate_review_rounded,
+            fullWidth: true,
+            onPressed: _saving ? null : () => _review('needs_review'),
+          ),
+          const SizedBox(height: V13.gapSm),
+          Text(
+            'The racer can submit another proof after reading your note.',
+            style: V13.caption,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13Button.danger(
+            label: 'Reject proof',
+            icon: Icons.close_rounded,
+            fullWidth: true,
+            onPressed: _saving ? null : () => _review('rejected'),
+          ),
+          const SizedBox(height: V13.gapSm),
+          Text(
+            'This declines the proof and keeps it out of the leaderboard.',
+            style: V13.caption,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    );
+  }
 }
 
-// ── Move summary card ─────────────────────────────────────────────────────────
+// ── Move summary card ────────────────────────────────────────────────────────
 
 class _MoveSummaryCard extends StatelessWidget {
   const _MoveSummaryCard({
     required this.proof,
     required this.race,
+    required this.onFaceTap,
     this.evidenceImage,
   });
 
   final RaceProof proof;
   final Race race;
+  final VoidCallback onFaceTap;
 
   /// Authed evidence image — null when no media or the viewer can't fetch it.
   final ImageProvider? evidenceImage;
 
-  Color _statusColor(BuildContext context) => switch (proof.verificationStatus) {
-    'accepted' || 'verified' => NuvoColors.success,
-    'rejected' => NuvoColors.danger,
-    'needs_review' => NuvoColors.warning,
-    _ => NuvoColors.blue,
+  Color get _statusColor => switch (proof.verificationStatus) {
+    'accepted' || 'verified' || 'ai_verified' => V13.mint,
+    'rejected' => V13.coral,
+    'needs_review' || 'submitted' => V13.sun,
+    _ => V13.sky,
   };
 
   String get _statusLabel {
@@ -537,81 +459,187 @@ class _MoveSummaryCard extends StatelessWidget {
         ? '+${proof.value}'
         : '+${proof.value} ${race.unit}';
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: context.themeColors.border, width: 2),
-        boxShadow: AppShadows.hardSmall,
-      ),
+    return V13Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Wrap, not Row: a long racer name drops under the pills instead
-          // of overflowing or truncating on a narrow phone.
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
             children: [
-              NuvoPill(label: _statusLabel, color: _statusColor(context)),
-              NuvoPill(
-                label: proof.proofType == 'ai_motion' ? 'Verified' : 'Manual',
-                color: proof.proofType == 'ai_motion'
-                    ? context.themeColors.accent
-                    : context.themeColors.inkMuted,
+              V13Face(
+                photoUrl: proof.profilePhotoUrl,
+                size: 44,
+                name: proof.displayName,
+                onTap: onFaceTap,
               ),
-              Text(
-                proof.displayName,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: context.themeColors.ink,
+              const SizedBox(width: V13.gapMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      proof.displayName,
+                      style: V13.bodyStrong,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(race.title, style: V13.caption),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Text(
-            race.title,
-            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
-          ),
-          const SizedBox(height: 3),
-          if (valueLabel != null) ...[
-            Text(
-              valueLabel,
-              style: AppTextStyles.headlineMedium.copyWith(
-                color: context.themeColors.accent,
+          const SizedBox(height: V13.gapMd),
+          Wrap(
+            spacing: V13.gapSm,
+            runSpacing: V13.gapSm,
+            children: [
+              V13Pill(label: _statusLabel, color: _statusColor),
+              V13Pill(
+                label: proof.proofType == 'ai_motion' ? 'Camera' : 'Manual',
+                color: V13.card,
               ),
-            ),
+            ],
+          ),
+          if (valueLabel != null) ...[
+            const SizedBox(height: V13.gapMd),
+            Text(valueLabel, style: V13.number.copyWith(color: V13.blue)),
           ],
           if (evidenceImage != null) ...[
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(NuvoRadii.sm),
+            const SizedBox(height: V13.gapMd),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(V13.radiusTile),
+                border: Border.all(color: V13.navy, width: V13.outline),
+              ),
+              clipBehavior: Clip.antiAlias,
               child: Image(
                 image: evidenceImage!,
                 width: double.infinity,
                 fit: BoxFit.fitWidth,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           ],
           if (proof.note != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: V13.gapMd),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(V13.gapMd),
               decoration: BoxDecoration(
-                color: context.themeColors.surface,
-                border: Border.all(color: context.themeColors.border, width: 1.5),
-                borderRadius: BorderRadius.circular(NuvoRadii.sm),
+                color: V13.bg,
+                border: Border.all(color: V13.divider, width: V13.outline),
+                borderRadius: BorderRadius.circular(V13.radiusTile),
               ),
-              child: Text(
-                proof.note!,
-                style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.ink),
-              ),
+              child: Text(proof.note!, style: V13.body),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Multi-line note field in V13TextInput's chrome (that widget is single-line
+/// only, so multi-line fields use this thin wrapper).
+class _NoteInput extends StatelessWidget {
+  const _NoteInput({required this.controller, required this.label, this.hint});
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: V13.bodyStrong),
+        const SizedBox(height: V13.gapSm),
+        TextField(
+          controller: controller,
+          maxLines: 4,
+          style: V13.body,
+          cursorColor: V13.blue,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: V13.body.copyWith(color: V13.muted),
+            filled: true,
+            fillColor: V13.card,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(V13.radiusButton),
+              borderSide: const BorderSide(color: V13.navy, width: V13.outline),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(V13.radiusButton),
+              borderSide: const BorderSide(color: V13.blue, width: V13.outline),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The report sheet — title, explainer, optional details, send.
+class _ReportMoveSheet extends StatelessWidget {
+  const _ReportMoveSheet({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapMd,
+        V13.pagePad,
+        V13.gapXl,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Report this move?', style: V13.sectionHead),
+          const SizedBox(height: V13.gapSm),
+          Text(
+            'What’s wrong? This goes to the Nuvo review team.',
+            style: V13.body.copyWith(color: V13.muted),
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13Card(
+            padding: const EdgeInsets.symmetric(
+              horizontal: V13.gapMd,
+              vertical: 2,
+            ),
+            child: TextField(
+              controller: controller,
+              maxLines: 3,
+              maxLength: 500,
+              style: V13.body,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                hintText: 'Optional details',
+                hintStyle: TextStyle(color: V13.muted),
+                counterStyle: TextStyle(color: V13.muted),
+              ),
+            ),
+          ),
+          const SizedBox(height: V13.gapMd),
+          V13Button.primary(
+            label: 'Send report',
+            icon: Icons.flag_outlined,
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+          ),
         ],
       ),
     );

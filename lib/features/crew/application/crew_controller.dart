@@ -20,6 +20,7 @@ class CrewState {
     this.outgoing = const [],
     this.relationships = const {},
     this.pendingUserIds = const {},
+    this.mutuals = const {},
     this.loading = false,
     this.refreshing = false,
     this.error,
@@ -32,6 +33,9 @@ class CrewState {
   final List<PublicUser> outgoing;
   final Map<String, CrewConnectionStatus> relationships;
   final Set<String> pendingUserIds;
+
+  /// W2 additive: mutual-friends context per requester id (request cards).
+  final Map<String, CrewRequestMutuals> mutuals;
   final bool loading;
   final bool refreshing;
   final String? error;
@@ -62,6 +66,7 @@ class CrewState {
     List<PublicUser>? outgoing,
     Map<String, CrewConnectionStatus>? relationships,
     Set<String>? pendingUserIds,
+    Map<String, CrewRequestMutuals>? mutuals,
     bool? loading,
     bool? refreshing,
     String? error,
@@ -71,6 +76,7 @@ class CrewState {
     outgoing: outgoing ?? this.outgoing,
     relationships: relationships ?? this.relationships,
     pendingUserIds: pendingUserIds ?? this.pendingUserIds,
+    mutuals: mutuals ?? this.mutuals,
     loading: loading ?? this.loading,
     refreshing: refreshing ?? this.refreshing,
     error: error,
@@ -276,6 +282,7 @@ class CrewController extends StateNotifier<CrewState> {
         requests: requests,
         outgoing: outgoing,
         pendingUserIds: state.pendingUserIds,
+        mutuals: page.mutuals,
         relationships: {
           for (final id in state.relationships.keys) id: CrewConnectionStatus.none,
           for (final user in outgoing) user.id: CrewConnectionStatus.pendingOutgoing,

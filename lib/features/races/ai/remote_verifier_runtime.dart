@@ -11,6 +11,10 @@ enum RemoteRuntimeState {
   repAccepted,
   holdProgress,
   completed,
+
+  /// A hold attempt ended — out of position past the break tolerance.
+  /// Terminal: the runtime keeps reporting it and never resumes.
+  holdBroken,
   runtimeError,
 }
 
@@ -44,9 +48,24 @@ abstract class RemoteVerifierRuntime {
   RemoteVerifierRuntime({required this.spec, required this.target});
 
   final RemoteVerifierSpec spec;
-  final int target;
+
+  /// Session finish line — null when the race format has no goal. The
+  /// runtime then counts everything and never reports `completed`.
+  final int? target;
   int count = 0;
   bool _started = false;
+
+  /// Frame time of the last counted rep — null until something counts.
+  /// The rep-inactivity prompt reads it through the verifier adapter.
+  DateTime? lastRepAt;
+
+  /// The take crossed its finish line. No goal means never — the athlete
+  /// ends the take with Done, which is what actually submits the count.
+  bool get reachedTarget => target != null && count >= target!;
+
+  /// 0–1 progress toward the finish line; a no-goal session has none.
+  double get targetProgress =>
+      target == null || target! <= 0 ? 0 : math.min(1, count / target!);
 
   void start() => _started = true;
 
@@ -55,7 +74,7 @@ abstract class RemoteVerifierRuntime {
   RemoteVerifierUpdate notReady(String diagnostic) => RemoteVerifierUpdate(
     state: RemoteRuntimeState.notReady,
     count: count,
-    progress: target == 0 ? 0 : count / target,
+    progress: targetProgress,
     confidence: 0,
     guidance: _friendlyDiagnostic(diagnostic),
     diagnostic: diagnostic,
@@ -65,6 +84,7 @@ abstract class RemoteVerifierRuntime {
     'missing_required_regions' =>
       'Step back until the required body regions are visible.',
     'hold_form_lost' => 'Hold the position steadily to keep the count moving.',
+    'hold_broken' => 'The hold broke — finishing up.',
     'waiting_for_start' => 'Start from the ready position.',
     'sequence_pose_lost' =>
       'Stay in frame — the sequence restarts when pose is lost.',
@@ -101,6 +121,7 @@ class StateMachineV1Runtime extends RemoteVerifierRuntime {
         _active = false;
         _candidateFrames = 0;
         count++;
+        lastRepAt = frame.createdAt;
         return _result(RemoteRuntimeState.repAccepted, 0.9, 'rep_accepted');
       }
     } else if ((_active && !isActive) || (!_active && !isStart)) {
@@ -118,11 +139,11 @@ class StateMachineV1Runtime extends RemoteVerifierRuntime {
     double confidence,
     String diagnostic,
   ) => RemoteVerifierUpdate(
-    state: count >= target ? RemoteRuntimeState.completed : state,
+    state: reachedTarget ? RemoteRuntimeState.completed : state,
     count: count,
-    progress: math.min(1, target == 0 ? 0 : count / target),
+    progress: targetProgress,
     confidence: confidence,
-    guidance: count >= target ? 'Target complete.' : 'Keep going.',
+    guidance: reachedTarget ? 'Target complete.' : 'Keep going.',
     diagnostic: diagnostic,
   );
 }
@@ -145,6 +166,7 @@ class AlternatingRepV1Runtime extends RemoteVerifierRuntime {
         _stableFrames = 0;
         _leftNext = !_leftNext;
         count++;
+        lastRepAt = frame.createdAt;
         return _result(
           RemoteRuntimeState.repAccepted,
           0.88,
@@ -162,11 +184,11 @@ class AlternatingRepV1Runtime extends RemoteVerifierRuntime {
     double confidence,
     String diagnostic,
   ) => RemoteVerifierUpdate(
-    state: count >= target ? RemoteRuntimeState.completed : state,
+    state: reachedTarget ? RemoteRuntimeState.completed : state,
     count: count,
-    progress: math.min(1, target == 0 ? 0 : count / target),
+    progress: targetProgress,
     confidence: confidence,
-    guidance: count >= target
+    guidance: reachedTarget
         ? 'Target complete.'
         : 'Alternate sides with control.',
     diagnostic: diagnostic,
@@ -176,18 +198,36 @@ class AlternatingRepV1Runtime extends RemoteVerifierRuntime {
 class HoldV1Runtime extends RemoteVerifierRuntime {
   HoldV1Runtime({required super.spec, required super.target});
 
+  /// Same contract as [HoldTimerStateMachine]: a hold is one unbroken
+  /// attempt — more than this much continuous time out of position ends it.
+  static const maxBreakMs = HoldTimerStateMachine.maxBreakMs;
+
   DateTime? _startedAt;
   DateTime? _lastFrame;
+  DateTime? _breakStartedAt;
   int _heldMs = 0;
+  bool _broken = false;
 
   @override
   RemoteVerifierUpdate update(NuvoPoseFrame frame) {
     if (!_started) start();
+    if (_broken) return _brokenUpdate();
     if (!_all(spec.holdRules, frame)) {
       _startedAt = null;
       _lastFrame = null;
+      // The break clock only exists once the hold has banked time — a
+      // take that never got into position has nothing to break.
+      if (_heldMs > 0) {
+        _breakStartedAt ??= frame.createdAt;
+        if (frame.createdAt.difference(_breakStartedAt!).inMilliseconds >
+            maxBreakMs) {
+          _broken = true;
+          return _brokenUpdate();
+        }
+      }
       return notReady('hold_form_lost');
     }
+    _breakStartedAt = null;
     final previous = _lastFrame;
     _lastFrame = frame.createdAt;
     _startedAt ??= frame.createdAt;
@@ -196,15 +236,22 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
       if (delta >= 0 && delta <= 1000)
         _heldMs = math.min(spec.maxHoldMs, _heldMs + delta);
     }
-    final progress = math
-        .min(1, _heldMs / math.max(1, target * 1000))
-        .toDouble();
-    final complete = _heldMs >= target * 1000;
+    final targetMs = (target ?? 0) * 1000;
+    final progress = targetMs <= 0
+        ? 0.0
+        : math.min(1, _heldMs / targetMs).toDouble();
+    final complete = target != null && _heldMs >= targetMs;
+    // The banked seconds live on [count] so a broken or finished hold
+    // reports what it held through currentValue/finish — before this they
+    // were only in the update payload and the runtime always answered 0.
+    final heldSeconds = (_heldMs / 1000).floor();
+    if (heldSeconds > count) lastRepAt = frame.createdAt;
+    count = heldSeconds;
     return RemoteVerifierUpdate(
       state: complete
           ? RemoteRuntimeState.completed
           : RemoteRuntimeState.holdProgress,
-      count: (_heldMs / 1000).floor(),
+      count: count,
       progress: progress,
       confidence: 0.86,
       guidance: complete ? 'Target complete.' : 'Hold steady.',
@@ -212,6 +259,16 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
       elapsedMs: _heldMs,
     );
   }
+
+  RemoteVerifierUpdate _brokenUpdate() => RemoteVerifierUpdate(
+    state: RemoteRuntimeState.holdBroken,
+    count: count,
+    progress: targetProgress,
+    confidence: 0.86,
+    guidance: 'The hold broke — finishing up.',
+    diagnostic: 'hold_broken',
+    elapsedMs: _heldMs,
+  );
 }
 
 /// Executes a strict linear `sequence_match_v1` phase chain.
@@ -301,6 +358,7 @@ class SequenceMatchV1Runtime extends RemoteVerifierRuntime {
         _dwellFrames = 0;
         if (phase.completesRep) {
           count++;
+          lastRepAt = frame.createdAt;
           _resetSequence();
           return _result(RemoteRuntimeState.repAccepted, 'rep_accepted');
         }
@@ -328,11 +386,11 @@ class SequenceMatchV1Runtime extends RemoteVerifierRuntime {
 
   RemoteVerifierUpdate _result(RemoteRuntimeState state, String diagnostic) =>
       RemoteVerifierUpdate(
-        state: count >= target ? RemoteRuntimeState.completed : state,
+        state: reachedTarget ? RemoteRuntimeState.completed : state,
         count: count,
-        progress: math.min(1, target == 0 ? 0 : count / target),
+        progress: targetProgress,
         confidence: state == RemoteRuntimeState.repAccepted ? 0.9 : 0.78,
-        guidance: count >= target
+        guidance: reachedTarget
             ? 'Target complete.'
             : 'Move through the full motion with control.',
         diagnostic: diagnostic,
@@ -360,16 +418,17 @@ class RepTreeV1Runtime extends RemoteVerifierRuntime {
     );
     count = _counter.count;
     final accepted = count > before;
+    if (accepted) lastRepAt = frame.createdAt;
     return RemoteVerifierUpdate(
-      state: count >= target
+      state: reachedTarget
           ? RemoteRuntimeState.completed
           : accepted
           ? RemoteRuntimeState.repAccepted
           : RemoteRuntimeState.tracking,
       count: count,
-      progress: math.min(1, target == 0 ? 0 : count / target),
+      progress: targetProgress,
       confidence: accepted ? 0.9 : 0.78,
-      guidance: count >= target
+      guidance: reachedTarget
           ? 'Target complete.'
           : 'Move through the full motion with control.',
       diagnostic: accepted ? 'rep_accepted' : 'rep_tree_tracking',
@@ -402,11 +461,15 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
     final before = _validator.currentValue;
     final result = _validator.update(frame);
     count = result.currentValue;
+    if (count > before) lastRepAt = frame.createdAt;
     final isHold = spec.measurementType == 'duration';
     final accepted = !isHold && count > before;
-    final complete = result.isVerified;
+    final complete = target != null && result.isVerified;
+    final holdBroken = _validator.holdBroken;
     return RemoteVerifierUpdate(
-      state: complete
+      state: holdBroken
+          ? RemoteRuntimeState.holdBroken
+          : complete
           ? RemoteRuntimeState.completed
           : accepted
           ? RemoteRuntimeState.repAccepted
@@ -414,10 +477,14 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
           ? RemoteRuntimeState.holdProgress
           : RemoteRuntimeState.tracking,
       count: count,
-      progress: math.min(1, target == 0 ? 0 : count / target),
+      progress: targetProgress,
       confidence: _validator.confidence,
       guidance: complete ? 'Target complete.' : result.coachingText,
-      diagnostic: accepted ? 'rep_accepted' : _validator.failedRuleReason,
+      diagnostic: holdBroken
+          ? 'hold_broken'
+          : accepted
+          ? 'rep_accepted'
+          : _validator.failedRuleReason,
       elapsedMs: isHold ? count * 1000 : 0,
       metrics: _validator.debugValues,
     );
@@ -426,9 +493,9 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
 
 RemoteVerifierRuntime createRemoteVerifierRuntime({
   required RemoteVerifierSpec spec,
-  required int target,
+  required int? target,
 }) {
-  if (target < 1 || target > 100000)
+  if (target != null && (target < 1 || target > 100000))
     throw const RemoteVerifierSpecException(
       'Target is outside the supported range.',
     );

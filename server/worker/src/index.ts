@@ -8,6 +8,7 @@ import { appleServiceConfig, retryPendingAppleRevocations } from './lib/apple';
 import { purgeExpiredAuthData } from './lib/dataRetention';
 import { sweepRaceLifecycle } from './domain/raceFinalize';
 import { notifyLifecycleTransitions, runNotificationJob } from './domain/notificationPolicy';
+import { sweepRecurringSquadRaces } from './domain/squadRecurring';
 import { claimDueJobs } from './domain/notificationJobs';
 import { authRouter } from './routes/auth';
 import { profileRouter } from './routes/profile';
@@ -23,9 +24,11 @@ import { verificationSessionsRouter } from './routes/verificationSessions';
 import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
 import { progressionRouter } from './routes/progression';
+import { leaderboardRouter } from './routes/leaderboard';
 import { crewRouter } from './routes/crew';
 import { squadsRouter } from './routes/squads';
 import { reportsRouter } from './routes/reports';
+import { mutesRouter } from './routes/mutes';
 import { invitesRouter } from './routes/invites';
 import { notificationsRouter } from './routes/notifications';
 import { reactionsRouter } from './routes/reactions';
@@ -288,7 +291,30 @@ app.get('/races/activities', async (c) => {
       aliases: metadataStringList(entry.metadata?.aliases, 8) ??
         entry.legacy?.aliases ?? [],
     }));
-    const etag = `\"${catalog.catalogVersion}:${activities.length}\"`;
+    // racerCount = distinct users who joined a still-active, non-deleted
+    // race of that activity within the last 7 days — the "[N] racing" count
+    // on Compete's trending-moves cards. Decorative: a stats failure must
+    // never blank the catalog, so it degrades to zeroes.
+    const racerCounts = new Map<string, number>();
+    try {
+      const counts = await c.env.DB.prepare(
+        `SELECT r.activity_id AS id, COUNT(DISTINCT rm.user_id) AS n
+         FROM race_members rm
+         JOIN races r ON r.id = rm.race_id
+         WHERE r.status = 'active' AND r.deleted_at IS NULL
+           AND rm.status = 'active'
+           AND rm.joined_at >= datetime('now', '-7 days')
+           AND r.activity_id IS NOT NULL
+         GROUP BY r.activity_id`,
+      ).all<{ id: string; n: number }>();
+      for (const row of counts.results) racerCounts.set(row.id, row.n);
+    } catch (err) {
+      console.error('[activities] racerCount query failed; defaulting to zero:', err instanceof Error ? err.message : String(err));
+    }
+    for (const a of activities) {
+      (a as { racerCount?: number }).racerCount = racerCounts.get(a.id) ?? 0;
+    }
+    const etag = `\"${catalog.catalogVersion}:${activities.length}:${activities.map((a) => racerCounts.get(a.id) ?? 0).join(',')}\"`;
     c.header('ETag', etag);
     c.header('Cache-Control', 'public, max-age=300');
     if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
@@ -308,7 +334,7 @@ app.get('/races/activities', async (c) => {
       etag: 'legacy-catalog',
       count: RACE_ACTIVITY_CATALOG.length,
       supported: RACE_ACTIVITY_CATALOG.filter((a) => a.availability === 'supported').map((a) => a.id),
-      activities: RACE_ACTIVITY_CATALOG,
+      activities: RACE_ACTIVITY_CATALOG.map((a) => ({ ...a, racerCount: 0 })),
       registryFallback: true,
     });
   }
@@ -390,6 +416,7 @@ app.route('/progression', progressionRouter);
 
 // ── Social routes ─────────────────────────────────────────────────────────────
 app.route('/users', usersRouter);
+app.route('/leaderboard', leaderboardRouter);
 app.route('/crew', crewRouter);
 app.route('/squads', squadsRouter);
 app.route('/invites', invitesRouter);
@@ -399,6 +426,7 @@ app.route('/devices', devicesRouter);
 
 // ── Reporting and safety routes ───────────────────────────────────────────────
 app.route('/reports', reportsRouter);
+app.route('/mutes', mutesRouter);
 
 // ── Race routes ───────────────────────────────────────────────────────────────
 app.route('/races', racesRouter);
@@ -509,6 +537,15 @@ const worker = Object.assign(app, {
           await notifyLifecycleTransitions(env, (p) => ctx.waitUntil(p), transitions);
         } catch (err) {
           console.error('[cron] race lifecycle sweep failed:', (err as Error).message);
+        }
+        // Crew recurring races: spawn today's instance per definition. The
+        // sweep is idempotent per UTC day and only ever sends notifications
+        // through the policy layer (which honors prefs + crew mutes).
+        try {
+          const spawned = await sweepRecurringSquadRaces(env, (p) => ctx.waitUntil(p));
+          if (spawned > 0) console.log(JSON.stringify({ evt: 'recurring_spawned', n: spawned }));
+        } catch (err) {
+          console.error('[cron] recurring race sweep failed:', (err as Error).message);
         }
         try {
           const jobs = await claimDueJobs(env.DB);

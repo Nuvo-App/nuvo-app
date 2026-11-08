@@ -11,6 +11,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 import { generateId } from '../lib/crypto';
 import { sendPush } from './push';
+import { isUserMuted } from './mutes';
 
 export const NOTIFICATION_CATEGORIES = [
   'race_invite',
@@ -24,6 +25,8 @@ export const NOTIFICATION_CATEGORIES = [
   'crew_request',
   'crew_request_accepted',
   'crew_connected',
+  'squad_join_request',
+  'squad_join_approved',
   'reaction',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
@@ -46,6 +49,8 @@ export const CATEGORY_DEFAULTS: Record<
   crew_request: { inApp: true, push: true },
   crew_request_accepted: { inApp: true, push: false }, // nice-to-know, not urgent
   crew_connected: { inApp: true, push: false }, // appears in the inbox + activity
+  squad_join_request: { inApp: true, push: true }, // an admin has to act on it
+  squad_join_approved: { inApp: true, push: false }, // you're in — no alarm needed
   reaction: { inApp: true, push: false }, // lightweight signal — inbox only by default
 };
 
@@ -98,6 +103,13 @@ export async function emitNotification(
   db: D1Database,
   opts: EmitOptions,
 ): Promise<string | null> {
+  // A muted actor produces nothing for the muter — no inbox row, no push,
+  // no aggregate bump — and the target never learns they were muted.
+  // Tolerates pre-0048 schemas (no user_mutes table → never muted).
+  if (opts.actorUserId && (await isUserMuted(db, opts.userId, opts.actorUserId))) {
+    return null;
+  }
+
   const pref = await db
     .prepare('SELECT in_app, push FROM notification_preferences WHERE user_id = ? AND category = ?')
     .bind(opts.userId, opts.category)
@@ -178,6 +190,7 @@ interface PushNotificationRow {
   id: string;
   user_id: string;
   category: string;
+  actor_user_id: string | null;
   title: string;
   body: string | null;
   dest_type: string | null;
@@ -204,13 +217,17 @@ export async function deliverNotificationPushes(
   try {
     const rows = await db
       .prepare(
-        `SELECT id, user_id, category, title, body, dest_type, dest_id, dest_context
+        `SELECT id, user_id, category, actor_user_id, title, body, dest_type, dest_id, dest_context
          FROM notifications WHERE id IN (${notificationIds.map(() => '?').join(',')})`,
       )
       .bind(...notificationIds)
       .all<PushNotificationRow>();
     for (const n of rows.results) {
       try {
+        // Belt-and-suspenders with the insert-side mute check: rows written
+        // through the crew-lifecycle batch honor the same rule — a muted
+        // actor's notification never pushes to the muter.
+        if (n.actor_user_id && (await isUserMuted(db, n.user_id, n.actor_user_id))) continue;
         const pref = await db
           .prepare(
             'SELECT push FROM notification_preferences WHERE user_id = ? AND category = ?',
@@ -223,6 +240,7 @@ export async function deliverNotificationPushes(
           title: n.title,
           body: n.body ?? undefined,
           category: n.category,
+          notificationId: n.id,
           dest: n.dest_type
             ? {
                 type: n.dest_type as DestinationDescriptor['type'],
@@ -264,6 +282,7 @@ export async function safeEmit(
       title: opts.title,
       body: opts.body,
       category: opts.category,
+      notificationId: id,
       dest: opts.dest,
     });
     if (c.executionCtx?.waitUntil) {

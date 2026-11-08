@@ -5,10 +5,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
-import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_legal_footer.dart';
 import 'auth_controller.dart';
@@ -217,8 +215,11 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                   if (!widget.embedded && context.canPop()) ...[
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: NuvoBackButton(
-                        onPressed: () => safePopOrGo(context, '/welcome'),
+                      child: V13IconButton(
+                        icon: Icons.arrow_back,
+                        shape: V13IconButtonShape.square,
+                        semanticLabel: 'Back',
+                        onTap: () => safePopOrGo(context, '/welcome'),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -227,8 +228,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                     isSignup
                         ? 'Ready to start\nyour first race?'
                         : 'Welcome back.',
-                    style: AppTextStyles.displayMedium.copyWith(
-                      color: context.themeColors.ink,
+                    style: V13.title.copyWith(
                       fontSize: constraints.maxWidth < 360 ? 30 : 36,
                       height: 1.08,
                       letterSpacing: -1.1,
@@ -241,15 +241,13 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                     isSignup
                         ? 'Create an account to save your races, invite your friends, and keep your progress.'
                         : 'Log in to keep your races, progress, and friends synced.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.themeColors.inkMuted,
-                    ),
+                    style: V13.body.copyWith(color: V13.muted, fontSize: 15),
                   ),
                   SizedBox(height: compact ? 24 : 28),
                   if (isSignup || replayingDemo)
-                    NuvoPrimaryButton(
+                    V13Button.primary(
                       label: replayingDemo ? 'Continue demo' : 'Create account',
-                      expand: true,
+                      fullWidth: true,
                       onPressed: replayingDemo
                           ? _continueDemo
                           : () => context.push('/auth/email'),
@@ -294,17 +292,15 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                             ),
                             TextSpan(
                               text: isSignup ? 'Log in' : 'Sign up',
-                              style: TextStyle(
-                                color: context.themeColors.accent,
+                              style: const TextStyle(
+                                color: V13.blue,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                           ],
                         ),
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeColors.inkMuted,
-                        ),
+                        style: V13.caption.copyWith(fontSize: 13),
                       ),
                     ),
                   ),
@@ -319,7 +315,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
     );
     if (widget.embedded) return content;
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(child: content),
     );
   }
@@ -349,28 +345,14 @@ class _ProviderButton extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      NuvoOutlineButton(
+      V13Button.secondary(
         label: label,
-        expand: true,
-        height: 52,
+        fullWidth: true,
+        loading: loading,
         // Fixed-width leading slot so the Apple and Google labels sit at the
         // same x position regardless of glyph width — the row still centers
         // as a unit inside the button.
-        leadingWidget: SizedBox(
-          width: 22,
-          height: 22,
-          child: Center(
-            child: loading
-                ? SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: context.themeColors.ink,
-                    ),
-                  )
-                : glyph,
-          ),
-        ),
+        leading: SizedBox(width: 22, height: 22, child: Center(child: glyph)),
         onPressed: loading ? null : onPressed,
       ),
       if (error != null)
@@ -380,8 +362,9 @@ class _ProviderButton extends StatelessWidget {
             liveRegion: true,
             child: Text(
               error!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.themeColors.dangerText,
+              style: V13.caption.copyWith(
+                color: V13.danger,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -404,7 +387,7 @@ class _AppleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _ProviderButton(
     label: 'Continue with Apple',
-    glyph: Icon(Icons.apple, size: 22, color: context.themeColors.ink),
+    glyph: const Icon(Icons.apple, size: 22, color: V13.navy),
     loading: loading,
     error: error,
     onPressed: onPressed,

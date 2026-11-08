@@ -21,13 +21,17 @@ import {
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  submissionImplausible,
   customRepRateImplausible,
+  formatNeedsFinishLine,
   manualConfigFromBody,
   validateRaceWindow,
   registryConfigFromBody,
+  rulesVersionFromBody,
+  timedAttemptValueExceedsDuration,
   type RaceConfig,
 } from '../domain/raceValidation';
-import { applyVerifiedSubmission, maxSubmissionValue } from '../domain/raceScoring';
+import { applyVerifiedSubmission } from '../domain/raceScoring';
 import {
   ensureMember,
   ensurePersonId,
@@ -53,11 +57,15 @@ import { scheduleRaceStartingSoon } from '../domain/notificationJobs';
 import { computeViewerContext } from '../domain/raceContext';
 import { effectiveTargetValue } from '../domain/raceTarget';
 import {
+  attemptElapsedMs,
   attemptsUsed,
+  bindableAttemptAtTime,
   bindableOpenAttempt,
+  cancelAttempt,
   closeAttempt,
   formatUsesAttempts,
   openAttempt,
+  type RaceAttemptRow,
 } from '../domain/raceAttempts';
 import { recordPersonalBestIfImproved, reconcilePersonalBest } from '../domain/raceBests';
 import { castProofVote, VETO_REASON_SET, type VetoReason } from '../domain/proofVeto';
@@ -275,6 +283,43 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
     startsAt: race.start_at,
     endsAt: race.end_at,
     recurrence: race.recurrence === 'daily' || race.recurrence === 'weekly' ? race.recurrence : 'none',
+  };
+}
+
+/**
+ * How the race's movement is physically measured — 'repetitions' for rep
+ * counters and honor/custom goals, 'duration' for holds, 'distance' for
+ * metre-measured movers (treadmill). The compiled catalog answers first; a
+ * registry-published activity answers from its control-plane row so a remote
+ * distance mover is judged as metres too. Manual and custom races carry no
+ * activity ID and always land on 'repetitions'.
+ */
+async function raceMeasurementType(
+  db: D1Database,
+  race: RaceRow,
+  config: RaceConfig | null,
+): Promise<{ measurementType: string; maxRepsPerSecond: number | null }> {
+  const activityId =
+    config?.activityId ??
+    normalizeActivityIdLoose(race.activity_id ?? race.movement_type);
+  if (!activityId) {
+    return { measurementType: 'repetitions', maxRepsPerSecond: null };
+  }
+  const activity = activityForId(activityId);
+  if (activity) {
+    return {
+      measurementType: activity.measurementType ?? 'repetitions',
+      maxRepsPerSecond: activity.maxRepsPerSecond ?? null,
+    };
+  }
+  const registry = await readRegistryActivity(db, activityId);
+  const publishedRate = registry?.metadata['maxRepsPerSecond'];
+  return {
+    measurementType: registry?.measurementType ?? 'repetitions',
+    maxRepsPerSecond:
+      typeof publishedRate === 'number' && Number.isFinite(publishedRate)
+        ? publishedRate
+        : null,
   };
 }
 
@@ -715,7 +760,7 @@ async function loadViewerVisibilityContext(
 /// shape from a single source of truth.
 function shapeRaceResponse(
   race: RaceRow,
-  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[]; levels?: ReadonlyMap<string, number> },
+  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[]; levels?: ReadonlyMap<string, number>; viewerPreviousRank?: number | null },
   viewerUserId: string | undefined,
   visibilityCtx: { allowedIds: Set<string>; blockedEitherWay: Set<string> },
   submissionResult?: SubmissionResult,
@@ -782,6 +827,7 @@ function shapeRaceResponse(
     attemptsUsed: viewerAttempts?.used ?? 0,
     openAttemptId: viewerAttempts?.openAttemptId ?? null,
     viewerUserId,
+    viewerPreviousRank: collections.viewerPreviousRank ?? null,
     now,
   });
 
@@ -826,6 +872,7 @@ function shapeRaceResponse(
     rules: '',
     proofRequirement,
     proofReviewMode: race.proof_review_mode ?? 'auto_accept',
+    rulesVersion: race.rules_version ?? 0,
     visibility: race.visibility,
     // The invite code is insider data — returning it to a non-member would
     // hand any signed-in user the key to join the race.
@@ -915,14 +962,18 @@ async function levelsForUsers(
   const ids = [...new Set([...userIds].filter((x): x is string => Boolean(x)))];
   const map = new Map<string, number>();
   if (ids.length === 0) return map;
-  const rows = await db
-    .prepare(
-      `SELECT user_id, level FROM user_progression
-       WHERE user_id IN (${ids.map(() => '?').join(',')})`,
-    )
-    .bind(...ids)
-    .all<{ user_id: string; level: number }>();
-  for (const r of rows.results) map.set(r.user_id, r.level);
+  // D1 caps bound variables per statement at 100 — chunk the lookup.
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const rows = await db
+      .prepare(
+        `SELECT user_id, level FROM user_progression
+         WHERE user_id IN (${chunk.map(() => '?').join(',')})`,
+      )
+      .bind(...chunk)
+      .all<{ user_id: string; level: number }>();
+    for (const r of rows.results) map.set(r.user_id, r.level);
+  }
   return map;
 }
 
@@ -975,7 +1026,7 @@ async function buildRaceResponse(
       }
     : undefined;
 
-  const [participants, moves, invite, finalStandings, release] = await Promise.all([
+  const [participants, moves, invite, finalStandings, release, viewerPrevRank] = await Promise.all([
     db.prepare(
       `SELECT rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
@@ -1013,6 +1064,18 @@ async function buildRaceResponse(
       : race.activity_id
       ? stableReleaseForActivity(db, race.activity_id, viewerUserId)
       : Promise.resolve(null),
+    // The viewer's rank before their latest verified proof — the trend
+    // baseline for viewerContext.previousRank.
+    viewerUserId
+      ? db
+          .prepare(
+            `SELECT previous_rank FROM move_logs
+             WHERE race_id = ? AND user_id = ? AND status != 'removed' AND previous_rank IS NOT NULL
+             ORDER BY created_at DESC, id DESC LIMIT 1`,
+          )
+          .bind(race.id, viewerUserId)
+          .first<{ previous_rank: number | null }>()
+      : Promise.resolve(null),
   ]);
 
   const [visibilityCtx, levels] = await Promise.all([
@@ -1024,7 +1087,7 @@ async function buildRaceResponse(
   ]);
   return shapeRaceResponse(
     race,
-    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results, levels },
+    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results, levels, viewerPreviousRank: viewerPrevRank?.previous_rank ?? null },
     viewerUserId,
     visibilityCtx,
     submissionResult,
@@ -1092,10 +1155,25 @@ async function buildRaceResponsesBatch(
   }
 
   const ids = races.map((r) => r.id);
-  const placeholders = ids.map(() => '?').join(', ');
+  // D1 caps bound variables per statement at 100, so id lists are chunked and
+  // the rows merged (each race's rows land in exactly one chunk, so the
+  // per-race ordering is preserved).
+  const idChunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 90) idChunks.push(ids.slice(i, i + 90));
+  const chunked = async <T>(sql: (marks: string) => string, leadingBinds: unknown[] = []): Promise<T[]> => {
+    const out: T[] = [];
+    for (const chunk of idChunks) {
+      const res = await db
+        .prepare(sql(chunk.map(() => '?').join(', ')))
+        .bind(...leadingBinds, ...chunk)
+        .all<T>();
+      out.push(...res.results);
+    }
+    return out;
+  };
 
-  const [participantsRows, movesRows, invitesRows, standingsRows, visibilityCtx] = await Promise.all([
-    db.prepare(
+  const [participants, moves, invites, standings, prevRankRows, visibilityCtx] = await Promise.all([
+    chunked<ParticipantRow & { race_id: string }>((marks) =>
       `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
@@ -1104,29 +1182,40 @@ async function buildRaceResponsesBatch(
        FROM race_members rm
        LEFT JOIN profiles p ON p.user_id = rm.user_id
        LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'
-       ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
-    ).bind(...ids).all<ParticipantRow & { race_id: string }>(),
-    db.prepare(
+       WHERE rm.race_id IN (${marks}) AND rm.status = 'active'
+       ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`),
+    chunked<MoveRow & { race_id: string }>((marks) =>
       `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM move_logs ml
        LEFT JOIN profiles p ON p.user_id = ml.user_id
-       WHERE ml.race_id IN (${placeholders}) AND ml.status != 'removed'
-       ORDER BY ml.race_id, ml.created_at DESC`
-    ).bind(...ids).all<MoveRow & { race_id: string }>(),
-    db.prepare(
-      `SELECT * FROM race_invites WHERE race_id IN (${placeholders}) AND status = 'active'
-       ORDER BY race_id, created_at DESC`
-    ).bind(...ids).all<InviteRow>(),
-    db.prepare(
+       WHERE ml.race_id IN (${marks}) AND ml.status != 'removed'
+       ORDER BY ml.race_id, ml.created_at DESC`),
+    chunked<InviteRow>((marks) =>
+      `SELECT * FROM race_invites WHERE race_id IN (${marks}) AND status = 'active'
+       ORDER BY race_id, created_at DESC`),
+    chunked<StandingRow & { race_id: string }>((marks) =>
       `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM race_final_standings fs
        LEFT JOIN profiles p ON p.user_id = fs.user_id
-       WHERE fs.race_id IN (${placeholders})
-       ORDER BY fs.race_id, fs.rank_position ASC`
-    ).bind(...ids).all<StandingRow & { race_id: string }>(),
+       WHERE fs.race_id IN (${marks})
+       ORDER BY fs.race_id, fs.rank_position ASC`),
+    // The viewer's rank before their latest verified proof in each race —
+    // feeds viewerContext.previousRank on every list row.
+    chunked<{ race_id: string; previous_rank: number | null }>(
+      (marks) =>
+        `SELECT ml.race_id, ml.previous_rank
+         FROM move_logs ml
+         WHERE ml.user_id = ? AND ml.race_id IN (${marks})
+           AND ml.status != 'removed' AND ml.previous_rank IS NOT NULL
+         ORDER BY ml.race_id, ml.created_at DESC, ml.id DESC`,
+      [viewerUserId],
+    ),
     loadViewerVisibilityContext(db, viewerUserId),
   ]);
+  const participantsRows = { results: participants };
+  const movesRows = { results: moves };
+  const invitesRows = { results: invites };
+  const standingsRows = { results: standings };
 
   // move_logs is capped at 20 most-recent per race, same as the single-race
   // path — the batched query fetches all matching rows pre-sorted per race,
@@ -1135,6 +1224,14 @@ async function buildRaceResponsesBatch(
   const movesByRace = groupByRaceId(movesRows.results, 20);
   const invitesByRace = groupByRaceId(invitesRows.results);
   const standingsByRace = groupByRaceId(standingsRows.results);
+  // Rows arrive per-race newest-first, so the first seen per race is the
+  // viewer's latest move there.
+  const prevRankByRace = new Map<string, number>();
+  for (const row of prevRankRows) {
+    if (!prevRankByRace.has(row.race_id) && row.previous_rank != null) {
+      prevRankByRace.set(row.race_id, row.previous_rank);
+    }
+  }
   const levels = await levelsForUsers(db, [
     ...participantsRows.results.map((p) => p.user_id),
     ...standingsRows.results.map((s) => s.user_id),
@@ -1149,6 +1246,7 @@ async function buildRaceResponsesBatch(
         invite: (invitesByRace.get(race.id) ?? [])[0] ?? null,
         finalStandings: standingsByRace.get(race.id) ?? [],
         levels,
+        viewerPreviousRank: prevRankByRace.get(race.id) ?? null,
       },
       viewerUserId,
       visibilityCtx,
@@ -1274,6 +1372,119 @@ racesRouter.get('/', async (c) => {
   return c.json({ ok: true, races });
 });
 
+// GET /races/open — joinable races created by or containing the viewer's
+// active friends, which the viewer has never joined. Powers the Compete
+// "Join a race" cards (docs/redesign/specs/COMPETE_RACES.md §1.3, §7).
+// Rows carry the exact shape of GET /races rows; POST /races/:id/join is
+// the join path (friends of any racer may enter a crew_only race — see
+// checkRaceJoinEligibility in lib/raceAccess.ts).
+racesRouter.get('/open', async (c) => {
+  const userId = c.get('userId');
+  const rows = await c.env.DB.prepare(
+    `SELECT DISTINCT r.* FROM races r
+     WHERE r.deleted_at IS NULL
+       AND r.status = 'active'
+       -- still joinable: a race whose finish line passed is closed even
+       -- before the lazy finalize lands (raceIsOpenToJoin parity)
+       AND (r.end_at IS NULL OR r.end_at > ${SQLITE_NOW_ISO})
+       AND r.creator_id != ?1
+       -- never a member (a 'left' row would rejoin fine, but resurfacing a
+       -- race the viewer already left is noise; a 'removed' row can't join)
+       AND NOT EXISTS (
+         SELECT 1 FROM race_members mine
+         WHERE mine.race_id = r.id AND mine.user_id = ?1
+       )
+       -- at least one active racer is the viewer's friend, and that friend
+       -- link is not blocked in either direction
+       AND EXISTS (
+         SELECT 1 FROM race_members fm
+         JOIN crew_connections cc ON cc.status = 'active'
+           AND ((cc.user_id = ?1 AND cc.crew_user_id = fm.user_id)
+             OR (cc.user_id = fm.user_id AND cc.crew_user_id = ?1))
+         WHERE fm.race_id = r.id AND fm.status = 'active'
+           AND NOT EXISTS (
+             SELECT 1 FROM blocked_users bf
+             WHERE (bf.user_id = ?1 AND bf.blocked_user_id = fm.user_id)
+                OR (bf.user_id = fm.user_id AND bf.blocked_user_id = ?1)
+           )
+       )
+       -- a block with the creator closes the race entirely (access rules)
+       AND NOT EXISTS (
+         SELECT 1 FROM blocked_users bc
+         WHERE (bc.user_id = ?1 AND bc.blocked_user_id = r.creator_id)
+            OR (bc.user_id = r.creator_id AND bc.blocked_user_id = ?1)
+       )
+       -- only visibilities POST /races/:id/join can actually enter:
+       -- crew_only (friends-of-a-racer) and open public_demo
+       AND (r.visibility = 'crew_only'
+            OR (r.visibility = 'public_demo' AND r.public_join_enabled = 1))
+     ORDER BY r.created_at DESC
+     LIMIT 20`,
+  )
+    .bind(userId)
+    .all<RaceRow>();
+
+  // Conditional GET over the same signals the batch response reads, scoped
+  // to the capped id set. The WHERE already excludes lazy-finalize races,
+  // so no write hides behind this validator.
+  const ids = rows.results.map((r) => r.id);
+  const nowMs = Date.now();
+  const etagParts: Array<string | number | null> = [
+    'races-open', userId, ids.join(','),
+    stalenessBucket(nowMs, 60_000),
+  ];
+  if (ids.length > 0) {
+    const marks = ids.map(() => '?').join(', ');
+    const sig = await c.env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '') FROM race_members
+            WHERE status = 'active' AND race_id IN (${marks})) AS members,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), '') || ':' || COALESCE(SUM(rank_cache), 0)
+                || ':' || COALESCE(SUM(progress_value), 0) FROM race_progress
+            WHERE race_id IN (${marks})) AS progress,
+         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), '') || ':' || COALESCE(SUM(status = 'verified'), 0)
+                || ':' || COALESCE(SUM(status = 'rejected'), 0) || ':' || COALESCE(SUM(LENGTH(COALESCE(summary, ''))), 0)
+                FROM move_logs WHERE status != 'removed' AND race_id IN (${marks})) AS moves,
+         (SELECT COUNT(*) || ':' || COALESCE(SUM(rank_position), 0) || ':' || COALESCE(SUM(score_value), 0)
+            FROM race_final_standings WHERE race_id IN (${marks})) AS standings`,
+    )
+      .bind(...ids, ...ids, ...ids, ...ids)
+      .first<Record<string, string | null>>();
+    let maxVersion = 0;
+    let maxUpdated = '';
+    const phases: string[] = [];
+    for (const r of rows.results) {
+      maxVersion = Math.max(maxVersion, r.version ?? 0);
+      if ((r.updated_at ?? '') > maxUpdated) maxUpdated = r.updated_at ?? '';
+      phases.push(effectiveRaceStatus(r.status, r.start_at, r.end_at, new Date(nowMs)).charAt(0));
+    }
+    etagParts.push(
+      maxVersion, maxUpdated, phases.join(''),
+      sig?.members ?? null, sig?.progress ?? null, sig?.moves ?? null, sig?.standings ?? null,
+    );
+  }
+  const nm = conditional(c, weakEtag(...etagParts));
+  if (nm) return nm;
+
+  let races: unknown[];
+  try {
+    races = await buildRaceResponsesBatch(c.env, userId, rows.results);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[races] GET /races/open batch failed, falling back per-race:', message);
+    races = [];
+    for (const row of rows.results) {
+      try {
+        races.push(await buildRaceResponse(c.env, userId, row));
+      } catch (rowErr) {
+        const rowMessage = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        console.error('[races] GET /races/open skipping corrupt race:', row.id, rowMessage);
+      }
+    }
+  }
+  return c.json({ ok: true, races });
+});
+
 // POST /races
 /** One structured line per refused race creation, so `wrangler tail` shows
  *  exactly which shape a client sent and why it was refused (no body content,
@@ -1329,6 +1540,7 @@ racesRouter.post('/', async (c) => {
 
   const raceTypeRaw = typeof body.goalType === 'string' ? body.goalType : 'manual';
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
+  const rulesVersion = rulesVersionFromBody(body);
   const customConfig = customConfigFromBody(body);
   if (customConfig && 'error' in customConfig) {
     logCreateRejected(c, userId, 'custom', customConfig.error, body);
@@ -1343,7 +1555,9 @@ racesRouter.post('/', async (c) => {
   }
   const manual = manualConfig && !('error' in manualConfig) ? manualConfig : null;
 
-  const verificationType = isCustomConfig
+  // What the client asked for. The stored contract may be stricter under
+  // rules_version >= 1 — resolved below once the configs are known.
+  const clientVerificationType = isCustomConfig
     ? 'movecheck'
     : mapProofRequirementToVerificationType(verificationRaw);
   let structuredConfig = isCustomConfig || manual ? null : configFromBody(body);
@@ -1353,10 +1567,12 @@ racesRouter.post('/', async (c) => {
     // a safe registry shape, look the activity up in the motion registry and
     // build the config from its published metric/format bounds. Only a
     // supported activity with a live stable pointer can be raced.
+    // When the catalog knows the ID its validation error is authoritative —
+    // the registry must not second-guess a request-level rejection.
     const looseId = normalizeActivityIdLoose(
       stringOrNull(body.activityId) ?? stringOrNull(body.activity_id) ?? stringOrNull(body.aiActivityType),
     );
-    const registryActivity = looseId
+    const registryActivity = looseId && !activityForId(looseId)
       ? await readRegistryActivity(c.env.DB, looseId)
       : null;
     if (registryActivity &&
@@ -1365,7 +1581,7 @@ racesRouter.post('/', async (c) => {
       structuredConfig = registryConfigFromBody(body, registryActivity);
     }
   }
-  if (!isCustomConfig && !manual && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
+  if (!isCustomConfig && !manual && clientVerificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
     logCreateRejected(c, userId, 'preset', structuredConfig.error, body);
     return c.json(badRequest(structuredConfig.error), 400);
   }
@@ -1374,6 +1590,17 @@ racesRouter.post('/', async (c) => {
   const description = stringOrNull(body.description) ?? null;
   const config = structuredConfig && !('error' in structuredConfig) ? structuredConfig : null;
   const custom = customConfig && !('error' in customConfig) ? customConfig : null;
+  // The stored proof contract. Under strict rules (rules_version >= 1) a
+  // race carries the contract it was created as: a camera-verifiable race
+  // (preset / registry / custom) is always camera proof — a client-sent
+  // photo/manual proofRequirement can never downgrade it — and a custom
+  // goal always takes photo proof (the proof route demands it anyway).
+  // v0 rows keep whatever the client asked for.
+  const verificationType = isCustomConfig
+    ? 'movecheck'
+    : rulesVersion >= 1
+      ? (config ? 'movecheck' : manual ? 'photo' : clientVerificationType)
+      : clientVerificationType;
   const raceType = manual?.format ?? config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
   // A custom race decides its own target (null for window / attempt formats) —
   // a stray body.targetValue must never become a made-up finish line.
@@ -1416,8 +1643,13 @@ racesRouter.post('/', async (c) => {
   const raceVerificationMethod = custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType);
   const raceTimezone = custom?.timezone ?? manual?.timezone ?? config?.timezone ?? 'America/New_York';
   const raceRecurrence = custom?.recurrence ?? manual?.recurrence ?? config?.recurrence ?? 'none';
-  // 'lower' = fastest/lowest verified value wins (time-attack races).
-  const raceScoreDirection = body.scoreDirection === 'lower' || body.score_direction === 'lower' ? 'lower' : 'higher';
+  // 'lower' = fastest/lowest verified value wins (attempt/golf races).
+  // A cumulative-sum leaderboard never ranks "lowest wins" — coerce at
+  // write so the stored direction always matches how the race scores.
+  const raceScoreDirection = scoreDirectionFor({
+    score_direction: body.scoreDirection === 'lower' || body.score_direction === 'lower' ? 'lower' : 'higher',
+    scoring_rule: raceScoringRule,
+  });
   // 'peer_review' holds manual submissions pending until the creator accepts;
   // 'auto_accept' (default) scores immediately, rejectable afterwards.
   const raceProofReviewMode = body.proofReviewMode === 'peer_review' || body.proof_review_mode === 'peer_review'
@@ -1449,9 +1681,9 @@ racesRouter.post('/', async (c) => {
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
           attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
+          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1480,13 +1712,14 @@ racesRouter.post('/', async (c) => {
         endAt,
         raceScoreDirection,
         raceProofReviewMode,
+        rulesVersion,
       )
     : c.env.DB.prepare(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
+          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1511,6 +1744,7 @@ racesRouter.post('/', async (c) => {
         endAt,
         raceScoreDirection,
         raceProofReviewMode,
+        rulesVersion,
       );
 
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
@@ -1676,7 +1910,9 @@ racesRouter.patch('/:id', async (c) => {
   if (body.startLineAt !== undefined || body.finishLineAt !== undefined) {
     const nextStart = body.startLineAt !== undefined ? stringOrNull(body.startLineAt) ?? null : race.start_at;
     const nextEnd = body.finishLineAt !== undefined ? stringOrNull(body.finishLineAt) ?? null : race.end_at;
-    if ((race.format ?? race.race_type) === 'most_in_window' && !nextEnd) {
+    if (formatNeedsFinishLine(race.format ?? race.race_type) && !nextEnd) {
+      // Every deadline-decided format needs its finish line — clearing it
+      // would leave a race that can never finish.
       return c.json(badRequest('A finish line is required.'), 400);
     }
     const checked = validateRaceWindow(race.format ?? race.race_type, nextStart, nextEnd);
@@ -1701,7 +1937,11 @@ racesRouter.patch('/:id', async (c) => {
     }
   }
 
-  if (typeof body.goalType === 'string') {
+  if (typeof body.goalType === 'string' && race.race_type !== race.format) {
+    // Legacy goalType maps onto the legacy race_type column only — it may
+    // change a race whose race_type still carries the old vocabulary. When
+    // race_type already mirrors the canonical format (v2 row), a settings
+    // PATCH must not overwrite it.
     updates.push('race_type = ?');
     values.push(mapGoalTypeToRaceType(body.goalType));
   }
@@ -2036,6 +2276,12 @@ racesRouter.post('/:id/proof', async (c) => {
   if (isAiMotion && !raceSupportsAiMotion(race)) {
     return c.json(badRequest('This race uses photo proof, not AI Motion Proof'), 400);
   }
+  // Strict-rules camera races are camera-only: the Manual tab is gone and a
+  // self-reported submission can never score one. v0 races keep the
+  // manual + photo path old builds rely on.
+  if (!isAiMotion && (race.rules_version ?? 0) >= 1 && raceSupportsAiMotion(race)) {
+    return c.json(badRequest('This race uses camera proof.'), 400);
+  }
   if (!isSubmissionValueInRange(body.value)) {
     return c.json(badRequest('value is out of range'), 400);
   }
@@ -2069,11 +2315,24 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
   if (isAiMotion && !clientSubmissionId) return c.json(badRequest('clientSubmissionId is required'), 400);
+  let reviveRejectedId: string | null = null;
   if (clientSubmissionId) {
     const existing = await c.env.DB.prepare(
       'SELECT * FROM move_logs WHERE race_id = ? AND user_id = ? AND client_submission_id = ?'
     ).bind(race.id, userId, clientSubmissionId).first<MoveLogRow>();
-    if (existing) {
+    if (
+      existing?.status === 'rejected' &&
+      !existing.vetoed_at &&
+      (existing.summary ?? '').startsWith('No open attempt')
+    ) {
+      // Only a proof rejected for the missing-attempt reason may be revived
+      // (rows written before the attempt check moved ahead of the INSERT).
+      // A proof rejected by review, veto or verification stays rejected.
+      // A rejected row is not a committed submission — the same client id
+      // retried means "try this submission again". The row is revived in
+      // place below (the unique index means it can never be re-inserted).
+      reviveRejectedId = existing.id;
+    } else if (existing) {
       const updated = await getRace(c.env.DB, race.id);
       const result: SubmissionResult | undefined = existing.status === 'verified'
         ? {
@@ -2106,11 +2365,6 @@ racesRouter.post('/:id/proof', async (c) => {
   const increment = value ?? 0;
   if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
   if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
-  // Per-submission sanity cap by metric: one proof can never carry an absurd
-  // amount (a 1e9-rep claim, or a day of plank in one go on a reps race).
-  if (increment > maxSubmissionValue(scoring.metric, isManualRace)) {
-    return c.json(badRequest('value is too large for a single proof'), 400);
-  }
 
   // Server-side provenance: when the client names the verification session
   // that produced this result, it must be this user's completed session for
@@ -2135,8 +2389,10 @@ racesRouter.post('/:id/proof', async (c) => {
       'FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
     ).bind(verificationSessionId, userId, race.id).first<ProofSessionRow>();
     let session = await readProofSession();
+    // A rejected proof must not consume the session: only committed rows
+    // (verified / pending) count as the session's proof.
     const existingLog = await c.env.DB.prepare(
-      "SELECT id, client_submission_id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
+      "SELECT id, client_submission_id FROM move_logs WHERE race_id = ? AND status != 'rejected' AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
     ).bind(race.id, verificationSessionId).first<{ id: string; client_submission_id: string | null }>();
     const inlineResult = parseInlineSessionResult(body.sessionResult);
     const decide = (s: ProofSessionRow | null) => decideSessionAction({
@@ -2237,12 +2493,40 @@ racesRouter.post('/:id/proof', async (c) => {
   if (isCustom && completionEvents !== null && completionEvents < increment) {
     return c.json(badRequest('Custom proof completion events must cover value.'), 400);
   }
-  if (isCustom && aiStatus === 'custom_verified' && customRepRateImplausible(increment, durationMs)) {
-    return c.json(badRequest('Custom proof count is not possible in the recorded time.'), 400);
-  }
-  if (isAiMotion && !isCustom && aiStatus === 'ai_verified' && scoring.metric === 'reps' &&
-      customRepRateImplausible(increment, durationMs)) {
-    return c.json(badRequest('Proof count is not possible in the recorded time.'), 400);
+  // Per-movement plausibility replaced the old flat per-proof caps: a real
+  // 5 km treadmill run or a big honest rep set is fine — a physically
+  // impossible burst is not. Distance movers are judged as metres (~10 m/s
+  // with a 100 km ceiling), holds and seconds metrics against the recorded
+  // wall clock, reps by the generous per-movement rate. Only verified results
+  // are judged — a failed verification stays a stored rejection, not an
+  // error — and the 1,000,000 absolute ceiling above still bounds everything.
+  const proofClaimsResult = isAiMotion
+    ? aiStatus === 'ai_verified' || aiStatus === 'custom_verified'
+    : true;
+  // Strict-rules timed battles (rules_version >= 1) are judged after the
+  // attempt binds, against the attempt's real window (S5), not durationMs.
+  const strictTimedAttempt =
+    scoring.format === 'timed_attempt' && (race.rules_version ?? 0) >= 1;
+  if (proofClaimsResult && !strictTimedAttempt) {
+    const measurement = await raceMeasurementType(c.env.DB, race, config);
+    if (
+      submissionImplausible({
+        measurementType: measurement.measurementType,
+        metric: scoring.metric,
+        value: increment,
+        durationMs,
+        maxRepsPerSecond: measurement.maxRepsPerSecond,
+      })
+    ) {
+      return c.json(
+        badRequest(
+          isCustom
+            ? 'Custom proof count is not possible in the recorded time.'
+            : 'Proof count is not possible in the recorded time.',
+        ),
+        400,
+      );
+    }
   }
   if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
     return c.json(badRequest('Custom proof valid frames cannot exceed analyzed frames.'), 400);
@@ -2284,43 +2568,103 @@ racesRouter.post('/:id/proof', async (c) => {
         : `Nuvo detected ${detectedValue ?? increment} clean reps out of ${targetValue ?? 'the target'}.`)
       : 'Manual proof accepted.');
 
-  const moveId = generateId();
-  await c.env.DB.prepare(
-    `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, activity_id, metric, value, unit, status, summary,
-      media_object_key, validator_version, duration_ms, metadata_json, client_submission_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-  ).bind(
-    moveId,
-    race.id,
-    userId,
-    isAiMotion ? 'movecheck' : 'manual',
-    activityType,
-    normalizeActivityIdLoose(activityType) ?? null,
-    metric ?? scoring.metric,
-    increment,
-    race.target_unit,
-    moveStatus,
-    summary,
-    mediaObjectKey,
-    validatorVersion,
-    durationMs,
-    metadata,
-    clientSubmissionId,
-  ).run();
+  // Attempt races bind a verified score to a declared open attempt. The
+  // check runs BEFORE the move row is written: a no-attempt failure must
+  // not consume the verification session, the evidence, or the client
+  // submission id — every retry surface stays fresh.
+  let boundAttempt: RaceAttemptRow | null = null;
+  if (moveStatus === 'verified' && formatUsesAttempts(scoring.format)) {
+    boundAttempt = await bindableOpenAttempt(c.env.DB, race, userId);
+    if (!boundAttempt) {
+      // A verified proof arriving with no live attempt opens one on the
+      // submitter's behalf — always for best_attempt; for timed_attempt only
+      // under legacy rules (rules_version >= 1 requires the explicit start).
+      const mayAutoOpen =
+        scoring.format === 'best_attempt' ||
+        (scoring.format === 'timed_attempt' && (race.rules_version ?? 0) < 1);
+      if (mayAutoOpen) {
+        const opened = await openAttempt(c.env.DB, race, userId, null);
+        if (opened.ok && opened.attempt) {
+          boundAttempt = opened.attempt;
+          await recordRaceEvents(c.env.DB, race.id, [
+            {
+              type: 'attempt_started',
+              actorUserId: userId,
+              subjectUserId: userId,
+              payload: { attemptId: opened.attempt.id, attemptIndex: opened.attempt.attempt_index },
+            },
+          ]);
+        }
+      }
+    }
+    if (!boundAttempt) {
+      return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
+    }
+    // v1 timed battles: the attempt's server window bounds the proof — a
+    // seconds-metric score can never outlast the declared attempt length,
+    // and rep rate is judged against the real window, never durationMs.
+    if (strictTimedAttempt) {
+      if (timedAttemptValueExceedsDuration(increment, scoring.metric, race.attempt_duration_seconds)) {
+        return c.json(badRequest('Score exceeds the attempt duration.'), 400);
+      }
+      const aiVerified = aiStatus === 'ai_verified' || aiStatus === 'custom_verified';
+      if (aiVerified && scoring.metric === 'reps' &&
+          customRepRateImplausible(increment, attemptElapsedMs(boundAttempt))) {
+        return c.json(badRequest('Proof count is not possible in the attempt window.'), 400);
+      }
+    }
+  }
+
+  const moveId = reviveRejectedId ?? generateId();
+  if (reviveRejectedId) {
+    // Retry of a rejected submission — update the row in place (unique index
+    // on client_submission_id means re-insert would fail).
+    await c.env.DB.prepare(
+      `UPDATE move_logs SET source = ?, movement_type = ?, activity_id = ?, metric = ?, value = ?, unit = ?,
+         status = ?, summary = ?, media_object_key = ?, validator_version = ?, duration_ms = ?, metadata_json = ?
+       WHERE id = ?`
+    ).bind(
+      isAiMotion ? 'movecheck' : 'manual',
+      activityType,
+      normalizeActivityIdLoose(activityType) ?? null,
+      metric ?? scoring.metric,
+      increment,
+      race.target_unit,
+      moveStatus,
+      summary,
+      mediaObjectKey,
+      validatorVersion,
+      durationMs,
+      metadata,
+      reviveRejectedId,
+    ).run();
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, activity_id, metric, value, unit, status, summary,
+        media_object_key, validator_version, duration_ms, metadata_json, client_submission_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).bind(
+      moveId,
+      race.id,
+      userId,
+      isAiMotion ? 'movecheck' : 'manual',
+      activityType,
+      normalizeActivityIdLoose(activityType) ?? null,
+      metric ?? scoring.metric,
+      increment,
+      race.target_unit,
+      moveStatus,
+      summary,
+      mediaObjectKey,
+      validatorVersion,
+      durationMs,
+      metadata,
+      clientSubmissionId,
+    ).run();
+  }
 
   let result: ScoredSubmission | undefined;
   if (moveStatus === 'verified') {
-    // Attempt races require a declared attempt. Auto-bind: the client opens
-    // an attempt, then submits proof through this same unchanged payload —
-    // the open attempt claims the verified score (duration enforced in
-    // bindableOpenAttempt via deadline + grace).
-    const usesAttempts = formatUsesAttempts(scoring.format);
-    const boundAttempt = usesAttempts ? await bindableOpenAttempt(c.env.DB, race, userId) : null;
-    if (usesAttempts && !boundAttempt) {
-      await c.env.DB.prepare('UPDATE move_logs SET status = ?, summary = ? WHERE id = ?')
-        .bind('rejected', 'No open attempt — start an attempt first.', moveId).run();
-      return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
-    }
     try {
       result = await applyMoveProgress(c.env.DB, race, userId, increment, moveId);
       if (race.status === 'completed' && eligibility === 'grace') {
@@ -2600,16 +2944,17 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
     }
   }
 
-  // Attempt-format races bind a score to a declared open attempt — same
-  // contract as direct submission (submit opens the attempt; pending proofs
-  // keep it open until review closes it). Validate BEFORE the status write
-  // so a failed accept never leaves a verified-but-unscored proof.
+  // Attempt-format races bind a score to a declared attempt — same contract
+  // as direct submission, except the proof was produced earlier: bind by
+  // WHEN it was produced (move.created_at inside the attempt's window), not
+  // by what is open at review time. Validate BEFORE the status write so a
+  // failed accept never leaves a verified-but-unscored proof.
   const scoring = raceScoringConfigFromRow(race);
   const needsAttempt = newStatus === 'verified' &&
     scoring != null &&
     formatUsesAttempts(scoring.format);
   const boundAttempt = needsAttempt
-    ? await bindableOpenAttempt(c.env.DB, race, move.user_id)
+    ? await bindableAttemptAtTime(c.env.DB, race, move.user_id, move.created_at)
     : null;
   if (needsAttempt && !boundAttempt) {
     return c.json(badRequest('No open attempt remains to accept this score.'), 400);
@@ -2620,9 +2965,63 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
   ).bind(newStatus, stringOrNull(body.verificationSummary) ?? move.summary, move.id, race.id).run();
 
   if (newStatus === 'verified') {
-    await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
+    const result = await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
     if (boundAttempt) {
       await closeAttempt(c.env.DB, boundAttempt.id, move.value ?? 0, move.id);
+      // Same attempt bookkeeping as the direct /proof path: the close-out
+      // event plus any personal best it earned.
+      const attemptEvents: RaceEventInput[] = [
+        {
+          type: 'attempt_completed',
+          actorUserId: move.user_id,
+          subjectUserId: move.user_id,
+          payload: {
+            attemptId: boundAttempt.id,
+            attemptIndex: boundAttempt.attempt_index,
+            score: move.value ?? 0,
+            durationSeconds: race.attempt_duration_seconds ?? null,
+          },
+        },
+      ];
+      const pb = await recordPersonalBestIfImproved(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
+      if (pb.improved) {
+        attemptEvents.push({
+          type: 'personal_best',
+          actorUserId: move.user_id,
+          subjectUserId: move.user_id,
+          moveLogId: move.id,
+          payload: { previousBest: pb.previousBest, newBest: pb.newBest, metric: race.metric ?? 'reps' },
+        });
+      }
+      await recordRaceEvents(c.env.DB, race.id, attemptEvents);
+    }
+
+    // Same notification fan-out as direct submission: applyMoveProgress
+    // already persisted the race events — publish the ones the policy maps
+    // to delivery (lead change, overtake, race finish).
+    if (
+      result.events.some(
+        (e) =>
+          e.type === 'lead_changed' ||
+          e.type === 'rank_changed' ||
+          e.type === 'race_finished',
+      )
+    ) {
+      const memberRows = await c.env.DB
+        .prepare(
+          `SELECT rm.user_id, COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name
+           FROM race_members rm LEFT JOIN profiles p ON p.user_id = rm.user_id
+           WHERE rm.race_id = ? AND rm.status = 'active'`,
+        )
+        .bind(race.id)
+        .all<{ user_id: string; display_name: string }>();
+      await notifyRaceEvents(
+        c.env,
+        (p) => c.executionCtx.waitUntil(p),
+        race,
+        result.events,
+        memberRows.results,
+      );
     }
   }
 
@@ -2807,6 +3206,41 @@ racesRouter.post('/:id/attempts', async (c) => {
   });
 });
 
+// DELETE /races/:id/attempts/:attemptId — cancel an open attempt. Only the
+// attempt's owner may cancel, and only while nothing is bound to it —
+// submitted (and already-expired) attempts are immutable. A cancelled
+// attempt does not count against the attempt limit; only submitted ones do.
+racesRouter.delete('/:id/attempts/:attemptId', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  const attempt = await c.env.DB
+    .prepare('SELECT * FROM race_attempts WHERE id = ? AND race_id = ?')
+    .bind(c.req.param('attemptId'), race.id)
+    .first<RaceAttemptRow>();
+  // One 404 for both "no such attempt" and "not yours" — don't leak rows.
+  if (!attempt || attempt.user_id !== userId) {
+    return c.json(badRequest('Attempt not found'), 404);
+  }
+  if (attempt.status !== 'open' || attempt.move_log_id) {
+    return c.json(badRequest('Only an open attempt with no submitted proof can be cancelled'), 400);
+  }
+
+  await cancelAttempt(c.env.DB, attempt.id);
+  const used = await attemptsUsed(c.env.DB, race.id, userId);
+  return c.json({
+    ok: true,
+    attempt: {
+      id: attempt.id,
+      attemptIndex: attempt.attempt_index,
+      status: 'cancelled',
+    },
+    attemptsUsed: used,
+    attemptsRemaining: race.attempt_limit != null ? Math.max(0, race.attempt_limit - used) : null,
+  });
+});
+
 // GET /races/:id/events — the durable domain log for this race. Feeds the
 // race-history surface and lets Crew/notifications consume transitions
 // without reverse-engineering race state.
@@ -2949,6 +3383,24 @@ racesRouter.post('/:id/rematch', async (c) => {
     return c.json({ ok: false, error: 'You must accept the Terms of Service before creating a race' }, 403);
   }
 
+  // A window/attempt race's rematch still needs a finish line — the format
+  // is decided there, so a NULL end would produce a race that never ends.
+  // Reuse the source window length when both boundaries exist; otherwise
+  // fall back to the same defaults creation applies. first_to_goal keeps
+  // its NULL end — it is decided by reaching the goal.
+  let rematchEnd: string | null = null;
+  const rematchFormat = (race.format ?? 'first_to_goal') as string;
+  if (formatNeedsFinishLine(rematchFormat)) {
+    if (race.start_at && race.end_at) {
+      const windowMs = new Date(race.end_at).getTime() - new Date(race.start_at).getTime();
+      if (windowMs > 0) rematchEnd = new Date(Date.now() + windowMs).toISOString();
+    }
+    if (!rematchEnd) {
+      const window = validateRaceWindow(rematchFormat, null, null, new Date());
+      rematchEnd = 'error' in window ? null : window.endsAt;
+    }
+  }
+
   const newRaceId = generateId();
   const personId = await ensurePersonId(c.env.DB, userId);
   await c.env.DB
@@ -2956,9 +3408,9 @@ racesRouter.post('/:id/rematch', async (c) => {
       `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
         target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
         attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, verifier_release_id,
+        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version, verifier_release_id,
         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(
       newRaceId,
@@ -2985,9 +3437,12 @@ racesRouter.post('/:id/rematch', async (c) => {
       'none', // rematch resets recurrence — the new race starts fresh
       race.visibility,
       null, // start line: the rematch begins when created
-      null, // deadlines are not carried over
+      rematchEnd,
       race.score_direction ?? 'higher',
       race.proof_review_mode ?? 'auto_accept',
+      // A rematch inherits the source race's rules revision — the
+      // competition contract is cloned verbatim.
+      race.rules_version ?? 0,
       race.verifier_release_id,
     )
     .run();

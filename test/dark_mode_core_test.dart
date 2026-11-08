@@ -4,12 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nuvo/core/theme/app_colors.dart';
-import 'package:nuvo/core/theme/app_theme.dart';
-import 'package:nuvo/core/widgets/bottom_nav.dart';
-import 'package:nuvo/core/widgets/nuvo_back_header.dart';
-import 'package:nuvo/core/widgets/nuvo_button.dart';
-import 'package:nuvo/core/widgets/nuvo_empty_state.dart';
-import 'package:nuvo/core/widgets/nuvo_error_state.dart';
 
 double _lum(Color c) {
   double f(double v) =>
@@ -76,63 +70,4 @@ void main() {
     });
   });
 
-  group('core widgets render in both themes', () {
-    Future<void> pump(WidgetTester t, ThemeData theme) async {
-      await t.pumpWidget(
-        MaterialApp(
-          theme: theme,
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: Column(
-                children: [
-                  NuvoBackHeader(title: 'Header', onBack: () {}),
-                  NuvoPrimaryButton(label: 'Primary go', onPressed: () {}),
-                  NuvoOutlineButton(label: 'Outline go', onPressed: () {}),
-                  const NuvoEmptyState(
-                    icon: Icons.flag_rounded,
-                    title: 'Empty title',
-                    body: 'Empty body',
-                  ),
-                  NuvoErrorState(message: 'Broke', onRetry: () {}),
-                  NuvoBottomNav(currentIndex: 0, onTap: (_) {}),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-      await t.pump(const Duration(milliseconds: 400));
-    }
-
-    for (final entry in {
-      'dark': AppTheme.dark,
-      'light': AppTheme.light,
-    }.entries) {
-      testWidgets('${entry.key}: no exceptions, primary pair has contrast', (
-        t,
-      ) async {
-        await pump(t, entry.value());
-        expect(t.takeException(), isNull);
-
-        final label = t.widget<Text>(find.text('Primary go'));
-        final fg = label.style?.color;
-        expect(fg, isNotNull);
-        expect(_contrast(fg!, NuvoColors.blue), greaterThanOrEqualTo(4.5));
-      });
-    }
-
-    testWidgets('dark theme exposes dark chrome extension', (t) async {
-      await pump(t, AppTheme.dark());
-      final ctx = t.element(find.text('Empty title'));
-      expect(ctx.themeColors.page, NuvoColors.darkPage);
-      expect(ctx.themeColors.accent, d.accent);
-      expect(
-        _contrast(
-          t.widget<Text>(find.text('Empty title')).style?.color ?? d.ink,
-          ctx.themeColors.page,
-        ),
-        greaterThanOrEqualTo(4.5),
-      );
-    });
-  });
 }

@@ -41,7 +41,7 @@ void main() {
     expect(instance.number('rightElbowAngle')!.value, 20);
     expect(instance.number('leftUpperArmScale')!.value, 0);
     expect(instance.number('torsoScaleY')!.value, 0);
-    instance!.dispose();
+    instance.dispose();
     file.dispose();
   });
 }

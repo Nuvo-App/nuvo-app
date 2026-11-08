@@ -50,6 +50,7 @@ class VerifierUpdate {
     required this.debugValues,
     required this.validatorState,
     required this.failedRuleReason,
+    this.holdBroken = false,
     this.customPoseUpdate,
   });
 
@@ -64,18 +65,23 @@ class VerifierUpdate {
     debugValues: output.debugValues,
     validatorState: output.validatorState,
     failedRuleReason: output.failedRuleReason,
+    holdBroken: output.holdBroken,
   );
 
   final VerifierType type;
   final MovementDefinition selectedMovement;
   final int count;
   final int holdSeconds;
-  final int target;
+  final int? target;
   final double confidence;
   final bool completed;
   final Map<String, double> debugValues;
   final String validatorState;
   final String failedRuleReason;
+
+  /// A hold attempt ended terminally — the screen finishes the take with
+  /// what banked, the same path as Done. Always false for rep movements.
+  final bool holdBroken;
   final CustomPoseRuntimeUpdate? customPoseUpdate;
 }
 
@@ -94,10 +100,17 @@ class VerifierResult {
 abstract class VerifierRuntime {
   VerifierType get type;
   MovementDefinition get movement;
-  int get targetValue;
+
+  /// Session finish line — null when the race format has no goal, so the
+  /// runtime reports the raw count and never "completes" mid-take.
+  int? get targetValue;
   int get currentValue;
   bool get fullBodyVisible;
   String get failedRuleReason;
+
+  /// Frame time of the last counted rep — the rep-inactivity prompt's
+  /// clock. Null until the engine counts something.
+  DateTime? get lastCountedAt => null;
 
   void start();
   VerifierUpdate update(NuvoPoseFrame frame);
@@ -108,7 +121,7 @@ abstract class VerifierRuntime {
 class PresetPoseVerifierRuntime implements VerifierRuntime {
   PresetPoseVerifierRuntime({
     required MovementDefinition movement,
-    required int target,
+    required int? target,
   }) : _engine = NuvoVerifyEngine(movement: movement, target: target);
 
   factory PresetPoseVerifierRuntime.defaultRuntime() =>
@@ -126,7 +139,7 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
   MovementDefinition get movement => _engine.movement;
 
   @override
-  int get targetValue => _engine.targetValue;
+  int? get targetValue => _engine.targetValue;
 
   @override
   int get currentValue => _engine.currentValue;
@@ -136,6 +149,9 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
 
   @override
   String get failedRuleReason => _engine.failedRuleReason;
+
+  @override
+  DateTime? get lastCountedAt => _engine.lastCountedAt;
 
   @override
   void start() => _engine.start();
@@ -163,7 +179,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   RemotePoseVerifierRuntime({
     required RemoteVerifierSpec spec,
     required MovementDefinition movement,
-    required int target,
+    required int? target,
   }) : _spec = spec,
        _movement = movement,
        _runtime = createRemoteVerifierRuntime(spec: spec, target: target);
@@ -182,7 +198,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   MovementDefinition get movement => _movement;
 
   @override
-  int get targetValue => _runtime.target;
+  int? get targetValue => _runtime.target;
 
   @override
   int get currentValue => _runtime.count;
@@ -194,6 +210,9 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   String get failedRuleReason => _lastUpdate?.diagnostic ?? '';
 
   @override
+  DateTime? get lastCountedAt => _runtime.lastRepAt;
+
+  @override
   void start() => _runtime.start();
 
   @override
@@ -202,6 +221,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
     if (frame.hasPoints(_spec.requiredLandmarks)) _validPoseFrames++;
     final update = _runtime.update(frame);
     _lastUpdate = update;
+    final holdBroken = update.state == RemoteRuntimeState.holdBroken;
     return VerifierUpdate(
       type: VerifierType.presetPose,
       selectedMovement: _movement,
@@ -215,27 +235,33 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
         'progress': update.progress,
         'elapsedMs': update.elapsedMs.toDouble(),
       },
-      validatorState: update.state.name,
+      validatorState: holdBroken ? 'hold_broken' : update.state.name,
       failedRuleReason: update.state == RemoteRuntimeState.notReady
           ? update.diagnostic
           : '',
+      holdBroken: holdBroken,
     );
   }
 
   @override
   VerifierResult finish() {
     final update = _lastUpdate;
-    final completed = _runtime.count >= targetValue;
+    final target = targetValue;
+    final completed = target == null
+        ? _runtime.count > 0 && _validPoseFrames > 0
+        : _runtime.count >= target;
     return VerifierResult(
       type: VerifierType.presetPose,
       aiMotionResult: AiMotionResult(
         activity: _movement.activity,
-        targetReps: targetValue,
+        targetReps: target,
         detectedReps: _runtime.count,
         confidence: update?.confidence ?? 0,
         verificationStatus: completed ? 'ai_verified' : 'ai_failed',
         verificationSummary: completed
-            ? 'Target complete.'
+            ? (target == null
+                  ? 'Detected ${_runtime.count} ${_movement.title} from live pose tracking.'
+                  : 'Target complete.')
             : (update?.guidance ??
                   'Keep your movement in frame and try again.'),
         framesAnalyzed: _framesAnalyzed,
@@ -283,7 +309,7 @@ class VerifierRuntimeResolution {
           (eligibility?.customMotionV2Spec ?? motionV2Spec) != null);
 
   VerifierRuntime createRuntime({
-    required int target,
+    required int? target,
     CustomPoseVerifierSpec? customSpec,
     RemoteVerifierSpec? remoteSpecOverride,
     TaughtMotionV2Spec? motionV2SpecOverride,

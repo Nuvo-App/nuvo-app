@@ -320,23 +320,28 @@ class NuvoVerifyOutput {
     required this.debugValues,
     required this.validatorState,
     required this.failedRuleReason,
+    this.holdBroken = false,
   });
 
   final MovementDefinition selectedMovement;
   final MovementVerificationState state;
   final int count;
   final int holdSeconds;
-  final int target;
+  final int? target;
   final double confidence;
   final String feedbackMessage;
   final bool completed;
   final Map<String, double> debugValues;
   final String validatorState;
   final String failedRuleReason;
+
+  /// A hold attempt ended — the engine is terminal and the take must
+  /// finish with what it banked. Always false for rep movements.
+  final bool holdBroken;
 }
 
 class NuvoVerifyEngine {
-  NuvoVerifyEngine({required MovementDefinition movement, required int target})
+  NuvoVerifyEngine({required MovementDefinition movement, required int? target})
     : _movement = movement,
       _validator = createMotionValidator(movement.activity, target);
 
@@ -345,13 +350,14 @@ class NuvoVerifyEngine {
 
   MovementDefinition get movement => _movement;
   MotionValidator get validator => _validator;
-  int get targetValue => _validator.targetValue;
+  int? get targetValue => _validator.targetValue;
   int get currentValue => _validator.currentValue;
   bool get fullBodyVisible => _validator.fullBodyVisible;
   String get validatorState => _validator.stateLabel;
   String get failedRuleReason => _validator.failedRuleReason;
+  DateTime? get lastCountedAt => _validator.lastCountedAt;
 
-  void selectMovement(MovementDefinition movement, int target) {
+  void selectMovement(MovementDefinition movement, int? target) {
     _movement = movement;
     _validator = createMotionValidator(movement.activity, target);
   }
@@ -366,7 +372,8 @@ class NuvoVerifyEngine {
 
   NuvoVerifyOutput output(MovementVerificationState state) {
     final value = _validator.currentValue;
-    final completed = value >= _validator.targetValue;
+    final target = _validator.targetValue;
+    final completed = target != null && value >= target;
     final nextState = completed
         ? MovementVerificationState.targetComplete
         : state;
@@ -386,6 +393,7 @@ class NuvoVerifyEngine {
       debugValues: _validator.debugValues,
       validatorState: _validator.stateLabel,
       failedRuleReason: _validator.failedRuleReason,
+      holdBroken: _validator.holdBroken,
     );
   }
 }
@@ -403,7 +411,7 @@ class MotionValidationUpdate {
   });
 
   final int currentValue;
-  final int targetValue;
+  final int? targetValue;
   final bool isVerified;
   final String statusText;
   final String coachingText;
@@ -502,7 +510,10 @@ Map<String, (double, double, double)> _gaitTunables(double lift) => {
 abstract class MotionValidator {
   MotionValidator({required this.targetValue});
 
-  final int targetValue;
+  /// Finish line for this session, or null when the race has no goal —
+  /// window and attempt formats count everything instead of capping at
+  /// a fabricated target.
+  final int? targetValue;
 
   /// Over-the-air threshold overrides; see [MotionTuning].
   MotionTuning tuning = MotionTuning.empty;
@@ -520,6 +531,14 @@ abstract class MotionValidator {
   String get stateLabel;
   String get failedRuleReason;
 
+  /// Frame time of the last counted rep — null until something counts.
+  /// The rep-inactivity prompt's clock.
+  DateTime? get lastCountedAt => null;
+
+  /// The hold attempt ended terminally — out of position past the break
+  /// tolerance. Always false for rep validators.
+  bool get holdBroken => false;
+
   void start();
   MotionValidationUpdate update(NuvoPoseFrame frame);
   AiMotionResult finish();
@@ -528,7 +547,10 @@ abstract class MotionValidator {
   MotionValidationUpdate snapshot() => MotionValidationUpdate(
     currentValue: currentValue,
     targetValue: targetValue,
-    isVerified: currentValue >= targetValue && validPoseFrames > 0,
+    isVerified:
+        targetValue != null &&
+        currentValue >= targetValue! &&
+        validPoseFrames > 0,
     statusText: statusText,
     coachingText: coachingText,
     framesAnalyzed: framesAnalyzed,
@@ -543,7 +565,7 @@ abstract class MotionValidator {
 /// [verifyValidatorDispatchComplete] verifies this invariant.
 MotionValidator createMotionValidator(
   AiMotionActivity activity,
-  int targetValue, {
+  int? targetValue, {
   MotionTuning tuning = MotionTuning.empty,
 }) => (_createMotionValidator(activity, targetValue, tuning)..tuning = tuning);
 
@@ -556,7 +578,7 @@ AirborneStateTracker _airborneFor(MotionTuning t) => AirborneStateTracker(
 
 MotionValidator _createMotionValidator(
   AiMotionActivity activity,
-  int targetValue,
+  int? targetValue,
   MotionTuning tuning,
 ) => switch (activity) {
   AiMotionActivity.pushUps => PushupsValidator(targetValue: targetValue),
@@ -723,21 +745,44 @@ class RepCounterStateMachine {
 }
 
 class HoldTimerStateMachine {
+  /// A hold is one unbroken attempt: this much continuous time out of
+  /// position ends it. Jitter under the tolerance survives — the break
+  /// clock only runs while frames keep arriving out of position.
+  static const maxBreakMs = 1000;
+
   int _validHoldMs = 0;
   DateTime? _lastValidFrameAt;
+  DateTime? _breakStartedAt;
+  bool _broken = false;
 
   int get seconds => (_validHoldMs / 1000).floor();
+
+  /// The hold broke for longer than [maxBreakMs] — terminal, no resume.
+  /// Banked time stays as the attempt's result.
+  bool get isBroken => _broken;
 
   void reset() {
     _validHoldMs = 0;
     _lastValidFrameAt = null;
+    _breakStartedAt = null;
+    _broken = false;
   }
 
   void update({required DateTime now, required bool valid}) {
+    if (_broken) return;
     if (!valid) {
       _lastValidFrameAt = null;
+      // The break clock only exists once the hold has banked time — a
+      // take that never got into position has nothing to break.
+      if (_validHoldMs > 0) {
+        _breakStartedAt ??= now;
+        if (now.difference(_breakStartedAt!).inMilliseconds > maxBreakMs) {
+          _broken = true;
+        }
+      }
       return;
     }
+    _breakStartedAt = null;
     if (_lastValidFrameAt != null) {
       final delta = now.difference(_lastValidFrameAt!).inMilliseconds;
       if (delta > 0 && delta < 500) _validHoldMs += delta;
@@ -827,6 +872,9 @@ abstract class _BaseValidator extends MotionValidator {
   String lastFailureReason = '';
 
   @override
+  DateTime? lastCountedAt;
+
+  @override
   int get durationMs => startedAt == null
       ? 0
       : DateTime.now().difference(startedAt!).inMilliseconds;
@@ -850,6 +898,7 @@ abstract class _BaseValidator extends MotionValidator {
     startedAt = DateTime.now();
     lastVisibilityScore = 0;
     lastFailureReason = '';
+    lastCountedAt = null;
     resetState();
   }
 
@@ -869,17 +918,27 @@ abstract class _BaseValidator extends MotionValidator {
     if (!fullBodyVisible) {
       lastFailureReason = 'low_landmark_confidence';
     }
+    final valueBefore = currentValue;
     analyzeValidFrame(frame);
+    if (currentValue > valueBefore) lastCountedAt = frame.createdAt;
     return snapshot();
   }
 
   void analyzeValidFrame(NuvoPoseFrame frame);
 
+  /// Caps [value] at the finish line when the session has one. A session
+  /// with no goal — window and attempt formats — reports the raw count.
+  int capToTarget(int value) =>
+      targetValue == null ? value : math.min(value, targetValue!);
+
   @override
   double get confidence {
     if (framesAnalyzed == 0 || validPoseFrames == 0) return 0;
     final validRatio = validPoseFrames / framesAnalyzed;
-    final targetRatio = math.min(1.0, currentValue / targetValue);
+    final target = targetValue;
+    final targetRatio = target == null
+        ? (currentValue > 0 ? 1.0 : 0.0)
+        : math.min(1.0, currentValue / target);
     final invalidPenalty = math.min(0.25, invalidPoseFrames / framesAnalyzed);
     return (validRatio * 0.58 + targetRatio * 0.42).clamp(
       0.0,
@@ -896,19 +955,22 @@ abstract class _BaseValidator extends MotionValidator {
 
   @override
   AiMotionResult finish() {
+    final target = targetValue;
     final verified =
-        currentValue >= targetValue &&
+        (target == null ? currentValue > 0 : currentValue >= target) &&
         validPoseFrames > 0 &&
         confidence >= 0.58;
     return AiMotionResult(
       activity: activity,
-      targetReps: targetValue,
+      targetReps: target,
       detectedReps: currentValue,
       confidence: confidence,
       verificationStatus: verified ? 'ai_verified' : 'ai_failed',
       verificationSummary: verified
           ? 'Detected $currentValue ${activity.label} from live pose tracking.'
-          : 'Nuvo detected $currentValue clean ${activity.label} out of $targetValue.',
+          : target == null
+          ? 'Nuvo detected $currentValue clean ${activity.label}.'
+          : 'Nuvo detected $currentValue clean ${activity.label} out of $target.',
       framesAnalyzed: framesAnalyzed,
       validPoseFrames: validPoseFrames,
       durationMs: durationMs,
@@ -961,7 +1023,7 @@ class PushupsValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.pushUps;
   @override
-  int get currentValue => math.min(_counter.count, targetValue);
+  int get currentValue => capToTarget(_counter.count);
   @override
   String get statusText => 'Tracking pushups';
   @override
@@ -1158,7 +1220,7 @@ class JumpingJacksValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.jumpingJacks;
   @override
-  int get currentValue => math.min(_counter.count, targetValue);
+  int get currentValue => capToTarget(_counter.count);
   @override
   String get statusText => 'Tracking motion';
   @override
@@ -1216,7 +1278,7 @@ class ArmRaisesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.armRaises;
   @override
-  int get currentValue => math.min(_reps, targetValue);
+  int get currentValue => capToTarget(_reps);
   @override
   String get statusText => 'Tracking arm raises';
   @override
@@ -1310,7 +1372,7 @@ class SquatsValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.squats;
   @override
-  int get currentValue => math.min(_counter.count, targetValue);
+  int get currentValue => capToTarget(_counter.count);
   @override
   String get statusText => 'Tracking squats';
   @override
@@ -1355,7 +1417,7 @@ class LungesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.lunges;
   @override
-  int get currentValue => math.min(_counter.count, targetValue);
+  int get currentValue => capToTarget(_counter.count);
   @override
   String get statusText => 'Tracking lunges';
   @override
@@ -1423,7 +1485,7 @@ class HighKneesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.highKnees;
   @override
-  int get currentValue => math.min(_count, targetValue);
+  int get currentValue => capToTarget(_count);
   @override
   String get statusText => 'Tracking high knees';
   @override
@@ -1536,14 +1598,34 @@ class PlankHoldValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.plankHold;
   @override
-  int get currentValue => math.min(_timer.seconds, targetValue);
+  int get currentValue => capToTarget(_timer.seconds);
   @override
   String get statusText => 'Tracking plank';
   @override
   String get coachingText => _plankFeedback;
   @override
-  String get stateLabel =>
-      _stableAlignmentFrames >= 4 ? 'hold_valid' : 'hold_paused';
+  bool get holdBroken => _timer.isBroken;
+  @override
+  String get stateLabel => _timer.isBroken
+      ? 'hold_broken'
+      : _stableAlignmentFrames >= 4
+      ? 'hold_valid'
+      : 'hold_paused';
+
+  @override
+  MotionValidationUpdate update(NuvoPoseFrame frame) {
+    // Out of frame is out of position too — a missing body feeds the same
+    // break clock a broken pose line does. Once the hold has banked time,
+    // [HoldTimerStateMachine.maxBreakMs] of this ends the attempt.
+    if (!frame.hasPoints(criticalPoints)) {
+      _feedTimer(frame.createdAt, valid: false);
+    }
+    final update = super.update(frame);
+    // A broken hold keeps its own reason — 'missing_landmarks' or a form
+    // reason would hide the one that actually ended the take.
+    if (_timer.isBroken) lastFailureReason = 'hold_broken';
+    return update;
+  }
   @override
   List<String> get criticalPoints => const [
     'leftShoulder',
@@ -1626,11 +1708,9 @@ class PlankHoldValidator extends _BaseValidator {
     }
 
     _stableAlignmentFrames++;
-    _plankFeedback = _stableAlignmentFrames >= 4
-        ? 'Hold steady.'
-        : 'Hold steady.';
+    _plankFeedback = 'Hold steady.';
     lastFailureReason = '';
-    _timer.update(now: frame.createdAt, valid: _stableAlignmentFrames >= 4);
+    _feedTimer(frame.createdAt, valid: _stableAlignmentFrames >= 4);
   }
 
   @override
@@ -1647,7 +1727,17 @@ class PlankHoldValidator extends _BaseValidator {
     _stableAlignmentFrames = 0;
     lastFailureReason = reason;
     _plankFeedback = feedback;
-    _timer.update(now: frame.createdAt, valid: false);
+    _feedTimer(frame.createdAt, valid: false);
+  }
+
+  /// Feeds the hold clock and surfaces the terminal break the moment it
+  /// lands — a hold past the break tolerance never resumes.
+  void _feedTimer(DateTime now, {required bool valid}) {
+    _timer.update(now: now, valid: valid);
+    if (_timer.isBroken) {
+      lastFailureReason = 'hold_broken';
+      _plankFeedback = 'The hold broke — finishing up.';
+    }
   }
 
   _Point _mid(NuvoPosePoint a, NuvoPosePoint b) =>
@@ -1832,7 +1922,7 @@ class MultiPhaseSequenceValidator extends _BaseValidator {
   late List<MultiPhaseSequenceTracker> _trackers;
 
   @override
-  int get currentValue => math.min(_totalCompletions, targetValue);
+  int get currentValue => capToTarget(_totalCompletions);
 
   int get _totalCompletions =>
       _trackers.fold(0, (sum, t) => sum + t.completionCount);
@@ -1972,7 +2062,7 @@ class ConfigurableRepValidator extends _BaseValidator {
   AiMotionActivity get activity => definition.activity;
 
   @override
-  int get currentValue => math.min(_counter.count, targetValue);
+  int get currentValue => capToTarget(_counter.count);
 
   @override
   String get statusText => definition.statusText;
@@ -2470,8 +2560,8 @@ class CadenceMotionValidator extends _BaseValidator {
   @override
   int get currentValue {
     final d = _distance;
-    if (d != null) return math.min(d.metresRounded, targetValue);
-    return math.min(_cadence.cycles, targetValue);
+    if (d != null) return capToTarget(d.metresRounded);
+    return capToTarget(_cadence.cycles);
   }
 
   /// Live virtual-distance readout for the verification UI (null for a plain
@@ -2869,7 +2959,7 @@ class MountainClimbersValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.mountainClimbers;
   @override
-  int get currentValue => math.min(_cadence.cycles, targetValue);
+  int get currentValue => capToTarget(_cadence.cycles);
   @override
   String get statusText => 'Tracking mountain climbers';
   @override
@@ -3009,7 +3099,7 @@ class LateralStepsValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.lateralSteps;
   @override
-  int get currentValue => math.min(_cadence.cycles, targetValue);
+  int get currentValue => capToTarget(_cadence.cycles);
   @override
   String get statusText => 'Tracking lateral steps';
   @override
@@ -3106,7 +3196,7 @@ class CalfRaisesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.calfRaises;
   @override
-  int get currentValue => math.min(_counter.count, targetValue);
+  int get currentValue => capToTarget(_counter.count);
   @override
   String get statusText => 'Tracking calf raises';
   @override

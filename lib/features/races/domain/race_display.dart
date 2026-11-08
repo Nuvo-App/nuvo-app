@@ -44,6 +44,10 @@ MotionMeasurementType raceMeasurementType(Race race) {
 
 /// The user-facing noun for a race's progress ("reps", "steps", "seconds").
 String raceDisplayUnit(Race race) {
+  // Distance races store metres; the activity's default plural unit is "mi",
+  // which made "0 mi" sit next to "0 / 200 m". Metres is the stored truth —
+  // formatDistance picks m / km / mi for display from it.
+  if (raceMeasurementType(race) == MotionMeasurementType.distance) return 'm';
   final activity = raceActivityDefinition(race);
   if (activity != null) return activity.unit;
   // A non-motion race still knows its unit from the backend ("strokes",
@@ -304,6 +308,18 @@ bool raceIsAccumulating(Race race) =>
     race.scoringRule == 'cumulative_sum' ||
     race.format == 'first_to_goal' ||
     race.format == 'most_in_window';
+
+/// The short product name for a race's format — "Most total", "Best
+/// single", "Timed battle". Cards with no finish line show it next to the
+/// score so they can say how the race is won instead of faking a percent
+/// toward a goal that does not exist.
+String raceModeLabel(String? format) =>
+    switch (RaceFormat.fromBackendValue(format)) {
+      RaceFormat.mostInWindow => 'Most total',
+      RaceFormat.bestAttempt => 'Best single',
+      RaceFormat.timedAttempt => 'Timed battle',
+      _ => 'First to the goal',
+    };
 
 /// The CTA the race's proof capability actually performs. Race Detail and
 /// Verify both derive from this so the same race offers the same action.

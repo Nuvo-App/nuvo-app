@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/v13/v13.dart';
 import '../../onboarding/data/first_use_store.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
@@ -36,7 +34,11 @@ Future<void> openAiMotionProof(
       ref.read(motionCapabilitiesProvider),
     ),
   );
-  debugLogCameraVerificationDecision(race, eligibility, routeAction: routeAction);
+  debugLogCameraVerificationDecision(
+    race,
+    eligibility,
+    routeAction: routeAction,
+  );
 
   // Not camera-verifiable → the chooser. Camera-verifiable but not yet seen
   // the pre-verify setup → show the motion preview first; its Begin returns
@@ -52,13 +54,8 @@ Future<void> openAiMotionProof(
   final firstUse = ref.read(firstUseStoreProvider);
   if (!firstUse.isCameraPrimerSeen) {
     if (!context.mounted) return;
-    final proceed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.themeColors.page,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+    final proceed = await showV13Sheet<bool>(
+      context,
       builder: (_) => const CameraPrimerSheet(),
     );
     if (proceed != true) return;
@@ -77,101 +74,83 @@ class CameraPrimerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: c.surface,
-                  border: Border.all(color: c.border, width: 2),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapLg,
+        V13.pagePad,
+        V13.gapXxl,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Center(
+            child: V13IconTile(
+              icon: Icons.accessibility_new_rounded,
+              color: V13.sky,
+              size: 56,
+              radius: V13.radiusTileLg,
+              iconSize: 28,
+            ),
+          ),
+          const SizedBox(height: V13.gapLg),
+          Text(
+            'Move. We’ll verify it.',
+            textAlign: TextAlign.center,
+            style: V13.title.copyWith(letterSpacing: -0.5),
+          ),
+          const SizedBox(height: V13.gapSm),
+          Text(
+            'Nuvo uses your camera to track your movement while you race.',
+            textAlign: TextAlign.center,
+            style: V13.body.copyWith(color: V13.muted),
+          ),
+          const SizedBox(height: V13.gapXl),
+          Row(
+            children: [
+              for (final (i, fact) in const [
+                (
+                  icon: Icons.accessibility_new_rounded,
+                  label: 'Processed for motion',
                 ),
-                child: Icon(
-                  Icons.accessibility_new_rounded,
-                  color: context.themeColors.accent,
-                  size: 28,
+                (
+                  icon: Icons.videocam_off_rounded,
+                  label: 'Video isn’t uploaded',
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Move. We’ll verify it.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.headlineMedium.copyWith(
-                color: c.ink,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Nuvo uses your camera to track your movement while you race.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: c.inkMuted,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                for (final (i, fact) in const [
-                  (
-                    icon: Icons.accessibility_new_rounded,
-                    label: 'Processed for motion',
-                  ),
-                  (
-                    icon: Icons.videocam_off_rounded,
-                    label: 'Video isn’t uploaded',
-                  ),
-                ].indexed) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Icon(fact.icon, color: context.themeColors.accent, size: 22),
-                        const SizedBox(height: 6),
-                        Text(
-                          fact.label,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: c.ink,
-                            fontWeight: FontWeight.w700,
-                            height: 1.25,
-                          ),
+              ].indexed) ...[
+                if (i > 0) const SizedBox(width: V13.gapSm),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Icon(fact.icon, color: V13.blue, size: 22),
+                      const SizedBox(height: 6),
+                      Text(
+                        fact.label,
+                        textAlign: TextAlign.center,
+                        style: V13.caption.copyWith(
+                          color: V13.navy,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 20),
-            NuvoPrimaryButton(
-              label: 'Continue',
-              expand: true,
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-            const SizedBox(height: 4),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Not now',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: c.inkMuted,
-                  fontWeight: FontWeight.w700,
                 ),
-              ),
-            ),
-          ],
-        ),
+              ],
+            ],
+          ),
+          const SizedBox(height: V13.gapXl),
+          V13Button.primary(
+            label: 'Continue',
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+          V13Button.ghost(
+            label: 'Not now',
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+        ],
       ),
     );
   }
