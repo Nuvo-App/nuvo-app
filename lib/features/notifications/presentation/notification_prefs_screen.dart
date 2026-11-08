@@ -267,7 +267,7 @@ class _SectionHeader extends StatelessWidget {
 
 /// Width of each toggle column — the section header labels and every row
 /// share it so App and Push line up as real columns.
-const _colW = 52.0;
+const _colW = 64.0;
 
 class _PrefRow extends StatelessWidget {
   const _PrefRow({
