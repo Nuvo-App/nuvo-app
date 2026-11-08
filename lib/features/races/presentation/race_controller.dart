@@ -469,6 +469,8 @@ class RaceController extends StateNotifier<RaceState> {
     String? targetUnit,
     String? proofMode,
     String? scoreDirection,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
   }) async {
     if (isPresentationDemo()) {
       final id =
@@ -504,6 +506,8 @@ class RaceController extends StateNotifier<RaceState> {
       targetUnit: targetUnit,
       proofMode: proofMode,
       scoreDirection: scoreDirection,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
