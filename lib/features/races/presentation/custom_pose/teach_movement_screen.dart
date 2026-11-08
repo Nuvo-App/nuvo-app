@@ -13,12 +13,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_geometry.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/nuvo_button.dart';
+import '../../../../core/v13/v13.dart';
 import '../../../../core/widgets/nuvo_focused_stage.dart';
-import '../../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
 import '../../ai/motion_model_resolver.dart';
@@ -1106,11 +1102,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   Future<void> _copyMotionV2Log() async {
     final text = _buildDiagnosticSession().toLogText();
     await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Motion V2 log copied.')));
-    }
+    if (mounted) showV13Toast(context, 'Motion V2 log copied.');
   }
 
   Future<void> _saveDiagnosticSession() async {
@@ -1133,11 +1125,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             '(${(bytes.length / 1024).toStringAsFixed(0)} KB gz)',
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
-      }
+      if (mounted) showV13Toast(context, 'Save failed: $e');
     }
   }
 
@@ -1265,35 +1253,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     ref.read(learnedCustomMovementProvider.notifier).state = null;
     _skeletonHold.clear();
     _stopCamera();
-    setState(() {});
-  }
-
-  void _resetStartPose() {
-    _flow.resetStartPose();
-    _skeletonHold.clear();
-    _ensureCameraStream();
-    setState(() {});
-  }
-
-  void _removeLastAccepted() {
-    _flow.removeLastAccepted();
-
-    setState(() {});
-  }
-
-  void _clearExamples() {
-    _flow.clearExamples();
-    _resetTeachFlags();
-
-    _customRuntime?.dispose();
-    _customRuntime = null;
-    _customUpdate = null;
-    _customTestResult = null;
-    _runtimeDiagnostics.clear();
-    _rawDemos.clear();
-    _v2Demos.clear();
-    _rawCurrent = [];
-    _ensureCameraStream();
     setState(() {});
   }
 
@@ -1458,7 +1417,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   /// Every non-camera Teach screen: one centred stage with a back arrow.
   Widget _stageScaffold(Widget stage) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
         child: Stack(
           children: [
@@ -1466,7 +1425,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             Positioned(
               top: 8,
               left: 12,
-              child: NuvoBackButton(onPressed: () => context.pop()),
+              child: V13IconButton(
+                icon: Icons.arrow_back_rounded,
+                shape: V13IconButtonShape.square,
+                onTap: () => context.pop(),
+                semanticLabel: 'Back',
+              ),
             ),
           ],
         ),
@@ -1503,15 +1467,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       icon: Icons.edit_rounded,
       title: 'Name your movement',
       body: 'What should Nuvo call it?',
-      content: TextField(
+      content: V13TextInput(
         controller: _nameController,
-        maxLength: 40,
-        textAlign: TextAlign.center,
+        hint: 'Overhead knee touch',
+        errorText: _nameError,
         textCapitalization: TextCapitalization.words,
-        decoration: InputDecoration(
-          hintText: 'Overhead knee touch',
-          errorText: _nameError,
-        ),
+        inputFormatters: [LengthLimitingTextInputFormatter(40)],
         onSubmitted: (_) => _submitName(),
       ),
       primaryLabel: 'Continue',
@@ -1595,7 +1556,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if (failed) {
       return NuvoFocusedStage(
         icon: Icons.refresh_rounded,
-        accent: NuvoColors.warning,
+        accent: V13.danger,
         title: "Let's try that again",
         body:
             _v2Error ??
@@ -1610,7 +1571,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     return NuvoFocusedStage(
       icon: Icons.check_circle_rounded,
-      accent: NuvoColors.success,
+      accent: V13.mint,
       title: 'Nuvo can count $name',
       body: testResult == null
           ? 'Use it now, or test it once first to make sure it recognises you.'
@@ -1650,9 +1611,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             Center(
               child: Text(
                 _flow.message.isNotEmpty ? _flow.message : 'Starting camera…',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: NuvoColors.white,
-                ),
+                style: V13.body.copyWith(color: V13.white, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -1708,18 +1667,23 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   /// One large, high-confidence instruction over the camera. Pose problems win
   /// (you can't recognise a movement you can't track), then movement feedback.
-  Widget _bigGuidance(String text, {Color? color}) {
+  /// [background]/[foreground] stay explicit: pastel fills take navy text.
+  Widget _bigGuidance(
+    String text, {
+    Color? background,
+    Color foreground = V13.white,
+  }) {
     if (text.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
-        color: (color ?? NuvoColors.navy).withValues(alpha: 0.62),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        color: (background ?? V13.navy).withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
       ),
       child: Text(
         text.toUpperCase(),
         textAlign: TextAlign.center,
-        style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.white),
+        style: V13.sectionHead.copyWith(color: foreground),
       ),
     );
   }
@@ -1730,27 +1694,30 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     // and before motion starts → "READY — DO THE MOVEMENT". Otherwise the
     // header carries it.
     String guide = '';
-    Color guideColor = NuvoColors.danger;
+    Color guideBg = V13.danger;
+    Color guideFg = V13.white;
     if (_preparing) {
       if (_track.isReady) {
         guide = 'Ready — start the movement';
-        guideColor = NuvoColors.success;
+        guideBg = V13.mint;
+        guideFg = V13.navy;
       } else {
         guide = _track.quality.guidance;
-        guideColor = _track.quality.readiness == PoseReadiness.unstable
-            ? NuvoColors.blue
-            : NuvoColors.danger;
+        guideBg = _track.quality.readiness == PoseReadiness.unstable
+            ? V13.blue
+            : V13.danger;
       }
     } else if (recording && !_track.motionStarted) {
       guide = 'Ready — do the movement';
-      guideColor = NuvoColors.success;
+      guideBg = V13.mint;
+      guideFg = V13.navy;
     } else if (recording && _track.motionStarted) {
       guide = 'Recording your movement';
-      guideColor = NuvoColors.blue;
+      guideBg = V13.blue;
     }
     return [
       if (guide.isNotEmpty) ...[
-        _bigGuidance(guide, color: guideColor),
+        _bigGuidance(guide, background: guideBg, foreground: guideFg),
         const SizedBox(height: 12),
       ],
       _teachProgressHeader(),
@@ -1766,34 +1733,35 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final r = _v2Result;
     // Priority: pose problem → last attempt's feedback → "keep going" → status.
     String message;
-    Color? color;
+    Color? background;
     if (v2 && r.poseReadiness != 'ready' && r.poseGuidance.isNotEmpty) {
       message = r.poseGuidance;
-      color = NuvoColors.danger;
+      background = V13.danger;
     } else if (v2 && r.attempt.outcome == MotionAttemptOutcome.inProgress) {
       message = 'Keep going';
-      color = NuvoColors.blue;
+      background = V13.blue;
     } else if (v2 &&
         r.attempt.outcome == MotionAttemptOutcome.failed &&
         r.attempt.userFeedback.isNotEmpty) {
       message = r.attempt.userFeedback;
-      color = NuvoColors.danger;
+      background = V13.danger;
     } else {
       message = v2 ? _v2StatusLabel() : _nuvoTestStatus(update: _customUpdate);
-      color = null;
+      background = null;
     }
     return [
-      _bigGuidance(message, color: color),
+      _bigGuidance(message, background: background),
       const SizedBox(height: 12),
       Center(
         child: NuvoRepPulse(
           count: v2 ? _v2Count : (_customUpdate?.count ?? 0),
           target: _testTarget,
-          accent: NuvoColors.blue,
+          accent: V13.blue,
+          onColor: V13.white,
         ),
       ),
       const SizedBox(height: 14),
-      _colorActionButton('Stop test', NuvoColors.danger, _stopVerifierTest),
+      _colorActionButton('Stop test', V13.danger, _stopVerifierTest),
       if (_showDiagnostics) ...[
         const SizedBox(height: 12),
         v2 ? _motionV2DebugPanel() : _debugPanel(),
@@ -1802,16 +1770,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Widget _immersiveIcon(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
+    return V13Pressable(
       onTap: onTap,
       child: Container(
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: NuvoColors.navy.withValues(alpha: 0.55),
+          color: V13.navy.withValues(alpha: 0.55),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: NuvoColors.white, size: 22),
+        child: Icon(icon, color: V13.white, size: 22),
       ),
     );
   }
@@ -1820,13 +1788,13 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: NuvoColors.navy.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        color: V13.navy.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
       ),
       child: Text(
         text,
         overflow: TextOverflow.ellipsis,
-        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
+        style: V13.caption.copyWith(color: V13.white),
       ),
     );
   }
@@ -1843,23 +1811,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _motionV2DebugPanel() {
     final r = _v2Result;
-    Text row(String s) => Text(
-      s,
-      style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
-    );
+    Text row(String s) =>
+        Text(s, style: V13.caption.copyWith(color: V13.white));
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        color: V13.navy,
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'MOTION V2',
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.blue),
-          ),
+          Text('MOTION V2', style: V13.label.copyWith(color: V13.blue)),
           row(
             'runtime: native (onnxruntime)   encoder: ${_v2?.encoderLoaded == true ? 'loaded' : 'not loaded'}',
           ),
@@ -1926,32 +1889,32 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
               row('  -> ${_savedSessionPath!.split('/').last}'),
           ],
           const SizedBox(height: 8),
-          NuvoOutlineButton(
+          V13Button.secondary(
             label: 'Copy Motion V2 Log',
-            expand: true,
+            fullWidth: true,
             onPressed: _copyMotionV2Log,
           ),
           if (kNuvoDiagnosticsEnabled) ...[
             const SizedBox(height: 8),
-            NuvoOutlineButton(
+            V13Button.secondary(
               label: 'Save Diagnostic Session',
-              expand: true,
+              fullWidth: true,
               onPressed: _saveDiagnosticSession,
             ),
           ],
           const SizedBox(height: 8),
-          NuvoOutlineButton(
+          V13Button.secondary(
             label: 'Copy raw debug JSON',
-            expand: true,
+            fullWidth: true,
             onPressed: _copyMotionV2Debug,
           ),
           if (kNuvoDiagnosticsEnabled &&
               _lastFailedAttemptFrames.isNotEmpty) ...[
             const SizedBox(height: 8),
-            NuvoOutlineButton(
+            V13Button.secondary(
               label:
                   'Copy failed-attempt fixture (${_lastFailedAttemptFrames.length}f)',
-              expand: true,
+              fullWidth: true,
               onPressed: _copyFailedAttemptFixture,
             ),
           ],
@@ -2026,11 +1989,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     await Clipboard.setData(
       ClipboardData(text: const JsonEncoder.withIndent('  ').convert(bundle)),
     );
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Motion V2 debug copied.')));
-    }
+    if (mounted) showV13Toast(context, 'Motion V2 debug copied.');
   }
 
   /// Everything needed to replay a failed attempt offline: raw pose frames,
@@ -2058,83 +2017,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         ).convert(_failedAttemptFixture()),
       ),
     );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed-attempt fixture copied.')),
-      );
-    }
-  }
-
-  // ignore: unused_element
-  Widget _statusPill() {
-    final (label, color) = switch (_flow.stage) {
-      TeachMovementStage.setup => ('Ready to start', NuvoColors.muted),
-      TeachMovementStage.countdown => ('Get ready', NuvoColors.muted),
-      TeachMovementStage.startPose => ('Waiting for start', NuvoColors.muted),
-      TeachMovementStage.readyToRecord => ('Ready', NuvoColors.white),
-      TeachMovementStage.holdStill => ('Hold still', NuvoColors.white),
-      TeachMovementStage.recording => ('Recording', NuvoColors.white),
-      TeachMovementStage.building => ('Learning', NuvoColors.muted),
-      _ => ('', NuvoColors.muted),
-    };
-    if (label.isEmpty) return const SizedBox.shrink();
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.bodySmall.copyWith(color: color),
-        ),
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _progressText() {
-    final accepted = _flow.acceptedCount;
-    final needed = _flow.requiredExampleCount;
-    return Text(
-      '$accepted of $needed examples saved',
-      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-      textAlign: TextAlign.center,
-    );
-  }
-
-  // ignore: unused_element
-  Widget _captureControls() {
-    final stage = _flow.stage;
-    final canRemoveLast =
-        _flow.acceptedCount > 0 &&
-        (stage == TeachMovementStage.readyToRecord ||
-            stage == TeachMovementStage.recording);
-    final canClear =
-        (_flow.acceptedCount > 0 || _flow.rejectedDemonstrations.isNotEmpty) &&
-        (stage == TeachMovementStage.readyToRecord ||
-            stage == TeachMovementStage.recording);
-    final showResetStart =
-        _flow.startPose != null &&
-        (stage == TeachMovementStage.readyToRecord ||
-            stage == TeachMovementStage.recording);
-    if (!canRemoveLast && !canClear && !showResetStart) {
-      return const SizedBox.shrink();
-    }
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 8,
-      children: [
-        if (canRemoveLast) _smallButton('Remove last', _removeLastAccepted),
-        if (canClear) _smallButton('Clear examples', _clearExamples),
-        if (showResetStart) _smallButton('Reteach start pose', _resetStartPose),
-      ],
-    );
-  }
-
-  Widget _smallButton(String label, VoidCallback onPressed) {
-    return NuvoTertiaryButton(label: label, small: true, onPressed: onPressed);
+    if (mounted) showV13Toast(context, 'Failed-attempt fixture copied.');
   }
 
   Widget _cameraPreview(CameraController controller) {
@@ -2164,19 +2047,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
               Positioned(
                 top: 12,
                 right: 12,
-                child: GestureDetector(
+                child: V13Pressable(
                   onTap: _switchCamera,
                   child: Container(
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: NuvoColors.navy.withValues(alpha: 0.5),
+                      color: V13.navy.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.flip_camera_ios,
-                      color: NuvoColors.white,
-                    ),
+                    child: const Icon(Icons.flip_camera_ios, color: V13.white),
                   ),
                 ),
               ),
@@ -2184,24 +2064,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         ),
       ),
     );
-  }
-
-  // ignore: unused_element
-  Widget _progressDots() {
-    final filled = _flow.acceptedCount;
-    final dots = List.generate(3, (index) {
-      final filledDot = index < filled;
-      return Container(
-        width: 12,
-        height: 12,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: filledDot ? NuvoColors.white : NuvoColors.navy,
-        ),
-      );
-    });
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: dots);
   }
 
   Widget _teachProgressHeader() {
@@ -2237,23 +2099,23 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: NuvoColors.navy.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        color: V13.navy.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             title,
-            style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
+            style: V13.cardTitle.copyWith(color: V13.white),
             textAlign: TextAlign.center,
           ),
           if (sub != null) ...[
             const SizedBox(height: 6),
             Text(
               sub,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.white.withValues(alpha: 0.75),
+              style: V13.caption.copyWith(
+                color: V13.white.withValues(alpha: 0.75),
               ),
               textAlign: TextAlign.center,
             ),
@@ -2263,49 +2125,40 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  /// Record = green, Stop = red, so the state is readable at a glance.
+  /// One big camera action: primary blue to record/save/learn, danger to stop.
   Widget _colorActionButton(String label, Color color, VoidCallback? onTap) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FilledButton(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: NuvoColors.white,
-          disabledBackgroundColor: color.withValues(alpha: 0.4),
-          disabledForegroundColor: NuvoColors.white.withValues(alpha: 0.7),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
-        ),
-      ),
+    return V13Button(
+      label: label,
+      fullWidth: true,
+      size: V13ButtonSize.large,
+      variant: color == V13.danger
+          ? V13ButtonVariant.danger
+          : V13ButtonVariant.primary,
+      onPressed: onTap,
     );
   }
 
   Widget _cameraActionButton() {
     final stage = _flow.stage;
     if (_preparing || stage == TeachMovementStage.recording) {
-      return _colorActionButton('Stop', NuvoColors.danger, _finishRecording);
+      return _colorActionButton('Stop', V13.danger, _finishRecording);
     }
     if (stage == TeachMovementStage.building || _learnRequested) {
-      return const Center(child: NuvoLoadingIndicator());
+      return const Center(child: CircularProgressIndicator(color: V13.blue));
     }
     if (_awaitingExampleSave) {
-      return NuvoPrimaryButton(
+      return V13Button.primary(
         label: 'Save example',
-        expand: true,
+        fullWidth: true,
+        size: V13ButtonSize.large,
         onPressed: _saveExample,
       );
     }
     if (_confirmedExamples >= _requiredExamples) {
-      return NuvoPrimaryButton(
+      return V13Button.primary(
         label: 'Learn movement',
-        expand: true,
+        fullWidth: true,
+        size: V13ButtonSize.large,
         onPressed: _flow.canLearn ? _learnMovement : null,
       );
     }
@@ -2313,22 +2166,22 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       // Always pressable — the user gets into position AFTER tapping Record.
       return _colorActionButton(
         'Record example ${_confirmedExamples + 1}',
-        NuvoColors.success,
+        V13.blue,
         _cameraReady ? _startRecording : null,
       );
     }
-    return NuvoOutlineButton(
+    return V13Button.secondary(
       label: 'Start over',
-      expand: true,
+      fullWidth: true,
       onPressed: _restart,
     );
   }
 
   Widget _secondaryActionButton() {
     if (_preparing || _flow.stage == TeachMovementStage.recording) {
-      return NuvoOutlineButton(
+      return V13Button.secondary(
         label: 'Cancel',
-        expand: true,
+        fullWidth: true,
         onPressed: () {
           if (_preparing) {
             _cancelPreparing();
@@ -2339,9 +2192,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
     }
     if (_awaitingExampleSave) {
-      return NuvoOutlineButton(
+      return V13Button.secondary(
         label: 'Redo this example',
-        expand: true,
+        fullWidth: true,
         onPressed: _redoExample,
       );
     }
@@ -2478,40 +2331,38 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     debugPrint(pretty, wrapWidth: 1024);
     await Clipboard.setData(ClipboardData(text: pretty));
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Debug report copied.')));
+    showV13Toast(context, 'Debug report copied.');
   }
 
   Widget _debugPanel() {
     final accepted = _flow.acceptedDemonstrations;
     final rejected = _flow.rejectedDemonstrations;
+    Text row(String s) =>
+        Text(s, style: V13.caption.copyWith(color: V13.white));
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        color: V13.navy,
+        borderRadius: BorderRadius.circular(V13.radiusTileLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('DEBUG', style: AppTextStyles.bodySmall),
-          Text('stage: ${_flow.stage.name}'),
-          Text(
+          Text('DEBUG', style: V13.label.copyWith(color: V13.blue)),
+          row('stage: ${_flow.stage.name}'),
+          row(
             'attempts: ${_flow.acceptedCount + _flow.rejectedDemonstrations.length}',
           ),
-          Text('accepted: ${accepted.map((d) => d.index).toList()}'),
-          Text('rejected: ${rejected.map((d) => d.rejectionReason).toList()}'),
-          Text('body: ${_flow.debugBodyInfo}'),
-          Text(
-            'similarity: ${_flow.lastSimilarity?.toStringAsFixed(2) ?? '-'}',
-          ),
-          Text('last rejection: ${_flow.lastRejection ?? '-'}'),
-          Text('build failure: ${_flow.lastBuildFailure ?? '-'}'),
+          row('accepted: ${accepted.map((d) => d.index).toList()}'),
+          row('rejected: ${rejected.map((d) => d.rejectionReason).toList()}'),
+          row('body: ${_flow.debugBodyInfo}'),
+          row('similarity: ${_flow.lastSimilarity?.toStringAsFixed(2) ?? '-'}'),
+          row('last rejection: ${_flow.lastRejection ?? '-'}'),
+          row('build failure: ${_flow.lastBuildFailure ?? '-'}'),
           const SizedBox(height: 8),
-          NuvoOutlineButton(
+          V13Button.secondary(
             label: 'Copy debug report',
-            expand: true,
+            fullWidth: true,
             onPressed: _copyDebugReport,
           ),
         ],
@@ -2521,21 +2372,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _testResultStatus(CustomPoseRuntimeResult result) {
     final matched = result.isVerified;
-    return Container(
+    return V13Card(
+      color: matched ? V13.mint : V13.card,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: matched
-            ? NuvoColors.success.withValues(alpha: 0.08)
-            : NuvoColors.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-      ),
       child: Text(
         matched
             ? "Nuvo recognized your movement. You're ready to use it."
             : "Nuvo couldn't match that. Try again.",
-        style: AppTextStyles.titleMedium.copyWith(
-          color: matched ? NuvoColors.success : NuvoColors.danger,
-        ),
+        style: V13.cardTitle.copyWith(color: matched ? V13.navy : V13.danger),
         textAlign: TextAlign.center,
       ),
     );
@@ -2740,7 +2584,6 @@ class _TeachSteps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.themeColors;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2755,24 +2598,19 @@ class _TeachSteps extends StatelessWidget {
                   height: 26,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: NuvoColors.blue.withValues(alpha: 0.12),
+                    color: V13.blue.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Text(
                     '${i + 1}',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.blue,
+                    style: V13.caption.copyWith(
+                      color: V13.blue,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _steps[i],
-                    style: AppTextStyles.bodyMedium.copyWith(color: colors.ink),
-                  ),
-                ),
+                Expanded(child: Text(_steps[i], style: V13.body)),
               ],
             ),
           ),

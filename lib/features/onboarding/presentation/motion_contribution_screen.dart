@@ -178,19 +178,10 @@ class _MotionContributionScreenState
                 onPressed: () => _choose(true),
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: _saving ? null : () => _choose(false),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    foregroundColor: V13.navy,
-                  ),
-                  child: Text(
-                    'Not now',
-                    style: V13.bodyStrong.copyWith(fontSize: 15),
-                  ),
-                ),
+              V13Button.ghost(
+                label: 'Not now',
+                fullWidth: true,
+                onPressed: _saving ? null : () => _choose(false),
               ),
             ],
           ),
