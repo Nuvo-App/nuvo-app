@@ -61,6 +61,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   int _countSeen = 0;
   DateTime? _startedAt;
   DateTime? _lastFrameAt;
+  DateTime? _lastCountedAt;
 
   @override
   VerifierType get type => VerifierType.motionV2;
@@ -84,6 +85,9 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
 
   @override
   String get failedRuleReason => _failureReason;
+
+  @override
+  DateTime? get lastCountedAt => _lastCountedAt;
 
   @override
   void start() {
@@ -145,7 +149,10 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
           // One eval can count several reps (in-window search), so completion
           // events follow the count, not the number of evals that flagged
           // newRep — the server rejects a proof whose events don't cover it.
-          if (r.count > _countSeen) _completions += r.count - _countSeen;
+          if (r.count > _countSeen) {
+            _completions += r.count - _countSeen;
+            _lastCountedAt = _lastFrameAt;
+          }
           _countSeen = r.count;
           if (r.attempt.outcome == MotionAttemptOutcome.failed) {
             _failedAttempts++;

@@ -355,6 +355,7 @@ class NuvoVerifyEngine {
   bool get fullBodyVisible => _validator.fullBodyVisible;
   String get validatorState => _validator.stateLabel;
   String get failedRuleReason => _validator.failedRuleReason;
+  DateTime? get lastCountedAt => _validator.lastCountedAt;
 
   void selectMovement(MovementDefinition movement, int? target) {
     _movement = movement;
@@ -529,6 +530,10 @@ abstract class MotionValidator {
   Map<String, double> get debugValues;
   String get stateLabel;
   String get failedRuleReason;
+
+  /// Frame time of the last counted rep — null until something counts.
+  /// The rep-inactivity prompt's clock.
+  DateTime? get lastCountedAt => null;
 
   /// The hold attempt ended terminally — out of position past the break
   /// tolerance. Always false for rep validators.
@@ -867,6 +872,9 @@ abstract class _BaseValidator extends MotionValidator {
   String lastFailureReason = '';
 
   @override
+  DateTime? lastCountedAt;
+
+  @override
   int get durationMs => startedAt == null
       ? 0
       : DateTime.now().difference(startedAt!).inMilliseconds;
@@ -890,6 +898,7 @@ abstract class _BaseValidator extends MotionValidator {
     startedAt = DateTime.now();
     lastVisibilityScore = 0;
     lastFailureReason = '';
+    lastCountedAt = null;
     resetState();
   }
 
@@ -909,7 +918,9 @@ abstract class _BaseValidator extends MotionValidator {
     if (!fullBodyVisible) {
       lastFailureReason = 'low_landmark_confidence';
     }
+    final valueBefore = currentValue;
     analyzeValidFrame(frame);
+    if (currentValue > valueBefore) lastCountedAt = frame.createdAt;
     return snapshot();
   }
 

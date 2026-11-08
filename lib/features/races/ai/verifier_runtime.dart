@@ -108,6 +108,10 @@ abstract class VerifierRuntime {
   bool get fullBodyVisible;
   String get failedRuleReason;
 
+  /// Frame time of the last counted rep — the rep-inactivity prompt's
+  /// clock. Null until the engine counts something.
+  DateTime? get lastCountedAt => null;
+
   void start();
   VerifierUpdate update(NuvoPoseFrame frame);
   VerifierResult finish();
@@ -145,6 +149,9 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
 
   @override
   String get failedRuleReason => _engine.failedRuleReason;
+
+  @override
+  DateTime? get lastCountedAt => _engine.lastCountedAt;
 
   @override
   void start() => _engine.start();
@@ -201,6 +208,9 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
 
   @override
   String get failedRuleReason => _lastUpdate?.diagnostic ?? '';
+
+  @override
+  DateTime? get lastCountedAt => _runtime.lastRepAt;
 
   @override
   void start() => _runtime.start();

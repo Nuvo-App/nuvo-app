@@ -55,6 +55,10 @@ abstract class RemoteVerifierRuntime {
   int count = 0;
   bool _started = false;
 
+  /// Frame time of the last counted rep — null until something counts.
+  /// The rep-inactivity prompt reads it through the verifier adapter.
+  DateTime? lastRepAt;
+
   /// The take crossed its finish line. No goal means never — the athlete
   /// ends the take with Done, which is what actually submits the count.
   bool get reachedTarget => target != null && count >= target!;
@@ -117,6 +121,7 @@ class StateMachineV1Runtime extends RemoteVerifierRuntime {
         _active = false;
         _candidateFrames = 0;
         count++;
+        lastRepAt = frame.createdAt;
         return _result(RemoteRuntimeState.repAccepted, 0.9, 'rep_accepted');
       }
     } else if ((_active && !isActive) || (!_active && !isStart)) {
@@ -161,6 +166,7 @@ class AlternatingRepV1Runtime extends RemoteVerifierRuntime {
         _stableFrames = 0;
         _leftNext = !_leftNext;
         count++;
+        lastRepAt = frame.createdAt;
         return _result(
           RemoteRuntimeState.repAccepted,
           0.88,
@@ -238,7 +244,9 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
     // The banked seconds live on [count] so a broken or finished hold
     // reports what it held through currentValue/finish — before this they
     // were only in the update payload and the runtime always answered 0.
-    count = (_heldMs / 1000).floor();
+    final heldSeconds = (_heldMs / 1000).floor();
+    if (heldSeconds > count) lastRepAt = frame.createdAt;
+    count = heldSeconds;
     return RemoteVerifierUpdate(
       state: complete
           ? RemoteRuntimeState.completed
@@ -350,6 +358,7 @@ class SequenceMatchV1Runtime extends RemoteVerifierRuntime {
         _dwellFrames = 0;
         if (phase.completesRep) {
           count++;
+          lastRepAt = frame.createdAt;
           _resetSequence();
           return _result(RemoteRuntimeState.repAccepted, 'rep_accepted');
         }
@@ -409,6 +418,7 @@ class RepTreeV1Runtime extends RemoteVerifierRuntime {
     );
     count = _counter.count;
     final accepted = count > before;
+    if (accepted) lastRepAt = frame.createdAt;
     return RemoteVerifierUpdate(
       state: reachedTarget
           ? RemoteRuntimeState.completed
@@ -451,6 +461,7 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
     final before = _validator.currentValue;
     final result = _validator.update(frame);
     count = result.currentValue;
+    if (count > before) lastRepAt = frame.createdAt;
     final isHold = spec.measurementType == 'duration';
     final accepted = !isHold && count > before;
     final complete = target != null && result.isVerified;

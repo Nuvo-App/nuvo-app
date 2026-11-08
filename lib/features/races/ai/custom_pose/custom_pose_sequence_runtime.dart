@@ -83,6 +83,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   bool _departedAfterReturnCount = true;
   DateTime? _startedAt;
   DateTime? _lastFrameAt;
+  DateTime? _lastCountedAt;
   String _guidance = 'Ready';
   String _failureReason = '';
 
@@ -103,6 +104,9 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
 
   @override
   String get failedRuleReason => _failureReason;
+
+  @override
+  DateTime? get lastCountedAt => _lastCountedAt;
 
   CustomPoseRuntimeState get state => _state;
 
@@ -140,6 +144,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     _departedAfterReturnCount = true;
     _startedAt = null;
     _lastFrameAt = null;
+    _lastCountedAt = null;
     _guidance = 'Step into frame';
     _failureReason = '';
     _state = _indexedSequence.isEmpty
@@ -663,6 +668,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   void _countRepetition() {
     _count++;
     _completionEvents++;
+    _lastCountedAt = _lastFrameAt;
     _cooldownFramesRemaining = _cooldownFramesForSpec();
     _resetAttemptProgress();
     _guidance = _reachedTarget
