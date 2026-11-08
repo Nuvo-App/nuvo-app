@@ -10,6 +10,8 @@ import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/network/conditional.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:nuvo/core/widgets/nuvo_button.dart';
+import 'package:nuvo/features/auth/data/auth_api.dart';
+import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/squads/application/squad_controller.dart';
 import 'package:nuvo/features/squads/data/squad_api.dart';
 import 'package:nuvo/features/squads/presentation/crew_groups_screen.dart';
@@ -33,8 +35,9 @@ Map<String, dynamic> _g(
   'raceCount': races,
 };
 
-class _Repo implements SquadRepository {
-  _Repo(this.groups, this.detailJson, {this.deleted});
+class _Repo extends SquadRepository {
+  _Repo(this.groups, this.detailJson, {this.deleted})
+    : super(SquadApi(), SecureTokenStore(), AuthApi());
   final List<String>? deleted;
   final List<Map<String, dynamic>> groups;
   final Map<String, dynamic> Function(String id) detailJson;

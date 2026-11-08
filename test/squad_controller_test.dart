@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/network/conditional.dart';
-import 'package:nuvo/features/auth/data/auth_api.dart' show ApiException;
+import 'package:nuvo/features/auth/data/auth_api.dart';
+import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/squads/application/squad_controller.dart';
 import 'package:nuvo/features/squads/data/squad_api.dart';
 import 'package:nuvo/features/squads/presentation/crew_groups_screen.dart';
@@ -27,7 +28,8 @@ Map<String, dynamic> _detail(String id) => {
   'standings': [],
 };
 
-class _FakeRepo implements SquadRepository {
+class _FakeRepo extends SquadRepository {
+  _FakeRepo() : super(SquadApi(), SecureTokenStore(), AuthApi());
   Map<String, dynamic> listBody = _list([_g('a')]);
   String? listEtagOut = 'L1';
   String? detailEtagOut = 'D1';

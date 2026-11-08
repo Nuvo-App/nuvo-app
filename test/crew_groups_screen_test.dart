@@ -5,6 +5,8 @@ import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/network/conditional.dart';
 import 'package:nuvo/core/widgets/nuvo_back_header.dart';
 import 'package:nuvo/core/widgets/nuvo_icons.dart';
+import 'package:nuvo/features/auth/data/auth_api.dart';
+import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/squads/application/squad_controller.dart';
 import 'package:nuvo/features/squads/data/squad_api.dart';
 import 'package:nuvo/features/squads/presentation/crew_groups_screen.dart';
@@ -30,8 +32,8 @@ Map<String, dynamic> _s(String id, String name, int rank, int pts,
       'isYou': you,
     };
 
-class _Repo implements SquadRepository {
-  _Repo(this.groups);
+class _Repo extends SquadRepository {
+  _Repo(this.groups) : super(SquadApi(), SecureTokenStore(), AuthApi());
   final List<Map<String, dynamic>> groups;
 
   @override
