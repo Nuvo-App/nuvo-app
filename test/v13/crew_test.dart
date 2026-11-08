@@ -536,7 +536,12 @@ void main() {
           builder: (_, s) => _Probe('u:${s.pathParameters['id']}'),
         ),
         GoRoute(path: '/scan', builder: (_, _) => const _Probe('scan')),
-        GoRoute(path: '/my-nuvo', builder: (_, _) => const _Probe('my-nuvo')),
+        GoRoute(
+          path: '/my-nuvo',
+          builder: (_, state) => _Probe(
+            state.uri.queryParameters['tab'] == 'scan' ? 'scan' : 'my-nuvo',
+          ),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -617,7 +622,12 @@ void main() {
             'new:${s.extra is RaceCreatePrefill ? (s.extra! as RaceCreatePrefill).crewId : 'none'}',
           ),
         ),
-        GoRoute(path: '/my-nuvo', builder: (_, _) => const _Probe('my-nuvo')),
+        GoRoute(
+          path: '/my-nuvo',
+          builder: (_, state) => _Probe(
+            state.uri.queryParameters['tab'] == 'scan' ? 'scan' : 'my-nuvo',
+          ),
+        ),
         GoRoute(
           path: '/u/:id',
           builder: (_, s) => _Probe('u:${s.pathParameters['id']}'),

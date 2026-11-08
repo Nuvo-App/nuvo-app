@@ -20,4 +20,4 @@ void openPerson(BuildContext context, WidgetRef ref, String userId) {
 /// "Add friend" from the Crew tab — the scan half of My Nuvo code. Today the
 /// camera scanner is its own route; when the segmented My Nuvo screen lands
 /// (S7) this flips to '/my-nuvo?tab=scan' in one place.
-void openScan(BuildContext context) => context.push('/scan');
+void openScan(BuildContext context) => context.push('/my-nuvo?tab=scan');

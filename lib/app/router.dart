@@ -7,6 +7,8 @@
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
 import '../core/config/v13.dart';
+import '../features/social/presentation/v13/crew_tab_v13_screen.dart';
+import '../features/squads/presentation/v13/crew_page_v13_screen.dart';
 import '../features/profile/presentation/v13/badges_v13_screen.dart';
 import '../features/profile/presentation/v13/edit_profile_v13_screen.dart';
 import '../features/profile/presentation/v13/my_nuvo_code_v13_screen.dart';
@@ -126,6 +128,8 @@ Widget? _v13TabScreenFor(String path) => switch (path) {
   '/arena' => const ArenaScreenV13(),
   // v13: compete (S5)
   '/compete' => const CompeteV13Screen(),
+  // v13: crew (S6) — the Crew tab keeps the /pass route
+  '/pass' => const CrewTabV13Screen(),
   // v13: profile (S7)
   '/profile' => const ProfileV13Screen(),
   _ => null,
@@ -219,7 +223,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/crews/:id',
         pageBuilder: (_, state) => _authPage(
           state,
-          CrewGroupDetailScreen(groupId: state.pathParameters['id']!),
+          kNuvoV13
+              ? CrewPageV13Screen(crewId: state.pathParameters['id']!)
+              : CrewGroupDetailScreen(groupId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(

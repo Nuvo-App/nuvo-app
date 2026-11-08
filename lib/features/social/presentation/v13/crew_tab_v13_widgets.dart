@@ -536,7 +536,11 @@ class _CheerChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('🔥', style: V13.caption),
+            Icon(
+              Icons.local_fire_department_rounded,
+              size: 16,
+              color: cheered ? V13.coral : V13.muted,
+            ),
             if (count > 0) ...[
               const SizedBox(width: 4),
               Text(
