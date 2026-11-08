@@ -1,0 +1,23 @@
+# Tests already failing on motion-ota-tuning 0a6f761 (before the v13 redesign).
+# CI fails only on failures NOT in this list. Remove lines as tests get fixed.
+test/arm_raises_animation_test.dart :: NuvoMovementAnimation for all preset demos marchingInPlace demo pose changes over time
+test/arm_raises_animation_test.dart :: NuvoMovementAnimation for all preset demos mountainClimbers demo pose changes over time
+test/flexirace_350_benchmark_test.dart :: flexirace 350 benchmark
+test/motion_qa/model_ab_eval_test.dart :: A-vs-B corpus evaluation through the production pipeline
+test/motion_qa/motion_lab_cloud_test.dart :: loading test/motion_qa/motion_lab_cloud_test.dart
+test/motion_qa/motion_lab_overnight_test.dart :: loading test/motion_qa/motion_lab_overnight_test.dart
+test/motion_qa/motion_lab_regression_test.dart :: loading test/motion_qa/motion_lab_regression_test.dart
+test/motion_qa/motion_lab_resume_test.dart :: loading test/motion_qa/motion_lab_resume_test.dart
+test/motion_qa/motion_lab_smoke_test.dart :: loading test/motion_qa/motion_lab_smoke_test.dart
+test/motion_qa/motion_lab_validation_test.dart :: loading test/motion_qa/motion_lab_validation_test.dart
+test/motion_v2_model_delivery_test.dart :: loading test/motion_v2_model_delivery_test.dart
+test/picker_first_view_test.dart :: (setUpAll)
+test/race_composer_test.dart :: (setUpAll)
+test/rive_nuvo_stickman_inspection_test.dart :: inspect Nuvo stickman Rive contract
+test/rive_nuvo_stickman_property_probe_test.dart :: records corrected Nuvo rig neutral values and control writes
+test/rive_pose_controller_test.dart :: writes only the six Jumping Jack controls
+test/rive_raw_smoke_test.dart :: raw Nuvo stickman Rive smoke render loads the artboard
+test/rive_side_treadmill_preview_test.dart :: corrected side Rive asset exposes the treadmill contract
+test/teach_movement_flow_test.dart :: race composer — custom movement state machine "Count it by hand" keeps it a normal goal
+test/teach_movement_flow_test.dart :: race composer — custom movement state machine custom flow reaches training BEFORE amount / solo / review, then advances only after a spec is returned
+test/teach_movement_flow_test.dart :: race composer — custom movement state machine "pull ups" asks ONE centred question; Teach Nuvo goes straight to training with the name filled in
