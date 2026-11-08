@@ -549,6 +549,13 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
                         V13ProgressBar(
                           value: raceProgressPercent(race, me) / 100,
                         ),
+                        if (race.attemptLimit != null) ...[
+                          const SizedBox(height: V13.gapSm),
+                          Text(
+                            '${race.viewerContext?.attemptsUsed ?? 0} of ${race.attemptLimit} attempts used',
+                            style: V13.caption,
+                          ),
+                        ],
                         if (chase?.chaseCopy != null) ...[
                           const SizedBox(height: V13.gapSm),
                           Text(chase!.chaseCopy!, style: V13.caption),

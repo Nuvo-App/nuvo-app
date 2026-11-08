@@ -350,6 +350,34 @@ void main() {
     expect(find.text('+30 reps'), findsNothing);
   });
 
+  testWidgets('test_gapOC6_attempt_limit_visible_in_ui', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(
+          races: [
+            _race(
+              format: 'timed_attempt',
+              scoringRule: 'maximum_attempt',
+              targetValue: null,
+              attemptDurationSeconds: 30,
+              attemptLimit: 5,
+              attemptsUsed: 2,
+            ),
+          ],
+        ),
+        home: const RaceDetailV13Screen(raceId: 'race-1'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The attempt budget was invisible — the racer now sees it next to
+    // their score.
+    expect(find.text('2 of 5 attempts used'), findsOneWidget);
+    expect(find.text('Most in 30s wins'), findsOneWidget);
+  });
+
   testWidgets('/race/:id/proof lands on Race detail with the sheet open', (
     tester,
   ) async {
