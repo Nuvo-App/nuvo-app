@@ -614,6 +614,8 @@ class RaceApi {
     String? targetUnit,
     String? proofMode,
     String? scoreDirection,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
   }) async {
     final body = <String, dynamic>{'title': title, 'goalType': goalType};
     if (description != null) body['description'] = description;
@@ -633,6 +635,10 @@ class RaceApi {
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;
     if (scoreDirection != null) body['scoreDirection'] = scoreDirection;
+    if (attemptDurationSeconds != null) {
+      body['attemptDurationSeconds'] = attemptDurationSeconds;
+    }
+    if (attemptLimit != null) body['attemptLimit'] = attemptLimit;
     final json = await _post('/races', token, body);
     return Race.fromJson(jMap(json['race']) ?? const {});
   }

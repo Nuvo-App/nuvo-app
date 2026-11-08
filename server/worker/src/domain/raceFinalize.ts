@@ -100,7 +100,19 @@ export function rulesLocked(input: {
 }
 
 /** Sort direction for a race: 'higher' (most/best) or 'lower' (fastest). */
-export function scoreDirectionFor(race: { score_direction?: string | null }): 'higher' | 'lower' {
+export function scoreDirectionFor(race: {
+  score_direction?: string | null;
+  scoring_rule?: string | null;
+  format?: string | null;
+  race_type?: string | null;
+}): 'higher' | 'lower' {
+  // 'lower' only has meaning on attempt scoring (golf-style "lowest wins").
+  // A cumulative-sum leaderboard always ranks "most wins" — a lower
+  // direction stored there silently inverts it, so coerce on every read.
+  const fmt = race.format ?? race.race_type;
+  const rule = race.scoring_rule ??
+    (fmt === 'best_attempt' || fmt === 'timed_attempt' ? 'maximum_attempt' : fmt ? 'cumulative_sum' : null);
+  if (rule === 'cumulative_sum') return 'higher';
   return race.score_direction === 'lower' ? 'lower' : 'higher';
 }
 

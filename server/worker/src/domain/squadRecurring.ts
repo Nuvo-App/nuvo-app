@@ -387,9 +387,9 @@ async function spawnRecurringRace(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
            target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
            attempt_limit, verification_method, timezone, recurrence, status, visibility,
-           start_at, end_at, score_direction, proof_review_mode, created_at, updated_at)
+           start_at, end_at, score_direction, proof_review_mode, rules_version, created_at, updated_at)
          VALUES (?, ?, ?, NULL, ?, NULL, 'manual', ?, ?, ?, ?, ?, 'cumulative_sum', NULL, NULL, 'manual',
-           'UTC', 'weekly', 'active', ?, NULL, ?, 'higher', 'auto_accept',
+           'UTC', 'weekly', 'active', ?, NULL, ?, 'higher', 'auto_accept', 0,
            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       )
       .bind(

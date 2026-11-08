@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/domain/race_mode_semantics.dart';
 import 'package:nuvo/features/races/domain/race_name_interpreter.dart';
 
 void main() {
@@ -153,6 +154,147 @@ void main() {
       expect(payload['finishLineAt'], deadline);
       expect(payload['attemptDurationSeconds'], 60);
       expect(payload['attemptLimit'], 3);
+    });
+
+    test('test_gap13_manual_timed_draft_clamps', () {
+      // Interpreted manual goals can't be attempt formats — there is no
+      // camera attempt. They clamp to Most total, keeping a finish line.
+      final timed = draftFromIdea('Most cartwheels in 30 seconds')!;
+      expect(timed.isManual, isTrue);
+      expect(timed.format, RaceFormat.mostInWindow);
+
+      final best = draftFromIdea('Lowest golf score')!;
+      expect(best.isManual, isTrue);
+      expect(best.format.isAttemptBased, isFalse);
+
+      // A deadline survives the clamp — a finish line is never dropped.
+      final deadline = draftFromIdea('Most books by Friday')!;
+      expect(deadline.isManual, isTrue);
+      expect(deadline.format, RaceFormat.mostInWindow);
+      expect(deadline.finishLineAt, isNotNull);
+
+      // The merge path clamps too: typing an attempt-shaped name while on
+      // a manual draft must not leave an attempt format standing.
+      var d = RaceDraft(
+        title: 'x',
+        activity: motionActivityDefinitions.first,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 1,
+        goalKind: RaceGoalKind.manual,
+        manualGoalName: 'Read',
+        manualUnit: 'pages',
+      );
+      d = mergeRaceNameInterpretation(
+        d,
+        interpretRaceName('Most cartwheels in 30 seconds'),
+      );
+      expect(d.isManual, isTrue);
+      expect(d.format, RaceFormat.mostInWindow);
+
+      // Preset activities keep every format — clamping is manual-only.
+      final preset = draftFromIdea('Most jumping jacks in 30 seconds')!;
+      expect(preset.isManual, isFalse);
+      expect(preset.format, RaceFormat.timedAttempt);
+    });
+
+    test('test_gapN11_deadline_modes_require_finish_line', () {
+      final base = draftFromIdea('First to 100 pushups')!;
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+
+      // First to stays finish-line free — still valid with none set.
+      expect(base.finishLineAt, isNull);
+      expect(base.isValidToCreate, isTrue);
+
+      for (final format in [
+        RaceFormat.mostInWindow,
+        RaceFormat.bestAttempt,
+        RaceFormat.timedAttempt,
+      ]) {
+        final noLine = base.copyWith(format: format);
+        expect(
+          noLine.isValidToCreate,
+          isFalse,
+          reason: '$format without a finish line',
+        );
+        final withLine = noLine.copyWith(
+          finishLineAt: deadline,
+          attemptDurationSeconds:
+              format == RaceFormat.timedAttempt ? 60 : null,
+        );
+        expect(
+          withLine.isValidToCreate,
+          isTrue,
+          reason: '$format with a finish line',
+        );
+      }
+    });
+
+    test('test_gapN11_review_copy_per_mode', () {
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+      final base = draftFromIdea('First to 100 pushups')!;
+      final statements = <RaceFormat, String>{};
+      statements[RaceFormat.firstToGoal] = base.winStatement;
+      statements[RaceFormat.mostInWindow] = base
+          .copyWith(format: RaceFormat.mostInWindow, finishLineAt: deadline)
+          .winStatement;
+      statements[RaceFormat.bestAttempt] = base
+          .copyWith(format: RaceFormat.bestAttempt, finishLineAt: deadline)
+          .winStatement;
+      statements[RaceFormat.timedAttempt] = base
+          .copyWith(
+            format: RaceFormat.timedAttempt,
+            finishLineAt: deadline,
+            attemptDurationSeconds: 30,
+          )
+          .winStatement;
+
+      // Every mode wins a different way — the review page must say so.
+      expect(statements.values.toSet(), hasLength(4));
+      expect(statements[RaceFormat.firstToGoal], contains('First to'));
+      expect(
+        statements[RaceFormat.mostInWindow],
+        contains('Highest total'),
+      );
+      expect(
+        statements[RaceFormat.bestAttempt],
+        contains('Best single attempt'),
+      );
+      expect(statements[RaceFormat.timedAttempt], contains('30s'));
+
+      // Direction is part of the rule for attempt formats.
+      final lowerBest = base
+          .copyWith(
+            format: RaceFormat.bestAttempt,
+            finishLineAt: deadline,
+            scoreDirection: 'lower',
+          )
+          .winStatement;
+      expect(lowerBest, contains('Lowest'));
+      final lowerTimed = base
+          .copyWith(
+            format: RaceFormat.timedAttempt,
+            finishLineAt: deadline,
+            attemptDurationSeconds: 30,
+            scoreDirection: 'lower',
+          )
+          .winStatement;
+      expect(lowerTimed, contains('Least'));
+      expect(lowerTimed, contains('30s'));
+    });
+
+    test('test_gap5_timed_battle_without_duration_invalid', () {
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+      final battle = draftFromIdea('First to 100 pushups')!.copyWith(
+        format: RaceFormat.timedAttempt,
+        finishLineAt: deadline,
+      );
+      expect(battle.attemptDurationSeconds, isNull);
+      expect(battle.isValidToCreate, isFalse);
+      expect(
+        battle.copyWith(attemptDurationSeconds: 30).isValidToCreate,
+        isTrue,
+      );
     });
 
     test('clearTiming resets deadline + attempt fields', () {

@@ -22,9 +22,11 @@ import {
   configFromBody,
   customConfigFromBody,
   customRepRateImplausible,
+  formatNeedsFinishLine,
   manualConfigFromBody,
   validateRaceWindow,
   registryConfigFromBody,
+  rulesVersionFromBody,
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission, maxSubmissionValue } from '../domain/raceScoring';
@@ -54,15 +56,17 @@ import { computeViewerContext } from '../domain/raceContext';
 import { effectiveTargetValue } from '../domain/raceTarget';
 import {
   attemptsUsed,
+  bindableAttemptAtTime,
   bindableOpenAttempt,
+  cancelAttempt,
   closeAttempt,
   formatUsesAttempts,
   openAttempt,
+  type RaceAttemptRow,
 } from '../domain/raceAttempts';
 import { recordPersonalBestIfImproved, reconcilePersonalBest } from '../domain/raceBests';
 import { castProofVote, VETO_REASON_SET, type VetoReason } from '../domain/proofVeto';
 import { reconcileProgression } from '../domain/progression';
-import { raceInviteAllowed } from '../domain/profilePrefs';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
@@ -828,6 +832,7 @@ function shapeRaceResponse(
     rules: '',
     proofRequirement,
     proofReviewMode: race.proof_review_mode ?? 'auto_accept',
+    rulesVersion: race.rules_version ?? 0,
     visibility: race.visibility,
     // The invite code is insider data — returning it to a non-member would
     // hand any signed-in user the key to join the race.
@@ -1495,6 +1500,7 @@ racesRouter.post('/', async (c) => {
 
   const raceTypeRaw = typeof body.goalType === 'string' ? body.goalType : 'manual';
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
+  const rulesVersion = rulesVersionFromBody(body);
   const customConfig = customConfigFromBody(body);
   if (customConfig && 'error' in customConfig) {
     logCreateRejected(c, userId, 'custom', customConfig.error, body);
@@ -1519,10 +1525,12 @@ racesRouter.post('/', async (c) => {
     // a safe registry shape, look the activity up in the motion registry and
     // build the config from its published metric/format bounds. Only a
     // supported activity with a live stable pointer can be raced.
+    // When the catalog knows the ID its validation error is authoritative —
+    // the registry must not second-guess a request-level rejection.
     const looseId = normalizeActivityIdLoose(
       stringOrNull(body.activityId) ?? stringOrNull(body.activity_id) ?? stringOrNull(body.aiActivityType),
     );
-    const registryActivity = looseId
+    const registryActivity = looseId && !activityForId(looseId)
       ? await readRegistryActivity(c.env.DB, looseId)
       : null;
     if (registryActivity &&
@@ -1582,8 +1590,13 @@ racesRouter.post('/', async (c) => {
   const raceVerificationMethod = custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType);
   const raceTimezone = custom?.timezone ?? manual?.timezone ?? config?.timezone ?? 'America/New_York';
   const raceRecurrence = custom?.recurrence ?? manual?.recurrence ?? config?.recurrence ?? 'none';
-  // 'lower' = fastest/lowest verified value wins (time-attack races).
-  const raceScoreDirection = body.scoreDirection === 'lower' || body.score_direction === 'lower' ? 'lower' : 'higher';
+  // 'lower' = fastest/lowest verified value wins (attempt/golf races).
+  // A cumulative-sum leaderboard never ranks "lowest wins" — coerce at
+  // write so the stored direction always matches how the race scores.
+  const raceScoreDirection = scoreDirectionFor({
+    score_direction: body.scoreDirection === 'lower' || body.score_direction === 'lower' ? 'lower' : 'higher',
+    scoring_rule: raceScoringRule,
+  });
   // 'peer_review' holds manual submissions pending until the creator accepts;
   // 'auto_accept' (default) scores immediately, rejectable afterwards.
   const raceProofReviewMode = body.proofReviewMode === 'peer_review' || body.proof_review_mode === 'peer_review'
@@ -1615,9 +1628,9 @@ racesRouter.post('/', async (c) => {
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
           attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
+          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1646,13 +1659,14 @@ racesRouter.post('/', async (c) => {
         endAt,
         raceScoreDirection,
         raceProofReviewMode,
+        rulesVersion,
       )
     : c.env.DB.prepare(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
+          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1677,6 +1691,7 @@ racesRouter.post('/', async (c) => {
         endAt,
         raceScoreDirection,
         raceProofReviewMode,
+        rulesVersion,
       );
 
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
@@ -1842,7 +1857,9 @@ racesRouter.patch('/:id', async (c) => {
   if (body.startLineAt !== undefined || body.finishLineAt !== undefined) {
     const nextStart = body.startLineAt !== undefined ? stringOrNull(body.startLineAt) ?? null : race.start_at;
     const nextEnd = body.finishLineAt !== undefined ? stringOrNull(body.finishLineAt) ?? null : race.end_at;
-    if ((race.format ?? race.race_type) === 'most_in_window' && !nextEnd) {
+    if (formatNeedsFinishLine(race.format ?? race.race_type) && !nextEnd) {
+      // Every deadline-decided format needs its finish line — clearing it
+      // would leave a race that can never finish.
       return c.json(badRequest('A finish line is required.'), 400);
     }
     const checked = validateRaceWindow(race.format ?? race.race_type, nextStart, nextEnd);
@@ -1867,7 +1884,11 @@ racesRouter.patch('/:id', async (c) => {
     }
   }
 
-  if (typeof body.goalType === 'string') {
+  if (typeof body.goalType === 'string' && race.race_type !== race.format) {
+    // Legacy goalType maps onto the legacy race_type column only — it may
+    // change a race whose race_type still carries the old vocabulary. When
+    // race_type already mirrors the canonical format (v2 row), a settings
+    // PATCH must not overwrite it.
     updates.push('race_type = ?');
     values.push(mapGoalTypeToRaceType(body.goalType));
   }
@@ -2007,11 +2028,6 @@ racesRouter.post('/:id/participants', async (c) => {
   if (await isBlockedEitherWay(c.env.DB, userId, targetUserId)) {
     return c.json(badRequest('You cannot add this user'), 403);
   }
-  // "Who can race me": a member who only accepts race invites from friends
-  // can't be added by anyone else.
-  if (!(await raceInviteAllowed(c.env.DB, userId, targetUserId))) {
-    return c.json(badRequest('This member only races with friends'), 403);
-  }
 
   // An explicit creator add is the one path that may bring back a member the
   // creator removed earlier.
@@ -2057,11 +2073,6 @@ racesRouter.post('/:id/members', async (c) => {
   if (!target) return c.json(badRequest('User not found'), 404);
   if (await isBlockedEitherWay(c.env.DB, userId, targetUserId)) {
     return c.json(badRequest('You cannot add this user'), 403);
-  }
-  // "Who can race me": a member who only accepts race invites from friends
-  // can't be added by anyone else.
-  if (!(await raceInviteAllowed(c.env.DB, userId, targetUserId))) {
-    return c.json(badRequest('This member only races with friends'), 403);
   }
 
   // An explicit creator add is the one path that may bring back a member the
@@ -2245,11 +2256,24 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
   if (isAiMotion && !clientSubmissionId) return c.json(badRequest('clientSubmissionId is required'), 400);
+  let reviveRejectedId: string | null = null;
   if (clientSubmissionId) {
     const existing = await c.env.DB.prepare(
       'SELECT * FROM move_logs WHERE race_id = ? AND user_id = ? AND client_submission_id = ?'
     ).bind(race.id, userId, clientSubmissionId).first<MoveLogRow>();
-    if (existing) {
+    if (
+      existing?.status === 'rejected' &&
+      !existing.vetoed_at &&
+      (existing.summary ?? '').startsWith('No open attempt')
+    ) {
+      // Only a proof rejected for the missing-attempt reason may be revived
+      // (rows written before the attempt check moved ahead of the INSERT).
+      // A proof rejected by review, veto or verification stays rejected.
+      // A rejected row is not a committed submission — the same client id
+      // retried means "try this submission again". The row is revived in
+      // place below (the unique index means it can never be re-inserted).
+      reviveRejectedId = existing.id;
+    } else if (existing) {
       const updated = await getRace(c.env.DB, race.id);
       const result: SubmissionResult | undefined = existing.status === 'verified'
         ? {
@@ -2311,8 +2335,10 @@ racesRouter.post('/:id/proof', async (c) => {
       'FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
     ).bind(verificationSessionId, userId, race.id).first<ProofSessionRow>();
     let session = await readProofSession();
+    // A rejected proof must not consume the session: only committed rows
+    // (verified / pending) count as the session's proof.
     const existingLog = await c.env.DB.prepare(
-      "SELECT id, client_submission_id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
+      "SELECT id, client_submission_id FROM move_logs WHERE race_id = ? AND status != 'rejected' AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
     ).bind(race.id, verificationSessionId).first<{ id: string; client_submission_id: string | null }>();
     const inlineResult = parseInlineSessionResult(body.sessionResult);
     const decide = (s: ProofSessionRow | null) => decideSessionAction({
@@ -2460,43 +2486,90 @@ racesRouter.post('/:id/proof', async (c) => {
         : `Nuvo detected ${detectedValue ?? increment} clean reps out of ${targetValue ?? 'the target'}.`)
       : 'Manual proof accepted.');
 
-  const moveId = generateId();
-  await c.env.DB.prepare(
-    `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, activity_id, metric, value, unit, status, summary,
-      media_object_key, validator_version, duration_ms, metadata_json, client_submission_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-  ).bind(
-    moveId,
-    race.id,
-    userId,
-    isAiMotion ? 'movecheck' : 'manual',
-    activityType,
-    normalizeActivityIdLoose(activityType) ?? null,
-    metric ?? scoring.metric,
-    increment,
-    race.target_unit,
-    moveStatus,
-    summary,
-    mediaObjectKey,
-    validatorVersion,
-    durationMs,
-    metadata,
-    clientSubmissionId,
-  ).run();
+  // Attempt races bind a verified score to a declared open attempt. The
+  // check runs BEFORE the move row is written: a no-attempt failure must
+  // not consume the verification session, the evidence, or the client
+  // submission id — every retry surface stays fresh.
+  let boundAttempt: RaceAttemptRow | null = null;
+  if (moveStatus === 'verified' && formatUsesAttempts(scoring.format)) {
+    boundAttempt = await bindableOpenAttempt(c.env.DB, race, userId);
+    if (!boundAttempt) {
+      // A verified proof arriving with no live attempt opens one on the
+      // submitter's behalf — always for best_attempt; for timed_attempt only
+      // under legacy rules (rules_version >= 1 requires the explicit start).
+      const mayAutoOpen =
+        scoring.format === 'best_attempt' ||
+        (scoring.format === 'timed_attempt' && (race.rules_version ?? 0) < 1);
+      if (mayAutoOpen) {
+        const opened = await openAttempt(c.env.DB, race, userId, null);
+        if (opened.ok && opened.attempt) {
+          boundAttempt = opened.attempt;
+          await recordRaceEvents(c.env.DB, race.id, [
+            {
+              type: 'attempt_started',
+              actorUserId: userId,
+              subjectUserId: userId,
+              payload: { attemptId: opened.attempt.id, attemptIndex: opened.attempt.attempt_index },
+            },
+          ]);
+        }
+      }
+    }
+    if (!boundAttempt) {
+      return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
+    }
+  }
+
+  const moveId = reviveRejectedId ?? generateId();
+  if (reviveRejectedId) {
+    // Retry of a rejected submission — update the row in place (unique index
+    // on client_submission_id means re-insert would fail).
+    await c.env.DB.prepare(
+      `UPDATE move_logs SET source = ?, movement_type = ?, activity_id = ?, metric = ?, value = ?, unit = ?,
+         status = ?, summary = ?, media_object_key = ?, validator_version = ?, duration_ms = ?, metadata_json = ?
+       WHERE id = ?`
+    ).bind(
+      isAiMotion ? 'movecheck' : 'manual',
+      activityType,
+      normalizeActivityIdLoose(activityType) ?? null,
+      metric ?? scoring.metric,
+      increment,
+      race.target_unit,
+      moveStatus,
+      summary,
+      mediaObjectKey,
+      validatorVersion,
+      durationMs,
+      metadata,
+      reviveRejectedId,
+    ).run();
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, activity_id, metric, value, unit, status, summary,
+        media_object_key, validator_version, duration_ms, metadata_json, client_submission_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).bind(
+      moveId,
+      race.id,
+      userId,
+      isAiMotion ? 'movecheck' : 'manual',
+      activityType,
+      normalizeActivityIdLoose(activityType) ?? null,
+      metric ?? scoring.metric,
+      increment,
+      race.target_unit,
+      moveStatus,
+      summary,
+      mediaObjectKey,
+      validatorVersion,
+      durationMs,
+      metadata,
+      clientSubmissionId,
+    ).run();
+  }
 
   let result: ScoredSubmission | undefined;
   if (moveStatus === 'verified') {
-    // Attempt races require a declared attempt. Auto-bind: the client opens
-    // an attempt, then submits proof through this same unchanged payload —
-    // the open attempt claims the verified score (duration enforced in
-    // bindableOpenAttempt via deadline + grace).
-    const usesAttempts = formatUsesAttempts(scoring.format);
-    const boundAttempt = usesAttempts ? await bindableOpenAttempt(c.env.DB, race, userId) : null;
-    if (usesAttempts && !boundAttempt) {
-      await c.env.DB.prepare('UPDATE move_logs SET status = ?, summary = ? WHERE id = ?')
-        .bind('rejected', 'No open attempt — start an attempt first.', moveId).run();
-      return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
-    }
     try {
       result = await applyMoveProgress(c.env.DB, race, userId, increment, moveId);
       if (race.status === 'completed' && eligibility === 'grace') {
@@ -2776,16 +2849,17 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
     }
   }
 
-  // Attempt-format races bind a score to a declared open attempt — same
-  // contract as direct submission (submit opens the attempt; pending proofs
-  // keep it open until review closes it). Validate BEFORE the status write
-  // so a failed accept never leaves a verified-but-unscored proof.
+  // Attempt-format races bind a score to a declared attempt — same contract
+  // as direct submission, except the proof was produced earlier: bind by
+  // WHEN it was produced (move.created_at inside the attempt's window), not
+  // by what is open at review time. Validate BEFORE the status write so a
+  // failed accept never leaves a verified-but-unscored proof.
   const scoring = raceScoringConfigFromRow(race);
   const needsAttempt = newStatus === 'verified' &&
     scoring != null &&
     formatUsesAttempts(scoring.format);
   const boundAttempt = needsAttempt
-    ? await bindableOpenAttempt(c.env.DB, race, move.user_id)
+    ? await bindableAttemptAtTime(c.env.DB, race, move.user_id, move.created_at)
     : null;
   if (needsAttempt && !boundAttempt) {
     return c.json(badRequest('No open attempt remains to accept this score.'), 400);
@@ -2796,9 +2870,63 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
   ).bind(newStatus, stringOrNull(body.verificationSummary) ?? move.summary, move.id, race.id).run();
 
   if (newStatus === 'verified') {
-    await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
+    const result = await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
     if (boundAttempt) {
       await closeAttempt(c.env.DB, boundAttempt.id, move.value ?? 0, move.id);
+      // Same attempt bookkeeping as the direct /proof path: the close-out
+      // event plus any personal best it earned.
+      const attemptEvents: RaceEventInput[] = [
+        {
+          type: 'attempt_completed',
+          actorUserId: move.user_id,
+          subjectUserId: move.user_id,
+          payload: {
+            attemptId: boundAttempt.id,
+            attemptIndex: boundAttempt.attempt_index,
+            score: move.value ?? 0,
+            durationSeconds: race.attempt_duration_seconds ?? null,
+          },
+        },
+      ];
+      const pb = await recordPersonalBestIfImproved(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
+      if (pb.improved) {
+        attemptEvents.push({
+          type: 'personal_best',
+          actorUserId: move.user_id,
+          subjectUserId: move.user_id,
+          moveLogId: move.id,
+          payload: { previousBest: pb.previousBest, newBest: pb.newBest, metric: race.metric ?? 'reps' },
+        });
+      }
+      await recordRaceEvents(c.env.DB, race.id, attemptEvents);
+    }
+
+    // Same notification fan-out as direct submission: applyMoveProgress
+    // already persisted the race events — publish the ones the policy maps
+    // to delivery (lead change, overtake, race finish).
+    if (
+      result.events.some(
+        (e) =>
+          e.type === 'lead_changed' ||
+          e.type === 'rank_changed' ||
+          e.type === 'race_finished',
+      )
+    ) {
+      const memberRows = await c.env.DB
+        .prepare(
+          `SELECT rm.user_id, COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name
+           FROM race_members rm LEFT JOIN profiles p ON p.user_id = rm.user_id
+           WHERE rm.race_id = ? AND rm.status = 'active'`,
+        )
+        .bind(race.id)
+        .all<{ user_id: string; display_name: string }>();
+      await notifyRaceEvents(
+        c.env,
+        (p) => c.executionCtx.waitUntil(p),
+        race,
+        result.events,
+        memberRows.results,
+      );
     }
   }
 
@@ -2983,6 +3111,41 @@ racesRouter.post('/:id/attempts', async (c) => {
   });
 });
 
+// DELETE /races/:id/attempts/:attemptId — cancel an open attempt. Only the
+// attempt's owner may cancel, and only while nothing is bound to it —
+// submitted (and already-expired) attempts are immutable. A cancelled
+// attempt does not count against the attempt limit; only submitted ones do.
+racesRouter.delete('/:id/attempts/:attemptId', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  const attempt = await c.env.DB
+    .prepare('SELECT * FROM race_attempts WHERE id = ? AND race_id = ?')
+    .bind(c.req.param('attemptId'), race.id)
+    .first<RaceAttemptRow>();
+  // One 404 for both "no such attempt" and "not yours" — don't leak rows.
+  if (!attempt || attempt.user_id !== userId) {
+    return c.json(badRequest('Attempt not found'), 404);
+  }
+  if (attempt.status !== 'open' || attempt.move_log_id) {
+    return c.json(badRequest('Only an open attempt with no submitted proof can be cancelled'), 400);
+  }
+
+  await cancelAttempt(c.env.DB, attempt.id);
+  const used = await attemptsUsed(c.env.DB, race.id, userId);
+  return c.json({
+    ok: true,
+    attempt: {
+      id: attempt.id,
+      attemptIndex: attempt.attempt_index,
+      status: 'cancelled',
+    },
+    attemptsUsed: used,
+    attemptsRemaining: race.attempt_limit != null ? Math.max(0, race.attempt_limit - used) : null,
+  });
+});
+
 // GET /races/:id/events — the durable domain log for this race. Feeds the
 // race-history surface and lets Crew/notifications consume transitions
 // without reverse-engineering race state.
@@ -3125,6 +3288,24 @@ racesRouter.post('/:id/rematch', async (c) => {
     return c.json({ ok: false, error: 'You must accept the Terms of Service before creating a race' }, 403);
   }
 
+  // A window/attempt race's rematch still needs a finish line — the format
+  // is decided there, so a NULL end would produce a race that never ends.
+  // Reuse the source window length when both boundaries exist; otherwise
+  // fall back to the same defaults creation applies. first_to_goal keeps
+  // its NULL end — it is decided by reaching the goal.
+  let rematchEnd: string | null = null;
+  const rematchFormat = (race.format ?? 'first_to_goal') as string;
+  if (formatNeedsFinishLine(rematchFormat)) {
+    if (race.start_at && race.end_at) {
+      const windowMs = new Date(race.end_at).getTime() - new Date(race.start_at).getTime();
+      if (windowMs > 0) rematchEnd = new Date(Date.now() + windowMs).toISOString();
+    }
+    if (!rematchEnd) {
+      const window = validateRaceWindow(rematchFormat, null, null, new Date());
+      rematchEnd = 'error' in window ? null : window.endsAt;
+    }
+  }
+
   const newRaceId = generateId();
   const personId = await ensurePersonId(c.env.DB, userId);
   await c.env.DB
@@ -3132,9 +3313,9 @@ racesRouter.post('/:id/rematch', async (c) => {
       `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
         target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
         attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, verifier_release_id,
+        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, rules_version, verifier_release_id,
         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(
       newRaceId,
@@ -3161,9 +3342,12 @@ racesRouter.post('/:id/rematch', async (c) => {
       'none', // rematch resets recurrence — the new race starts fresh
       race.visibility,
       null, // start line: the rematch begins when created
-      null, // deadlines are not carried over
+      rematchEnd,
       race.score_direction ?? 'higher',
       race.proof_review_mode ?? 'auto_accept',
+      // A rematch inherits the source race's rules revision — the
+      // competition contract is cloned verbatim.
+      race.rules_version ?? 0,
       race.verifier_release_id,
     )
     .run();
@@ -3185,10 +3369,6 @@ racesRouter.post('/:id/rematch', async (c) => {
     .bind(race.id, userId)
     .all<{ user_id: string }>();
   for (const row of roster.results) {
-    // A former racer who now only races friends isn't re-added by a
-    // non-friend's rematch — same skip treatment as a block, not a 403,
-    // so one friends-only member can't block the whole rematch.
-    if (!(await raceInviteAllowed(c.env.DB, userId, row.user_id))) continue;
     await ensureMember(c.env.DB, newRaceId, row.user_id);
     await ensureProgress(c.env.DB, newRaceId, row.user_id);
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {

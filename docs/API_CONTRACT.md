@@ -147,7 +147,7 @@ v13 fields (all additive, `null` when unset):
 - `bio` — free-text bio, up to 80 chars.
 - `favoriteMovementKey` — the member's favorite movement key, up to 40 chars.
 - `activityMapShared` — whether the member shares their activity map with other members (default `true`).
-- `raceInvitesFrom` — `"everyone"` (default) or `"friends"`. When `"friends"`, only a connected friend may add this member to a race; other add attempts return `403`.
+- `raceInvitesFrom` — `"everyone"` (default) or `"friends"`. Stored for old app builds only — it is never enforced; anyone can race anyone.
 
 ### POST /profile
 
@@ -386,6 +386,20 @@ Request body:
 }
 ```
 
+Race fields:
+
+- `rulesVersion` (or `rules_version`) — race rules revision: `0` legacy
+  (default), `1` strict rules. Any other value normalizes to `0`. Stored on
+  create, echoed as `rulesVersion` in every race response, and copied to
+  rematches. Not PATCH-able.
+- `format` may be `first_to_goal`, `most_in_window`, `best_attempt`, or
+  `timed_attempt`. Attempt formats accept `attemptLimit` and
+  `attemptDurationSeconds`. On `rulesVersion: 1`, `attemptDurationSeconds` is
+  required for `timed_attempt` (400 `"Attempt duration is required."` when
+  missing); on `0` a missing duration defaults to 60 seconds.
+- `scoreDirection: "lower"` is honored on attempt formats; races that score by
+  cumulative sum always rank "most wins".
+
 Response: race object with the same shape as `GET /races`.
 
 ### GET /races/:id
@@ -446,6 +460,13 @@ Update race settings (creator only).
 
 Request body: same fields as `POST /races`. Partial updates allowed.
 
+- `rulesVersion` is create-only and ignored here.
+- `finishLineAt: null` is rejected for formats decided at the finish line
+  (`most_in_window`, `best_attempt`, `timed_attempt`); `first_to_goal` races
+  may clear it.
+- `goalType` updates the legacy `race_type` only on legacy-vocabulary rows; a
+  race whose canonical `format` is set keeps its type.
+
 Response:
 
 ```json
@@ -484,6 +505,14 @@ Request body:
 }
 ```
 
+Attempt formats: a verified proof binds the racer's open attempt. If none is
+open, the Worker auto-opens one (recording the same `attempt_started` event as
+`POST /races/:id/attempts`) — always for `best_attempt`, and for
+`timed_attempt` only when the race's `rulesVersion` is `0`. Submission still
+400s when the attempt limit is reached or the race is not active. A proof
+rejected for no open attempt consumes nothing: the same verification session
+and `clientSubmissionId` may be retried once an attempt is open.
+
 Response:
 
 ```json
@@ -508,12 +537,62 @@ Request body:
 
 `verificationStatus` may be `accepted`, `rejected`, or `ai_verified`.
 
+On an attempt-format race, accepting a pending proof binds it to the attempt
+whose window contained the proof's submission time (attempt deadline plus a
+short grace, or the untimed attempt TTL); the attempt need not still be open at
+review time.
+
 Response:
 
 ```json
 {
   "ok": true,
   "race": { ... }
+}
+```
+
+### POST /races/:id/attempts
+
+Declare an attempt on a `best_attempt` / `timed_attempt` race (race members
+only). The next verified proof binds to the open attempt automatically.
+
+Request body (optional):
+
+```json
+{ "clientAttemptId": "uuid" }
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "attempt": { "id": "...", "attemptIndex": 1, "status": "open", "startedAt": "...", "deadlineAt": "..." },
+  "attemptsUsed": 0,
+  "attemptsRemaining": 3,
+  "serverTime": "..."
+}
+```
+
+Attempt accounting: `attemptsUsed` / the `attemptLimit` enforcement count
+**submitted** attempts only — a cancelled or expired-unused attempt frees its
+slot. A new open is refused while one is already live (`409`), so a racer can
+never hold two open attempts at once.
+
+### DELETE /races/:id/attempts/:attemptId
+
+Cancel an open attempt (attempt owner only). The attempt must still be
+`open` with no bound proof — submitted and expired attempts are immutable
+(`400`); another racer's attempt and unknown ids both return `404`.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "attempt": { "id": "...", "attemptIndex": 1, "status": "cancelled" },
+  "attemptsUsed": 0,
+  "attemptsRemaining": 3
 }
 ```
 
@@ -634,18 +713,9 @@ Request body:
 
 Response: `200` with the updated race object (same shape as `GET /races/:id`).
 
-**"Who can race me" gate:** every add-member path — this route,
-`/participants`, rematch fan-out, and crew race fan-out — checks the
-*target's* `raceInvitesFrom` pref. When the target has
-`raceInvitesFrom = "friends"` and the inviter is not a connected friend, the
-add returns `403`:
-
-```json
-{ "ok": false, "error": "This member only races with friends" }
-```
-
-Rematch fan-out silently skips ineligible members rather than failing the
-whole rematch. Existing block checks still apply on top of this gate.
+**"Who can race me":** the `raceInvitesFrom` profile pref still round-trips
+(old app builds may send or display it) but is never enforced — anyone can
+race anyone. Existing block checks still apply.
 
 ---
 

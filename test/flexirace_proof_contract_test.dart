@@ -92,7 +92,10 @@ void main() {
     test('lowest golf score stays lower-wins', () {
       final draft = draftFromIdea('Lowest golf score')!;
       expect(draft.scoreDirection, 'lower');
-      expect(draft.toCreatePayload()['scoreDirection'], 'lower');
+      // The draft keeps the direction, but a manual goal can only run
+      // non-attempt formats — and direction is an attempt-format rule, so
+      // it is not sent on the wire for this race.
+      expect(draft.toCreatePayload().containsKey('scoreDirection'), isFalse);
     });
   });
 }

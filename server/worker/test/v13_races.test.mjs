@@ -19,6 +19,7 @@ const SCHEMA = [
   readFileSync(new URL('migrations/0042_achievements.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0043_proof_votes.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0044_custom_verifier_seed.sql', root), 'utf8'),
+  readFileSync(new URL('migrations/0050_race_rules_version.sql', root), 'utf8'),
 ];
 
 // ── D1 adapter over node:sqlite (same shape as race_membership.test.mjs) ─────

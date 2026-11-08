@@ -208,6 +208,8 @@ class RaceRepository {
     String? targetUnit,
     String? proofMode,
     String? scoreDirection,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
   }) => _withRefresh(
     (token) => _api.createRace(
       token,
@@ -230,6 +232,8 @@ class RaceRepository {
       targetUnit: targetUnit,
       proofMode: proofMode,
       scoreDirection: scoreDirection,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
     ),
   );
 

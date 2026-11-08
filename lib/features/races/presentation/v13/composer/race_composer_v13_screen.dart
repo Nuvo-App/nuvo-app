@@ -157,6 +157,8 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       // The finish line the user picked — without this the server falls back
       // to its default window and the race page disagrees with step 4.
       finishLineAt: payload['finishLineAt'] as String?,
+      attemptDurationSeconds: payload['attemptDurationSeconds'] as int?,
+      attemptLimit: payload['attemptLimit'] as int?,
     );
   }
 
