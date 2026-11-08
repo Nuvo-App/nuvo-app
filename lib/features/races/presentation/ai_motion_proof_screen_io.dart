@@ -278,6 +278,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // just not shown?" from a device log.
   final _repEventLog = RepEventLog();
 
+  // Live encouragement — rotating copy pools keyed on phase, streak,
+  // elapsed time and milestone/new-best beats. Presentation only; a line
+  // can never touch the count.
+  final _encouragement = SessionEncouragement();
+  MotionProgressPhase? _lastHudPhase;
+  DateTime? _hudFlashUntil;
+  bool _newBestFlashed = false;
+
   /// Distance presentation (milestone spacing / pace) for this race's scale.
   DistancePresentationPolicy get _distancePolicy =>
       DistancePresentationPolicy.forTarget(_raceTarget);
@@ -296,11 +304,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak => _burst.isOnStreak;
 
-  String get _streakLabel {
-    if (_streakCount < 5) return 'Keep going';
-    if (_streakCount < 10) return 'Keep your streak!';
-    return 'On fire!';
-  }
+  String get _streakLabel => _encouragement.streakLine(_streakCount);
 
   /// Short decaying pulse used to thicken the skeleton the instant a rep lands.
   double get _skeletonGlow {
@@ -317,6 +321,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _targetCelebrationSeq = 0;
     _burst.reset();
     _repEventLog.clear();
+    _encouragement.reset();
+    _lastHudPhase = null;
+    _hudFlashUntil = null;
+    _newBestFlashed = false;
   }
 
   void _scheduleSkeletonExpiry() {
@@ -1187,6 +1195,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           HapticFeedback.lightImpact();
         }
       }
+      // Encouragement moments — a phase step flashes a milestone line,
+      // crossing the score-to-beat flashes a new-best line. Presentation
+      // only; it never feeds back into recognition.
+      _updateEncouragementMoments();
       // Finish line reached — fire once per recording, and only in a mode
       // that has a finish line. Attempt races never "reach" one.
       if (!_targetCelebrated && _targetReachedNow) {
@@ -1246,6 +1258,31 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       await _stopImageStream();
     } finally {
       _isProcessingVerificationFrame = false;
+    }
+  }
+
+  /// Milestone + new-best beats for the recording HUD's encouragement
+  /// line. A phase step IS the milestone; [VerifierRaceContext]'s
+  /// [VerifierRaceContext.beatsPersonalBest] is the new best. Each beat
+  /// hands the HUD one line to hold for a few seconds, then the phase
+  /// line comes back.
+  void _updateEncouragementMoments() {
+    final phase = motionProgressPhase(
+      current: _displayedRaceProgress,
+      target: _raceTarget,
+    );
+    final previous = _lastHudPhase;
+    _lastHudPhase = phase;
+    if (previous != null && phase != previous) {
+      _encouragement.triggerMilestone();
+      _hudFlashUntil = DateTime.now().add(const Duration(seconds: 4));
+      return;
+    }
+    if (!_newBestFlashed &&
+        (_raceContext?.beatsPersonalBest(_sessionContribution) ?? false)) {
+      _newBestFlashed = true;
+      _encouragement.triggerNewBest();
+      _hudFlashUntil = DateTime.now().add(const Duration(seconds: 4));
     }
   }
 
@@ -2999,10 +3036,22 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final showsPace =
         _isDistanceRace &&
         motionProgressShowsPace(MotionMeasurementType.distance, _raceTarget);
-    final phaseLine = motionProgressPhase(
+    final phase = motionProgressPhase(
       current: _displayedRaceProgress,
       target: _raceTarget,
-    ).label;
+    );
+    // A milestone/new-best beat holds the line for its flash window;
+    // otherwise the phase pool's rotating line shows.
+    final flashActive =
+        _hudFlashUntil != null && DateTime.now().isBefore(_hudFlashUntil!);
+    final phaseLine = flashActive
+        ? _encouragement.flashLine
+        : _encouragement.phaseLine(
+            phase,
+            elapsedSeconds: _elapsed.inSeconds,
+            rotationTick:
+                _elapsed.inSeconds ~/ SessionEncouragement.rotationSeconds,
+          );
     final effort = [
       if (showsPace) ?_paceLabel,
       if (showsPace) ?_intensityLabel,

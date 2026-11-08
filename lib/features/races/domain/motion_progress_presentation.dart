@@ -140,3 +140,157 @@ extension MotionProgressPhaseLabel on MotionProgressPhase {
         MotionProgressPhase.finish => 'FINISH',
       };
 }
+
+/// Live encouragement copy during a take. Copy pools are keyed on the
+/// moment — progress phase, elapsed time, streak depth, milestone and
+/// new-best beats — and every pool rotates through its lines without
+/// repeating the one it just showed, so a take keeps talking like Nuvo
+/// instead of looping a single string.
+///
+/// Deterministic on purpose: each pool serves its lines in order, so the
+/// rotation is unit-testable and never random-dependent. Lines that are
+/// moment flashes (milestone / new best) are drawn once per beat via
+/// [triggerMilestone] / [triggerNewBest] and read through [flashLine].
+class SessionEncouragement {
+  /// A keep-going take switches to the long-take voice once it has run
+  /// this long without reaching halfway — elapsed time picks the pool.
+  static const lateElapsedSeconds = 45;
+
+  /// The phase line redraws on this cadence — the recording HUD ticks
+  /// once a second, so the line rotates every [rotationSeconds] ticks.
+  static const rotationSeconds = 8;
+
+  // Phase pools — the HUD's status line, uppercase like the fixed labels
+  // they replace.
+  static const readyPool = ['READY', 'SET AT THE START LINE', 'IN POSITION'];
+  static const keepGoingPool = [
+    'KEEP GOING',
+    'EVERY REP BANKS',
+    'STAY WITH IT',
+    'STACK THE REPS',
+  ];
+  static const keepGoingLatePool = [
+    'STILL WITH IT',
+    'STEADY — REPS COUNT THE SAME',
+    'LONG TAKE — KEEP MOVING',
+  ];
+  static const halfwayPool = [
+    'HALFWAY',
+    'HALF THE PUSH DONE',
+    'MIDDLE OF THE RACE',
+  ];
+  static const almostTherePool = [
+    'ALMOST THERE',
+    'THE FINISH LINE IS CLOSE',
+    'LAST STRETCH',
+  ];
+  static const finishPool = ['FINISH', 'FINISH LINE CROSSED', 'GOAL REACHED'];
+
+  // Streak pools — the badge inside the rep flash, title case like the
+  // lines it replaces. Depth picks the band.
+  static const streakPool = [
+    'Keep going',
+    'Reps landing',
+    "That's a run",
+    'Building a streak',
+  ];
+  static const streakHotPool = [
+    'Keep your streak!',
+    'Rolling now',
+    'Streak alive',
+  ];
+  static const streakOnFirePool = ['On fire!', 'Unstoppable', 'Double digits'];
+
+  // Moment flashes — a crossed checkpoint or a new best holds the HUD line
+  // for a beat before the phase line returns.
+  static const milestonePool = [
+    'CHECKPOINT BANKED',
+    'ANOTHER MARK DOWN',
+    'PROGRESS LANDING',
+  ];
+  static const newBestPool = [
+    'NEW BEST — KEEP ROLLING',
+    'PAST YOUR BEST',
+    "THAT'S A NEW BEST",
+  ];
+
+  static const _phasePools = {
+    MotionProgressPhase.ready: readyPool,
+    MotionProgressPhase.keepGoing: keepGoingPool,
+    MotionProgressPhase.halfway: halfwayPool,
+    MotionProgressPhase.almostThere: almostTherePool,
+    MotionProgressPhase.finish: finishPool,
+  };
+
+  final Map<String, int> _cursors = {};
+  String _phaseKey = '';
+  int _phaseTick = -1;
+  String _phaseLine = readyPool.first;
+  int _streak = -1;
+  String _streakLine = streakPool.first;
+  String _flashLine = '';
+
+  /// The next line in a pool — round-robin, so consecutive draws never
+  /// repeat while the pool holds more than one line.
+  String _next(String key, List<String> pool) {
+    final index = (_cursors[key] ?? 0) % pool.length;
+    _cursors[key] = index + 1;
+    return pool[index];
+  }
+
+  /// The HUD's phase line. Stable while [rotationTick] holds (one tick is
+  /// [rotationSeconds] of take time); a new tick or a new phase draws the
+  /// pool's next line — never the one just shown.
+  String phaseLine(
+    MotionProgressPhase phase, {
+    int elapsedSeconds = 0,
+    int rotationTick = 0,
+  }) {
+    final late =
+        phase == MotionProgressPhase.keepGoing &&
+        elapsedSeconds >= lateElapsedSeconds;
+    final key = late ? 'keepGoingLate' : 'phase:${phase.name}';
+    final pool = late ? keepGoingLatePool : _phasePools[phase]!;
+    if (key != _phaseKey || rotationTick != _phaseTick) {
+      _phaseKey = key;
+      _phaseTick = rotationTick;
+      _phaseLine = _next(key, pool);
+    }
+    return _phaseLine;
+  }
+
+  /// The streak badge — the band picks the pool, each new streak value
+  /// draws the next line.
+  String streakLine(int streak) {
+    if (streak != _streak) {
+      _streak = streak;
+      _streakLine = streak >= 10
+          ? _next('streakOnFire', streakOnFirePool)
+          : streak >= 5
+          ? _next('streakHot', streakHotPool)
+          : _next('streak', streakPool);
+    }
+    return _streakLine;
+  }
+
+  /// The line a milestone or new-best flash is showing — read while the
+  /// screen holds its flash window.
+  String get flashLine => _flashLine;
+
+  /// A checkpoint crossed (a phase step) — flashes one milestone line.
+  void triggerMilestone() => _flashLine = _next('milestone', milestonePool);
+
+  /// This take just beat the athlete's best — flashes one new-best line.
+  void triggerNewBest() => _flashLine = _next('newBest', newBestPool);
+
+  /// Between takes — the next take starts its own rotation, not the tail
+  /// of this one.
+  void reset() {
+    _phaseKey = '';
+    _phaseTick = -1;
+    _phaseLine = readyPool.first;
+    _streak = -1;
+    _streakLine = streakPool.first;
+    _flashLine = '';
+  }
+}
