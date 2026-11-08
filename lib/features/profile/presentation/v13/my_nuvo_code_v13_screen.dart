@@ -387,7 +387,8 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
           // The viewfinder is a framed card inside the page — the camera never
           // bleeds under the header or the segmented control.
           Expanded(
-            child: Center(
+            child: Align(
+              alignment: Alignment.topCenter,
               child: AspectRatio(
                 aspectRatio: keyboard ? 1.6 : 0.82,
                 child: Container(
@@ -414,7 +415,7 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
               ),
             ),
           ),
-          if (!keyboard) ...[
+          if (!keyboard && _status == _ScanStatus.scanning) ...[
             const SizedBox(height: V13.gapMd),
             Text(
               _found == null
@@ -446,8 +447,10 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
         ),
       );
     }
+    // Non-camera states sit on a light card so the viewfinder frame reads
+    // (navy-on-navy hid the outline and made the shadow look like a smear).
     return ColoredBox(
-      color: V13.navy,
+      color: _status == _ScanStatus.starting ? V13.navy : V13.card,
       child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(V13.gapLg),
@@ -477,7 +480,7 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
         return _scanMessage(
           icon: Icons.no_photography_rounded,
           title: 'No camera',
-          body: 'This device has no camera. Paste a link below.',
+          body: 'This device has no camera. Paste a Nuvo link below instead.',
         );
       case _ScanStatus.error:
         return _scanMessage(
@@ -499,8 +502,8 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
     String? ctaLabel,
     VoidCallback? onCta,
   }) {
-    return V13Card(
-      padding: const EdgeInsets.all(V13.gapXl),
+    return Padding(
+      padding: const EdgeInsets.all(V13.gapMd),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -609,7 +612,8 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
         const SizedBox(width: V13.gapSm),
         V13Button.primary(
           label: 'Go',
-          size: V13ButtonSize.small,
+          size: V13ButtonSize.medium,
+          fullWidth: false,
           onPressed: _submitPasted,
         ),
       ],

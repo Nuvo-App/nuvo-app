@@ -252,43 +252,11 @@ class _MainShellState extends ConsumerState<MainShell>
       extendBody: true,
       body: SafeArea(
         bottom: false,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            widget.child,
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _DockOcclusion(),
-            ),
-          ],
-        ),
+        // Content scrolls behind the floating dock; every tab pads its last
+        // row by V13TabBar.bottomPadding so it can scroll fully clear.
+        child: widget.child,
       ),
       bottomNavigationBar: navigation,
-    );
-  }
-}
-
-/// Foreground occlusion for the floating dock — one shared contract for
-/// every tab. The nav widget only paints the rounded dock itself; its
-/// margins are transparent, so without this band scrolled body content
-/// showed through (and under) the dock. The band is page-colored and
-/// spans the nav's rendered extent plus the breathing strip above the dock —
-/// content scrolls behind it and re-emerges above the dock's top edge,
-/// which is what the shared `bottomPadding` scroll clearance reserves.
-/// IgnorePointer so taps still reach the nav painted on top.
-class _DockOcclusion extends StatelessWidget {
-  const _DockOcclusion();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        key: const ValueKey('nuvo-dock-occlusion'),
-        height: MediaQuery.paddingOf(context).bottom + V13TabBar.topBreath,
-        color: V13.bg,
-      ),
     );
   }
 }

@@ -130,7 +130,7 @@ class RacingFriendCell extends StatelessWidget {
       onTap: onTap,
       semanticLabel: name,
       child: SizedBox(
-        width: 80,
+        width: 84,
         child: Column(
           children: [
             Stack(
@@ -163,11 +163,14 @@ class RacingFriendCell extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            // The movement, not "Racing · <full race title>" — that never fit
+            // an 80pt cell and always ended in an ellipsis.
             Text(
-              'Racing · ${race.displayTitle}',
+              raceActivityDefinition(race)?.title ?? race.displayTitle,
               style: V13.caption,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ],
         ),

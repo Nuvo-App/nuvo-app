@@ -732,10 +732,36 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
             ],
           ),
         ),
-        if (_proofsOpen) ...[
+        if (_proofsOpen || proofs.isEmpty) ...[
           const SizedBox(height: V13.gapSm),
           if (proofs.isEmpty)
-            Text('No moves logged yet.', style: V13.body)
+            V13Card(
+              padding: const EdgeInsets.all(V13.gapLg),
+              child: Row(
+                children: [
+                  const V13IconTile(
+                    icon: Icons.photo_camera_rounded,
+                    color: V13.sky,
+                  ),
+                  const SizedBox(width: V13.gapMd),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('No proofs yet', style: V13.bodyStrong),
+                        const SizedBox(height: 2),
+                        Text(
+                          raceIsActive(race)
+                              ? 'Submit the first proof and set the pace.'
+                              : 'Nobody logged a move in this race.',
+                          style: V13.caption,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
           else
             for (var i = 0; i < proofs.length && i < 8; i++) ...[
               if (i > 0) const V13Divider(),

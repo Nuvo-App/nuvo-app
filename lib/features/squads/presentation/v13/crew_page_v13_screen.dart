@@ -389,6 +389,7 @@ class _CrewPageV13ScreenState extends ConsumerState<CrewPageV13Screen> {
     return Scaffold(
       backgroundColor: V13.bg,
       body: SafeArea(
+        bottom: false,
         child: detail != null
             ? _memberPage(detail)
             : loading

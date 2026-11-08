@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../motion.dart';
@@ -18,14 +20,16 @@ class V13TabItem {
   final IconData? selectedIcon;
 }
 
-/// The v13 bottom tab bar: white and outlined (a 2 px navy line across the
-/// top), four slots with icon + label, and a blue indicator dash that
-/// slides to the active slot on the v13 spring.
+/// The v13 floating dock: a white pill with the 2 px navy outline and hard
+/// shadow, inset from the screen edges and sized to its four slots. It sits
+/// just above the home indicator; page content scrolls behind it. The active
+/// tab gets a filled blue icon and label over a soft blue capsule that
+/// glides between slots on the v13 spring.
 ///
-/// GEOMETRY CONTRACT — mirrors `NuvoBottomNav` so it can drop into the
-/// same shell: [barHeight] is the visual height, the bar adds the bottom
-/// safe inset below that, and [bottomPadding] is the shared scroll inset
-/// every screen pads its last row by.
+/// GEOMETRY CONTRACT — the shell passes this as `bottomNavigationBar` with
+/// `extendBody: true`, so body `MediaQuery.padding.bottom` already equals
+/// the dock's full footprint (dock + gap + safe inset). Screens pad their
+/// last row by [bottomPadding], which adds the clearance on top of that.
 class V13TabBar extends StatelessWidget {
   const V13TabBar({
     super.key,
@@ -40,48 +44,79 @@ class V13TabBar extends StatelessWidget {
 
   // ── Geometry contract ──────────────────────────────────────────────────
 
-  /// Visual height of the bar, above the bottom safe inset.
-  static const double barHeight = 62;
+  /// Visual height of the dock pill (inside its outline).
+  static const double barHeight = 60;
 
-  /// Breathing strip above the bar's top edge.
+  /// Breathing strip reserved above the dock's top edge.
   static const double topBreath = 8;
 
-  /// Section gap reserved below a scroll view's last row, on top of the bar.
-  static const double scrollClearance = 10;
+  /// Section gap reserved below a scroll view's last row, on top of the dock.
+  static const double scrollClearance = 16;
 
-  /// The shared bottom-content inset — same formula as
-  /// `NuvoBottomNav.bottomPadding`.
+  /// Width of one tab slot.
+  static const double slotWidth = 76;
+
+  /// Gap between the dock and the bottom edge when there's no home indicator.
+  static const double _minBottomGap = 12;
+
+  /// The shared bottom-content inset every scroll view pads its last row by.
   static double bottomPadding(BuildContext context) =>
       MediaQuery.paddingOf(context).bottom + topBreath + scrollClearance;
 
-  static const double _indicatorW = 28;
-  static const double _indicatorH = 4;
+  /// Distance from the screen's bottom edge to the dock's bottom edge: the
+  /// dock rides just above the home indicator instead of above its full
+  /// safe inset, which would float it too high.
+  static double dockBottomGap(BuildContext context) {
+    final safe = MediaQuery.paddingOf(context).bottom;
+    return math.max(safe - 8, _minBottomGap);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
     final reduce = MediaQuery.disableAnimationsOf(context);
     final index = currentIndex.clamp(0, items.length - 1);
+    const inner = 4.0;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: V13.card,
-        border: Border(
-          top: BorderSide(color: V13.navy, width: V13.outline),
-        ),
+    return Padding(
+      padding: EdgeInsets.only(
+        top: topBreath,
+        bottom: dockBottomGap(context),
       ),
-      padding: EdgeInsets.only(bottom: safeBottom),
-      child: SizedBox(
-        height: barHeight,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final slotW = constraints.maxWidth / items.length;
-            return Stack(
+      child: Center(
+        heightFactor: 1,
+        child: Container(
+          decoration: BoxDecoration(
+            color: V13.card,
+            borderRadius: BorderRadius.circular(V13.radiusPill),
+            border: Border.all(color: V13.navy, width: V13.outline),
+            boxShadow: V13.shadow4,
+          ),
+          padding: const EdgeInsets.all(inner),
+          child: SizedBox(
+            height: barHeight - inner * 2,
+            width: slotWidth * items.length,
+            child: Stack(
               children: [
+                AnimatedPositioned(
+                  duration: reduce ? Duration.zero : V13Motion.medium,
+                  curve: V13Motion.spring,
+                  left: slotWidth * index,
+                  top: 0,
+                  bottom: 0,
+                  width: slotWidth,
+                  child: Container(
+                    key: const ValueKey('v13-tab-indicator'),
+                    decoration: BoxDecoration(
+                      color: V13.blue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(V13.radiusPill),
+                    ),
+                  ),
+                ),
                 Row(
                   children: [
                     for (var i = 0; i < items.length; i++)
-                      Expanded(
+                      SizedBox(
+                        width: slotWidth,
                         child: _TabSlot(
                           key: ValueKey('v13-tab-slot-$i'),
                           item: items[i],
@@ -94,23 +129,9 @@ class V13TabBar extends StatelessWidget {
                       ),
                   ],
                 ),
-                AnimatedPositioned(
-                  duration: reduce ? Duration.zero : V13Motion.medium,
-                  curve: V13Motion.spring,
-                  left: slotW * index + (slotW - _indicatorW) / 2,
-                  bottom: 5,
-                  width: _indicatorW,
-                  height: _indicatorH,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: V13.blue,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
               ],
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -131,7 +152,8 @@ class _TabSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? V13.navy : V13.muted;
+    final fg = selected ? V13.blue : V13.muted;
+    final reduce = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       button: true,
       selected: selected,
@@ -143,23 +165,29 @@ class _TabSlot extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              selected ? (item.selectedIcon ?? item.icon) : item.icon,
-              size: 24,
-              color: fg,
+            AnimatedScale(
+              scale: selected ? 1.08 : 1,
+              duration: reduce ? Duration.zero : V13Motion.fast,
+              curve: V13Motion.spring,
+              child: Icon(
+                selected ? (item.selectedIcon ?? item.icon) : item.icon,
+                size: 22,
+                color: fg,
+              ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               item.label,
               style: V13.label.copyWith(
                 color: fg,
                 fontSize: 10,
-                letterSpacing: 0.6,
+                letterSpacing: 0.4,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
               ),
               maxLines: 1,
+              overflow: TextOverflow.fade,
+              softWrap: false,
             ),
-            // Reserve the indicator's lane so labels never collide with it.
-            const SizedBox(height: V13TabBar._indicatorH + 5),
           ],
         ),
       ),

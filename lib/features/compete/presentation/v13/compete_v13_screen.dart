@@ -179,7 +179,7 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                   V13.pagePad,
                   V13.gapMd,
                   V13.pagePad,
-                  V13TabBar.bottomPadding(context) + 72,
+                  V13TabBar.bottomPadding(context),
                 ),
                 children: [
                   _Header(
@@ -224,24 +224,6 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                     _TrophyShelf(races: finished, userId: user?.id),
                   ],
                 ],
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: V13TabBar.bottomPadding(context) + 12,
-              child: IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: _moreBelow ? 1 : 0,
-                  duration: V13Motion.fast,
-                  child: const Center(
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: V13.muted,
-                      size: 28,
-                    ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -317,6 +299,7 @@ class _LiveRaceCard extends ConsumerWidget {
     final prevRank = race.viewerContext?.previousRank;
     final me = userId == null ? null : race.participantFor(userId!);
     final progress = raceProgressPercent(race, me) / 100;
+    final hasTarget = (race.targetValue ?? 0) > 0;
     final trend = rank != null && prevRank != null && prevRank != rank
         ? (rank < prevRank
               ? Icons.trending_up_rounded
@@ -327,99 +310,107 @@ class _LiveRaceCard extends ConsumerWidget {
       onTap: onOpen,
       semanticLabel: 'Open ${race.displayTitle}',
       padding: EdgeInsets.zero,
-      child: SizedBox(
-        width: 250,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              height: 8,
-              decoration: const BoxDecoration(
-                color: V13.coral,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(V13.radiusCard - 3),
-                ),
-                border: Border(
-                  bottom: BorderSide(color: V13.navy, width: V13.outline),
+      // Clip to the card's inner radius so the colored cap follows the
+      // rounded corners instead of poking past them.
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(V13.radiusCard - V13.outline),
+        child: SizedBox(
+          width: 250,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: V13.coral,
+                  border: Border(
+                    bottom: BorderSide(color: V13.navy, width: V13.outline),
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(V13.gapMd),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            race.displayTitle,
-                            style: V13.bodyStrong,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(V13.gapMd),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              race.displayTitle,
+                              style: V13.bodyStrong,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        if (chase?.timeLeft != null)
-                          V13Pill(
-                            label: chase!.timeLeft!,
-                            color: V13.sun,
-                            textColor: V13.navy,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        if (rank != null) Text('#$rank', style: V13.numberSm),
-                        if (trend != null) ...[
-                          const SizedBox(width: 2),
-                          Icon(trend, size: 18, color: V13.blue),
+                          if (chase?.timeLeft != null)
+                            V13Pill(
+                              label: chase!.timeLeft!,
+                              color: V13.sun,
+                              textColor: V13.navy,
+                            ),
                         ],
-                        const SizedBox(width: V13.gapSm),
-                        Expanded(
-                          child: Text(
-                            '${sorted.length} racer${sorted.length == 1 ? '' : 's'}',
-                            style: V13.caption,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: V13.gapMd),
-                    V13ProgressBar(value: progress),
-                    const SizedBox(height: 4),
-                    Text(
-                      me == null
-                          ? 'Not on the board yet'
-                          : '${raceProgressLabel(race, me)} · ${(progress * 100).round()}%',
-                      style: V13.caption,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        V13FaceStack(
-                          faces: [
-                            for (final p in sorted.take(4))
-                              V13FaceInfo(
-                                photoUrl: p.profilePhotoUrl,
-                                name: p.displayName,
-                                isMe: p.userId == userId,
-                              ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (rank != null) Text('#$rank', style: V13.numberSm),
+                          if (trend != null) ...[
+                            const SizedBox(width: 2),
+                            Icon(trend, size: 18, color: V13.blue),
                           ],
-                          size: 22,
-                        ),
-                        const Spacer(),
+                          const SizedBox(width: V13.gapSm),
+                          Expanded(
+                            child: Text(
+                              '${sorted.length} racer${sorted.length == 1 ? '' : 's'}',
+                              style: V13.caption,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: V13.gapMd),
+                      // Only races with a finish number get a progress bar —
+                      // a most-total race has no 100%, so show the tally.
+                      if (hasTarget) ...[
+                        V13ProgressBar(value: progress),
+                        const SizedBox(height: 4),
                       ],
-                    ),
-                  ],
+                      Text(
+                        me == null
+                            ? 'Not on the board yet'
+                            : hasTarget
+                            ? '${raceProgressLabel(race, me)} · ${(progress * 100).round()}%'
+                            : 'Your total: ${raceProgressLabel(race, me)}',
+                        style: V13.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          V13FaceStack(
+                            faces: [
+                              for (final p in sorted.take(4))
+                                V13FaceInfo(
+                                  photoUrl: p.profilePhotoUrl,
+                                  name: p.displayName,
+                                  isMe: p.userId == userId,
+                                ),
+                            ],
+                            size: 22,
+                          ),
+                          const Spacer(),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -540,6 +531,9 @@ class _LeaderboardSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(friendsLeaderboardProvider).valueOrNull;
     if (rows == null || rows.isEmpty) return const SizedBox.shrink();
+    // A board where everyone sits on 0 is noise ("#1 … #1, 0 pts"): hide it
+    // until somebody scores.
+    if (rows.every((r) => r.points <= 0)) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -547,7 +541,10 @@ class _LeaderboardSection extends ConsumerWidget {
         const SizedBox(height: V13.gapMd),
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0) const V13Divider(),
-          _LeaderboardRow(entry: rows[i]),
+          _LeaderboardRow(
+            entry: rows[i],
+            tied: rows.where((r) => r.rank == rows[i].rank).length > 1,
+          ),
         ],
         const SizedBox(height: V13.gapSection),
       ],
@@ -556,8 +553,11 @@ class _LeaderboardSection extends ConsumerWidget {
 }
 
 class _LeaderboardRow extends ConsumerWidget {
-  const _LeaderboardRow({required this.entry});
+  const _LeaderboardRow({required this.entry, this.tied = false});
   final LeaderboardEntry entry;
+
+  /// Shares its rank with another row — shown as "=2" instead of "#2".
+  final bool tied;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -568,7 +568,10 @@ class _LeaderboardRow extends ConsumerWidget {
         children: [
           SizedBox(
             width: 30,
-            child: Text('#${entry.rank}', style: V13.numberSm),
+            child: Text(
+              '${tied ? '=' : '#'}${entry.rank}',
+              style: V13.numberSm,
+            ),
           ),
           V13Face(
             photoUrl: entry.profilePhotoUrl,

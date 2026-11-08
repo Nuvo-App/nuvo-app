@@ -107,7 +107,8 @@ class V13BackBar extends StatelessWidget {
               child: Text(
                 title,
                 style: V13.sectionHead,
-                maxLines: 1,
+                // Long race names wrap to a second line instead of clipping.
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),

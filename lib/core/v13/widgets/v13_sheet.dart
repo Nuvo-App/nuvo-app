@@ -14,6 +14,13 @@ Future<T?> showV13Sheet<T>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    // The app theme gives every modal sheet its own drag handle + bordered
+    // shape; v13 draws its own frame, so turn those off or two sheets stack.
+    showDragHandle: false,
+    elevation: 0,
+    shape: const RoundedRectangleBorder(),
+    clipBehavior: Clip.none,
+    useSafeArea: true,
     barrierColor: V13.navy.withValues(alpha: 0.45),
     builder: (ctx) => _V13SheetFrame(child: builder(ctx)),
   );

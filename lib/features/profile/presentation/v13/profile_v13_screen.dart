@@ -42,6 +42,7 @@ class ProfileV13Screen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: V13.bg,
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           color: V13.blue,
           backgroundColor: V13.card,

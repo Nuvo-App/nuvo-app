@@ -340,17 +340,20 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
 
     return Scaffold(
       backgroundColor: V13.bg,
+      // bottom: false — the list scrolls to the screen edge (behind the home
+      // indicator) instead of stopping at the safe inset with a blank strip.
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             const V13BackBar(title: 'Settings'),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   V13.pagePad,
                   V13.gapMd,
                   V13.pagePad,
-                  V13.gapXxl * 2,
+                  MediaQuery.paddingOf(context).bottom + V13.gapXxl * 2,
                 ),
                 children: [
                   _accountCard(
