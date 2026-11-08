@@ -55,7 +55,16 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  /// Tab-switch entrance: the incoming tab fades up a few points. Driven by
+  /// one controller (no key swap) so each branch keeps its state.
+  late final AnimationController _tabIn = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1,
+  );
+  int? _lastTabIndex;
+
   /// Reentrancy guard for the level-up moment — the server flag makes it
   /// once-per-level across devices; this makes it once-per-dialog in-flight.
   bool _levelUpShowing = false;
@@ -129,6 +138,7 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabIn.dispose();
     super.dispose();
   }
 
@@ -233,6 +243,13 @@ class _MainShellState extends ConsumerState<MainShell>
         ? (widget.child as StatefulNavigationShell).currentIndex
         : _indexFor(GoRouterState.of(context).uri.path);
 
+    if (_lastTabIndex != null &&
+        _lastTabIndex != currentIndex &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      _tabIn.forward(from: 0.35);
+    }
+    _lastTabIndex = currentIndex;
+
     final Widget navigation = V13TabBar(
       key: TrackSideLayoutKeys.navigation,
       items: [
@@ -254,7 +271,16 @@ class _MainShellState extends ConsumerState<MainShell>
         bottom: false,
         // Content scrolls behind the floating dock; every tab pads its last
         // row by V13TabBar.bottomPadding so it can scroll fully clear.
-        child: widget.child,
+        child: FadeTransition(
+          opacity: CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0, 0.012),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: _tabIn, curve: Curves.easeOut)),
+            child: widget.child,
+          ),
+        ),
       ),
       bottomNavigationBar: navigation,
     );

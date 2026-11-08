@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/v13/v13.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
+import '../../profile/application/progression_controller.dart';
 import '../domain/proof_status.dart';
 
 class BoardMovedArgs {
@@ -44,17 +46,22 @@ class BoardMovedArgs {
 /// moment: a big "+N" in hero type, a rank pop when the standing changed,
 /// and confetti when the racer took the lead. Pending and failed verdicts
 /// stay calm. Every number comes from the proof response.
-class BoardMovedScreen extends StatefulWidget {
+class BoardMovedScreen extends ConsumerStatefulWidget {
   const BoardMovedScreen({super.key, required this.raceId, required this.args});
 
   final String raceId;
   final BoardMovedArgs args;
 
   @override
-  State<BoardMovedScreen> createState() => _BoardMovedScreenState();
+  ConsumerState<BoardMovedScreen> createState() => _BoardMovedScreenState();
 }
 
-class _BoardMovedScreenState extends State<BoardMovedScreen> {
+class _BoardMovedScreenState extends ConsumerState<BoardMovedScreen> {
+  /// XP progress when the screen opened — the ring and level bar animate
+  /// from here to the refreshed value, so the racer sees the XP land.
+  double? _progressBefore;
+  int? _levelBefore;
+
   String get raceId => widget.raceId;
   BoardMovedArgs get args => widget.args;
 
@@ -95,6 +102,15 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
     return 'Holding #${args.rankAfter}';
   }
 
+  String get _headline {
+    final name = ref.read(authControllerProvider).user?.fullName ?? '';
+    final first = name.trim().split(RegExp(r'\s+')).first;
+    final who = first.isEmpty ? '' : ', $first';
+    if (_tookLead) return 'You took the lead$who!';
+    if (_movedUp) return 'Moving up$who!';
+    return 'Nice work$who!';
+  }
+
   String get _againRoute => args.aiMotionProof
       ? '/race/$raceId/proof/ai-motion'
       : '/race/$raceId/proof';
@@ -102,8 +118,15 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
   @override
   void initState() {
     super.initState();
+    final before = ref.read(progressionControllerProvider).valueOrNull;
+    _progressBefore = before?.progress;
+    _levelBefore = before?.level;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (_isVerified) {
+        // Pull the post-proof XP so the ring/bar can fill to the new value.
+        ref.read(progressionControllerProvider.notifier).load(force: true);
+      }
       if (_isNotVerified) {
         V13Haptics.light();
       } else if (_isPending) {
@@ -131,8 +154,13 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
       backgroundColor: V13.bg,
       body: Stack(
         children: [
-          if (_tookLead)
-            const Positioned.fill(child: IgnorePointer(child: V13Confetti())),
+          // Every verified proof earns the burst; taking the lead earns a
+          // bigger one.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: V13Confetti(particleCount: _tookLead ? 120 : 60),
+            ),
+          ),
           SafeArea(
             child: Column(
               children: [
@@ -146,28 +174,47 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                     ),
                     child: Column(
                       children: [
-                        const _CheckMedallion()
-                            .animate()
-                            .scale(
-                              begin: const Offset(0.6, 0.6),
-                              end: const Offset(1, 1),
-                              duration: V13Motion.medium,
-                              curve: V13Motion.spring,
+                        _CelebrationHero(
+                          progressBefore: _progressBefore,
+                          levelBefore: _levelBefore,
+                        ),
+                        const SizedBox(height: V13.gapLg),
+                        Text(
+                              _headline,
+                              style: V13.title,
+                              textAlign: TextAlign.center,
                             )
-                            .fadeIn(duration: 200.ms),
-                        const SizedBox(height: V13.gapXl),
+                            .animate(delay: 160.ms)
+                            .fadeIn(duration: 260.ms)
+                            .slideY(
+                              begin: .25,
+                              end: 0,
+                              curve: V13Motion.spring,
+                            ),
+                        const SizedBox(height: V13.gapSm),
                         Text(
                           'MOVE VERIFIED',
                           style: V13.label.copyWith(color: V13.blue),
-                        ).animate(delay: 120.ms).fadeIn(duration: 260.ms),
+                        ).animate(delay: 220.ms).fadeIn(duration: 260.ms),
                         const SizedBox(height: V13.gapMd),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
-                              '+${args.value}',
-                              style: V13.hugeNumber.copyWith(fontSize: 72),
+                            // Count up to the proof value.
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(
+                                begin: 0,
+                                end: args.value.toDouble(),
+                              ),
+                              duration: MediaQuery.disableAnimationsOf(context)
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 700),
+                              curve: Curves.easeOutCubic,
+                              builder: (_, v, _) => Text(
+                                '+${v.round()}',
+                                style: V13.hugeNumber.copyWith(fontSize: 72),
+                              ),
                             ),
                             if (args.unit != null)
                               Padding(
@@ -183,7 +230,12 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                                 ),
                               ),
                           ],
-                        ).animate(delay: 180.ms).fadeIn(duration: 280.ms),
+                        ).animate(delay: 260.ms).fadeIn(duration: 280.ms),
+                        const SizedBox(height: V13.gapLg),
+                        _LevelProgress(
+                          progressBefore: _progressBefore,
+                          levelBefore: _levelBefore,
+                        ).animate(delay: 420.ms).fadeIn(duration: 300.ms),
                         if (!hasRank) ...[
                           const SizedBox(height: V13.gapSm),
                           Text(
@@ -264,19 +316,21 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
 /// The reward medallion — a mint check in a navy-outlined circle with the
 /// signature hard shadow.
 class _CheckMedallion extends StatelessWidget {
-  const _CheckMedallion();
+  const _CheckMedallion({this.size = 88});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 88,
-    height: 88,
+    width: size,
+    height: size,
     decoration: BoxDecoration(
       color: V13.mint,
       shape: BoxShape.circle,
       border: Border.all(color: V13.navy, width: V13.outlineThick),
       boxShadow: V13.shadow4,
     ),
-    child: const Icon(Icons.check_rounded, color: V13.navy, size: 44),
+    child: Icon(Icons.check_rounded, color: V13.navy, size: size / 2),
   );
 }
 
@@ -462,6 +516,117 @@ class _NotVerifiedView extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The racer's face inside the XP ring, ring filling from the pre-proof
+/// value to the fresh one, with a mint check badge popping on.
+class _CelebrationHero extends ConsumerWidget {
+  const _CelebrationHero({this.progressBefore, this.levelBefore});
+
+  final double? progressBefore;
+  final int? levelBefore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authControllerProvider).user;
+    final now = ref.watch(progressionControllerProvider).valueOrNull;
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    final leveled =
+        now != null && levelBefore != null && now.level > levelBefore!;
+    final start = progressBefore ?? 0;
+    // A level-up wraps the ring: fill to full, the level bar shows the rest.
+    final end = leveled ? 1.0 : (now?.progress ?? start);
+    return SizedBox.square(
+      dimension: 132,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          TweenAnimationBuilder<double>(
+                tween: Tween(begin: start, end: end),
+                duration: reduce
+                    ? Duration.zero
+                    : const Duration(milliseconds: 1100),
+                curve: Curves.easeOutCubic,
+                builder: (_, v, _) => V13XpRing(
+                  progress: v,
+                  photoUrl: user?.profilePhotoUrl,
+                  name: user?.fullName,
+                  size: 132,
+                  strokeWidth: 8,
+                ),
+              )
+              .animate()
+              .scale(
+                begin: const Offset(0.6, 0.6),
+                end: const Offset(1, 1),
+                duration: V13Motion.medium,
+                curve: V13Motion.spring,
+              )
+              .fadeIn(duration: 200.ms),
+          Positioned(
+            right: -2,
+            bottom: 2,
+            child: const _CheckMedallion(size: 44)
+                .animate(delay: 380.ms)
+                .scale(
+                  begin: const Offset(0, 0),
+                  end: const Offset(1, 1),
+                  duration: V13Motion.medium,
+                  curve: V13Motion.spring,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Level N" + XP bar filling to the post-proof value, and what's left to
+/// the next level. Hidden until progression has loaded once.
+class _LevelProgress extends ConsumerWidget {
+  const _LevelProgress({this.progressBefore, this.levelBefore});
+
+  final double? progressBefore;
+  final int? levelBefore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(progressionControllerProvider).valueOrNull;
+    if (p == null) return const SizedBox.shrink();
+    final leveled = levelBefore != null && p.level > levelBefore!;
+    return V13Card(
+      padding: const EdgeInsets.all(V13.gapLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Level ${p.level}', style: V13.bodyStrong),
+              if (leveled) ...[
+                const SizedBox(width: V13.gapSm),
+                const V13Pill(
+                  label: 'Level up!',
+                  color: V13.sun,
+                  textColor: V13.navy,
+                ),
+              ],
+              const Spacer(),
+              Text('${p.totalXp} XP', style: V13.caption),
+            ],
+          ),
+          const SizedBox(height: V13.gapSm),
+          V13ProgressBar(value: p.progress, color: V13.blue),
+          const SizedBox(height: V13.gapSm),
+          Text(
+            p.xpToNext > 0
+                ? '${p.xpToNext} XP to Level ${p.level + 1}'
+                : 'Level ${p.level + 1} unlocked',
+            style: V13.caption,
+          ),
+        ],
       ),
     );
   }

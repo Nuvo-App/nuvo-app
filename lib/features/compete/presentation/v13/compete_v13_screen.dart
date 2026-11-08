@@ -440,12 +440,16 @@ class _OpenRacesSection extends ConsumerWidget {
       children: [
         const _SectionHead('Join a race'),
         const SizedBox(height: V13.gapLg),
-        for (final race in [...visible, ...joinedVisible]) ...[
-          _OpenRaceCard(
-            race: race,
-            joined: joinedIds.contains(race.id),
-            joining: joiningId == race.id,
-            onJoin: () => onJoin(race),
+        for (final (i, race) in [...visible, ...joinedVisible].indexed) ...[
+          V13StaggerIn(
+            key: ValueKey('open-${race.id}'),
+            index: i,
+            child: _OpenRaceCard(
+              race: race,
+              joined: joinedIds.contains(race.id),
+              joining: joiningId == race.id,
+              onJoin: () => onJoin(race),
+            ),
           ),
           const SizedBox(height: V13.gapMd),
         ],
@@ -615,42 +619,46 @@ class _TrendingSection extends ConsumerWidget {
         const SizedBox(height: V13.gapMd),
         for (var i = 0; i < moves.length; i++) ...[
           if (i > 0) const V13Divider(),
-          V13ListRow(
-            title: moves[i].activity.title,
-            subtitle: moves[i].racerCount != null
-                ? '${moves[i].racerCount} racing'
-                : null,
-            leading: V13IconTile(
-              icon: moves[i].activity.icon,
-              color: const [
-                V13.coral,
-                V13.sun,
-                V13.mint,
-                V13.sky,
-                V13.lilac,
-              ][i % 5],
-            ),
-            trailing: V13Pressable(
-              onTap: () => onStart(moves[i].activity),
-              pressDepth: 1.5,
-              semanticLabel: 'Start a ${moves[i].activity.title} race',
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: V13.card,
-                  borderRadius: BorderRadius.circular(V13.radiusPill),
-                  border: Border.all(color: V13.navy, width: V13.outline),
-                ),
-                child: Text(
-                  'Start',
-                  style: V13.label.copyWith(color: V13.navy),
+          V13StaggerIn(
+            key: ValueKey('move-${moves[i].activity.activityId}'),
+            index: i,
+            child: V13ListRow(
+              title: moves[i].activity.title,
+              subtitle: moves[i].racerCount != null
+                  ? '${moves[i].racerCount} racing'
+                  : null,
+              leading: V13IconTile(
+                icon: moves[i].activity.icon,
+                color: const [
+                  V13.coral,
+                  V13.sun,
+                  V13.mint,
+                  V13.sky,
+                  V13.lilac,
+                ][i % 5],
+              ),
+              trailing: V13Pressable(
+                onTap: () => onStart(moves[i].activity),
+                pressDepth: 1.5,
+                semanticLabel: 'Start a ${moves[i].activity.title} race',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: V13.card,
+                    borderRadius: BorderRadius.circular(V13.radiusPill),
+                    border: Border.all(color: V13.navy, width: V13.outline),
+                  ),
+                  child: Text(
+                    'Start',
+                    style: V13.label.copyWith(color: V13.navy),
+                  ),
                 ),
               ),
+              showDivider: false,
             ),
-            showDivider: false,
           ),
         ],
         const SizedBox(height: V13.gapSection),
