@@ -617,7 +617,14 @@ class RaceApi {
     int? attemptDurationSeconds,
     int? attemptLimit,
   }) async {
-    final body = <String, dynamic>{'title': title, 'goalType': goalType};
+    // rulesVersion 1: every race this build creates follows the strict
+    // rules (camera-only proof on camera races, custom goals race First
+    // to / Most total). Stamped here so no caller can drop it.
+    final body = <String, dynamic>{
+      'title': title,
+      'goalType': goalType,
+      'rulesVersion': 1,
+    };
     if (description != null) body['description'] = description;
     if (category != null) body['category'] = category;
     if (targetValue != null) body['targetValue'] = targetValue;
@@ -683,6 +690,8 @@ class RaceApi {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'verificationMethod': 'ai',
+      // Strict rules: this build always creates rules_version 1 races.
+      'rulesVersion': 1,
       'verifierType': motionV2Spec != null
           ? motionV2VerifierType
           : customPoseVerifierType,

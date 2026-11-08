@@ -338,6 +338,8 @@ class RaceDraft {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'aiActivityType': activity.activityId,
+      // Strict rules: this build always creates rules_version 1 races.
+      'rulesVersion': 1,
       // Direction is an attempt-format rule only — a first-to or cumulative
       // race must not carry a stale interpreted 'lower' onto the wire.
       if (format.isAttemptBased && lowerWins) 'scoreDirection': 'lower',
@@ -376,6 +378,8 @@ class RaceDraft {
       'proofRequirement': 'photo_video',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'photo',
+      // Strict rules: this build always creates rules_version 1 races.
+      'rulesVersion': 1,
       if (format.isAttemptBased && lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
