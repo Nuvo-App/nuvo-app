@@ -7,6 +7,7 @@
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
 import '../core/config/v13.dart';
+import '../features/arena/presentation/v13/arena_v13_screen.dart';
 import '../features/compete/presentation/v13/compete_v13_screen.dart';
 import '../features/races/presentation/v13/composer/race_composer_v13_screen.dart';
 import '../features/races/presentation/v13/race_detail_v13_screen.dart';
@@ -115,6 +116,8 @@ Widget _tabScreenFor(String path) {
 /// falls through to the pre-v13 screen, so every tab works at every stage of
 /// the redesign.
 Widget? _v13TabScreenFor(String path) => switch (path) {
+  // v13: arena (S4)
+  '/arena' => const ArenaScreenV13(),
   // v13: compete (S5)
   '/compete' => const CompeteV13Screen(),
   _ => null,
