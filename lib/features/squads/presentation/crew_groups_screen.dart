@@ -1,148 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:nuvo/core/widgets/nuvo_fade_scroll.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../social/presentation/theme_ink.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/nuvo_back_header.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_confirm_dialog.dart';
-import '../../../core/widgets/nuvo_empty_state.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/live_refresh.dart';
-import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/nuvo_loading_indicator.dart';
-import '../../../core/widgets/nuvo_page.dart';
-import '../../auth/data/auth_api.dart' show ApiException;
-import '../../auth/presentation/auth_controller.dart';
-import '../../races/data/race_models.dart' show RaceCreatePrefill;
-import '../../races/presentation/race_controller.dart';
+import 'package:nuvo/core/v13/v13.dart';
+import 'package:nuvo/core/widgets/live_refresh.dart';
+import 'package:nuvo/features/auth/data/auth_api.dart' show ApiException;
+import 'package:nuvo/features/races/presentation/race_controller.dart';
+import 'package:nuvo/features/social/presentation/v13/crew_tab_v13_widgets.dart';
+
 import '../application/squad_controller.dart';
 import '../data/squad_api.dart';
 
 String _messageFor(Object e) =>
     e is ApiException ? e.message : 'Something went wrong. Try again.';
 
-/// Back that never dead-ends: pops when there is history, otherwise lands on
-/// the Crew tab (deep links and cold starts have nothing to pop to).
-void _leave(BuildContext context) {
-  if (context.canPop()) {
-    context.pop();
-  } else {
-    context.go('/pass');
-  }
-}
-
-/// NuvoPage does not inset its topBar for the status bar / Dynamic Island, so
-/// the header owns the top safe area itself.
-Widget _topBar(BuildContext context, String title, {Widget? trailing}) =>
-    SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          NuvoSpacing.sm,
-          NuvoSpacing.xs,
-          NuvoSpacing.lg,
-          NuvoSpacing.xs,
-        ),
-        child: NuvoBackHeader(
-          title: title,
-          onBack: () => _leave(context),
-          trailing: trailing,
-        ),
-      ),
-    );
-
-const double _kSide = NuvoSpacing.lg;
-
-/// Two side-by-side actions that stack when each would get too little room:
-/// a half-width button on a narrow phone squeezes its label down to a few
-/// pixels, so below [_kPairMinWidth] of inner width (or with large text) the
-/// pair becomes two full-width buttons instead.
-const double _kPairMinWidth = 340;
-
-class _ActionPair extends StatelessWidget {
-  const _ActionPair({
-    required this.first,
-    this.second,
-    this.minWidth = _kPairMinWidth,
-  });
-  final double minWidth;
-  final Widget first;
-  final Widget? second;
-
-  @override
-  Widget build(BuildContext context) {
-    final second = this.second;
-    if (second == null) return first;
-    final bigText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
-    return LayoutBuilder(
-      builder: (context, box) {
-        if (bigText || box.maxWidth < minWidth) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [first, const SizedBox(height: 8), second],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: first),
-            const SizedBox(width: 10),
-            Expanded(child: second),
-          ],
-        );
-      },
-    );
-  }
-}
-
 /// The one invite text used by every Share button.
 String _inviteText(CrewGroup g) =>
     'Join my crew "${g.name}" on Nuvo. Crew code: ${g.joinCode}'
     '\nhttps://getnuvo.net/c/${g.joinCode}';
-
-/// Opens the share sheet from the tapped button. `context` must be the
-/// button's own (iPad and some iPhones need a source rect for the sheet to
-/// appear). If sharing throws or is unavailable, the invite goes to the
-/// clipboard instead so the tap always does something.
-Future<void> _shareCrew(BuildContext context, CrewGroup g) async {
-  final text = _inviteText(g);
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  Rect? origin;
-  try {
-    final box = context.findRenderObject();
-    if (box is RenderBox && box.hasSize && box.attached) {
-      final rect = box.localToGlobal(Offset.zero) & box.size;
-      if (rect.width > 0 && rect.height > 0) origin = rect;
-    }
-  } catch (_) {
-    origin = null;
-  }
-  var copied = false;
-  try {
-    final result = await Share.share(
-      text,
-      subject: g.name,
-      sharePositionOrigin: origin,
-    );
-    copied = result.status == ShareResultStatus.unavailable;
-  } catch (_) {
-    copied = true;
-  }
-  if (!copied) return;
-  await Clipboard.setData(ClipboardData(text: text));
-  messenger?.showSnackBar(
-    const SnackBar(content: Text('Invite copied — paste it into a message')),
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /crews — the crews I'm in
@@ -171,1246 +48,191 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
   Future<void> _load() => ref.read(squadControllerProvider.notifier).refresh();
 
   Future<void> _start() async {
-    final group = await showModalBottomSheet<CrewGroup>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const _CrewInputSheet(mode: _SheetMode.create),
+    CrewGroup? created;
+    final done = await showV13Sheet<bool>(
+      context,
+      builder: (_) => CrewInputSheet(
+        title: 'Start a crew',
+        hint: 'Crew name',
+        buttonLabel: 'Create crew',
+        onSubmit: (name) async {
+          if (name.trim().length < 2) {
+            return 'Give your crew a name (2 characters or more).';
+          }
+          try {
+            created = await ref
+                .read(squadControllerProvider.notifier)
+                .create(name.trim());
+            return null;
+          } on ApiException catch (e) {
+            return e.statusCode >= 500
+                ? "Couldn't start the crew. Try again."
+                : e.message;
+          } catch (_) {
+            return "Couldn't start the crew. Try again.";
+          }
+        },
+      ),
     );
     // A swipe-down dismiss leaves the text field's focus (and the keyboard)
     // behind — drop it whichever way the sheet closed.
     FocusManager.instance.primaryFocus?.unfocus();
-    if (group == null || !mounted) return;
-    if (mounted) context.push('/crews/${group.id}');
+    final group = created;
+    if (done == true && mounted && group != null) {
+      showV13Toast(context, 'Your crew is live.');
+      context.push('/crews/${group.id}');
+    }
   }
 
   Future<void> _join() async {
-    final joined = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const _CrewInputSheet(mode: _SheetMode.join),
+    final done = await showV13Sheet<bool>(
+      context,
+      builder: (_) => CrewInputSheet(
+        title: 'Join with a code',
+        hint: 'Crew code',
+        buttonLabel: 'Join crew',
+        upperCase: true,
+        onSubmit: (code) async {
+          if (code.isEmpty) return 'Enter the crew code.';
+          try {
+            await ref.read(squadControllerProvider.notifier).join(code);
+            return null;
+          } on ApiException catch (e) {
+            return e.statusCode >= 500
+                ? "Couldn't join. Try again."
+                : e.message;
+          } catch (_) {
+            return "That code didn't work. Check it and try again.";
+          }
+        },
+      ),
     );
     FocusManager.instance.primaryFocus?.unfocus();
-    if (joined != true || !mounted) return;
-    // Joining pulls me into the crew's running races — refresh race lists too.
-    ref.read(raceControllerProvider.notifier).loadRaces(force: true);
+    if (done == true && mounted) {
+      showV13Confetti(context);
+      showV13Toast(context, "You're in the crew.");
+      // Joining pulls me into the crew's running races — refresh race lists.
+      ref.read(raceControllerProvider.notifier).loadRaces(force: true);
+    }
   }
 
-  void _scan() => context.push('/scan');
+  void _scan() => openScan(context);
 
   @override
   Widget build(BuildContext context) {
     final squads = ref.watch(squadControllerProvider);
     final groups = squads.groups;
     final error = squads.error;
-    final Widget body;
-    if (groups == null && error != null) {
-      body = NuvoErrorState(message: error, onRetry: _load);
-    } else if (groups == null) {
-      body = const Center(child: NuvoLoadingIndicator());
-    } else if (groups.isEmpty) {
-      body = LayoutBuilder(
-        builder: (context, box) => SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: box.maxHeight),
-            child: Center(
-              child: NuvoEmptyState(
-                icon: Icons.groups_rounded,
-                leading: const NuvoCrewIcon(size: 28, semanticLabel: null),
-                title: 'Race with a crew',
-                body:
-                    'Start a crew, share the code, and every race you '
-                    'bring to it lands on one leaderboard.',
-                ctaLabel: 'Start a crew',
-                onCta: _start,
-                secondaryLabel: 'Join with a code',
-                onSecondary: _join,
-                align: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
-      );
-    } else {
-      body = RefreshIndicator(
-        onRefresh: _load,
-        child: NuvoFadeScroll(
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              _kSide,
-              NuvoSpacing.md,
-              _kSide,
-              24,
-            ),
-            children: [
-              _AddPanel(onStart: _start, onJoin: _join, onScan: _scan),
-              const SizedBox(height: NuvoSpacing.lg),
-              for (final g in groups) _GroupCard(group: g),
-            ],
-          ),
-        ),
-      );
-    }
     return LiveRefresh(
       onRefresh: () => ref.read(squadControllerProvider.notifier).refresh(),
-      child: NuvoPage(topBar: _topBar(context, 'Crews'), child: body),
-    );
-  }
-}
-
-/// The one place crews are added: start one, join with a code, or scan a
-/// crew's QR. An outlined card in the app's physical style, above the list.
-class _AddPanel extends StatelessWidget {
-  const _AddPanel({
-    required this.onStart,
-    required this.onJoin,
-    required this.onScan,
-  });
-  final VoidCallback onStart;
-  final VoidCallback onJoin;
-  final VoidCallback onScan;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final start = NuvoPrimaryButton(
-      label: 'Start a crew',
-      icon: Icons.add_rounded,
-      expand: true,
-      onPressed: onStart,
-    );
-    final join = NuvoOutlineButton(
-      label: 'Join with a code',
-      icon: Icons.login_rounded,
-      expand: true,
-      onPressed: onJoin,
-    );
-    return Container(
-      key: const ValueKey('crew-add-panel'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.border, width: 2),
-        boxShadow: AppShadows.hardOffset(c.inkShadow),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Add a crew',
-            style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Start your own, or pull in with a code or QR.',
-            style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-          ),
-          const SizedBox(height: 12),
-          _ActionPair(first: start, second: join, minWidth: 380),
-          const SizedBox(height: 8),
-          Semantics(
-            button: true,
-            label: 'Scan a crew QR code',
-            excludeSemantics: true,
-            child: InkWell(
-              key: const ValueKey('crew-scan-qr'),
-              borderRadius: BorderRadius.circular(NuvoRadii.sm),
-              onTap: onScan,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 48),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.qr_code_scanner_rounded,
-                      size: 20,
-                      color: c.accent,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Scan a crew QR',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: c.accent,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Small crew-code pill used on list cards and the detail share card.
-class _CodeChip extends StatelessWidget {
-  const _CodeChip({required this.code});
-  final String code;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    if (code.isEmpty) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: c.border),
-      ),
-      child: Text(
-        code,
-        maxLines: 1,
-        style: AppTextStyles.labelMedium.copyWith(
-          color: c.inkMuted,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupCard extends StatelessWidget {
-  const _GroupCard({required this.group});
-  final CrewGroup group;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final races =
-        '${group.raceCount} ${group.raceCount == 1 ? 'race' : 'races'}';
-    final people = '${group.memberCount} in crew';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14, right: 4),
-      child: Semantics(
-        button: true,
-        label: '${group.name}, $people, $races, code ${group.joinCode}',
-        excludeSemantics: true,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(NuvoRadii.sm),
-            boxShadow: AppShadows.hardOffset(c.inkShadow),
-          ),
-          child: Material(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.sm),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(NuvoRadii.sm),
-              onTap: () => context.push('/crews/${group.id}'),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 64),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(NuvoRadii.sm),
-                  border: Border.all(color: c.border, width: 2),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: c.border, width: 1.5),
-                      ),
-                      alignment: Alignment.center,
-                      child: const NuvoCrewIcon(size: 26, semanticLabel: null),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            group.name,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: c.ink,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                '$people · $races',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: c.inkMuted,
-                                ),
-                              ),
-                              _CodeChip(code: group.joinCode),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Start / join sheet
-// ─────────────────────────────────────────────────────────────────────────────
-
-enum _SheetMode { create, join }
-
-class _CrewInputSheet extends ConsumerStatefulWidget {
-  const _CrewInputSheet({required this.mode});
-  final _SheetMode mode;
-
-  @override
-  ConsumerState<_CrewInputSheet> createState() => _CrewInputSheetState();
-}
-
-class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
-  final _controller = TextEditingController();
-  bool _busy = false;
-  String? _error;
-
-  bool get _isCreate => widget.mode == _SheetMode.create;
-
-  @override
-  void dispose() {
-    FocusManager.instance.primaryFocus?.unfocus();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (_busy) return;
-    final text = _controller.text.trim();
-    if (_isCreate ? text.length < 2 : text.isEmpty) {
-      setState(
-        () => _error = _isCreate
-            ? 'Give your crew a name (2 characters or more).'
-            : 'Enter the crew code.',
-      );
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    final squads = ref.read(squadControllerProvider.notifier);
-    try {
-      if (_isCreate) {
-        final group = await squads.create(text);
-        if (mounted) Navigator.of(context).pop(group);
-      } else {
-        await squads.join(text);
-        if (mounted) Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          _error = _messageFor(e);
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final router = GoRouter.maybeOf(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        20 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: c.border, width: 2),
-                  ),
-                  alignment: Alignment.center,
-                  child: _isCreate
-                      ? const NuvoCrewIcon(size: 28, semanticLabel: null)
-                      : Icon(Icons.login_rounded, color: c.ink),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _isCreate ? 'Start a crew' : 'Join a crew',
-                        style: AppTextStyles.titleLarge.copyWith(color: c.ink),
-                      ),
-                      Text(
-                        _isCreate
-                            ? 'Name it, then share the code or QR.'
-                            : 'Type the code or scan the crew QR.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: c.inkMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              key: const ValueKey('crew-input'),
-              controller: _controller,
-              onTapOutside: (_) =>
-                  FocusManager.instance.primaryFocus?.unfocus(),
-              autofocus: true,
-              maxLength: _isCreate ? 40 : 12,
-              textAlign: _isCreate ? TextAlign.start : TextAlign.center,
-              style: _isCreate
-                  ? null
-                  : AppTextStyles.titleLarge.copyWith(
-                      color: c.ink,
-                      letterSpacing: 4,
-                    ),
-              textCapitalization: _isCreate
-                  ? TextCapitalization.words
-                  : TextCapitalization.characters,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                labelText: _isCreate ? 'Crew name' : 'Crew code',
-                counterText: '',
-                errorText: _error,
-              ),
-            ),
-            const SizedBox(height: 14),
-            NuvoPrimaryButton(
-              label: _isCreate ? 'Start crew' : 'Join crew',
-              expand: true,
-              loading: _busy,
-              onPressed: _submit,
-            ),
-            if (!_isCreate) ...[
-              const SizedBox(height: 10),
-              NuvoOutlineButton(
-                label: 'Scan crew QR',
-                icon: Icons.qr_code_scanner_rounded,
-                expand: true,
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  router?.push('/scan');
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// /crews/:id — the crew leaderboard
-// ─────────────────────────────────────────────────────────────────────────────
-
-class CrewGroupDetailScreen extends ConsumerStatefulWidget {
-  const CrewGroupDetailScreen({super.key, required this.groupId});
-  final String groupId;
-
-  @override
-  ConsumerState<CrewGroupDetailScreen> createState() =>
-      _CrewGroupDetailScreenState();
-}
-
-class _CrewGroupDetailScreenState extends ConsumerState<CrewGroupDetailScreen> {
-  String? _actionError;
-  bool _busy = false;
-  int _tab = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    Future(() {
-      if (!mounted) return;
-      final c = ref.read(squadControllerProvider.notifier);
-      c.loadDetail(widget.groupId);
-      c.revalidateDetail(widget.groupId);
-    });
-  }
-
-  Future<void> _load() =>
-      ref.read(squadControllerProvider.notifier).refreshDetail(widget.groupId);
-
-  RaceCreatePrefill _crewPrefill() => RaceCreatePrefill(
-    crewId: widget.groupId,
-    crewName: ref
-        .read(squadControllerProvider)
-        .details[widget.groupId]
-        ?.group
-        .name,
-  );
-
-  Future<void> _bringRace() async {
-    final detail = ref.read(squadControllerProvider).details[widget.groupId];
-    final me = ref.read(authControllerProvider).user;
-    if (detail == null || me == null) return;
-    final linked = detail.races.map((r) => r.id).toSet();
-    final mine = ref
-        .read(raceControllerProvider)
-        .races
-        .where(
-          (r) =>
-              r.creatorId == me.id &&
-              r.status == 'active' &&
-              !linked.contains(r.id),
-        )
-        .toList();
-
-    if (mine.isEmpty) {
-      // Nothing to bring yet — start a race, then come back.
-      context.push('/races/new', extra: _crewPrefill());
-      return;
-    }
-
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        final c = ctx.themeColors;
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            children: [
-              Text(
-                'Bring a race to the crew',
-                style: AppTextStyles.titleLarge.copyWith(color: c.ink),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Everyone in the crew is added to the race.',
-                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-              ),
-              const SizedBox(height: 8),
-              for (final race in mine)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.flag_rounded),
-                  title: Text(race.displayTitle),
-                  onTap: () => Navigator.of(ctx).pop(race.id),
-                ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.add_rounded),
-                title: const Text('Start a new race'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  context.push('/races/new', extra: _crewPrefill());
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
-
-    setState(() {
-      _busy = true;
-      _actionError = null;
-    });
-    try {
-      await ref
-          .read(squadControllerProvider.notifier)
-          .addRace(widget.groupId, picked);
-      ref.read(raceControllerProvider.notifier).loadRaces(force: true);
-    } catch (e) {
-      if (mounted) setState(() => _actionError = _messageFor(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _addPeople() async {
-    final detail = ref.read(squadControllerProvider).details[widget.groupId];
-    if (detail == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(_kSide, 0, _kSide, _kSide),
-          child: SingleChildScrollView(child: _CodeCard(group: detail.group)),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _manageMember(CrewMember member) async {
-    final detail = ref.read(squadControllerProvider).details[widget.groupId];
-    if (detail == null) return;
-    final iAmOwner = detail.group.isOwner;
-    final canRemove =
-        !member.isOwner &&
-        (iAmOwner || (!member.isAdmin && detail.group.canManage));
-    final canSetRole = iAmOwner && !member.isOwner;
-    if (!canRemove && !canSetRole) return;
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(_kSide, 0, _kSide, _kSide),
+      child: Scaffold(
+        backgroundColor: V13.bg,
+        body: SafeArea(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                member.displayName,
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: ctx.themeColors.ink,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (canSetRole)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    member.isAdmin
-                        ? Icons.remove_moderator_outlined
-                        : Icons.admin_panel_settings_outlined,
-                  ),
-                  title: Text(member.isAdmin ? 'Remove admin' : 'Make admin'),
-                  subtitle: Text(
-                    member.isAdmin
-                        ? 'They go back to a regular member.'
-                        : 'Admins can add races and remove members.',
-                  ),
-                  onTap: () => Navigator.of(ctx).pop('role'),
-                ),
-              if (canRemove)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.person_remove_outlined,
-                    color: ctx.dangerInk,
-                  ),
-                  title: Text(
-                    'Remove from crew',
-                    style: TextStyle(color: ctx.dangerInk),
-                  ),
-                  onTap: () => Navigator.of(ctx).pop('remove'),
-                ),
+              const V13BackBar(title: 'Crews', fallback: '/pass'),
+              Expanded(child: _body(groups, error)),
             ],
           ),
         ),
       ),
     );
-    if (action == null || !mounted) return;
-    final squads = ref.read(squadControllerProvider.notifier);
-    if (action == 'remove') {
-      final ok = await showNuvoConfirmDialog(
-        context,
-        title: 'Remove ${member.displayName}?',
-        message: 'They leave this crew and can\'t rejoin with the code.',
-        confirmLabel: 'Remove',
-      );
-      if (ok != true) return;
-    }
-    setState(() {
-      _busy = true;
-      _actionError = null;
-    });
-    try {
-      if (action == 'role') {
-        await squads.setRole(
-          widget.groupId,
-          member.userId,
-          member.isAdmin ? 'member' : 'admin',
-        );
-      } else {
-        await squads.removeMember(widget.groupId, member.userId);
-      }
-    } catch (e) {
-      if (mounted) setState(() => _actionError = _messageFor(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
-  Future<void> _removeRace(CrewGroupRace race) async {
-    final ok = await showNuvoConfirmDialog(
-      context,
-      title: 'Remove "${race.title}"?',
-      message:
-          'It stops counting for the crew leaderboard. Everyone stays in the race.',
-      confirmLabel: 'Remove',
-    );
-    if (ok != true || !mounted) return;
-    setState(() {
-      _busy = true;
-      _actionError = null;
-    });
-    try {
-      await ref
-          .read(squadControllerProvider.notifier)
-          .removeRace(widget.groupId, race.id);
-    } catch (e) {
-      if (mounted) setState(() => _actionError = _messageFor(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final squads = ref.watch(squadControllerProvider);
-    final detail = squads.details[widget.groupId];
-    final error = squads.detailErrors[widget.groupId];
-    final c = context.themeColors;
-
-    if (detail == null) {
-      return NuvoPage(
-        topBar: _topBar(context, 'Crew'),
-        child: error != null
-            ? NuvoErrorState(message: error, onRetry: _load)
-            : const Center(child: NuvoLoadingIndicator()),
-      );
-    }
-
-    final group = detail.group;
-    final canManage = group.canManage;
-    final alone = detail.members.length <= 1 && group.memberCount <= 1;
-
-    // Races first (each opens its own leaderboard), then the people.
-    final Widget content = switch (_tab) {
-      1 => _MembersTab(
-        detail: detail,
-        onAdd: _addPeople,
-        onManage: _manageMember,
-      ),
-      _ => _RacesTab(
-        detail: detail,
-        canManage: canManage,
-        busy: _busy,
-        alone: alone,
-        onAdd: _bringRace,
-        onRemove: _removeRace,
-      ),
-    };
-
-    return LiveRefresh(
-      onRefresh: () => ref
-          .read(squadControllerProvider.notifier)
-          .refreshDetail(widget.groupId),
-      child: NuvoPage(
-        topBar: _topBar(
-          context,
-          group.name,
-          trailing: IconButton(
-            key: const ValueKey('crew-settings-button'),
-            tooltip: 'Crew settings',
-            icon: Icon(Icons.settings_outlined, color: c.ink),
-            onPressed: () => context.push('/crews/${widget.groupId}/settings'),
-          ),
-        ),
-        child: RefreshIndicator(
+  Widget _body(List<CrewGroup>? groups, String? error) {
+    if (groups == null) {
+      if (error != null) {
+        return V13AsyncView<Never>.state(
+          status: V13AsyncStatus.error,
+          errorTitle: "Couldn't load your crews",
+          errorBody: error,
+          onRetry: _load,
           onRefresh: _load,
-          child: NuvoFadeScroll(
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                _kSide,
-                NuvoSpacing.md,
-                _kSide,
-                32 + MediaQuery.viewPaddingOf(context).bottom,
-              ),
-              children: [
-                _CrewSummaryCard(
-                  detail: detail,
-                  onAddPeople: _addPeople,
-                  onAddRace: canManage ? _bringRace : null,
-                  busy: _busy,
-                ),
-                if (_actionError != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    _actionError!,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.dangerInk,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: NuvoSpacing.lg),
-                _CrewTabBar(
-                  selected: _tab,
-                  labels: [
-                    'Races (${group.raceCount})',
-                    'Members (${group.memberCount})',
-                  ],
-                  onSelect: (i) => setState(() => _tab = i),
-                ),
-                const SizedBox(height: NuvoSpacing.lg),
-                content,
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The crew at a glance: how big it is, my role, and the two things an owner
-/// does most — pull people in and bring races.
-class _CrewSummaryCard extends StatelessWidget {
-  const _CrewSummaryCard({
-    required this.detail,
-    required this.onAddPeople,
-    required this.onAddRace,
-    required this.busy,
-  });
-
-  final CrewGroupDetail detail;
-  final VoidCallback onAddPeople;
-  final VoidCallback? onAddRace;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final g = detail.group;
-    final role = g.isOwner
-        ? 'Owner'
-        : (g.myRole == 'admin' ? 'Admin' : 'Member');
-    return Container(
-      key: const ValueKey('crew-summary'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.border, width: 2),
-        boxShadow: AppShadows.hardOffset(c.inkShadow),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: c.border, width: 1.5),
-                ),
-                alignment: Alignment.center,
-                child: const NuvoCrewIcon(size: 28, semanticLabel: null),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      g.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-                    ),
-                    Text(
-                      '${g.memberCount} ${g.memberCount == 1 ? 'member' : 'members'}'
-                      ' · ${g.raceCount} ${g.raceCount == 1 ? 'race' : 'races'}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: c.inkMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _RoleChip(
-                label: role,
-                role: g.isOwner
-                    ? 'owner'
-                    : (g.myRole == 'admin' ? 'admin' : 'member'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Builder(
-            builder: (context) {
-              final addPeople = NuvoPrimaryButton(
-                label: 'Add people',
-                icon: Icons.qr_code_2_rounded,
-                expand: true,
-                onPressed: onAddPeople,
-              );
-              final addRace = onAddRace == null
-                  ? null
-                  : NuvoOutlineButton(
-                      label: 'Add race',
-                      icon: Icons.flag_rounded,
-                      expand: true,
-                      onPressed: busy ? null : onAddRace,
-                    );
-              return _ActionPair(first: addPeople, second: addRace);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoleChip extends StatelessWidget {
-  const _RoleChip({required this.label, this.role = 'member'});
-  final String label;
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    // Solid colour is the highlight: owner = gold, admin = Nuvo blue.
-    final (fill, text, edge) = switch (role) {
-      'owner' => (NuvoColors.gold, NuvoColors.navy, NuvoColors.gold),
-      'admin' => (NuvoColors.blue, NuvoColors.white, NuvoColors.blue),
-      _ => (c.surface, c.inkMuted, c.border),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: edge),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        style: AppTextStyles.labelMedium.copyWith(
-          color: text,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-/// Three views of one crew: standings, people, races.
-class _CrewTabBar extends StatelessWidget {
-  const _CrewTabBar({
-    required this.selected,
-    required this.labels,
-    required this.onSelect,
-  });
-
-  final int selected;
-  final List<String> labels;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Container(
-      key: const ValueKey('crew-tabs'),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: c.border, width: 2),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: Semantics(
-                button: true,
-                selected: i == selected,
-                label: labels[i],
-                excludeSemantics: true,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onSelect(i),
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 40),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: i == selected
-                          ? NuvoColors.blue
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        labels[i],
-                        maxLines: 1,
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: i == selected ? NuvoColors.white : c.inkMuted,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MembersTab extends StatelessWidget {
-  const _MembersTab({
-    required this.detail,
-    required this.onAdd,
-    required this.onManage,
-  });
-
-  final CrewGroupDetail detail;
-  final VoidCallback onAdd;
-  final ValueChanged<CrewMember> onManage;
-
-  static int _order(CrewMember m) => m.isOwner ? 0 : (m.isAdmin ? 1 : 2);
-
-  @override
-  Widget build(BuildContext context) {
-    final g = detail.group;
-    final members = [...detail.members]
-      ..sort((a, b) => _order(a).compareTo(_order(b)));
-    if (members.isEmpty) {
-      return const _InlineNote(
-        icon: Icons.groups_outlined,
-        text: 'Members will show up here.',
-      );
+          builder: (_) => const SizedBox.shrink(),
+        );
+      }
+      return const V13Skeleton.screen();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final m in members)
-          _MemberRow(
-            member: m,
-            canManage: !m.isOwner && (g.isOwner || (g.canManage && !m.isAdmin)),
-            onManage: () => onManage(m),
-          ),
-        const SizedBox(height: NuvoSpacing.xs),
-        NuvoOutlineButton(
-          label: 'Add people',
-          icon: Icons.qr_code_2_rounded,
-          expand: true,
-          onPressed: onAdd,
-        ),
-      ],
-    );
-  }
-}
-
-class _MemberRow extends StatelessWidget {
-  const _MemberRow({
-    required this.member,
-    required this.canManage,
-    required this.onManage,
-  });
-
-  final CrewMember member;
-  final bool canManage;
-  final VoidCallback onManage;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      constraints: const BoxConstraints(minHeight: 56),
-      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.border, width: 2),
-      ),
-      child: Row(
+    return V13AsyncView<List<CrewGroup>>.state(
+      status: groups.isEmpty ? V13AsyncStatus.empty : V13AsyncStatus.data,
+      dataValue: groups,
+      emptyIcon: Icons.groups_rounded,
+      emptyTitle: 'Race with a crew',
+      emptyBody:
+          'Start a crew, share the code, and every race you '
+          'bring to it lands on one leaderboard.',
+      emptyAction: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          NuvoAvatar(
-            initials: member.initials,
-            size: NuvoAvatarSizes.sm,
-            photoUrl: member.profilePhotoUrl,
+          V13Button.primary(
+            label: 'Start a crew',
+            icon: Icons.add_rounded,
+            fullWidth: true,
+            onPressed: _start,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: V13.gapMd),
+          V13Button.secondary(
+            label: 'Join with a code',
+            icon: Icons.login_rounded,
+            fullWidth: true,
+            onPressed: _join,
+          ),
+        ],
+      ),
+      onRefresh: _load,
+      builder: (list) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          V13.pagePad,
+          V13.gapMd,
+          V13.pagePad,
+          V13.gapXxl,
+        ),
+        children: [
+          for (final g in list) ...[
+            CrewGroupCard(crew: g, onTap: () => context.push('/crews/${g.id}')),
+            const SizedBox(height: V13.gapMd),
+          ],
+          V13Card.dashed(
+            onTap: _start,
+            semanticLabel: 'Start a crew',
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  member.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
-                ),
-                if (member.username != null)
-                  Text(
-                    '@${member.username}',
+                const Icon(Icons.add_rounded, color: V13.navy),
+                const SizedBox(width: V13.gapSm),
+                Flexible(
+                  child: Text(
+                    'Start a crew',
+                    style: V13.bodyStrong,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
                   ),
+                ),
               ],
             ),
           ),
-          if (member.isOwner || member.isAdmin) ...[
-            _RoleChip(
-              label: member.isOwner ? 'Owner' : 'Admin',
-              role: member.isOwner ? 'owner' : 'admin',
+          V13ListRow(
+            leading: const V13IconTile(
+              icon: Icons.key_rounded,
+              color: V13.sky,
+              size: 40,
             ),
-            const SizedBox(width: 4),
-          ],
-          if (canManage)
-            IconButton(
-              tooltip: 'Manage ${member.displayName}',
-              icon: Icon(Icons.more_horiz_rounded, color: c.ink),
-              onPressed: onManage,
-            )
-          else
-            const SizedBox(width: 8),
-        ],
-      ),
-    );
-  }
-}
-
-class _RacesTab extends StatelessWidget {
-  const _RacesTab({
-    required this.detail,
-    required this.canManage,
-    required this.busy,
-    required this.alone,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  final CrewGroupDetail detail;
-  final bool canManage;
-  final bool busy;
-  final bool alone;
-  final VoidCallback onAdd;
-  final ValueChanged<CrewGroupRace> onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final live = detail.races.where((r) => r.status == 'active').toList();
-    final done = detail.races.where((r) => r.status != 'active').toList();
-    Widget section(String title, List<CrewGroupRace> races) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10, left: 2),
-          child: Text(
-            title,
-            style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+            title: 'Join with a code',
+            subtitle: 'Got a crew code from a friend?',
+            trailing: const Icon(Icons.chevron_right_rounded, color: V13.muted),
+            onTap: _join,
           ),
-        ),
-        // One card per race: every race is its own bordered block, so the
-        // list reads as separate items and simply keeps going as it grows.
-        for (final r in races)
-          _RaceRow(race: r, onRemove: canManage ? () => onRemove(r) : null),
-        const SizedBox(height: NuvoSpacing.md),
-      ],
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (alone) ...[
-          // Nobody else yet: the next move is getting people in.
-          _CodeCard(group: detail.group, title: 'Just you so far'),
-          const SizedBox(height: NuvoSpacing.lg),
-        ],
-        if (detail.races.isEmpty) ...[
-          const _InlineNote(
-            icon: Icons.flag_outlined,
-            text: 'No races yet. Races you add count for the whole crew.',
-          ),
-          if (canManage)
-            NuvoPrimaryButton(
-              label: 'Add a race',
-              icon: Icons.flag_rounded,
-              expand: true,
-              loading: busy,
-              onPressed: onAdd,
-            )
-          else
-            Text(
-              'Crew admins add races.',
-              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+          V13ListRow(
+            leading: const V13IconTile(
+              icon: Icons.qr_code_scanner_rounded,
+              color: V13.mint,
+              size: 40,
             ),
-        ] else ...[
-          Text(
-            'Tap a race to see its leaderboard.',
-            style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-          ),
-          const SizedBox(height: NuvoSpacing.md),
-          if (live.isNotEmpty) section('Racing now', live),
-          if (done.isNotEmpty) section('Finished', done),
-        ],
-      ],
-    );
-  }
-}
-
-class _InlineNote extends StatelessWidget {
-  const _InlineNote({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: c.inkSubtle),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-            ),
+            title: 'Scan a crew QR',
+            trailing: const Icon(Icons.chevron_right_rounded, color: V13.muted),
+            onTap: _scan,
+            showDivider: false,
           ),
         ],
       ),
@@ -1418,116 +240,9 @@ class _InlineNote extends StatelessWidget {
   }
 }
 
-class _CodeCard extends StatelessWidget {
-  const _CodeCard({required this.group, this.title = 'Pull in your crew'});
-  final CrewGroup group;
-  final String title;
-
-  /// What the QR carries; `NuvoDestination` parses it back to the code.
-  String get _link => 'https://getnuvo.net/c/${group.joinCode}';
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    // The QR scales with the phone: big enough to scan from across a table on
-    // tall screens, small enough that the buttons stay on screen on short ones.
-    final media = MediaQuery.sizeOf(context);
-    final qrSize = (media.height * 0.2)
-        .clamp(120.0, 200.0)
-        .clamp(0.0, media.width * 0.55)
-        .toDouble();
-    return Container(
-      key: const ValueKey('crew-code-card'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.border, width: 2),
-        boxShadow: AppShadows.hardOffset(c.inkShadow),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: AppTextStyles.titleMedium.copyWith(color: c.ink)),
-          const SizedBox(height: 14),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                // Scanners need the white quiet zone in both themes.
-                color: NuvoColors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: c.border, width: 2),
-              ),
-              child: QrImageView(
-                key: const ValueKey('crew-qr'),
-                data: _link,
-                version: QrVersions.auto,
-                size: qrSize,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: NuvoColors.navy,
-                ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: NuvoColors.navy,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(
-              'Crew code',
-              style: AppTextStyles.labelMedium.copyWith(color: c.inkMuted),
-            ),
-          ),
-          Center(
-            child: Text(
-              group.joinCode,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleLarge.copyWith(
-                color: c.ink,
-                letterSpacing: 4,
-              ),
-            ),
-          ),
-          Center(
-            child: Text(
-              'Scan or enter this code to join',
-              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-            ),
-          ),
-          const SizedBox(height: 14),
-          _ActionPair(
-            minWidth: 260,
-            first: NuvoOutlineButton(
-              label: 'Copy code',
-              icon: Icons.copy_rounded,
-              expand: true,
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: group.joinCode));
-                HapticFeedback.selectionClick();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Crew code copied')),
-                );
-              },
-            ),
-            second: Builder(
-              builder: (btnContext) => NuvoPrimaryButton(
-                label: 'Share',
-                icon: Icons.ios_share_rounded,
-                expand: true,
-                onPressed: () => _shareCrew(btnContext, group),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// /crews/join/:code — confirm before joining
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// `/crews/join/:code` — where a scanned crew QR or shared link lands. It
 /// confirms before joining; scanning never joins on its own.
@@ -1558,6 +273,8 @@ class _CrewJoinScreenState extends ConsumerState<CrewJoinScreen> {
           .groups
           ?.where((g) => g.joinCode.toUpperCase() == widget.code.toUpperCase())
           .firstOrNull;
+      showV13Confetti(context);
+      showV13Toast(context, "You're in the crew.");
       if (joined != null) {
         context.pushReplacement('/crews/${joined.id}');
       } else {
@@ -1575,156 +292,68 @@ class _CrewJoinScreenState extends ConsumerState<CrewJoinScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return NuvoPage(
-      topBar: _topBar(context, 'Join a crew'),
-      child: Padding(
-        padding: const EdgeInsets.all(_kSide),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const NuvoCrewIcon(size: 56, semanticLabel: null),
-              const SizedBox(height: 16),
-              Text(
-                'Join this crew?',
-                style: AppTextStyles.titleLarge.copyWith(color: c.ink),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.code,
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: c.ink,
-                  letterSpacing: 4,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'You will join its leaderboard and its running races.',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.dangerInk,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              NuvoPrimaryButton(
-                label: 'Join crew',
-                expand: true,
-                loading: _busy,
-                onPressed: _join,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RaceRow extends StatelessWidget {
-  const _RaceRow({required this.race, this.onRemove});
-  final CrewGroupRace race;
-  final VoidCallback? onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final sem = context.semanticColors;
-    final live = race.status == 'active';
-    // Green = running now; gold = finished. The border carries the colour.
-    final tone = live ? sem.success : sem.warning;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, right: 3),
-      child: Semantics(
-        button: true,
-        label:
-            '${race.title}, ${live ? 'racing now' : 'finished'}. Open leaderboard.',
-        excludeSemantics: true,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            boxShadow: tone.hardShadow(offset: const Offset(3, 3)),
-          ),
-          child: Material(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(NuvoRadii.lg),
-              onTap: () => context.push('/race/${race.id}'),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 64),
-                padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                  border: Border.all(color: tone.base, width: 2),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+    return Scaffold(
+      backgroundColor: V13.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const V13BackBar(title: 'Join a crew', fallback: '/pass'),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  padding: const EdgeInsets.all(V13.pagePad),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - V13.pagePad * 2,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const V13IconTile(
+                          icon: Icons.groups_rounded,
+                          color: V13.sky,
+                          size: 76,
+                          radius: V13.radiusTileLg,
+                        ),
+                        const SizedBox(height: V13.gapLg),
+                        Text(
+                          'Join this crew?',
+                          textAlign: TextAlign.center,
+                          style: V13.sectionHead,
+                        ),
+                        const SizedBox(height: V13.gapSm),
+                        Text(
+                          widget.code,
+                          style: V13.sectionHead.copyWith(letterSpacing: 4),
+                        ),
+                        const SizedBox(height: V13.gapSm),
+                        Text(
+                          'You will join its leaderboard and its running races.',
+                          textAlign: TextAlign.center,
+                          style: V13.body.copyWith(color: V13.muted),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: V13.gapMd),
                           Text(
-                            race.title,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: c.ink,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: tone.base,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  live ? 'Racing now' : 'Finished',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: tone.on,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: V13.caption.copyWith(color: V13.danger),
                           ),
                         ],
-                      ),
+                        const SizedBox(height: V13.gapXl),
+                        V13Button.primary(
+                          label: 'Join crew',
+                          fullWidth: true,
+                          loading: _busy,
+                          onPressed: _join,
+                        ),
+                      ],
                     ),
-                    if (onRemove != null)
-                      IconButton(
-                        tooltip: 'Remove ${race.title} from crew',
-                        icon: Icon(Icons.more_horiz_rounded, color: c.ink),
-                        onPressed: onRemove,
-                      )
-                    else
-                      Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
-                    if (onRemove != null)
-                      Icon(Icons.chevron_right_rounded, color: c.inkSubtle),
-                    const SizedBox(width: 6),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1732,7 +361,7 @@ class _RaceRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// /crews/:id/settings — rename, code, about, leave
+// /crews/:id/settings — rename, code, about, leave, delete
 // ─────────────────────────────────────────────────────────────────────────────
 
 class CrewSettingsScreen extends ConsumerStatefulWidget {
@@ -1750,7 +379,6 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
   bool _leaving = false;
   bool _deleting = false;
   String? _error;
-  String? _saved;
 
   @override
   void initState() {
@@ -1778,11 +406,10 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
     setState(() {
       _saving = true;
       _error = null;
-      _saved = null;
     });
     try {
       await ref.read(squadControllerProvider.notifier).rename(g.id, next);
-      if (mounted) setState(() => _saved = 'Name updated.');
+      if (mounted) showV13Toast(context, 'Name updated.');
     } catch (e) {
       if (mounted) setState(() => _error = _messageFor(e));
     } finally {
@@ -1790,15 +417,52 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
     }
   }
 
+  Future<void> _copyCode(CrewGroup g) async {
+    await Clipboard.setData(ClipboardData(text: g.joinCode));
+    V13Haptics.select();
+    if (mounted) showV13Toast(context, 'Crew code copied');
+  }
+
+  Future<void> _shareCrew(CrewGroup g) async {
+    final text = _inviteText(g);
+    Rect? origin;
+    try {
+      final box = context.findRenderObject();
+      if (box is RenderBox && box.hasSize && box.attached) {
+        final rect = box.localToGlobal(Offset.zero) & box.size;
+        if (rect.width > 0 && rect.height > 0) origin = rect;
+      }
+    } catch (_) {
+      origin = null;
+    }
+    var copied = false;
+    try {
+      final result = await Share.share(
+        text,
+        subject: g.name,
+        sharePositionOrigin: origin,
+      );
+      copied = result.status == ShareResultStatus.unavailable;
+    } catch (_) {
+      copied = true;
+    }
+    if (!copied || !mounted) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      showV13Toast(context, 'Invite copied — paste it into a message');
+    }
+  }
+
   Future<void> _leaveCrew(CrewGroup g) async {
-    final ok = await showNuvoConfirmDialog(
+    final ok = await showV13ConfirmSheet(
       context,
       title: 'Leave ${g.name}?',
-      message: g.isOwner
+      body: g.isOwner
           ? 'You stay in races you already joined. Ownership passes to an '
                 'admin, or to the longest-standing member.'
           : 'You stay in races you already joined.',
       confirmLabel: 'Leave crew',
+      destructive: true,
     );
     if (ok != true || !mounted) return;
     setState(() {
@@ -1807,7 +471,9 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
     });
     try {
       await ref.read(squadControllerProvider.notifier).leave(g.id);
-      if (mounted) context.go('/crews');
+      if (!mounted) return;
+      showV13Toast(context, 'You left ${g.name}.');
+      context.go('/crews');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -1819,13 +485,14 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
   }
 
   Future<void> _deleteCrew(CrewGroup g) async {
-    final ok = await showNuvoConfirmDialog(
+    final ok = await showV13ConfirmSheet(
       context,
       title: 'Delete ${g.name}?',
-      message:
+      body:
           'This removes the crew for everyone: the leaderboard, members and '
           'crew code stop working. Races stay as they are.',
       confirmLabel: 'Delete crew',
+      destructive: true,
     );
     if (ok != true || !mounted) return;
     setState(() {
@@ -1834,7 +501,9 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
     });
     try {
       await ref.read(squadControllerProvider.notifier).deleteCrew(g.id);
-      if (mounted) context.go('/crews');
+      if (!mounted) return;
+      showV13Toast(context, '${g.name} deleted.');
+      context.go('/crews');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -1849,21 +518,34 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
   Widget build(BuildContext context) {
     final squads = ref.watch(squadControllerProvider);
     final detail = squads.details[widget.groupId];
-    final c = context.themeColors;
-    final sem = context.semanticColors;
+    return Scaffold(
+      backgroundColor: V13.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const V13BackBar(title: 'Crew settings', fallback: '/pass'),
+            Expanded(child: _body(squads, detail)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _body(SquadState squads, CrewGroupDetail? detail) {
     if (detail == null) {
       final error = squads.detailErrors[widget.groupId];
-      return NuvoPage(
-        topBar: _topBar(context, 'Crew settings'),
-        child: error != null
-            ? NuvoErrorState(
-                message: error,
-                onRetry: () => ref
-                    .read(squadControllerProvider.notifier)
-                    .refreshDetail(widget.groupId),
-              )
-            : const Center(child: NuvoLoadingIndicator()),
-      );
+      if (error != null) {
+        return V13AsyncView<Never>.state(
+          status: V13AsyncStatus.error,
+          errorTitle: "Couldn't load crew settings",
+          errorBody: error,
+          onRetry: () => ref
+              .read(squadControllerProvider.notifier)
+              .refreshDetail(widget.groupId),
+          builder: (_) => const SizedBox.shrink(),
+        );
+      }
+      return const V13Skeleton.screen();
     }
     final g = detail.group;
     if (!_seeded) {
@@ -1873,219 +555,138 @@ class _CrewSettingsScreenState extends ConsumerState<CrewSettingsScreen> {
     final role = g.isOwner
         ? 'Owner'
         : (g.myRole == 'admin' ? 'Admin' : 'Member');
-    return NuvoPage(
-      topBar: _topBar(context, 'Crew settings'),
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          _kSide,
-          NuvoSpacing.md,
-          _kSide,
-          32 + MediaQuery.viewPaddingOf(context).bottom,
-        ),
-        children: [
-          _SettingsSection(
-            title: 'Name',
-            tone: sem.neutral,
-            child: g.canManage
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        key: const ValueKey('crew-rename'),
-                        controller: _name,
-                        maxLength: 40,
-                        textCapitalization: TextCapitalization.words,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _save(g),
-                        onTapOutside: (_) =>
-                            FocusManager.instance.primaryFocus?.unfocus(),
-                        decoration: InputDecoration(
-                          labelText: 'Crew name',
-                          counterText: '',
-                          errorText: _error,
-                        ),
-                      ),
-                      if (_saved != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            _saved!,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: c.successText,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      NuvoPrimaryButton(
-                        label: 'Save name',
-                        expand: true,
-                        loading: _saving,
-                        onPressed: () => _save(g),
-                      ),
-                    ],
-                  )
-                : Text(
-                    g.name,
-                    style: AppTextStyles.titleMedium.copyWith(color: c.ink),
-                  ),
-          ),
-          const SizedBox(height: NuvoSpacing.lg),
-          _SettingsSection(
-            title: 'Crew code',
-            tone: sem.accent,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    g.joinCode,
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: c.ink,
-                      letterSpacing: 4,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Copy code',
-                  icon: Icon(Icons.copy_rounded, color: c.ink),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: g.joinCode));
-                    HapticFeedback.selectionClick();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Crew code copied')),
-                    );
-                  },
-                ),
-                Builder(
-                  builder: (btnContext) => IconButton(
-                    tooltip: 'Share',
-                    icon: Icon(Icons.ios_share_rounded, color: c.ink),
-                    onPressed: () => _shareCrew(btnContext, g),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: NuvoSpacing.lg),
-          _SettingsSection(
-            title: 'About',
-            tone: sem.success,
-            child: Column(
-              children: [
-                _InfoRow(label: 'Members', value: '${g.memberCount}'),
-                _InfoRow(label: 'Races', value: '${g.raceCount}'),
-                _InfoRow(label: 'Your role', value: role),
-              ],
-            ),
-          ),
-          const SizedBox(height: NuvoSpacing.lg),
-          _SettingsSection(
-            title: 'Leave',
-            tone: sem.danger,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  g.isOwner
-                      ? 'You own this crew. If you leave, ownership passes to '
-                            'an admin, or to the longest-standing member.'
-                      : 'You will leave the crew and its leaderboard. You stay '
-                            'in races you already joined.',
-                  style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-                ),
-                const SizedBox(height: 12),
-                NuvoDangerButton(
-                  label: 'Leave crew',
-                  icon: Icons.logout_rounded,
-                  expand: true,
-                  loading: _leaving,
-                  onPressed: () => _leaveCrew(g),
-                ),
-              ],
-            ),
-          ),
-          if (g.isOwner) ...[
-            const SizedBox(height: NuvoSpacing.xl),
-            _SettingsSection(
-              title: 'Delete',
-              tone: sem.danger,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Delete removes this crew for everyone. The leaderboard, '
-                    'members and crew code stop working. Races stay as they '
-                    'are.',
-                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-                  ),
-                  const SizedBox(height: 12),
-                  NuvoDangerButton(
-                    key: const ValueKey('crew-delete'),
-                    label: 'Delete crew',
-                    icon: Icons.delete_outline_rounded,
-                    expand: true,
-                    loading: _deleting,
-                    onPressed: (_leaving || _deleting)
-                        ? null
-                        : () => _deleteCrew(g),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapMd,
+        V13.pagePad,
+        V13.gapXxl + MediaQuery.viewPaddingOf(context).bottom,
       ),
-    );
-  }
-}
-
-/// One settings group: a coloured label dot + title over an outlined card.
-class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({
-    required this.title,
-    required this.tone,
-    required this.child,
-  });
-
-  final String title;
-  final NuvoColorRole tone;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 8),
+        const V13SectionHeader(title: 'Name'),
+        const SizedBox(height: V13.gapMd),
+        V13Card(
+          child: g.canManage
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    V13TextInput(
+                      key: const ValueKey('crew-rename'),
+                      controller: _name,
+                      label: 'Crew name',
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      inputFormatters: [LengthLimitingTextInputFormatter(40)],
+                      errorText: _error,
+                      onSubmitted: (_) => _save(g),
+                    ),
+                    const SizedBox(height: V13.gapMd),
+                    V13Button.primary(
+                      label: 'Save name',
+                      fullWidth: true,
+                      loading: _saving,
+                      onPressed: () => _save(g),
+                    ),
+                  ],
+                )
+              : Text(g.name, style: V13.bodyStrong),
+        ),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Crew code'),
+        const SizedBox(height: V13.gapMd),
+        V13Card(
           child: Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: tone.base,
-                  shape: BoxShape.circle,
+              Expanded(
+                child: Text(
+                  g.joinCode,
+                  style: V13.sectionHead.copyWith(letterSpacing: 4),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: AppTextStyles.titleMedium.copyWith(color: c.ink),
+              V13IconButton(
+                icon: Icons.copy_rounded,
+                semanticLabel: 'Copy code',
+                onTap: () => _copyCode(g),
+              ),
+              const SizedBox(width: V13.gapSm),
+              V13IconButton(
+                icon: Icons.ios_share_rounded,
+                semanticLabel: 'Share crew invite',
+                onTap: () => _shareCrew(g),
               ),
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(color: tone.border, width: 2),
-            boxShadow: tone.hardShadow(),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'About'),
+        const SizedBox(height: V13.gapMd),
+        V13Card(
+          padding: const EdgeInsets.symmetric(horizontal: V13.gapLg),
+          child: Column(
+            children: [
+              _InfoRow(label: 'Members', value: '${g.memberCount}'),
+              const V13Divider(),
+              _InfoRow(label: 'Races', value: '${g.raceCount}'),
+              const V13Divider(),
+              _InfoRow(label: 'Your role', value: role),
+            ],
           ),
-          child: child,
         ),
+        const SizedBox(height: V13.gapSection),
+        const V13SectionHeader(title: 'Leave'),
+        const SizedBox(height: V13.gapMd),
+        V13Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                g.isOwner
+                    ? 'You own this crew. If you leave, ownership passes to '
+                          'an admin, or to the longest-standing member.'
+                    : 'You will leave the crew and its leaderboard. You stay '
+                          'in races you already joined.',
+                style: V13.caption,
+              ),
+              const SizedBox(height: V13.gapMd),
+              V13Button.danger(
+                label: 'Leave crew',
+                icon: Icons.logout_rounded,
+                fullWidth: true,
+                loading: _leaving,
+                onPressed: () => _leaveCrew(g),
+              ),
+            ],
+          ),
+        ),
+        if (g.isOwner) ...[
+          const SizedBox(height: V13.gapSection),
+          const V13SectionHeader(title: 'Delete'),
+          const SizedBox(height: V13.gapMd),
+          V13Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Delete removes this crew for everyone. The leaderboard, '
+                  'members and crew code stop working. Races stay as they '
+                  'are.',
+                  style: V13.caption,
+                ),
+                const SizedBox(height: V13.gapMd),
+                V13Button.danger(
+                  key: const ValueKey('crew-delete'),
+                  label: 'Delete crew',
+                  icon: Icons.delete_outline_rounded,
+                  fullWidth: true,
+                  loading: _deleting,
+                  onPressed: (_leaving || _deleting)
+                      ? null
+                      : () => _deleteCrew(g),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -2093,29 +694,18 @@ class _SettingsSection extends StatelessWidget {
 
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.label, required this.value});
+
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: V13.gapMd),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
-            ),
-          ),
-          Text(
-            value,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: c.ink,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Expanded(child: Text(label, style: V13.body)),
+          Text(value, style: V13.bodyStrong),
         ],
       ),
     );

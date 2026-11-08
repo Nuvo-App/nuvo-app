@@ -28,7 +28,7 @@
 | `/crews` | _authPage | CrewGroupsScreen | features/squads/presentation/crew_groups_screen.dart |
 | `/crews/:id/settings` | _authPage | CrewSettingsScreen | features/squads/presentation/crew_groups_screen.dart |
 | `/crews/join/:code` | _authPage | CrewJoinScreen | features/squads/presentation/crew_groups_screen.dart |
-| `/crews/:id` | _authPage | CrewGroupDetailScreen | features/squads/presentation/crew_groups_screen.dart |
+| `/crews/:id` | _authPage | CrewPageV13Screen | features/squads/presentation/v13/crew_page_v13_screen.dart |
 | `/my-nuvo` | _authPage | MyNuvoScreen | features/social/presentation/my_nuvo_screen.dart |
 | `/notifications` | _detailPage | NotificationsScreen | features/notifications/presentation/notifications_screen.dart |
 | `/settings` | _authPage | SettingsScreen | features/profile/presentation/settings_screen.dart |
