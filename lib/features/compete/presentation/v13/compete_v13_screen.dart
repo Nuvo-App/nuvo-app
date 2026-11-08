@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/analytics/analytics.dart';
 import '../../../../core/v13/v13.dart';
 import '../../../races/data/race_models.dart';
 import '../../../races/domain/chase_context.dart';
@@ -140,6 +141,7 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
     });
     try {
       await ref.read(raceControllerProvider.notifier).joinRace(race.id);
+      ref.read(analyticsProvider).raceJoined(via: 'open');
       if (!mounted) return;
       setState(() => _joinedIds.add(race.id));
       showV13Confetti(context);

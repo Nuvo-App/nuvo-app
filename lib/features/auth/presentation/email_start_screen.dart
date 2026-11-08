@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_legal_footer.dart';
@@ -64,6 +65,11 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     // evaluates the moment the session resolves and must already see the
     // replay armed to route into first-run setup instead of the app.
     final intent = ref.read(authIntentProvider);
+    // The email screen is also reachable straight at /auth/email without the
+    // welcome CTA — under sign-up intent this submit is itself a start.
+    if (intent == AuthIntent.signUp) {
+      ref.read(analyticsProvider).signupStarted();
+    }
     final wasReplaying = ref.read(demoReplayProvider);
     if (_isReviewerEmail && intent == AuthIntent.signUp) {
       ref.read(demoReplayProvider.notifier).state = true;

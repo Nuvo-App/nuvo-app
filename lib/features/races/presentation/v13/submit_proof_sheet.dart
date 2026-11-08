@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/analytics/analytics.dart';
 import '../../../../core/utils/friendly_error.dart';
 import '../../../../core/v13/v13.dart';
 import '../../../auth/data/auth_api.dart';
@@ -91,7 +92,12 @@ class _SubmitProofV13SheetState extends ConsumerState<SubmitProofV13Sheet> {
         maxWidth: 1600,
         imageQuality: 85,
       );
-      if (picked != null && mounted) setState(() => _evidence = picked);
+      if (picked != null && mounted) {
+        setState(() => _evidence = picked);
+        // Evidence attached = the photo proof is underway (submit or abandon
+        // resolves the funnel).
+        ref.read(analyticsProvider).proofStarted(method: 'photo');
+      }
     } catch (_) {
       if (mounted) {
         setState(

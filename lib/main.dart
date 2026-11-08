@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
+import 'core/analytics/analytics.dart';
 import 'core/config/nuvo_flags.dart';
 import 'core/demo/presentation_demo.dart';
 import 'core/theme/app_theme.dart';
@@ -24,6 +25,9 @@ Future<void> main() async {
   await ensurePresentationModeLoaded();
   // Resolve the persisted light/dark choice before the first frame.
   await ensureNuvoThemeModeLoaded();
+  // Load the persisted analytics opt-out + install id, then start PostHog
+  // when a POSTHOG_API_KEY was compiled in — a missing key keeps it a no-op.
+  await ensureAnalyticsLoaded();
   // Server switches load in the background; defaults are the safe ones.
   unawaited(NuvoFlags.load());
   runApp(const ProviderScope(child: NuvoApp()));

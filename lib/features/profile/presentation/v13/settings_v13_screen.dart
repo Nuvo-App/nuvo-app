@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/analytics/analytics.dart';
 import '../../../../core/config/legal_links.dart';
 import '../../../../core/demo/presentation_demo.dart';
 import '../../../../core/v13/v13.dart';
@@ -37,6 +38,7 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
   Object? _notifError;
 
   bool? _motionConsent;
+  bool? _analyticsOn;
   bool _signingOut = false;
   bool _deleting = false;
 
@@ -85,8 +87,22 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
   @override
   void initState() {
     super.initState();
+    _analyticsOn = ref.read(analyticsProvider).enabled;
     _loadNotifPrefs();
     _loadMotionConsent();
+  }
+
+  Future<void> _setAnalyticsEnabled(bool on) async {
+    final previous = _analyticsOn;
+    setState(() => _analyticsOn = on);
+    try {
+      await ref.read(analyticsProvider).setEnabled(on);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _analyticsOn = previous);
+        showV13Toast(context, "Couldn't save that. Try again.");
+      }
+    }
   }
 
   Future<void> _loadNotifPrefs() async {
@@ -645,6 +661,19 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
               trailing: V13Toggle(
                 value: _motionConsent!,
                 onChanged: _setMotionConsent,
+              ),
+            ),
+          if (_analyticsOn != null)
+            V13ListRow(
+              title: 'Help improve Nuvo',
+              subtitle: 'Share anonymous usage stats',
+              leading: const V13IconTile(
+                icon: Icons.insights_rounded,
+                color: V13.blue,
+              ),
+              trailing: V13Toggle(
+                value: _analyticsOn!,
+                onChanged: _setAnalyticsEnabled,
               ),
             ),
           if (canTogglePresentation)

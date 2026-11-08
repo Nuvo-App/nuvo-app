@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
@@ -83,6 +84,9 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
+    if (_mode == _AuthMode.signup) {
+      ref.read(analyticsProvider).signupStarted();
+    }
     setState(() {
       _googleLoading = true;
       _googleError = null;
@@ -119,6 +123,9 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
   }
 
   Future<void> _signInWithApple() async {
+    if (_mode == _AuthMode.signup) {
+      ref.read(analyticsProvider).signupStarted();
+    }
     setState(() {
       _appleLoading = true;
       _appleError = null;
@@ -250,7 +257,12 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                       fullWidth: true,
                       onPressed: replayingDemo
                           ? _continueDemo
-                          : () => context.push('/auth/email'),
+                          : () {
+                              ref
+                                  .read(analyticsProvider)
+                                  .signupStarted();
+                              context.push('/auth/email');
+                            },
                     )
                   else
                     const EmailStartScreen(embedded: true),

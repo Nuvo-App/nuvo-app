@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../arena/presentation/arena_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
@@ -118,6 +119,7 @@ class PushService {
     final granted =
         settings.authorizationStatus == AuthorizationStatus.authorized ||
             settings.authorizationStatus == AuthorizationStatus.provisional;
+    _ref.read(analyticsProvider).notificationPermission(granted: granted);
     if (granted) unawaited(_sync.syncNow());
     return granted;
   }

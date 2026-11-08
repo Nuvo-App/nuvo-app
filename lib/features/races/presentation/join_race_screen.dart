@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/utils/friendly_error.dart';
 import '../../../core/v13/v13.dart';
@@ -45,6 +46,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
       final race = await ref
           .read(raceControllerProvider.notifier)
           .joinRaceByCode(code);
+      ref.read(analyticsProvider).raceJoined(via: 'code');
       if (!mounted) return;
       showV13Confetti(context);
       showV13Toast(context, "You're in the race.");

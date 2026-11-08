@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../notifications/application/push_service.dart';
@@ -51,6 +52,9 @@ class _NotificationPermissionScreenState
       return;
     }
     setState(() => _ready = true);
+    // The primer only counts as a viewed step once it actually renders —
+    // already-decided OS states skip straight through without a view.
+    ref.read(analyticsProvider).onboardingStepViewed('notifications');
   }
 
   /// Every exit lands here: the step counts as resolved once shown, so it
@@ -175,7 +179,16 @@ class _NotificationPermissionScreenState
                     SizedBox(
                       width: double.infinity,
                       child: TextButton(
-                        onPressed: _busy ? null : _resolve,
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                ref
+                                    .read(analyticsProvider)
+                                    .onboardingSkipped(
+                                      step: 'notifications',
+                                    );
+                                _resolve();
+                              },
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           foregroundColor: V13.navy,

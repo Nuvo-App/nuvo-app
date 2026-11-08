@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart' show ImageSource, XFile;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/config/legal_links.dart';
 import '../../../core/utils/photo_service.dart';
 import '../../../core/v13/v13.dart';
@@ -52,6 +53,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _usernameController = TextEditingController(text: user?.username ?? '');
     _nameController.addListener(() => setState(() {}));
     _usernameController.addListener(_onUsernameChanged);
+    ref.read(analyticsProvider).onboardingStepViewed('profile');
   }
 
   /// The real reason a username can't be used, or null when the format is

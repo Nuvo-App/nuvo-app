@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/analytics/analytics.dart';
 import '../../../../../core/config/nuvo_flags.dart';
 import '../../../../../core/navigation/nuvo_navigation.dart';
 import '../../../../../core/utils/friendly_error.dart';
@@ -62,6 +63,9 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       _invited.add(prefill!.withUser!.id);
     }
     _draft = draft;
+    // Opening the composer is the start of the create funnel — a successful
+    // _createRace reports race_created with the draft's derived shape.
+    ref.read(analyticsProvider).raceCreateStarted();
   }
 
   void _update(RaceDraft d) => setState(() => _draft = d);
@@ -171,6 +175,24 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       final controller = ref.read(raceControllerProvider.notifier);
       final race = await _createRace(controller, _draft);
       if (!mounted) return;
+      ref
+          .read(analyticsProvider)
+          .raceCreated(
+            format: _draft.format.backendValue,
+            movementKind: _draft.isCustom
+                ? 'custom'
+                : _draft.isManual
+                ? 'goal'
+                : 'preset',
+            // Mirror what was actually sent: custom target races drop the
+            // draft's date entirely, every other path sends a set one.
+            hasFinishLine: _draft.isCustom
+                ? !_draft.format.usesScoreTarget
+                : (_draft.finishLineAt?.isNotEmpty ?? false),
+            attemptDurationSeconds: _draft.format.usesAttemptDuration
+                ? _draft.attemptDurationSeconds
+                : null,
+          );
 
       final crewId = widget.prefill?.crewId;
       var sent = 0;

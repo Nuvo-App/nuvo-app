@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
@@ -211,7 +212,14 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
       vsync: this,
       duration: const Duration(milliseconds: 3600),
     )..repeat();
+    _trackStepViewed(0);
   }
+
+  /// Onboarding funnel — one step per story page so drop-off lands on the
+  /// exact page. The rebuild planned elsewhere moves these named helpers
+  /// with the screens; step ids stay 'story_p<index>'.
+  void _trackStepViewed(int page) =>
+      ref.read(analyticsProvider).onboardingStepViewed('story_p$page');
 
   @override
   void dispose() {
@@ -234,7 +242,12 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
 
   /// Skip always lands on the payoff page — the user still owns the final
   /// "Start your first race" decision; skipping only compresses the story.
-  void _skip() => _goToPage(_lastPage);
+  void _skip() {
+    ref
+        .read(analyticsProvider)
+        .onboardingSkipped(step: 'story_p$_page');
+    _goToPage(_lastPage);
+  }
 
   void _markReady(int page) {
     if (_readyPages.contains(page)) return;
@@ -295,6 +308,9 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
     });
     try {
       await ref.read(authControllerProvider.notifier).completeOnboarding();
+      // The server flag is flipped — the onboarding funnel is complete even
+      // if the notification step after this never resolves.
+      ref.read(analyticsProvider).onboardingCompleted();
       // The notification permission moment is the next first-run step —
       // mark it owed so a kill there resumes at it rather than skipping.
       await ref.read(firstUseStoreProvider).markNotificationPromptOwed();
@@ -368,8 +384,10 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
                           Expanded(
                             child: PageView(
                               controller: _pageController,
-                              onPageChanged: (page) =>
-                                  setState(() => _page = page),
+                              onPageChanged: (page) {
+                                setState(() => _page = page);
+                                _trackStepViewed(page);
+                              },
                               // The opening cinematic must not be bypassable by an
                               // accidental swipe — only once it has settled can the
                               // PageView move at all.

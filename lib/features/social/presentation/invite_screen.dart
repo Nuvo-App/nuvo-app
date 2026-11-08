@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:nuvo/core/v13/v13.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
@@ -104,21 +105,30 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     final dest = result.destination;
     // Freshness: fold the new membership into the canonical caches before we
     // navigate, so Arena / Compete / race detail are already current.
-    if (result.kind == 'race_join' && dest is RaceDestination) {
-      try {
-        await ref
-            .read(raceControllerProvider.notifier)
-            .refreshJoinedRace(dest.raceId);
-      } catch (_) {
-        // Navigation still proceeds; mark the list stale so the next
-        // revalidate refetches instead of trusting a pre-join cache.
-        if (mounted) ref.read(raceControllerProvider.notifier).markStale();
+    final analytics = ref.read(analyticsProvider);
+    if (result.kind == 'race_join') {
+      if (dest is RaceDestination) {
+        try {
+          await ref
+              .read(raceControllerProvider.notifier)
+              .refreshJoinedRace(dest.raceId);
+        } catch (_) {
+          // Navigation still proceeds; mark the list stale so the next
+          // revalidate refetches instead of trusting a pre-join cache.
+          if (mounted) ref.read(raceControllerProvider.notifier).markStale();
+        }
       }
+      analytics.raceJoined(via: 'invite');
     } else if (result.kind == 'crew_connect') {
       // The connection is canonical in CrewController — mark both it and the
       // inbox stale so the new member/request shows without a restart.
       ref.read(crewControllerProvider.notifier).markStale();
       ref.read(notificationControllerProvider.notifier).markStale();
+      // 'pending' means a request was sent, not a friend link — the accept
+      // fires friend_added through CrewController when it lands.
+      if (result.connectionStatus != 'pending') analytics.friendAdded();
+    } else if (result.kind == 'squad_join') {
+      analytics.crewJoined();
     }
     // First race join / first crew connect is the contextual moment to ask
     // for push permission (no-op until Firebase is configured).

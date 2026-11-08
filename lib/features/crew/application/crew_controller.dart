@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/network/conditional.dart';
@@ -92,6 +93,7 @@ class CrewController extends StateNotifier<CrewState> {
     this.isPresentationDemo = _neverPresentationDemo,
     this.cache,
     this.accountId = _noAccount,
+    this.analytics,
   }) : super(const CrewState());
 
   /// Disk snapshot of members + requests. Null disables hydration/persistence.
@@ -107,6 +109,10 @@ class CrewController extends StateNotifier<CrewState> {
   final VoidCallback? onSessionExpired;
   final bool Function() isPresentationDemo;
   static bool _neverPresentationDemo() => false;
+
+  /// Product analytics — `friend_added` fires only when a link forms
+  /// (instant connect or request accepted), never for a sent request.
+  final NuvoAnalytics? analytics;
 
   static const _cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
@@ -423,7 +429,10 @@ class CrewController extends StateNotifier<CrewState> {
             ? CrewConnectionStatus.connected : CrewConnectionStatus.pendingOutgoing},
         loading: false, refreshing: false,
       );
-      if (connected) onRequestResolved?.call(user.id);
+      if (connected) {
+        analytics?.friendAdded();
+        onRequestResolved?.call(user.id);
+      }
     },
   );
 
@@ -438,6 +447,7 @@ class CrewController extends StateNotifier<CrewState> {
         relationships: {...state.relationships, user.id: CrewConnectionStatus.connected},
         loading: false, refreshing: false,
       );
+      analytics?.friendAdded();
       onRequestResolved?.call(user.id);
     },
   );
@@ -503,6 +513,7 @@ final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>(
     onMutated: () => ref.read(raceControllerProvider.notifier).markStale(),
     onRequestResolved: (id) => ref.read(notificationControllerProvider.notifier).resolveCrewRequest(id),
     onSessionExpired: () => ref.read(authControllerProvider.notifier).sessionExpired(),
+    analytics: ref.read(analyticsProvider),
   );
   var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
   // Deferred: a synchronous mutation during the kickoff would modify other
