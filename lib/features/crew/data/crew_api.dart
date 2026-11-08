@@ -39,9 +39,25 @@ class CrewSearchResult {
 }
 
 class CrewRequestPage {
-  const CrewRequestPage({this.incoming = const [], this.outgoing = const []});
+  const CrewRequestPage({
+    this.incoming = const [],
+    this.outgoing = const [],
+    this.mutuals = const {},
+  });
   final List<PublicUser> incoming;
   final List<PublicUser> outgoing;
+
+  /// W2 additive: mutual-friends context per requester id — the
+  /// "Friends with X and Y" line on request cards. Empty on older workers.
+  final Map<String, CrewRequestMutuals> mutuals;
+}
+
+/// Mutual-friends context for one friend-request row (W2 `mutualCount` /
+/// `mutualNames` on `GET /crew/requests`).
+class CrewRequestMutuals {
+  const CrewRequestMutuals({this.count = 0, this.names = const []});
+  final int count;
+  final List<String> names;
 }
 
 class PublicProfileCard {
@@ -265,7 +281,28 @@ class CrewApi {
     final json = _decode(res);
     List<PublicUser> users(String key) => (json[key] as List<dynamic>? ?? [])
         .map((e) => PublicUser.fromJson(e as Map<String, dynamic>)).toList();
-    return CrewRequestPage(incoming: users('requests'), outgoing: users('outgoing'));
+    // W2 additive: each request row may carry mutualCount / mutualNames[].
+    final mutuals = <String, CrewRequestMutuals>{};
+    for (final key in const ['requests', 'outgoing']) {
+      for (final e in (json[key] as List<dynamic>? ?? [])) {
+        if (e is! Map<String, dynamic>) continue;
+        final id = jStr(e['id']);
+        if (id == null) continue;
+        final names = <String>[
+          for (final n in jList(e['mutualNames']))
+            if (jStr(n) != null) jStr(n)!,
+        ];
+        final count = jInt(e['mutualCount']) ?? names.length;
+        if (count > 0 || names.isNotEmpty) {
+          mutuals[id] = CrewRequestMutuals(count: count, names: names);
+        }
+      }
+    }
+    return CrewRequestPage(
+      incoming: users('requests'),
+      outgoing: users('outgoing'),
+      mutuals: mutuals,
+    );
   }
 
   Future<List<CrewSearchResult>> search(String token, String query) async {
