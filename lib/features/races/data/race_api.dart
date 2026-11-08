@@ -877,6 +877,23 @@ class RaceApi {
     return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
+  /// `GET /races/open` — joinable races created by or containing the
+  /// viewer's friends, which the viewer has never joined (W3). Same row
+  /// shape as `GET /races`.
+  Future<List<Race>> getOpenRaces(String token) async {
+    final json = await _get('/races/open', token);
+    return jMapList(json['races']).map(Race.fromJson).toList();
+  }
+
+  /// `GET /leaderboard?scope=…` — the Compete weekly leaderboard (W3).
+  Future<List<LeaderboardEntry>> getLeaderboard(
+    String token, {
+    String scope = 'friends',
+  }) async {
+    final json = await _get('/leaderboard?scope=$scope', token);
+    return jMapList(json['rows']).map(LeaderboardEntry.fromJson).toList();
+  }
+
   Future<Race> addRaceParticipant(
     String token,
     String raceId,
