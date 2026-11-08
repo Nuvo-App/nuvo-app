@@ -15,6 +15,7 @@ import '../../data/race_models.dart';
 import '../../domain/chase_context.dart';
 import '../../domain/motion_activity.dart';
 import '../../domain/race_display.dart';
+import '../../domain/race_mode_semantics.dart';
 import '../race_controller.dart';
 import 'submit_proof_entry.dart';
 
@@ -376,8 +377,10 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         race.scoreDirection == 'lower'
             ? 'Lowest single score wins'
             : 'Best single attempt wins',
-      RaceFormat.timedAttempt =>
-        'Most in ${formatDurationShort(race.attemptDurationSeconds ?? 0)} wins',
+      RaceFormat.timedAttempt => timedAttemptRuleLine(
+          race.scoreDirection,
+          race.attemptDurationSeconds,
+        ),
     };
   }
 
@@ -546,6 +549,13 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
                         V13ProgressBar(
                           value: raceProgressPercent(race, me) / 100,
                         ),
+                        if (race.attemptLimit != null) ...[
+                          const SizedBox(height: V13.gapSm),
+                          Text(
+                            '${race.viewerContext?.attemptsUsed ?? 0} of ${race.attemptLimit} attempts used',
+                            style: V13.caption,
+                          ),
+                        ],
                         if (chase?.chaseCopy != null) ...[
                           const SizedBox(height: V13.gapSm),
                           Text(chase!.chaseCopy!, style: V13.caption),
@@ -775,7 +785,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
                 ),
                 trailing: proofs[i].value != null
                     ? Text(
-                        '+${raceScoreLabel(race, proofs[i].value!)}',
+                        raceIsAccumulating(race)
+                            ? '+${raceScoreLabel(race, proofs[i].value!)}'
+                            : raceScoreLabel(race, proofs[i].value!),
                         style: V13.bodyStrong,
                       )
                     : null,

@@ -8,6 +8,8 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import '../../profile/application/progression_controller.dart';
 import '../domain/proof_status.dart';
+import '../domain/race_display.dart';
+import 'race_controller.dart';
 
 class BoardMovedArgs {
   const BoardMovedArgs({
@@ -64,6 +66,17 @@ class _BoardMovedScreenState extends ConsumerState<BoardMovedScreen> {
 
   String get raceId => widget.raceId;
   BoardMovedArgs get args => widget.args;
+
+  /// "+N" copy is honest only when the race banks every proof onto a running
+  /// total. Attempt races (Best single, Timed battle) and lower-wins boards
+  /// replace the score instead — the proof stands alone, so the copy does
+  /// too. Resolved from the cached race; an unknown race keeps additive copy.
+  bool get _accumulating {
+    for (final r in ref.watch(raceControllerProvider).races) {
+      if (r.id == raceId) return raceIsAccumulating(r);
+    }
+    return true;
+  }
 
   ProofStatusPresentation get _status => proofStatusPresentation(args.status);
 
@@ -212,7 +225,9 @@ class _BoardMovedScreenState extends ConsumerState<BoardMovedScreen> {
                                   : const Duration(milliseconds: 700),
                               curve: Curves.easeOutCubic,
                               builder: (_, v, _) => Text(
-                                '+${v.round()}',
+                                _accumulating
+                                    ? '+${v.round()}'
+                                    : '${v.round()}',
                                 style: V13.hugeNumber.copyWith(fontSize: 72),
                               ),
                             ),
@@ -239,7 +254,9 @@ class _BoardMovedScreenState extends ConsumerState<BoardMovedScreen> {
                         if (!hasRank) ...[
                           const SizedBox(height: V13.gapSm),
                           Text(
-                            'Added to your total.',
+                            _accumulating
+                                ? 'Added to your total.'
+                                : 'Attempt logged.',
                             style: V13.body.copyWith(color: V13.muted),
                             textAlign: TextAlign.center,
                           ).animate(delay: 260.ms).fadeIn(duration: 280.ms),
@@ -258,7 +275,9 @@ class _BoardMovedScreenState extends ConsumerState<BoardMovedScreen> {
                           ).animate(delay: 380.ms).fadeIn(duration: 280.ms),
                           const SizedBox(height: V13.gapLg),
                           V13Pill(
-                            label: '+$_valueLabel added to your total',
+                            label: _accumulating
+                                ? '+$_valueLabel added to your total'
+                                : '$_valueLabel logged',
                             color: V13.mint,
                             icon: Icons.check_rounded,
                           ).animate(delay: 460.ms).fadeIn(duration: 300.ms),

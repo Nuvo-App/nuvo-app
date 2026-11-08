@@ -305,6 +305,18 @@ bool raceIsAccumulating(Race race) =>
     race.format == 'first_to_goal' ||
     race.format == 'most_in_window';
 
+/// The short product name for a race's format — "Most total", "Best
+/// single", "Timed battle". Cards with no finish line show it next to the
+/// score so they can say how the race is won instead of faking a percent
+/// toward a goal that does not exist.
+String raceModeLabel(String? format) =>
+    switch (RaceFormat.fromBackendValue(format)) {
+      RaceFormat.mostInWindow => 'Most total',
+      RaceFormat.bestAttempt => 'Best single',
+      RaceFormat.timedAttempt => 'Timed battle',
+      _ => 'First to the goal',
+    };
+
 /// The CTA the race's proof capability actually performs. Race Detail and
 /// Verify both derive from this so the same race offers the same action.
 ({String label, IconData icon}) raceProofCta(Race race) =>

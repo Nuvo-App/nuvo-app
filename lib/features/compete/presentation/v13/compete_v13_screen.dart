@@ -299,7 +299,7 @@ class _LiveRaceCard extends ConsumerWidget {
     final prevRank = race.viewerContext?.previousRank;
     final me = userId == null ? null : race.participantFor(userId!);
     final progress = raceProgressPercent(race, me) / 100;
-    final hasTarget = (race.targetValue ?? 0) > 0;
+    final hasTarget = raceHasFinishLine(race);
     final trend = rank != null && prevRank != null && prevRank != rank
         ? (rank < prevRank
               ? Icons.trending_up_rounded
@@ -383,7 +383,7 @@ class _LiveRaceCard extends ConsumerWidget {
                             ? 'Not on the board yet'
                             : hasTarget
                             ? '${raceProgressLabel(race, me)} · ${(progress * 100).round()}%'
-                            : 'Your total: ${raceProgressLabel(race, me)}',
+                            : '${raceProgressLabel(race, me)} · ${raceModeLabel(race.format)}',
                         style: V13.caption,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

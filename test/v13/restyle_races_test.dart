@@ -180,14 +180,21 @@ Race _race({
   String creatorId = 'user-1',
   String? inviteCode,
   List<RaceProof> proofs = const [],
+  String format = 'first_to_goal',
+  String scoringRule = 'cumulative_sum',
+  String scoreDirection = 'higher',
+  int? targetValue = 100,
 }) => Race(
   id: id,
   creatorId: creatorId,
   title: 'Pushup Race',
   goalType: 'first_to_goal',
-  targetValue: 100,
+  targetValue: targetValue,
   unit: 'reps',
   proofRequirement: 'manual',
+  format: format,
+  scoringRule: scoringRule,
+  scoreDirection: scoreDirection,
   status: 'active',
   inviteCode: inviteCode,
   createdAt: '2026-01-01T00:00:00Z',
@@ -615,6 +622,89 @@ void main() {
 
       await tester.tap(find.text('View race'));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('test_gap16_lower_direction_has_no_plus_prefix', (
+      tester,
+    ) async {
+      final repo = _StubRaceRepo(
+        races: [
+          _race(
+            format: 'best_attempt',
+            scoringRule: 'minimum_attempt',
+            scoreDirection: 'lower',
+            targetValue: null,
+          ),
+        ],
+      );
+      await _pump(
+        tester,
+        repo,
+        const BoardMovedScreen(
+          raceId: 'race-1',
+          args: BoardMovedArgs(
+            raceId: 'race-1',
+            raceName: 'Golf Round',
+            value: 30,
+            unit: 'reps',
+            status: 'verified',
+            rankBefore: 2,
+            rankAfter: 1,
+            aiMotionProof: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(seconds: 3));
+
+      // A lower-wins attempt stands alone — nothing is added to a total,
+      // so no "+N" prefix appears anywhere.
+      expect(find.text('+30'), findsNothing);
+      expect(find.textContaining('+'), findsNothing);
+      expect(find.textContaining('added to your total'), findsNothing);
+      expect(find.text('30'), findsOneWidget);
+      expect(find.text('30 reps logged'), findsOneWidget);
+      expect(find.text('#1'), findsOneWidget);
+    });
+
+    testWidgets('attempt-mode race: hero and pill drop the +', (
+      tester,
+    ) async {
+      final repo = _StubRaceRepo(
+        races: [
+          _race(
+            format: 'timed_attempt',
+            scoringRule: 'maximum_attempt',
+            targetValue: null,
+          ),
+        ],
+      );
+      await _pump(
+        tester,
+        repo,
+        const BoardMovedScreen(
+          raceId: 'race-1',
+          args: BoardMovedArgs(
+            raceId: 'race-1',
+            raceName: 'Pushup Battle',
+            value: 15,
+            unit: 'reps',
+            status: 'verified',
+            rankBefore: 3,
+            rankAfter: 2,
+            aiMotionProof: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(find.text('+15'), findsNothing);
+      expect(find.text('15'), findsOneWidget);
+      expect(find.text('15 reps logged'), findsOneWidget);
+      expect(find.textContaining('added to your total'), findsNothing);
     });
 
     testWidgets('pending move stays calm', (tester) async {
