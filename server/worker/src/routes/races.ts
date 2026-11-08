@@ -2261,7 +2261,14 @@ racesRouter.post('/:id/proof', async (c) => {
     const existing = await c.env.DB.prepare(
       'SELECT * FROM move_logs WHERE race_id = ? AND user_id = ? AND client_submission_id = ?'
     ).bind(race.id, userId, clientSubmissionId).first<MoveLogRow>();
-    if (existing?.status === 'rejected') {
+    if (
+      existing?.status === 'rejected' &&
+      !existing.vetoed_at &&
+      (existing.summary ?? '').startsWith('No open attempt')
+    ) {
+      // Only a proof rejected for the missing-attempt reason may be revived
+      // (rows written before the attempt check moved ahead of the INSERT).
+      // A proof rejected by review, veto or verification stays rejected.
       // A rejected row is not a committed submission — the same client id
       // retried means "try this submission again". The row is revived in
       // place below (the unique index means it can never be re-inserted).

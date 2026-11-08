@@ -416,8 +416,8 @@ test('test_gap8_rejected_bind_does_not_consume_session', async () => {
   });
   assert.equal(done.status, 200, done.text);
   w.exec(
-    `INSERT INTO move_logs (id, race_id, user_id, source, status, value, client_submission_id, metadata_json, created_at)
-     VALUES ('m-old', ?, 'B', 'movecheck', 'rejected', 10, 'cs-1', ?, CURRENT_TIMESTAMP)`,
+    `INSERT INTO move_logs (id, race_id, user_id, source, status, value, summary, client_submission_id, metadata_json, created_at)
+     VALUES ('m-old', ?, 'B', 'movecheck', 'rejected', 10, 'No open attempt — start an attempt first.', 'cs-1', ?, CURRENT_TIMESTAMP)`,
     raceId,
     JSON.stringify({ verification_session_id: vs.id }),
   );
@@ -438,6 +438,63 @@ test('test_gap8_rejected_bind_does_not_consume_session', async () => {
   assert.equal(rows.length, 1, 'the rejected row is revived in place');
   assert.equal(rows[0].status, 'verified');
   assert.equal(w.progress(raceId, 'B'), 10);
+});
+
+test('test_gap8_review_rejected_proof_is_never_revived', async () => {
+  const w = world();
+  w.user('A');
+  w.user('B');
+  seedPreset(w);
+
+  // A first_to_goal preset race keeps attempts out of the picture — this
+  // test isolates the session / client-submission reuse.
+  const created = await w.req('A', 'POST', '/races', {
+    title: 'Sprint',
+    goalType: 'first_to_goal',
+    targetValue: 50,
+    activityId: 'push_ups',
+    aiActivityType: 'push_ups',
+    metric: 'reps',
+    targetUnit: 'reps',
+    proofRequirement: 'ai_check',
+    proofMode: 'ai_check',
+    verificationMethod: 'ai',
+  });
+  assert.equal(created.status, 201, created.text);
+  const raceId = created.json.race.id;
+  w.member(raceId, 'B');
+
+  // Simulate the legacy failure shape: a move_log rejected for a race-state
+  // reason still carries the session + submission ids in its metadata.
+  const mint = await w.req('B', 'POST', `/races/${raceId}/verification-sessions`, CAPS);
+  assert.equal(mint.status, 201, mint.text);
+  const vs = mint.json.session;
+  const done = await w.req('B', 'POST', `/verification-sessions/${vs.id}/complete`, {
+    releaseId: vs.releaseId, releaseChecksum: vs.releaseChecksum, status: 'completed', resultValue: 10,
+  });
+  assert.equal(done.status, 200, done.text);
+  w.exec(
+    `INSERT INTO move_logs (id, race_id, user_id, source, status, value, summary, client_submission_id, metadata_json, created_at)
+     VALUES ('m-old', ?, 'B', 'movecheck', 'rejected', 10, 'Rejected by the race creator.', 'cs-1', ?, CURRENT_TIMESTAMP)`,
+    raceId,
+    JSON.stringify({ verification_session_id: vs.id }),
+  );
+
+  // A proof rejected for any other reason (review, veto, failed check)
+  // must stay rejected: the retry answers with the existing row, no score.
+  await w.req('B', 'POST', `/races/${raceId}/proof`, {
+    proofType: 'ai_motion',
+    metric: 'reps',
+    value: 10,
+    clientSubmissionId: 'cs-1',
+    verificationSessionId: vs.id,
+    verificationStatus: 'ai_verified',
+    activityType: 'push_ups',
+  });
+  const rows = w.q("SELECT status FROM move_logs WHERE race_id = ? AND client_submission_id = 'cs-1'", raceId);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, 'rejected', 'a review-rejected proof is not revived');
+  assert.equal(w.progress(raceId, 'B') ?? 0, 0);
 });
 
 test('test_gap8_retry_after_opening_attempt_scores', async () => {
