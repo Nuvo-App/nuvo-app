@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/domain/camera_verification_resolver.dart';
@@ -320,5 +321,108 @@ void main() {
       expect(ar.movementType, MotionActivityType.armRaises);
       expect(ar.source, CameraVerificationSource.explicitField);
     });
+
+    test(
+      'test_gap10_registry_motion_offers_server_supported_formats',
+      () {
+        // A registry-published motion resolved from its release spec must
+        // offer the server's real format contract — rep motions get every
+        // mode (timed battles included), a hold never a timed rep battle.
+        const rule = {
+          'point': 'leftWrist',
+          'axis': 'y',
+          'operator': 'lt',
+          'threshold': 0.4,
+        };
+        Race remote(String engine, String measurement) => Race(
+          id: 'race-remote',
+          creatorId: 'user-1',
+          title: 'Reach Taps',
+          goalType: 'first_to_goal',
+          unit: 'reps',
+          activityId: 'reach_taps',
+          metric: 'reps',
+          proofRequirement: 'ai_check',
+          proofMode: 'ai_check',
+          verificationMethod: 'camera_pose',
+          verifierType: 'remote_release',
+          verifierReleaseId: 'rel-1',
+          verifierSpec: {
+            'specSchemaVersion': 1,
+            'releaseId': 'rel-1',
+            'activityId': 'reach_taps',
+            'engineType': engine,
+            'measurementType': measurement,
+            'requiredLandmarks': ['leftWrist'],
+            'startRules': [rule],
+            'activeRules': [rule],
+            'holdRules': [rule],
+            'activity': {
+              'displayName': 'Reach Taps',
+              'measurementType': measurement,
+              'defaultTarget': 30,
+              'preferredCameraView': 'front',
+              'instructions': ['Reach up and tap.'],
+            },
+          },
+          status: 'active',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        );
+
+        final rep = resolveCameraVerification(
+          remote('state_machine_v1', 'repetitions'),
+        );
+        expect(rep.isCameraVerifiable, isTrue);
+        expect(rep.remoteActivityDefinition?.supportedFormats, [
+          RaceFormat.firstToGoal,
+          RaceFormat.mostInWindow,
+          RaceFormat.bestAttempt,
+          RaceFormat.timedAttempt,
+        ]);
+
+        final hold = resolveCameraVerification(remote('hold_v1', 'duration'));
+        expect(hold.isCameraVerifiable, isTrue);
+        expect(
+          hold.remoteActivityDefinition?.supportedFormats,
+          isNot(contains(RaceFormat.timedAttempt)),
+        );
+        expect(
+          hold.remoteActivityDefinition?.supportedFormats,
+          containsAll([
+            RaceFormat.firstToGoal,
+            RaceFormat.mostInWindow,
+            RaceFormat.bestAttempt,
+          ]),
+        );
+
+        // When the live catalog knows the motion, its published formats pass
+        // through verbatim instead of a hardcoded list.
+        const catalogDef = MotionActivityDefinition(
+          type: MotionActivityType.remote,
+          backendId: 'reach_taps',
+          title: 'Reach Taps',
+          metric: RaceMetric.reps,
+          suggestedTargets: [30],
+          supportedFormats: [RaceFormat.mostInWindow, RaceFormat.bestAttempt],
+          aliases: [],
+          proofLabel: 'Reach Taps',
+          cameraInstruction: 'Reach.',
+          instructions: ['Reach.'],
+          icon: Icons.fitness_center_rounded,
+          framingLabel: '',
+          preferredCameraView: PreferredCameraView.frontPreferred,
+          category: MovementCategory.fullBody,
+        );
+        final viaCatalog = resolveCameraVerification(
+          remote('state_machine_v1', 'repetitions'),
+          remoteDefinitions: const [catalogDef],
+        );
+        expect(viaCatalog.remoteActivityDefinition?.supportedFormats, [
+          RaceFormat.mostInWindow,
+          RaceFormat.bestAttempt,
+        ]);
+      },
+    );
   });
 }

@@ -559,13 +559,76 @@ export function assertSubmissionCompatible(config: RaceConfig, activityId: strin
 }
 
 /**
+ * Per-movement plausibility bounds for a single proof. These replaced the old
+ * flat per-proof caps (3,000 reps / 8 h / 100 k manual): a real 5 km treadmill
+ * run is not an absurd claim, so each measurement kind is judged by its own
+ * physics instead. The route-level 1,000,000 absolute ceiling still applies
+ * on top of every check here.
+ */
+
+/** Default rep-rate bound: 5 reps/second + 5 spare — generous on purpose, it
+ *  only catches absurd counts. A movement may publish its own bound through
+ *  catalog/registry data (`maxRepsPerSecond`). */
+export const DEFAULT_MAX_REPS_PER_SECOND = 5;
+export const REP_RATE_SPARE = 5;
+/** Distance is judged as metres: ~10 m/s is a world-class treadmill sprint. */
+export const MAX_METRES_PER_SECOND = 10;
+export const DISTANCE_SPARE_METRES = 5;
+/** One distance proof can never carry more than 100 km. */
+export const MAX_DISTANCE_PER_SUBMISSION = 100_000;
+/** Seconds-metric proofs may exceed the recorded wall clock by this much —
+ *  pose detection loses a little wall time to setup and dropped frames. */
+export const SECONDS_PROOF_SLACK_SECONDS = 15;
+
+/**
+ * Is a single proof value implausible for how the movement is measured?
+ * - 'distance' (treadmill): metres, bounded by ~10 m/s with the recorded
+ *   duration and a 100 km absolute ceiling (applied even without duration).
+ * - 'duration' / seconds metric: the claimed seconds cannot exceed the
+ *   recorded wall clock plus a small slack.
+ * - 'repetitions': the generous rep-rate bound — a large honest set in
+ *   plausible time is accepted, an impossible burst is not.
+ * A null duration means the rate checks do not judge — only the absolute
+ * ceilings still apply.
+ */
+export function submissionImplausible(input: {
+  measurementType: string;
+  metric: string | null | undefined;
+  value: number;
+  durationMs: number | null;
+  maxRepsPerSecond?: number | null;
+}): boolean {
+  const durationSeconds =
+    input.durationMs === null ? null : input.durationMs / 1000;
+  if (input.measurementType === 'distance') {
+    if (input.value > MAX_DISTANCE_PER_SUBMISSION) return true;
+    if (durationSeconds === null) return false;
+    return (
+      input.value >
+      DISTANCE_SPARE_METRES + durationSeconds * MAX_METRES_PER_SECOND
+    );
+  }
+  if (input.measurementType === 'duration' || input.metric === 'seconds') {
+    if (durationSeconds === null) return false;
+    return input.value > durationSeconds + SECONDS_PROOF_SLACK_SECONDS;
+  }
+  if (durationSeconds === null) return false;
+  const rate = input.maxRepsPerSecond ?? DEFAULT_MAX_REPS_PER_SECOND;
+  return input.value > REP_RATE_SPARE + durationSeconds * rate;
+}
+
+/**
  * A camera-counted proof can't hold more reps than a body can do in the time
  * recorded. Generous on purpose (5 reps/second + 5 spare): it only catches
  * absurd counts, never a fast but real set. Unknown duration is not judged.
  */
 export function customRepRateImplausible(value: number, durationMs: number | null): boolean {
-  if (durationMs === null) return false;
-  return value > 5 + (durationMs / 1000) * 5;
+  return submissionImplausible({
+    measurementType: 'repetitions',
+    metric: 'reps',
+    value,
+    durationMs,
+  });
 }
 
 /**

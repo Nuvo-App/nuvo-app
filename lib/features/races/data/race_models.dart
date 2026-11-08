@@ -1,4 +1,5 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:nuvo/core/utils/json_safe.dart';
 import '../ai/motion_v2/motion_v2_models.dart';
 import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
@@ -895,8 +896,26 @@ class RaceCreatePrefill {
 
 /// Builds a structured creation draft from a race's canonical fields —
 /// run-it-back/clone paths must carry fields, never re-interpret the title.
-RaceCreatePrefill prefillFromRace(Race race, {PublicUser? withUser}) {
-  final activity = motionActivityForBackendValue(race.effectiveAiActivityType);
+/// Remote and custom races keep their own activity ID and format: a race the
+/// compiled catalog doesn't know resolves through the live [catalog] first,
+/// then falls back to a verbatim remote definition — never to the first
+/// bundled preset.
+RaceCreatePrefill prefillFromRace(
+  Race race, {
+  PublicUser? withUser,
+  Iterable<MotionActivityDefinition>? catalog,
+}) {
+  if (race.isCustomVerifierRace && race.customActivityName != null) {
+    return RaceCreatePrefill(
+      draft: _customDraftFromRace(race),
+      withUser: withUser,
+    );
+  }
+  final activityId = race.effectiveAiActivityType;
+  final activity =
+      motionActivityForBackendValue(activityId) ??
+      _catalogActivityForId(catalog, activityId) ??
+      _remoteActivityFromRace(race, activityId);
   if (activity == null) {
     return RaceCreatePrefill(
       draft: RaceDraft(
@@ -919,7 +938,104 @@ RaceCreatePrefill prefillFromRace(Race race, {PublicUser? withUser}) {
       format: stored != null && activity.supportedFormats.contains(stored)
           ? stored
           : null,
+      finishLineAt: race.finishLineAt,
+      attemptDurationSeconds: race.attemptDurationSeconds,
+      attemptLimit: race.attemptLimit,
+      scoreDirection: race.scoreDirection,
     ),
     withUser: withUser,
+  );
+}
+
+/// The motion the control plane published under [activityId], when the merged
+/// catalog (bundled + remote) knows it — the server-published formats and
+/// targets ride along verbatim.
+MotionActivityDefinition? _catalogActivityForId(
+  Iterable<MotionActivityDefinition>? catalog,
+  String activityId,
+) {
+  if (catalog == null || activityId.isEmpty) return null;
+  for (final definition in catalog) {
+    if (definition.activityId == activityId) return definition;
+  }
+  return null;
+}
+
+/// A display-only remote definition for an activity ID no catalog resolves.
+/// It carries the race's own identity — backendId, metric, timing — so a
+/// rematch recreates the same motion instead of silently becoming Pushups.
+/// Every format is offered: the stored format must survive the prefill, and
+/// the server is the authority on what the motion actually supports.
+MotionActivityDefinition? _remoteActivityFromRace(Race race, String activityId) {
+  if (activityId.isEmpty) return null;
+  final isDuration = race.metric == 'seconds';
+  return MotionActivityDefinition(
+    type: MotionActivityType.remote,
+    backendId: activityId,
+    title: _humanizeActivityId(activityId),
+    metric: isDuration ? RaceMetric.seconds : RaceMetric.reps,
+    suggestedTargets: [race.targetValue ?? 1],
+    supportedFormats: RaceFormat.values,
+    aliases: const [],
+    proofLabel: _humanizeActivityId(activityId),
+    cameraInstruction: 'Keep your body in frame.',
+    instructions: const ['Keep the required body regions visible.'],
+    icon: Icons.fitness_center_rounded,
+    framingLabel: 'Follow the release framing guide',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.fullBody,
+    measurementType: isDuration
+        ? MotionMeasurementType.duration
+        : MotionMeasurementType.repetitions,
+  );
+}
+
+/// 'reach_taps' → 'Reach Taps' — a remote motion with no published name still
+/// presents itself readably instead of borrowing a preset's title.
+String _humanizeActivityId(String activityId) => activityId
+    .split(RegExp(r'[_\s]+'))
+    .where((w) => w.isNotEmpty)
+    .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+    .join(' ');
+
+/// A taught custom movement races again as itself — the verifier spec is the
+/// movement, so the draft carries the stored spec, name, format and timing
+/// verbatim. The composer's custom path re-creates the same race.
+///
+/// The draft's [RaceDraft.activity] is display-only for a custom race (the
+/// create payload is built from [RaceDraft.customActivityName] + spec), but
+/// it still feeds the composer's goal suggestion chips — so it is a synthetic
+/// remote definition named after the movement, never a borrowed preset.
+RaceDraft _customDraftFromRace(Race race) {
+  final stored = RaceFormat.fromBackendValue(race.format);
+  final name = race.customActivityName!;
+  return RaceDraft(
+    title: race.displayTitle,
+    hasCustomName: true,
+    activity: MotionActivityDefinition(
+      type: MotionActivityType.remote,
+      title: name,
+      metric: RaceMetric.reps,
+      suggestedTargets: [race.targetValue ?? 1],
+      supportedFormats: RaceFormat.values,
+      aliases: const [],
+      proofLabel: name,
+      cameraInstruction: 'Keep your body in frame.',
+      instructions: const ['Keep the required body regions visible.'],
+      icon: Icons.auto_awesome_rounded,
+      framingLabel: 'Follow the release framing guide',
+      preferredCameraView: PreferredCameraView.frontPreferred,
+      category: MovementCategory.fullBody,
+    ),
+    metric: RaceMetric.reps,
+    format: stored ?? RaceFormat.firstToGoal,
+    targetValue: race.targetValue ?? 1,
+    customActivityName: race.customActivityName,
+    verifierSpec: race.customVerifierSpec,
+    motionV2Spec: race.customMotionV2Spec,
+    finishLineAt: race.finishLineAt,
+    attemptDurationSeconds: race.attemptDurationSeconds,
+    attemptLimit: race.attemptLimit,
+    scoreDirection: race.scoreDirection,
   );
 }

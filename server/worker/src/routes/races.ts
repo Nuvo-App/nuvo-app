@@ -21,6 +21,7 @@ import {
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  submissionImplausible,
   customRepRateImplausible,
   formatNeedsFinishLine,
   manualConfigFromBody,
@@ -30,7 +31,7 @@ import {
   timedAttemptValueExceedsDuration,
   type RaceConfig,
 } from '../domain/raceValidation';
-import { applyVerifiedSubmission, maxSubmissionValue } from '../domain/raceScoring';
+import { applyVerifiedSubmission } from '../domain/raceScoring';
 import {
   ensureMember,
   ensurePersonId,
@@ -282,6 +283,43 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
     startsAt: race.start_at,
     endsAt: race.end_at,
     recurrence: race.recurrence === 'daily' || race.recurrence === 'weekly' ? race.recurrence : 'none',
+  };
+}
+
+/**
+ * How the race's movement is physically measured — 'repetitions' for rep
+ * counters and honor/custom goals, 'duration' for holds, 'distance' for
+ * metre-measured movers (treadmill). The compiled catalog answers first; a
+ * registry-published activity answers from its control-plane row so a remote
+ * distance mover is judged as metres too. Manual and custom races carry no
+ * activity ID and always land on 'repetitions'.
+ */
+async function raceMeasurementType(
+  db: D1Database,
+  race: RaceRow,
+  config: RaceConfig | null,
+): Promise<{ measurementType: string; maxRepsPerSecond: number | null }> {
+  const activityId =
+    config?.activityId ??
+    normalizeActivityIdLoose(race.activity_id ?? race.movement_type);
+  if (!activityId) {
+    return { measurementType: 'repetitions', maxRepsPerSecond: null };
+  }
+  const activity = activityForId(activityId);
+  if (activity) {
+    return {
+      measurementType: activity.measurementType ?? 'repetitions',
+      maxRepsPerSecond: activity.maxRepsPerSecond ?? null,
+    };
+  }
+  const registry = await readRegistryActivity(db, activityId);
+  const publishedRate = registry?.metadata['maxRepsPerSecond'];
+  return {
+    measurementType: registry?.measurementType ?? 'repetitions',
+    maxRepsPerSecond:
+      typeof publishedRate === 'number' && Number.isFinite(publishedRate)
+        ? publishedRate
+        : null,
   };
 }
 
@@ -2327,11 +2365,6 @@ racesRouter.post('/:id/proof', async (c) => {
   const increment = value ?? 0;
   if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
   if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
-  // Per-submission sanity cap by metric: one proof can never carry an absurd
-  // amount (a 1e9-rep claim, or a day of plank in one go on a reps race).
-  if (increment > maxSubmissionValue(scoring.metric, isManualRace)) {
-    return c.json(badRequest('value is too large for a single proof'), 400);
-  }
 
   // Server-side provenance: when the client names the verification session
   // that produced this result, it must be this user's completed session for
@@ -2460,19 +2493,40 @@ racesRouter.post('/:id/proof', async (c) => {
   if (isCustom && completionEvents !== null && completionEvents < increment) {
     return c.json(badRequest('Custom proof completion events must cover value.'), 400);
   }
-  // Strict-rules timed battles (rules_version >= 1) judge rep rate against
-  // the bound attempt's real window (started_at..now), not the client's
-  // claimed durationMs — the client-clock check below is skipped for them
-  // and runs after the attempt binds instead.
+  // Per-movement plausibility replaced the old flat per-proof caps: a real
+  // 5 km treadmill run or a big honest rep set is fine — a physically
+  // impossible burst is not. Distance movers are judged as metres (~10 m/s
+  // with a 100 km ceiling), holds and seconds metrics against the recorded
+  // wall clock, reps by the generous per-movement rate. Only verified results
+  // are judged — a failed verification stays a stored rejection, not an
+  // error — and the 1,000,000 absolute ceiling above still bounds everything.
+  const proofClaimsResult = isAiMotion
+    ? aiStatus === 'ai_verified' || aiStatus === 'custom_verified'
+    : true;
+  // Strict-rules timed battles (rules_version >= 1) are judged after the
+  // attempt binds, against the attempt's real window (S5), not durationMs.
   const strictTimedAttempt =
     scoring.format === 'timed_attempt' && (race.rules_version ?? 0) >= 1;
-  if (isCustom && aiStatus === 'custom_verified' && !strictTimedAttempt &&
-      customRepRateImplausible(increment, durationMs)) {
-    return c.json(badRequest('Custom proof count is not possible in the recorded time.'), 400);
-  }
-  if (isAiMotion && !isCustom && aiStatus === 'ai_verified' && scoring.metric === 'reps' &&
-      !strictTimedAttempt && customRepRateImplausible(increment, durationMs)) {
-    return c.json(badRequest('Proof count is not possible in the recorded time.'), 400);
+  if (proofClaimsResult && !strictTimedAttempt) {
+    const measurement = await raceMeasurementType(c.env.DB, race, config);
+    if (
+      submissionImplausible({
+        measurementType: measurement.measurementType,
+        metric: scoring.metric,
+        value: increment,
+        durationMs,
+        maxRepsPerSecond: measurement.maxRepsPerSecond,
+      })
+    ) {
+      return c.json(
+        badRequest(
+          isCustom
+            ? 'Custom proof count is not possible in the recorded time.'
+            : 'Proof count is not possible in the recorded time.',
+        ),
+        400,
+      );
+    }
   }
   if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
     return c.json(badRequest('Custom proof valid frames cannot exceed analyzed frames.'), 400);
