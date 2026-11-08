@@ -339,7 +339,9 @@ class RaceDraft {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'aiActivityType': activity.activityId,
-      if (lowerWins) 'scoreDirection': 'lower',
+      // Direction is an attempt-format rule only — a first-to or cumulative
+      // race must not carry a stale interpreted 'lower' onto the wire.
+      if (format.isAttemptBased && lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
   }
@@ -375,7 +377,7 @@ class RaceDraft {
       'proofRequirement': 'photo_video',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'photo',
-      if (lowerWins) 'scoreDirection': 'lower',
+      if (format.isAttemptBased && lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
   }

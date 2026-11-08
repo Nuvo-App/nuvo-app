@@ -232,4 +232,35 @@ void main() {
     expect(find.text('Custom'), findsOneWidget);
     expect(find.text('Custom goal'), findsOneWidget);
   });
+
+  testWidgets('test_gap11_lower_wins_toggle_best_attempt', (tester) async {
+    _size(tester);
+    final bodies = <Map<String, dynamic>>[];
+    final repo = _WireRaceRepo(onBody: bodies.add);
+    await tester.pumpWidget(_app(repo, home: const RaceComposerV13Screen()));
+    await tester.pumpAndSettle();
+    await _toSetup(tester);
+
+    // First to (the default) never shows a win-direction control.
+    for (var i = 0; i < 6; i++) {
+      expect(find.text('WIN DIRECTION'), findsNothing);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -400));
+      await tester.pump();
+    }
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 2400));
+    await tester.pumpAndSettle();
+
+    await _tapVisible(tester, 'Best single');
+    expect(find.text('WIN DIRECTION'), findsOneWidget);
+    expect(find.text('Most wins'), findsOneWidget);
+    await _tapVisible(tester, 'Lowest wins');
+    await _tapVisible(tester, 'In 1 week');
+    await _toReview(tester);
+    await tester.tap(find.text('Start race'));
+    await tester.pumpAndSettle();
+
+    expect(bodies, hasLength(1));
+    expect(bodies.single['format'], 'best_attempt');
+    expect(bodies.single['scoreDirection'], 'lower');
+  });
 }

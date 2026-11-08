@@ -772,6 +772,37 @@ class _SetupStep extends ConsumerWidget {
             ),
             const SizedBox(height: V13.gapLg),
           ],
+          if (draft.format.isAttemptBased) ...[
+            Text('WIN DIRECTION', style: V13.label),
+            const SizedBox(height: V13.gapMd),
+            Wrap(
+              spacing: V13.gapSm,
+              runSpacing: V13.gapSm,
+              children: [
+                V13Chip(
+                  label: 'Most wins',
+                  selected: !draft.lowerWins,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      scoreDirection: 'higher',
+                      markEdited: {RaceField.scoreDirection},
+                    ),
+                  ),
+                ),
+                V13Chip(
+                  label: 'Lowest wins',
+                  selected: draft.lowerWins,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      scoreDirection: 'lower',
+                      markEdited: {RaceField.scoreDirection},
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: V13.gapLg),
+          ],
           if (finishOptions.isNotEmpty) ...[
             Text('FINISH LINE', style: V13.label),
             const SizedBox(height: V13.gapMd),
