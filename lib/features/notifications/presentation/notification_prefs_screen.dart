@@ -333,9 +333,12 @@ class _ToggleCell extends StatelessWidget {
         // phrase for screen readers ("Race starting, app notifications").
         child: Semantics(
           label: semanticLabel,
-          child: Opacity(
-            opacity: onChanged == null ? .5 : 1,
-            child: V13Toggle(value: value, onChanged: onChanged ?? (_) {}),
+          child: IgnorePointer(
+            ignoring: onChanged == null,
+            child: Opacity(
+              opacity: onChanged == null ? .5 : 1,
+              child: V13Toggle(value: value, onChanged: onChanged ?? (_) {}),
+            ),
           ),
         ),
       ),

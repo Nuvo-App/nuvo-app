@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
-import '../theme/app_geometry.dart';
-import '../theme/app_text_styles.dart';
-import 'nuvo_button.dart';
+import '../v13/v13.dart';
 
 /// One decision per screen, centred: an icon tile, a headline, a short line,
 /// optional content, ONE primary action, an optional secondary action, and
@@ -19,7 +16,7 @@ class NuvoFocusedStage extends StatelessWidget {
     required this.title,
     this.body,
     this.icon,
-    this.accent = NuvoColors.blue,
+    this.accent = V13.blue,
     this.content,
     this.busy = false,
     this.primaryLabel,
@@ -35,7 +32,7 @@ class NuvoFocusedStage extends StatelessWidget {
   final String? body;
   final IconData? icon;
 
-  /// Tints the icon tile: blue default, green for done, red for a problem.
+  /// Fills the icon tile: blue default, mint for done, red for a problem.
   final Color accent;
 
   /// Extra content between the text and the buttons (steps, a preview, …).
@@ -58,15 +55,6 @@ class NuvoFocusedStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.themeColors;
-    final semantic = context.semanticColors;
-    final (surface, border) = switch (accent) {
-      NuvoColors.success => (semantic.success.surface, semantic.success.border),
-      NuvoColors.danger => (semantic.danger.surface, semantic.danger.border),
-      NuvoColors.warning => (semantic.warning.surface, semantic.warning.border),
-      _ => (semantic.neutral.surface, semantic.neutral.border),
-    };
-
     final column = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -75,34 +63,27 @@ class NuvoFocusedStage extends StatelessWidget {
           const SizedBox(
             width: 44,
             height: 44,
-            child: CircularProgressIndicator(strokeWidth: 3),
+            child: CircularProgressIndicator(strokeWidth: 3, color: V13.blue),
           )
         else if (icon != null)
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(NuvoRadii.lg),
-              border: Border.all(color: border),
-            ),
-            child: Icon(icon, size: 30, color: accent),
+          V13IconTile(
+            icon: icon!,
+            color: accent,
+            size: 64,
+            radius: V13.radiusTileLg,
+            iconSize: 30,
+            // Pastel accents (mint, sun, sky…) take the navy glyph; deep
+            // fills (blue, danger) need white to stay readable.
+            iconColor: accent.computeLuminance() > 0.5 ? V13.navy : V13.card,
           ),
         if (busy || icon != null) const SizedBox(height: 22),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: AppTextStyles.headlineMedium.copyWith(
-            color: colors.ink,
-            height: 1.15,
-          ),
-        ),
+        Text(title, textAlign: TextAlign.center, style: V13.title),
         if (body != null) ...[
           const SizedBox(height: 10),
           Text(
             body!,
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(color: colors.inkMuted),
+            style: V13.body.copyWith(color: V13.muted),
           ),
         ],
         if (content != null) ...[const SizedBox(height: 22), content!],
@@ -125,18 +106,18 @@ class NuvoFocusedStage extends StatelessWidget {
                     if (primaryLabel != null)
                       KeyedSubtree(
                         key: primaryKey,
-                        child: NuvoPrimaryButton(
+                        child: V13Button.primary(
                           label: primaryLabel!,
-                          expand: true,
+                          fullWidth: true,
                           loading: primaryLoading,
                           onPressed: onPrimary,
                         ),
                       ),
                     if (secondaryLabel != null) ...[
                       const SizedBox(height: 10),
-                      NuvoOutlineButton(
+                      V13Button.secondary(
                         label: secondaryLabel!,
-                        expand: true,
+                        fullWidth: true,
                         onPressed: onSecondary,
                       ),
                     ],
@@ -157,13 +138,7 @@ class NuvoFocusedStage extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 for (var i = 0; i < links.length; i++) ...[
-                  if (i > 0)
-                    Text(
-                      '·',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: colors.inkMuted,
-                      ),
-                    ),
+                  if (i > 0) Text('·', style: V13.caption),
                   // Just the text — no button chrome around small edit
                   // actions; they should never read as a second CTA.
                   GestureDetector(
@@ -176,8 +151,7 @@ class NuvoFocusedStage extends StatelessWidget {
                       ),
                       child: Text(
                         links[i].$1,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: colors.inkMuted,
+                        style: V13.caption.copyWith(
                           decoration: TextDecoration.underline,
                         ),
                       ),

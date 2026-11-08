@@ -832,6 +832,9 @@ class _PublicProfileV13ScreenState
               card.achievementsEarned != null && card.achievementsTotal != null
               ? 'ACHIEVEMENTS · ${card.achievementsEarned}/${card.achievementsTotal}'
               : 'ACHIEVEMENTS',
+          trailingLabel: 'See all',
+          onTrailingTap: () =>
+              context.push('/u/${widget.userId}/badges', extra: card),
         ),
         const SizedBox(height: V13.gapMd),
         Wrap(spacing: V13.gapMd, runSpacing: V13.gapLg, children: tiles),

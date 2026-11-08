@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-import '../theme/app_colors.dart';
-import '../theme/app_text_styles.dart';
 import '../theme/nuvo_responsive.dart';
+import '../v13/v13.dart';
 import 'rep_burst_controller.dart';
 
 /// The "Nuvo saw that" feedback for a live rep count.
@@ -21,7 +20,7 @@ class NuvoRepPulse extends StatefulWidget {
     super.key,
     required this.count,
     required this.target,
-    this.accent = NuvoColors.blue,
+    this.accent = V13.blue,
     this.onColor,
     this.haptics = true,
     this.compact = false,
@@ -30,10 +29,10 @@ class NuvoRepPulse extends StatefulWidget {
   final int count;
   final int target;
 
-  /// The `+1` flash colour.
+  /// The `+N` flash colour.
   final Color accent;
 
-  /// Colour of the running "N / target" number.
+  /// Colour of the running "N / target" number — white over the camera.
   final Color? onColor;
   final bool haptics;
 
@@ -83,6 +82,7 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
     final s = context.nuvoScale;
     final numberSize = (widget.compact ? 40.0 : 72.0) * s;
     final targetLabel = widget.target > 0 ? ' / ${widget.target}' : '';
+    final numberColor = _targetHit ? V13.mint : widget.onColor ?? V13.navy;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -94,21 +94,18 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
             children: [
               TextSpan(
                 text: '$_shownCount',
-                style: AppTextStyles.displayLarge.copyWith(
+                style: V13.hugeNumber.copyWith(
                   fontSize: numberSize,
                   height: 1,
                   fontWeight: FontWeight.w900,
-                  color: _targetHit
-                      ? NuvoColors.success
-                      : widget.onColor ?? context.themeColors.ink,
+                  color: numberColor,
                 ),
               ),
               TextSpan(
                 text: targetLabel,
-                style: AppTextStyles.titleLarge.copyWith(
+                style: V13.sectionHead.copyWith(
                   fontSize: numberSize * 0.42,
-                  color: (widget.onColor ?? context.themeColors.ink)
-                      .withValues(alpha: 0.55),
+                  color: (widget.onColor ?? V13.navy).withValues(alpha: 0.55),
                 ),
               ),
             ],
@@ -121,32 +118,33 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
           Positioned(
             top: -numberSize * 0.55,
             child: IgnorePointer(
-              child: Text(
-                '+${_burst.streakCount > 0 ? _burst.streakCount : 1}',
-                style: AppTextStyles.displayLarge.copyWith(
-                  fontSize: numberSize * 0.7,
-                  fontWeight: FontWeight.w900,
-                  color: widget.accent,
-                  shadows: const [
-                    Shadow(
-                      color: Color(0x33000000),
-                      blurRadius: 12,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-              )
-                  .animate(key: ValueKey(_pulseSeq))
-                  .scale(
-                    begin: const Offset(0.4, 0.4),
-                    end: const Offset(1, 1),
-                    duration: 260.ms,
-                    curve: Curves.easeOutBack,
-                  )
-                  .fadeIn(duration: 90.ms)
-                  .moveY(begin: 8, end: -18, duration: 520.ms)
-                  .then()
-                  .fadeOut(duration: 240.ms),
+              child:
+                  Text(
+                        '+${_burst.streakCount > 0 ? _burst.streakCount : 1}',
+                        style: V13.hugeNumber.copyWith(
+                          fontSize: numberSize * 0.7,
+                          fontWeight: FontWeight.w900,
+                          color: widget.accent,
+                          shadows: const [
+                            Shadow(
+                              color: Color(0x33000000),
+                              blurRadius: 12,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      )
+                      .animate(key: ValueKey(_pulseSeq))
+                      .scale(
+                        begin: const Offset(0.4, 0.4),
+                        end: const Offset(1, 1),
+                        duration: 260.ms,
+                        curve: Curves.easeOutBack,
+                      )
+                      .fadeIn(duration: 90.ms)
+                      .moveY(begin: 8, end: -18, duration: 520.ms)
+                      .then()
+                      .fadeOut(duration: 240.ms),
             ),
           ),
       ],
