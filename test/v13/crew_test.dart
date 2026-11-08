@@ -431,7 +431,8 @@ void main() {
     expect(find.text('#2 this week'), findsOneWidget);
     expect(find.text('Morning pushups · In 2 days'), findsOneWidget);
     expect(find.text('RACING RIGHT NOW'), findsOneWidget);
-    expect(find.text('Racing · Pushup Race'), findsOneWidget);
+    // The cell names the movement now, not "Racing · <race title>".
+    expect(find.text('Pushups'), findsWidgets);
     expect(find.text('Kai wants to race'), findsOneWidget);
     expect(find.text('Friends with Priya Lane and Alex Row'), findsOneWidget);
     expect(find.text('Waiting on Sam'), findsOneWidget);

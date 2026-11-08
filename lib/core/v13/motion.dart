@@ -140,3 +140,63 @@ abstract final class V13Haptics {
     if (_on) HapticFeedback.mediumImpact();
   }
 }
+
+
+/// First-load list entrance: fade + rise, staggered by [index]. The delay is
+/// capped so a long list never waits on its tail, and it plays once per
+/// mounted element (scrolling back doesn't replay it). Respects reduced
+/// motion.
+class V13StaggerIn extends StatefulWidget {
+  const V13StaggerIn({super.key, required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<V13StaggerIn> createState() => _V13StaggerInState();
+}
+
+class _V13StaggerInState extends State<V13StaggerIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 360),
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQueryData.fromView(View.of(context)).disableAnimations) {
+      _c.value = 1;
+      return;
+    }
+    final delay = Duration(milliseconds: 40 * widget.index.clamp(0, 8));
+    Future.delayed(delay, () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curve = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+    return FadeTransition(
+      opacity: curve,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(curve),
+        child: widget.child,
+      ),
+    );
+  }
+}

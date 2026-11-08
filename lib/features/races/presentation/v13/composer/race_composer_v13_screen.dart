@@ -62,12 +62,17 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       _invited.add(prefill!.withUser!.id);
     }
     _draft = draft;
+    // Warm the friend list early so step 3 never flashes empty.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadFriends();
+    });
   }
 
   void _update(RaceDraft d) => setState(() => _draft = d);
 
   void _next() {
-    if (_step == 2) _loadFriends();
+    // Load friends on the way INTO the invite step (index 2).
+    if (_step + 1 == 2) _loadFriends();
     setState(() {
       _step = (_step + 1).clamp(0, 3);
       _error = null;
@@ -198,7 +203,7 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       showV13Confetti(context);
       showV13Toast(
         context,
-        crewId != null
+        sent == 0
             ? '${race.displayTitle} is live.'
             : '${race.displayTitle} is live. $sent '
                   'invite${sent == 1 ? '' : 's'} sent.',
@@ -262,6 +267,10 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
         key: const ValueKey('review'),
         draft: _draft,
         invitedCount: _invited.length,
+        invitedFriends: [
+          for (final f in _friends)
+            if (_invited.contains(f.id)) f,
+        ],
         loading: _loading,
         error: _error,
         onJump: (i) => setState(() => _step = i),
@@ -337,7 +346,11 @@ class _StepShell extends StatelessWidget {
     this.onCta,
     this.ctaEnabled = true,
     this.ctaLoading = false,
+    this.ctaHint,
   });
+
+  /// Plain reason shown under a disabled CTA ("Pick a finish line").
+  final String? ctaHint;
   final String question;
   final Widget body;
   final String? ctaLabel;
@@ -365,6 +378,21 @@ class _StepShell extends StatelessWidget {
             onPressed: ctaEnabled ? onCta : null,
             loading: ctaLoading,
           ),
+          if (!ctaEnabled && ctaHint != null) ...[
+            const SizedBox(height: V13.gapSm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: V13.muted,
+                ),
+                const SizedBox(width: 6),
+                Flexible(child: Text(ctaHint!, style: V13.caption)),
+              ],
+            ),
+          ],
         ],
       ],
     );
@@ -491,6 +519,9 @@ class _NameStepState extends State<_NameStep> {
               onSubmitted: (_) => _commit(),
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 hintText: 'First to 100 Pushups',
                 hintStyle: TextStyle(color: V13.muted),
               ),
@@ -569,6 +600,7 @@ class _SetupStep extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    _ctxForLabels = context;
     final customOn = NuvoFlags.customMotionOn;
     // Manual goals can only run the logged formats; a taught custom movement
     // is camera-verified like any preset and gets all four modes rather than
@@ -576,10 +608,10 @@ class _SetupStep extends ConsumerWidget {
     final modes = draft.isManual
         ? const [RaceFormat.firstToGoal, RaceFormat.mostInWindow]
         : draft.isCustom
-            ? _modeLabels.keys.toList()
-            : draft.activity.supportedFormats
-                  .where(_modeLabels.containsKey)
-                  .toList();
+        ? _modeLabels.keys.toList()
+        : draft.activity.supportedFormats
+              .where(_modeLabels.containsKey)
+              .toList();
     // Every mode shows a FINISH LINE section — required for the deadline
     // modes, optional on First to (None bounds nothing; the race ends when
     // somebody reaches the goal).
@@ -591,7 +623,10 @@ class _SetupStep extends ConsumerWidget {
       question: 'Set it up.',
       ctaLabel: 'Invite friends',
       onCta: onNext,
-      ctaEnabled: !draft.isCustom || draft.hasVerifierSpec,
+      // Same rule the final Start uses (RaceDraft.isValidToCreate), so the
+      // last step can never say "finish setting up" after this one passed.
+      ctaEnabled: draft.isValidToCreate,
+      ctaHint: setupIssue(draft),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -605,7 +640,7 @@ class _SetupStep extends ConsumerWidget {
             crossAxisSpacing: V13.gapSm,
             childAspectRatio: 1,
             children: [
-              for (final a in catalog)
+              for (final a in _mainMovements(catalog, draft))
                 _MovementTile(
                   icon: a.icon,
                   label: a.title,
@@ -623,32 +658,53 @@ class _SetupStep extends ConsumerWidget {
                         ),
                   ),
                 ),
-              if (customOn)
+              if (catalog.length > _mainMovements(catalog, draft).length)
                 _MovementTile(
-                  icon: Icons.auto_awesome_rounded,
-                  label: 'Custom',
-                  selected: draft.isCustom,
-                  onTap: () => _teach(context),
+                  icon: Icons.apps_rounded,
+                  label: 'More',
+                  selected: false,
+                  onTap: () => _pickMore(context),
                 ),
-              _MovementTile(
-                icon: Icons.edit_note_rounded,
-                label: 'Custom goal',
-                selected: draft.isManual,
-                onTap: () => onUpdate(
-                  draft.copyWith(
-                    goalKind: RaceGoalKind.manual,
-                    metric: RaceMetric.reps,
-                    // Manual goals log progress by hand — there are no
-                    // camera attempts, so an attempt format becomes Most
-                    // total (the finish line is kept).
-                    format: draft.format.isAttemptBased
-                        ? RaceFormat.mostInWindow
-                        : draft.format,
-                    clearCustom: true,
-                    markEdited: {RaceField.goalKind},
+            ],
+          ),
+          const SizedBox(height: V13.gapMd),
+          // The two non-preset paths, side by side and compact.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _OptionCard(
+                  icon: Icons.edit_note_rounded,
+                  color: V13.sun,
+                  title: 'Custom goal',
+                  body: 'Log anything',
+                  selected: draft.isManual,
+                  onTap: () => onUpdate(
+                    draft.copyWith(
+                      goalKind: RaceGoalKind.manual,
+                      metric: RaceMetric.reps,
+                      format: draft.format.isAttemptBased
+                          ? RaceFormat.mostInWindow
+                          : draft.format,
+                      clearCustom: true,
+                      markEdited: {RaceField.goalKind},
+                    ),
                   ),
                 ),
               ),
+              if (customOn) ...[
+                const SizedBox(width: V13.gapSm),
+                Expanded(
+                  child: _OptionCard(
+                    icon: Icons.auto_awesome_rounded,
+                    color: V13.lilac,
+                    title: 'Custom move',
+                    body: 'Teach Nuvo',
+                    selected: draft.isCustom,
+                    onTap: () => _teach(context),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: V13.gapLg),
@@ -679,23 +735,32 @@ class _SetupStep extends ConsumerWidget {
             _ManualFields(draft: draft, onUpdate: onUpdate),
             const SizedBox(height: V13.gapLg),
           ],
-          Text('MODE', style: V13.label),
-          const SizedBox(height: V13.gapMd),
-          Wrap(
-            spacing: V13.gapSm,
-            runSpacing: V13.gapSm,
-            children: [
-              for (final f in modes)
-                V13Chip(
-                  label: _modeLabels[f]!,
-                  selected: draft.format == f,
-                  onTap: () => onUpdate(
-                    draft.copyWith(format: f, markEdited: {RaceField.format}),
+          _CollapsibleRow(
+            key: const ValueKey('mode-row'),
+            label: 'Mode',
+            value: _modeLabels[draft.format] ?? '',
+            icon: _ModeTile._icon(draft.format),
+            child: GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: V13.gapSm,
+              crossAxisSpacing: V13.gapSm,
+              childAspectRatio: 1.3,
+              children: [
+                for (final f in modes)
+                  _ModeTile(
+                    format: f,
+                    label: _modeLabels[f]!,
+                    selected: draft.format == f,
+                    onTap: () => onUpdate(
+                      draft.copyWith(format: f, markEdited: {RaceField.format}),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: V13.gapLg),
+          const SizedBox(height: V13.gapSm),
           if (draft.format.usesScoreTarget) ...[
             Text('GOAL', style: V13.label),
             const SizedBox(height: V13.gapMd),
@@ -817,41 +882,122 @@ class _SetupStep extends ConsumerWidget {
             const SizedBox(height: V13.gapLg),
           ],
           if (finishOptions.isNotEmpty) ...[
-            Text('FINISH LINE', style: V13.label),
-            const SizedBox(height: V13.gapMd),
-            Wrap(
-              spacing: V13.gapSm,
-              runSpacing: V13.gapSm,
+            Row(
               children: [
-                for (final phrase in finishOptions)
-                  V13Chip(
-                    label: phrase == 'none'
-                        ? 'None'
-                        : phrase == 'today'
-                            ? 'Today'
-                            : 'In $phrase',
-                    selected: phrase == 'none'
-                        ? draft.finishLineAt == null
-                        : _finishMatches(phrase),
-                    onTap: () => onUpdate(
-                      phrase == 'none'
-                          ? draft.copyWith(
-                              clearTiming: true,
-                              markEdited: {RaceField.timing},
-                            )
-                          : draft.copyWith(
-                              finishLineAt: deadlineUtcFromPhrase(
-                                phrase,
-                              )?.toIso8601String(),
-                              markEdited: {RaceField.timing},
-                            ),
-                    ),
-                  ),
+                const Icon(Icons.event_rounded, size: 18, color: V13.navy),
+                const SizedBox(width: V13.gapSm),
+                Text('FINISH LINE', style: V13.label),
               ],
+            ),
+            const SizedBox(height: V13.gapSm),
+            SizedBox(
+              child: Wrap(
+                spacing: V13.gapSm,
+                runSpacing: V13.gapSm,
+                children: [
+                  for (final phrase in finishOptions)
+                    V13Chip(
+                      label: phrase == 'none'
+                          ? 'None'
+                          : phrase == 'today'
+                          ? 'Today'
+                          : 'In $phrase',
+                      selected: phrase == 'none'
+                          ? draft.finishLineAt == null
+                          : _finishMatches(phrase),
+                      onTap: () => onUpdate(
+                        phrase == 'none'
+                            ? draft.copyWith(
+                                clearTiming: true,
+                                markEdited: {RaceField.timing},
+                              )
+                            : draft.copyWith(
+                                finishLineAt: deadlineUtcFromPhrase(
+                                  phrase,
+                                )?.toIso8601String(),
+                                markEdited: {RaceField.timing},
+                              ),
+                      ),
+                    ),
+                  V13Chip(
+                    label: _customFinish() ?? 'Pick date',
+                    selected: _customFinish() != null,
+                    onTap: () => _pickDate(context),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
       ),
+    );
+  }
+
+  /// "Nov 20" when the finish line is a picked date (not one of the presets).
+  String? _customFinish() {
+    final iso = draft.finishLineAt;
+    if (iso == null) return null;
+    for (final p in const ['today', '3 days', '1 week', '2 weeks']) {
+      if (_finishMatches(p)) return null;
+    }
+    final d = DateTime.tryParse(iso)?.toLocal();
+    if (d == null) return null;
+    return MaterialLocalizations.of(_ctxForLabels!).formatShortMonthDay(d);
+  }
+
+  static BuildContext? _ctxForLabels;
+
+  Future<void> _pickDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 7)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'Finish line',
+    );
+    if (picked == null) return;
+    // End of the picked day, local time.
+    final end = DateTime(picked.year, picked.month, picked.day, 23, 59);
+    onUpdate(
+      draft.copyWith(
+        finishLineAt: end.toUtc().toIso8601String(),
+        markEdited: {RaceField.timing},
+      ),
+    );
+  }
+
+  static const _mainCount = 8;
+
+  /// The first movements as tiles; the selected one always stays visible.
+  List<MotionActivityDefinition> _mainMovements(
+    List<MotionActivityDefinition> all,
+    RaceDraft d,
+  ) {
+    final main = all.take(_mainCount).toList();
+    if (!d.isCustom &&
+        !d.isManual &&
+        !main.any((a) => a.activityId == d.activity.activityId)) {
+      final sel = all.where((a) => a.activityId == d.activity.activityId);
+      if (sel.isNotEmpty) main[main.length - 1] = sel.first;
+    }
+    return main;
+  }
+
+  Future<void> _pickMore(BuildContext context) async {
+    final picked = await showV13Sheet<MotionActivityDefinition>(
+      context,
+      builder: (_) => _MovementSearchSheet(catalog: catalog),
+    );
+    if (picked == null) return;
+    onUpdate(
+      draft
+          .asPreset(activity: picked, targetValue: picked.defaultTarget)
+          .copyWith(
+            clearCustom: true,
+            goalKind: RaceGoalKind.movement,
+            markEdited: {RaceField.activity, RaceField.goalKind},
+          ),
     );
   }
 
@@ -973,6 +1119,9 @@ class _ManualFieldsState extends State<_ManualFields> {
       onChanged: onChanged,
       decoration: InputDecoration(
         border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        filled: false,
         hintText: hint,
         hintStyle: const TextStyle(color: V13.muted),
       ),
@@ -1018,6 +1167,9 @@ class _MovementNameSheetState extends State<_MovementNameSheet> {
               onSubmitted: (_) => Navigator.of(context).pop(_ctrl.text),
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 hintText: 'Burpee backflip',
                 hintStyle: TextStyle(color: V13.muted),
               ),
@@ -1036,7 +1188,7 @@ class _MovementNameSheetState extends State<_MovementNameSheet> {
 
 // ── Step 3: invite friends ───────────────────────────────────────────────────
 
-class _FriendsStep extends StatelessWidget {
+class _FriendsStep extends StatefulWidget {
   const _FriendsStep({
     super.key,
     required this.friends,
@@ -1058,15 +1210,33 @@ class _FriendsStep extends StatelessWidget {
   final VoidCallback onNext;
 
   @override
+  State<_FriendsStep> createState() => _FriendsStepState();
+}
+
+class _FriendsStepState extends State<_FriendsStep> {
+  String _q = '';
+
+  @override
   Widget build(BuildContext context) {
+    final w = widget;
+    final q = _q.trim().toLowerCase();
+    final shown = w.friends
+        .where(
+          (f) =>
+              q.isEmpty ||
+              f.displayName.toLowerCase().contains(q) ||
+              (f.username ?? '').toLowerCase().contains(q),
+        )
+        .toList();
+    final picked = w.friends.where((f) => w.invited.contains(f.id)).toList();
     return _StepShell(
       question: 'Invite your friends.',
       ctaLabel: 'Review race',
-      onCta: onNext,
+      onCta: w.onNext,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (crewName != null) ...[
+          if (w.crewName != null) ...[
             V13Card(
               padding: const EdgeInsets.all(V13.gapMd),
               color: V13.mint,
@@ -1076,7 +1246,7 @@ class _FriendsStep extends StatelessWidget {
                   const SizedBox(width: V13.gapMd),
                   Expanded(
                     child: Text(
-                      'Everyone in $crewName joins when this goes live.',
+                      'Everyone in ${w.crewName} joins when this goes live.',
                       style: V13.bodyStrong,
                     ),
                   ),
@@ -1085,7 +1255,7 @@ class _FriendsStep extends StatelessWidget {
             ),
             const SizedBox(height: V13.gapMd),
           ],
-          if (loading)
+          if (w.loading)
             const Padding(
               padding: EdgeInsets.all(V13.gapXl),
               child: Center(
@@ -1099,40 +1269,116 @@ class _FriendsStep extends StatelessWidget {
                 ),
               ),
             )
-          else if (error != null)
-            Column(
-              children: [
-                Text(error!, style: V13.body),
-                const SizedBox(height: V13.gapSm),
-                V13Button.secondary(label: 'Retry', onPressed: onRetry),
-              ],
+          else if (w.error != null)
+            V13ErrorBanner(message: w.error!, onRetry: w.onRetry)
+          else if (w.friends.isEmpty)
+            V13Card.dashed(
+              padding: const EdgeInsets.all(V13.gapLg),
+              child: Row(
+                children: [
+                  const V13IconTile(
+                    icon: Icons.person_add_alt_1_rounded,
+                    color: V13.sky,
+                  ),
+                  const SizedBox(width: V13.gapMd),
+                  Expanded(
+                    child: Text(
+                      'No friends yet. Start the race and share its link — anyone can join.',
+                      style: V13.body,
+                    ),
+                  ),
+                ],
+              ),
             )
-          else if (friends.isEmpty)
-            Text(
-              'No friends yet — you can invite them after the race is live.',
-              style: V13.body,
-            )
-          else
-            for (var i = 0; i < friends.length; i++) ...[
-              if (i > 0) const V13Divider(),
-              V13ListRow(
-                title: friends[i].displayName,
-                subtitle:
-                    friends[i].racesTogether != null &&
-                        friends[i].racesTogether! > 0
-                    ? 'Raced you ${friends[i].racesTogether} '
-                          'time${friends[i].racesTogether == 1 ? '' : 's'}'
-                    : null,
-                leading: V13Face(
-                  photoUrl: friends[i].profilePhotoUrl,
-                  size: 36,
-                  name: friends[i].displayName,
+          else ...[
+            V13TextInput(
+              hint: 'Search friends',
+              prefixIcon: const Icon(Icons.search_rounded, color: V13.muted),
+              onChanged: (v) => setState(() => _q = v),
+            ),
+            if (picked.isNotEmpty) ...[
+              const SizedBox(height: V13.gapMd),
+              SizedBox(
+                height: 64,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final f in picked)
+                      Padding(
+                        padding: const EdgeInsets.only(right: V13.gapMd),
+                        child: GestureDetector(
+                          onTap: () => w.onToggle(f.id),
+                          child: Column(
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  V13Face(
+                                    photoUrl: f.profilePhotoUrl,
+                                    size: 40,
+                                    name: f.displayName,
+                                  ),
+                                  const Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: Icon(
+                                      Icons.cancel_rounded,
+                                      size: 18,
+                                      color: V13.navy,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                f.displayName.split(' ').first,
+                                style: V13.caption,
+                                maxLines: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                trailing: _CheckDot(selected: invited.contains(friends[i].id)),
-                onTap: () => onToggle(friends[i].id),
-                showDivider: false,
               ),
             ],
+            const SizedBox(height: V13.gapSm),
+            if (shown.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: V13.gapLg),
+                child: Text(
+                  'No friend matches “$_q”.',
+                  style: V13.body.copyWith(color: V13.muted),
+                ),
+              )
+            else
+              for (var i = 0; i < shown.length; i++) ...[
+                if (i > 0) const V13Divider(),
+                V13ListRow(
+                  title: shown[i].displayName,
+                  subtitle:
+                      shown[i].racesTogether != null &&
+                          shown[i].racesTogether! > 0
+                      ? 'Raced you ${shown[i].racesTogether} '
+                            'time${shown[i].racesTogether == 1 ? '' : 's'}'
+                      : (shown[i].username != null
+                            ? '@${shown[i].username}'
+                            : null),
+                  leading: V13Face(
+                    photoUrl: shown[i].profilePhotoUrl,
+                    size: 40,
+                    name: shown[i].displayName,
+                  ),
+                  trailing: _CheckDot(
+                    selected: w.invited.contains(shown[i].id),
+                  ),
+                  onTap: () => w.onToggle(shown[i].id),
+                  showDivider: false,
+                ),
+              ],
+          ],
         ],
       ),
     );
@@ -1168,6 +1414,7 @@ class _ReviewStep extends StatelessWidget {
     super.key,
     required this.draft,
     required this.invitedCount,
+    this.invitedFriends = const [],
     required this.loading,
     required this.error,
     required this.onJump,
@@ -1175,6 +1422,7 @@ class _ReviewStep extends StatelessWidget {
   });
   final RaceDraft draft;
   final int invitedCount;
+  final List<PublicUser> invitedFriends;
   final bool loading;
   final String? error;
   final ValueChanged<int> onJump;
@@ -1193,16 +1441,83 @@ class _ReviewStep extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Preview in the Arena card's language: race colour, title,
+          // mode line, invited faces.
           V13Card(
-            padding: const EdgeInsets.all(V13.gapMd),
+            color: V13.mint,
+            shadow: V13.shadow6,
+            padding: const EdgeInsets.all(V13.gapLg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(draft.resolvedTitle, style: V13.bodyStrong),
+                Row(
+                  children: [
+                    V13FaceStack(
+                      faces: [
+                        const V13FaceInfo(name: 'You', isMe: true),
+                        for (final f in invitedFriends)
+                          V13FaceInfo(
+                            photoUrl: f.profilePhotoUrl,
+                            name: f.displayName,
+                          ),
+                      ],
+                      max: 4,
+                      size: 30,
+                      total: invitedFriends.length + 1,
+                    ),
+                    const SizedBox(width: V13.gapSm),
+                    Expanded(
+                      child: Text(
+                        '${draft.displayActivityName} \u00b7 $mode',
+                        style: V13.caption.copyWith(
+                          color: V13.navy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: V13.gapMd),
+                Text(
+                  _titleCase(draft.resolvedTitle),
+                  style: V13.cardTitle.copyWith(fontSize: 28),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 4),
-                Text(draft.winStatement, style: V13.caption),
+                Text(draft.winStatement, style: V13.body),
+                const SizedBox(height: V13.gapLg),
+                Row(
+                  children: [
+                    V13IconTile(
+                      icon: draft.isManual
+                          ? Icons.edit_note_rounded
+                          : draft.isCustom
+                          ? Icons.auto_awesome_rounded
+                          : draft.activity.icon,
+                      color: V13.card,
+                    ),
+                    const Spacer(),
+                    V13Pill(
+                      label: _finishLine() == null
+                          ? 'No finish line'
+                          : 'Ends ${_finishLine()}',
+                      icon: Icons.schedule_rounded,
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: V13.gapMd),
+          Text(
+            invitedCount == 0
+                ? 'Next: it goes live, and you can share the link with anyone.'
+                : 'Next: it goes live and your $invitedCount '
+                      '${invitedCount == 1 ? 'friend gets' : 'friends get'} an invite.',
+            style: V13.caption,
           ),
           const SizedBox(height: V13.gapLg),
           _reviewRow('Movement', draft.displayActivityName, () => onJump(1)),
@@ -1238,19 +1553,14 @@ class _ReviewStep extends StatelessWidget {
             'Friends',
             invitedCount == 0
                 ? 'Invite after it\u2019s live'
-                : '$invitedCount invited',
+                : invitedFriends
+                      .map((f) => f.displayName.split(' ').first)
+                      .join(', '),
             () => onJump(2),
           ),
           if (error != null) ...[
             const SizedBox(height: V13.gapLg),
-            V13Card(
-              padding: const EdgeInsets.all(V13.gapMd),
-              color: V13.coral.withValues(alpha: 0.15),
-              child: Text(
-                error!,
-                style: V13.bodyStrong.copyWith(color: V13.danger),
-              ),
-            ),
+            V13ErrorBanner(message: error!, onRetry: onStart),
           ],
         ],
       ),
@@ -1291,4 +1601,296 @@ class _ReviewStep extends StatelessWidget {
         onTap: onTap,
         showDivider: false,
       );
+}
+
+/// Same casing `Race.displayTitle` applies, so the review card matches the
+/// race everywhere else.
+String _titleCase(String raw) => raw
+    .trim()
+    .split(RegExp(r'\s+'))
+    .map(
+      (w) => w.isEmpty
+          ? w
+          : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}',
+    )
+    .join(' ');
+
+/// Plain reason the Setup step can't continue yet, from the same checks as
+/// [RaceDraft.isValidToCreate]. Null when the draft is ready.
+String? setupIssue(RaceDraft d) {
+  if (d.isValidToCreate) return null;
+  if (d.isCustom && !d.hasVerifierSpec) {
+    return 'Teach Nuvo your custom movement first.';
+  }
+  if (d.isManual &&
+      ((d.manualGoalName ?? '').trim().isEmpty ||
+          (d.manualUnit ?? '').trim().isEmpty)) {
+    return 'Name your goal and how it’s measured.';
+  }
+  if (d.format.usesDeadline && (d.finishLineAt ?? '').isEmpty) {
+    return 'Pick a finish line for this mode.';
+  }
+  if (d.format == RaceFormat.timedAttempt &&
+      (d.attemptDurationSeconds ?? 0) <= 0) {
+    return 'Pick an attempt length.';
+  }
+  if ((d.format.usesScoreTarget || d.isManual) && d.targetValue <= 0) {
+    return 'Set a goal above 0.';
+  }
+  return 'Finish setting up your race.';
+}
+
+/// A first-class option row (Custom goal / Custom movement): icon tile,
+/// title, one-line description, selected ring.
+class _OptionCard extends StatelessWidget {
+  const _OptionCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.body,
+    required this.selected,
+    required this.onTap,
+  });
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String body;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return V13Card(
+      onTap: onTap,
+      semanticLabel: title,
+      color: selected ? V13.blue.withValues(alpha: 0.08) : V13.card,
+      padding: const EdgeInsets.all(V13.gapMd),
+      child: Row(
+        children: [
+          V13IconTile(icon: icon, color: color),
+          const SizedBox(width: V13.gapMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: V13.bodyStrong),
+                Text(body, style: V13.caption),
+              ],
+            ),
+          ),
+          if (selected)
+            const Icon(Icons.check_circle_rounded, color: V13.blue, size: 20),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mode picker tile: icon, name and the approved one-line meaning.
+class _ModeTile extends StatelessWidget {
+  const _ModeTile({
+    required this.format,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final RaceFormat format;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  static IconData _icon(RaceFormat f) => switch (f) {
+    RaceFormat.firstToGoal => Icons.flag_rounded,
+    RaceFormat.mostInWindow => Icons.stacked_bar_chart_rounded,
+    RaceFormat.bestAttempt => Icons.military_tech_rounded,
+    RaceFormat.timedAttempt => Icons.timer_rounded,
+  };
+
+  static String _blurb(RaceFormat f) => switch (f) {
+    RaceFormat.firstToGoal => 'First to reach the goal wins.',
+    RaceFormat.mostInWindow => 'Everything you log adds up.',
+    RaceFormat.bestAttempt => 'Your one best attempt counts.',
+    RaceFormat.timedAttempt => 'Timed attempt, best result wins.',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return V13Card(
+      onTap: onTap,
+      semanticLabel: label,
+      color: selected ? V13.navy : V13.card,
+      padding: const EdgeInsets.all(V13.gapMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_icon(format), color: selected ? V13.card : V13.navy, size: 22),
+          const Spacer(),
+          Text(
+            label,
+            style: V13.bodyStrong.copyWith(
+              color: selected ? V13.card : V13.navy,
+            ),
+          ),
+          Text(
+            _blurb(format),
+            style: V13.caption.copyWith(
+              color: selected ? V13.card.withValues(alpha: 0.8) : V13.muted,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Searchable full movement range, grouped by category.
+class _MovementSearchSheet extends StatefulWidget {
+  const _MovementSearchSheet({required this.catalog});
+  final List<MotionActivityDefinition> catalog;
+
+  @override
+  State<_MovementSearchSheet> createState() => _MovementSearchSheetState();
+}
+
+class _MovementSearchSheetState extends State<_MovementSearchSheet> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _q.trim().toLowerCase();
+    final hits = widget.catalog
+        .where((a) => q.isEmpty || a.title.toLowerCase().contains(q))
+        .toList();
+    final groups = <MovementCategory, List<MotionActivityDefinition>>{};
+    for (final a in hits) {
+      groups.putIfAbsent(a.category, () => []).add(a);
+    }
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.75,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              V13.pagePad,
+              V13.gapSm,
+              V13.pagePad,
+              V13.gapSm,
+            ),
+            child: V13TextInput(
+              hint: 'Search movements',
+              prefixIcon: const Icon(Icons.search_rounded, color: V13.muted),
+              onChanged: (v) => setState(() => _q = v),
+            ),
+          ),
+          Expanded(
+            child: hits.isEmpty
+                ? Center(
+                    child: Text(
+                      'No movement called “$_q”.',
+                      style: V13.body.copyWith(color: V13.muted),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      V13.pagePad,
+                      0,
+                      V13.pagePad,
+                      V13.gapXl,
+                    ),
+                    children: [
+                      for (final cat in MovementCategory.values)
+                        if (groups[cat] != null) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: V13.gapMd,
+                              bottom: V13.gapXs,
+                            ),
+                            child: Text(
+                              cat.label.toUpperCase(),
+                              style: V13.label,
+                            ),
+                          ),
+                          for (final a in groups[cat]!)
+                            V13ListRow(
+                              title: a.title,
+                              leading: Icon(a.icon, color: V13.navy),
+                              onTap: () => Navigator.of(context).pop(a),
+                              showDivider: false,
+                            ),
+                        ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A one-line row showing the current value; tap to expand its picker.
+class _CollapsibleRow extends StatefulWidget {
+  const _CollapsibleRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.child,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  State<_CollapsibleRow> createState() => _CollapsibleRowState();
+}
+
+class _CollapsibleRowState extends State<_CollapsibleRow> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        V13Card(
+          onTap: () => setState(() => _open = !_open),
+          semanticLabel: '${widget.label}: ${widget.value}',
+          padding: const EdgeInsets.all(V13.gapMd),
+          child: Row(
+            children: [
+              Icon(widget.icon, size: 20, color: V13.navy),
+              const SizedBox(width: V13.gapMd),
+              Text(widget.label, style: V13.body),
+              const Spacer(),
+              Text(widget.value, style: V13.bodyStrong),
+              const SizedBox(width: V13.gapXs),
+              AnimatedRotation(
+                turns: _open ? 0.5 : 0,
+                duration: V13Motion.fast,
+                curve: V13Motion.spring,
+                child: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: V13.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: V13Motion.fast,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _open
+              ? Padding(
+                  padding: const EdgeInsets.only(top: V13.gapSm),
+                  child: widget.child,
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
 }

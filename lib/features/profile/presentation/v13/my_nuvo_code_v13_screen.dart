@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -117,29 +116,7 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
               if (invite == null)
                 const V13Skeleton(height: 240, radius: V13.radiusCard)
               else
-                SizedBox(
-                  width: 240,
-                  height: 240,
-                  child: QrImageView(
-                    data: invite.url,
-                    version: QrVersions.auto,
-                    backgroundColor: V13.card,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: V13.navy,
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: V13.navy,
-                    ),
-                    embeddedImage: const AssetImage(
-                      'assets/branding/nuvo_app_icon.png',
-                    ),
-                    embeddedImageStyle: const QrEmbeddedImageStyle(
-                      size: Size(44, 44),
-                    ),
-                  ),
-                ),
+                V13NuvoQr(data: invite.url),
               const SizedBox(height: V13.gapLg),
               Text(
                 username != null && username.isNotEmpty
@@ -157,7 +134,7 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
           icon: Icons.ios_share_rounded,
           onPressed: invite == null
               ? null
-              : () => Share.share('Add me on Nuvo — ${invite.url}'),
+              : () => shareMyNuvoLink(context, invite.url),
         ),
         const SizedBox(height: V13.gapMd),
         V13Button.secondary(
@@ -396,13 +373,62 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _cameraLayer(),
-        if (_found != null) _foundCard(),
-        SafeArea(child: Column(children: [const Spacer(), _pasteBar()])),
-      ],
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        V13.pagePad,
+        V13.gapXl,
+        V13.pagePad,
+        V13.gapLg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The viewfinder is a framed card inside the page — the camera never
+          // bleeds under the header or the segmented control.
+          Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: AspectRatio(
+                aspectRatio: keyboard ? 1.6 : 0.82,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(V13.radiusCardLg),
+                    border: Border.all(color: V13.navy, width: V13.outline),
+                    boxShadow: V13.shadow6,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      V13.radiusCardLg - V13.outline,
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _cameraLayer(),
+                        if (_status == _ScanStatus.scanning && _found == null)
+                          const IgnorePointer(child: _Reticle()),
+                        if (_found != null) _foundCard(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (!keyboard && _status == _ScanStatus.scanning) ...[
+            const SizedBox(height: V13.gapMd),
+            Text(
+              _found == null
+                  ? 'Point your camera at a friend\u2019s Nuvo code.'
+                  : 'Found them.',
+              style: V13.caption,
+              textAlign: TextAlign.center,
+            ),
+          ],
+          const SizedBox(height: V13.gapLg),
+          _pasteBar(),
+        ],
+      ),
     );
   }
 
@@ -413,6 +439,7 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
         cam.value.isInitialized) {
       return FittedBox(
         fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
         child: SizedBox(
           width: cam.value.previewSize?.height ?? 1080,
           height: cam.value.previewSize?.width ?? 1920,
@@ -420,9 +447,16 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
         ),
       );
     }
+    // Non-camera states sit on a light card so the viewfinder frame reads
+    // (navy-on-navy hid the outline and made the shadow look like a smear).
     return ColoredBox(
-      color: V13.navy,
-      child: Center(child: _statusCard()),
+      color: _status == _ScanStatus.starting ? V13.navy : V13.card,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(V13.gapLg),
+          child: _statusCard(),
+        ),
+      ),
     );
   }
 
@@ -446,7 +480,7 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
         return _scanMessage(
           icon: Icons.no_photography_rounded,
           title: 'No camera',
-          body: 'This device has no camera. Paste a link below.',
+          body: 'This device has no camera. Paste a Nuvo link below instead.',
         );
       case _ScanStatus.error:
         return _scanMessage(
@@ -468,8 +502,8 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
     String? ctaLabel,
     VoidCallback? onCta,
   }) {
-    return V13Card(
-      padding: const EdgeInsets.all(V13.gapXl),
+    return Padding(
+      padding: const EdgeInsets.all(V13.gapMd),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -545,56 +579,123 @@ class _ScanPaneState extends ConsumerState<_ScanPane>
     );
   }
 
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      if (mounted) showV13Toast(context, 'Nothing to paste.');
+      return;
+    }
+    _pasteController.text = text;
+    _submitPasted();
+  }
+
   Widget _pasteBar() {
-    return Container(
-      color: V13.navy,
-      padding: const EdgeInsets.fromLTRB(
-        V13.pagePad,
-        V13.gapMd,
-        V13.pagePad,
-        V13.gapMd,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _pasteController,
-              style: V13.bodyStrong.copyWith(color: V13.card),
-              decoration: InputDecoration(
-                hintText: 'Paste a Nuvo link',
-                hintStyle: V13.body.copyWith(color: V13.divider),
-                filled: true,
-                fillColor: V13.navy,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: V13.gapLg,
-                  vertical: V13.gapMd,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(V13.radiusButton),
-                  borderSide: const BorderSide(
-                    color: V13.card,
-                    width: V13.outline,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(V13.radiusButton),
-                  borderSide: const BorderSide(
-                    color: V13.card,
-                    width: V13.outlineThick,
-                  ),
-                ),
-              ),
-              onSubmitted: (_) => _submitPasted(),
+    return Row(
+      children: [
+        Expanded(
+          child: V13TextInput(
+            controller: _pasteController,
+            hint: 'Or paste a Nuvo link',
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.go,
+            onSubmitted: (_) => _submitPasted(),
+            suffixIcon: IconButton(
+              tooltip: 'Paste',
+              icon: const Icon(Icons.content_paste_rounded, color: V13.navy),
+              onPressed: _pasteFromClipboard,
             ),
           ),
-          const SizedBox(width: V13.gapMd),
-          V13Button.secondary(
-            label: 'Go',
-            size: V13ButtonSize.small,
-            onPressed: _submitPasted,
-          ),
-        ],
+        ),
+        const SizedBox(width: V13.gapSm),
+        V13Button.primary(
+          label: 'Go',
+          size: V13ButtonSize.medium,
+          fullWidth: false,
+          onPressed: _submitPasted,
+        ),
+      ],
+    );
+  }
+}
+
+/// Corner brackets that frame the scan area inside the viewfinder.
+class _Reticle extends StatelessWidget {
+  const _Reticle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: FractionallySizedBox(
+        widthFactor: .62,
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: CustomPaint(painter: _ReticlePainter()),
+        ),
       ),
     );
+  }
+}
+
+class _ReticlePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = V13.card
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    final l = size.width * .2;
+    const r = 18.0;
+    final w = size.width, h = size.height;
+    // Each corner is an L with a rounded elbow.
+    for (final path in [
+      Path()
+        ..moveTo(0, l)
+        ..lineTo(0, r)
+        ..arcToPoint(const Offset(r, 0), radius: const Radius.circular(r))
+        ..lineTo(l, 0),
+      Path()
+        ..moveTo(w - l, 0)
+        ..lineTo(w - r, 0)
+        ..arcToPoint(Offset(w, r), radius: const Radius.circular(r))
+        ..lineTo(w, l),
+      Path()
+        ..moveTo(w, h - l)
+        ..lineTo(w, h - r)
+        ..arcToPoint(Offset(w - r, h), radius: const Radius.circular(r))
+        ..lineTo(w - l, h),
+      Path()
+        ..moveTo(l, h)
+        ..lineTo(r, h)
+        ..arcToPoint(Offset(0, h - r), radius: const Radius.circular(r))
+        ..lineTo(0, h - l),
+    ]) {
+      canvas.drawPath(path, p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ReticlePainter oldDelegate) => false;
+}
+
+/// The one way Nuvo shares "add me" — My code's "Share your code" and
+/// Profile's "Share profile" both call this, so the link and copy can't
+/// drift. Opens the iOS share sheet (anchored to [context] for iPad); if the
+/// sheet can't open, copies the link and says so.
+Future<void> shareMyNuvoLink(BuildContext context, String url) async {
+  final box = context.findRenderObject() as RenderBox?;
+  try {
+    await Share.share(
+      'Add me on Nuvo — $url',
+      sharePositionOrigin: box == null
+          ? null
+          : box.localToGlobal(Offset.zero) & box.size,
+    );
+  } catch (_) {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) showV13Toast(context, 'Link copied.');
   }
 }

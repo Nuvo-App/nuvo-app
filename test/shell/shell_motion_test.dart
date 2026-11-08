@@ -268,11 +268,11 @@ void _expectSelected(WidgetTester tester, String label) {
     findsOneWidget,
     reason: '$label must show its own page',
   );
-  // The selected destination's label reads in navy (the blue spring
-  // indicator sits underneath it).
+  // The selected destination's label reads in blue (over the blue
+  // capsule that springs between slots).
   expect(
     tester.widget<Text>(_slot(label)).style?.color,
-    V13.navy,
+    V13.blue,
     reason: '$label must be the highlighted nav destination',
   );
 }
@@ -473,6 +473,6 @@ void main() {
     await tester.pumpAndSettle();
 
     final icon = tester.widget<Icon>(find.byIcon(Icons.groups));
-    expect(icon.color, V13.navy, reason: 'the selected icon reads in navy');
+    expect(icon.color, V13.blue, reason: 'the selected icon reads in blue');
   });
 }

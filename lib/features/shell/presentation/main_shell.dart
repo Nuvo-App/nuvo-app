@@ -55,7 +55,16 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  /// Tab-switch entrance: the incoming tab fades up a few points. Driven by
+  /// one controller (no key swap) so each branch keeps its state.
+  late final AnimationController _tabIn = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1,
+  );
+  int? _lastTabIndex;
+
   /// Reentrancy guard for the level-up moment — the server flag makes it
   /// once-per-level across devices; this makes it once-per-dialog in-flight.
   bool _levelUpShowing = false;
@@ -129,6 +138,7 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabIn.dispose();
     super.dispose();
   }
 
@@ -233,6 +243,13 @@ class _MainShellState extends ConsumerState<MainShell>
         ? (widget.child as StatefulNavigationShell).currentIndex
         : _indexFor(GoRouterState.of(context).uri.path);
 
+    if (_lastTabIndex != null &&
+        _lastTabIndex != currentIndex &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      _tabIn.forward(from: 0.35);
+    }
+    _lastTabIndex = currentIndex;
+
     final Widget navigation = V13TabBar(
       key: TrackSideLayoutKeys.navigation,
       items: [
@@ -252,43 +269,48 @@ class _MainShellState extends ConsumerState<MainShell>
       extendBody: true,
       body: SafeArea(
         bottom: false,
+        // Content scrolls behind the floating dock; every tab pads its last
+        // row by V13TabBar.bottomPadding so it can scroll fully clear.
         child: Stack(
           fit: StackFit.expand,
           children: [
-            widget.child,
-            const Positioned(
+            FadeTransition(
+              opacity: CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+              child: SlideTransition(
+                position: Tween(
+                  begin: const Offset(0, 0.012),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+                ),
+                child: widget.child,
+              ),
+            ),
+            // Soft fade behind the floating dock: content dissolves into the
+            // page colour instead of hard-cutting at the dock's edge.
+            Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: _DockOcclusion(),
+              height: MediaQuery.paddingOf(context).bottom + 32,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey('nuvo-dock-fade'),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [V13.bg.withValues(alpha: 0), V13.bg],
+                      stops: const [0, 0.55],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
       bottomNavigationBar: navigation,
-    );
-  }
-}
-
-/// Foreground occlusion for the floating dock — one shared contract for
-/// every tab. The nav widget only paints the rounded dock itself; its
-/// margins are transparent, so without this band scrolled body content
-/// showed through (and under) the dock. The band is page-colored and
-/// spans the nav's rendered extent plus the breathing strip above the dock —
-/// content scrolls behind it and re-emerges above the dock's top edge,
-/// which is what the shared `bottomPadding` scroll clearance reserves.
-/// IgnorePointer so taps still reach the nav painted on top.
-class _DockOcclusion extends StatelessWidget {
-  const _DockOcclusion();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        key: const ValueKey('nuvo-dock-occlusion'),
-        height: MediaQuery.paddingOf(context).bottom + V13TabBar.topBreath,
-        color: V13.bg,
-      ),
     );
   }
 }

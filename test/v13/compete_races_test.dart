@@ -155,9 +155,10 @@ void main() {
       _app(_StubRaceRepo(races: [_race()]), home: const CompeteV13Screen()),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Compete'), findsOneWidget);
-    expect(find.text('New race'), findsOneWidget);
-    expect(find.text('Join with a code'), findsOneWidget);
+    // Greeting + state line, then the Start a race hero (code link inside).
+    expect(find.textContaining('Ready,'), findsOneWidget);
+    expect(find.text('Start a race'), findsOneWidget);
+    expect(find.text('Have a code? Join with a code'), findsOneWidget);
     expect(find.text('Live races'), findsOneWidget);
     expect(find.text('Pushup Race'), findsWidgets);
     // No open races → the whole section hides.
@@ -252,7 +253,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Join a race'), findsOneWidget);
-    expect(find.text('Squat Sprint'), findsOneWidget);
+    expect(
+      find.textContaining('is racing Squat Sprint', findRichText: true),
+      findsOneWidget,
+    );
     expect(find.text('Join'), findsOneWidget);
     expect(find.text('Leaderboard'), findsOneWidget);
     expect(find.text('Maya Miles'), findsOneWidget);
@@ -288,7 +292,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pushup Race'), findsOneWidget);
     expect(find.text('First to 100 reps'), findsOneWidget);
-    expect(find.text('Maya'), findsOneWidget);
+    // Two racers with progress → ranked list rows (full names), no podium.
+    expect(find.text('Maya Miles'), findsOneWidget);
     expect(find.text('Join race'), findsOneWidget);
     await shot(tester, 'v13_race_detail_visitor');
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
@@ -344,12 +349,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('PROOFS'));
-    await tester.pumpAndSettle();
-    // A best-single proof stands alone — the row shows the score itself,
-    // never a "+N" onto a total that does not exist.
-    expect(find.text('30 reps'), findsOneWidget);
-    expect(find.text('+30 reps'), findsNothing);
+    // A best-single proof stands alone — the activity row shows the score
+    // itself, never a "+N" onto a total that does not exist.
+    expect(
+      find.textContaining('Maya 30 reps', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.textContaining('+30 reps', findRichText: true), findsNothing);
   });
 
   testWidgets('test_gapOC6_attempt_limit_visible_in_ui', (tester) async {
@@ -427,19 +433,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // Camera-verifiable pushup → segmented chooser shows both.
-    expect(find.text('Camera'), findsOneWidget);
-    expect(find.text('Manual'), findsOneWidget);
+    // AI-verified movement → camera only, on every rules version (manual
+    // stays server-side for old installed apps, but this app never offers
+    // it for a movement the camera can verify).
+    expect(find.text('Manual'), findsNothing);
+    expect(find.text('Start camera proof'), findsOneWidget);
     await shot(tester, 'v13_submit_sheet');
-    await tester.tap(find.text('Manual'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Log proof'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Add a photo — proof is required for this race.'),
-      findsOneWidget,
-    );
-    expect(find.text('Keeps you at 2nd.'), findsOneWidget);
   });
 
   testWidgets('test_gap8_manual_tab_hidden_on_camera_only_race', (
@@ -470,8 +469,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Camera'), findsOneWidget);
-    expect(find.text('Manual'), findsOneWidget);
+    // Legacy rules too: AI-verified movements are camera-only in this app.
+    expect(find.text('Manual'), findsNothing);
+    expect(find.text('Start camera proof'), findsOneWidget);
   });
 }
 

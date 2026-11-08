@@ -229,9 +229,11 @@ class _SubmitProofV13SheetState extends ConsumerState<SubmitProofV13Sheet> {
   Widget build(BuildContext context) {
     final eligibility = _eligibility;
     final showCamera = eligibility.isCameraVerifiable;
-    // Strict-rules races (rulesVersion >= 1) are camera-only — the Worker
-    // rejects manual proof on them, so there is no Manual tab to offer.
-    final cameraOnly = showCamera && widget.race.rulesVersion >= 1;
+    // Any movement Nuvo's camera can verify is camera-only in this app —
+    // no Manual tab for AI-verified movements, whatever the race's rules
+    // version (the Worker still accepts manual from older installed apps).
+    // Manual stays only where the camera can't verify the movement.
+    final cameraOnly = showCamera;
     final tab = !showCamera ? 1 : (cameraOnly ? 0 : _tab);
 
     return Padding(

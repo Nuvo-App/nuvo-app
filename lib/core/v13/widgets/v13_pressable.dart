@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 
 import '../motion.dart';
@@ -75,20 +76,53 @@ class _V13PressableState extends State<V13Pressable>
     return Offset(0, d);
   }
 
-  void _down(TapDownDetails _) {
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _ctrl.value = 1;
-    } else {
-      _ctrl.forward();
+  /// Pointer-down (not the gesture arena's delayed tap-down) so the sink
+  /// starts the instant a finger lands, even on a quick tap.
+  Offset? _downAt;
+
+  /// A drag (scrolling a list that holds this card) releases the press so
+  /// cards don't sink while the page scrolls under the finger.
+  void _move(PointerMoveEvent e) {
+    final start = _downAt;
+    if (start == null) return;
+    if ((e.position - start).distance > kTouchSlop) {
+      _downAt = null;
+      _up();
     }
   }
 
-  void _up() {
+  void _down(PointerDownEvent e) {
+    _downAt = e.position;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.value = 1;
+    } else {
+      _ctrl.animateTo(1, duration: _pressDown, curve: Curves.easeOut);
+    }
+  }
+
+  static const _pressDown = Duration(milliseconds: 110);
+
+  /// Release: always let the surface finish landing on its plate first —
+  /// a fast tap otherwise reverses before the sink is visible — then spring
+  /// back up with the v13 overshoot.
+  Future<void> _up() async {
     if (MediaQuery.disableAnimationsOf(context)) {
       _ctrl.value = 0;
       return;
     }
-    _ctrl.animateTo(0, duration: V13Motion.medium, curve: V13Motion.spring);
+    if (_ctrl.value < 1) {
+      await _ctrl.animateTo(
+        1,
+        duration: _pressDown * (1 - _ctrl.value),
+        curve: Curves.easeOut,
+      );
+    }
+    if (!mounted) return;
+    await _ctrl.animateTo(
+      0,
+      duration: const Duration(milliseconds: 380),
+      curve: V13Motion.spring,
+    );
   }
 
   void _tap() {
@@ -104,34 +138,44 @@ class _V13PressableState extends State<V13Pressable>
       button: true,
       enabled: interactive,
       label: widget.semanticLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: interactive ? _tap : null,
-        onTapDown: interactive ? _down : null,
-        onTapUp: interactive ? (_) => _up() : null,
-        onTapCancel: interactive ? _up : null,
-        child: AnimatedBuilder(
-          animation: _ctrl,
-          builder: (context, child) {
-            final t = _ctrl.value;
-            Widget result = Transform.translate(
-              offset: _sink * t,
-              child: child,
-            );
-            if (shadow != null) {
-              // The plate stays on the "floor"; the surface sinks onto it.
-              // Once past halfway the plate is covered, so it drops out.
-              result = DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: widget.borderRadius,
-                  boxShadow: t > 0.5 ? const <BoxShadow>[] : shadow,
-                ),
-                child: result,
+      child: Listener(
+        onPointerDown: interactive ? _down : null,
+        onPointerMove: interactive ? _move : null,
+        onPointerUp: interactive
+            ? (_) {
+                if (_downAt == null) return;
+                _downAt = null;
+                _up();
+              }
+            : null,
+        onPointerCancel: interactive ? (_) => _up() : null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: interactive ? _tap : null,
+          child: AnimatedBuilder(
+            animation: _ctrl,
+            builder: (context, child) {
+              final t = _ctrl.value;
+              Widget result = Transform.translate(
+                offset: _sink * t,
+                child: child,
               );
-            }
-            return result;
-          },
-          child: widget.child,
+              if (shadow != null) {
+                // The plate stays on the "floor"; the surface slides onto it
+                // and covers it exactly at full press — the shadow collapses
+                // physically instead of popping out.
+                result = DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: widget.borderRadius,
+                    boxShadow: shadow,
+                  ),
+                  child: result,
+                );
+              }
+              return result;
+            },
+            child: widget.child,
+          ),
         ),
       ),
     );

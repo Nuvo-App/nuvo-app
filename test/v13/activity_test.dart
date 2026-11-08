@@ -260,10 +260,12 @@ void main() {
       await _settle(tester);
 
       expect(find.text('NEW'), findsOneWidget);
-      expect(find.text('EARLIER'), findsOneWidget);
-      expect(find.text('Noah passed you in Pushup Battle'), findsOneWidget);
+      // Read items bucket by date: 5 minutes ago lands in Today.
+      expect(find.text('TODAY'), findsOneWidget);
+      expect(find.textContaining('Noah passed you in Pushup Battle', findRichText: true), findsOneWidget);
       expect(find.text('Take it back'), findsOneWidget);
-      expect(find.text('View'), findsOneWidget);
+      // Rows open on tap — no generic per-row View button.
+      expect(find.text('View'), findsNothing);
       // Opening the screen clears the badge via read-all.
       expect(repo.markAllReadCalls, 1);
       await shot(tester, 'v13_activity_populated');
@@ -315,7 +317,7 @@ void main() {
     repo.throws = false;
     await tester.tap(find.text('Retry'));
     await _settle(tester);
-    expect(find.text('Sam joined Plank Party'), findsOneWidget);
+    expect(find.textContaining('Sam joined Plank Party', findRichText: true), findsOneWidget);
     expect(repo.listCalls, greaterThan(1));
   });
 
@@ -342,7 +344,7 @@ void main() {
     await tester.pumpWidget(_app(notifs: repo));
     await _settle(tester);
 
-    await tester.tap(find.text('Sam joined Plank Party'));
+    await tester.tap(find.textContaining('Sam joined Plank Party', findRichText: true));
     await _settle(tester);
     expect(find.text('STUB race r2'), findsOneWidget);
   });
