@@ -884,6 +884,7 @@ class RaceController extends StateNotifier<RaceState> {
         finalStandings: r.finalStandings,
         submissionResult: r.submissionResult,
         scoreDirection: r.scoreDirection,
+        rulesVersion: r.rulesVersion,
         serverTime: r.serverTime,
         verifierReleaseId: r.verifierReleaseId,
         verifierSpec: r.verifierSpec,
@@ -1243,6 +1244,8 @@ class RaceController extends StateNotifier<RaceState> {
       ],
       recentProofs: existing.recentProofs,
       finalStandings: existing.finalStandings,
+      scoreDirection: existing.scoreDirection,
+      rulesVersion: existing.rulesVersion,
     );
     _upsertRace(updated);
     return updated;
@@ -1486,6 +1489,8 @@ class RaceController extends StateNotifier<RaceState> {
         raceCompleted: completed,
         winnerUserId: completed ? userId : existing.winnerUserId,
       ),
+      scoreDirection: existing.scoreDirection,
+      rulesVersion: existing.rulesVersion,
     );
   }
 

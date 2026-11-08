@@ -223,7 +223,10 @@ class _SubmitProofV13SheetState extends ConsumerState<SubmitProofV13Sheet> {
   Widget build(BuildContext context) {
     final eligibility = _eligibility;
     final showCamera = eligibility.isCameraVerifiable;
-    final tab = showCamera ? _tab : 1;
+    // Strict-rules races (rulesVersion >= 1) are camera-only — the Worker
+    // rejects manual proof on them, so there is no Manual tab to offer.
+    final cameraOnly = showCamera && widget.race.rulesVersion >= 1;
+    final tab = !showCamera ? 1 : (cameraOnly ? 0 : _tab);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -238,7 +241,7 @@ class _SubmitProofV13SheetState extends ConsumerState<SubmitProofV13Sheet> {
         children: [
           Text('Submit proof', style: V13.sectionHead),
           const SizedBox(height: V13.gapMd),
-          if (showCamera)
+          if (showCamera && !cameraOnly)
             V13Segmented(
               segments: const [
                 V13Segment(label: 'Camera', icon: Icons.videocam_rounded),
