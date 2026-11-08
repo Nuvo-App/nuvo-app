@@ -21,10 +21,19 @@ import 'submit_proof_entry.dart';
 /// v13 Race detail — the leaderboard room for one race. Podium top 3 +
 /// open rows first; one blue action: Submit proof / Join / Race again.
 class RaceDetailV13Screen extends ConsumerStatefulWidget {
-  const RaceDetailV13Screen({super.key, required this.raceId});
+  const RaceDetailV13Screen({
+    super.key,
+    required this.raceId,
+    this.openProofOnLoad = false,
+  });
 
   /// Path param from `/race/:id` — the orchestrator wires it through.
   final String raceId;
+
+  /// `/race/:id/proof` (push deep links, "Take it back", legacy links) lands
+  /// here and opens the Submit proof sheet once the race has loaded — only
+  /// when the viewer is racing in it and it is still live.
+  final bool openProofOnLoad;
 
   @override
   ConsumerState<RaceDetailV13Screen> createState() =>
@@ -124,6 +133,20 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     }
   }
 
+  bool _proofOpened = false;
+
+  void _maybeOpenProof() {
+    if (!widget.openProofOnLoad || _proofOpened) return;
+    final race = _race;
+    final uid = ref.read(authControllerProvider).user?.id;
+    if (race == null || uid == null) return;
+    if (!raceIsActive(race) || !race.isParticipant(uid)) return;
+    _proofOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) openSubmitProof(context, ref, race);
+    });
+  }
+
   Future<void> _load() async {
     final cached = ref
         .read(raceControllerProvider)
@@ -135,6 +158,7 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         _race = cached;
         _loading = false;
       });
+      _maybeOpenProof();
       _silentRefresh();
       return;
     }
@@ -151,6 +175,7 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
           _race = race;
           _loading = false;
         });
+        _maybeOpenProof();
       }
     } catch (_) {
       if (mounted) {

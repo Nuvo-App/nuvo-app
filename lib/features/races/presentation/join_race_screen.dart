@@ -1,17 +1,15 @@
-import '../../../core/utils/friendly_error.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/utils/friendly_error.dart';
+import '../../../core/v13/v13.dart';
 import '../../auth/data/auth_api.dart';
 import 'race_controller.dart';
 
+/// `/races/join` — join a race by invite code. The v13 "Join with a code"
+/// surface: one sky hero, one boxed code field, one blue Join action.
 class JoinRaceScreen extends ConsumerStatefulWidget {
   const JoinRaceScreen({super.key});
 
@@ -47,12 +45,10 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
       final race = await ref
           .read(raceControllerProvider.notifier)
           .joinRaceByCode(code);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("You're in the race.")));
-      }
-      if (mounted) context.go('/race/${race.id}');
+      if (!mounted) return;
+      showV13Confetti(context);
+      showV13Toast(context, "You're in the race.");
+      context.go('/race/${race.id}');
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -75,85 +71,73 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.themeColors.page,
+      backgroundColor: V13.bg,
       body: SafeArea(
-        child:
-            ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: NuvoBackButton(
-                        onPressed: () => safePopOrGo(context, '/compete'),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Join a race',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Have an invite code? Enter it below to join the race.',
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: context.themeColors.inkMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    NuvoTextInput(
-                      controller: _codeController,
-                      label: 'Invite code',
-                      hint: 'NUV-XXXXXX',
-                      textCapitalization: TextCapitalization.characters,
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
+        child: Column(
+          children: [
+            V13BackBar(
+              title: 'Join a race',
+              onBack: () => safePopOrGo(context, '/compete'),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  V13.pagePad,
+                  V13.gapMd,
+                  V13.pagePad,
+                  V13.gapXxl,
+                ),
+                children: [
+                  V13Card(
+                    color: V13.sky,
+                    child: Row(
+                      children: [
+                        const V13IconTile(
+                          icon: Icons.key_rounded,
+                          color: V13.card,
                         ),
-                        decoration: BoxDecoration(
-                          color: context.semanticColors.danger.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.semanticColors.danger.border),
+                        const SizedBox(width: V13.gapMd),
+                        Expanded(
+                          child: Text(
+                            'Have an invite code? Enter it below to join the race.',
+                            style: V13.bodyStrong,
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: context.themeColors.dangerText,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _error!,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: context.semanticColors.danger.on,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    NuvoPrimaryButton(
-                      label: 'Join race',
-                      icon: Icons.group_add_rounded,
-                      expand: true,
-                      loading: _loading,
-                      onPressed: _loading ? null : _join,
+                      ],
                     ),
-                  ],
-                )
-                .animate()
-                .fadeIn(duration: 220.ms, curve: Curves.easeOut)
-                .slideY(begin: 0.03, end: 0, duration: 260.ms),
+                  ),
+                  const SizedBox(height: V13.gapSection),
+                  V13TextInput(
+                    controller: _codeController,
+                    label: 'Invite code',
+                    hint: 'NUV-XXXXXX',
+                    textCapitalization: TextCapitalization.characters,
+                    errorText: _error,
+                    onChanged: (_) {
+                      if (_error != null) setState(() => _error = null);
+                    },
+                    onSubmitted: (_) => _join(),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                V13.pagePad,
+                0,
+                V13.pagePad,
+                V13.gapLg,
+              ),
+              child: V13Button.primary(
+                label: 'Join race',
+                icon: Icons.flag_rounded,
+                fullWidth: true,
+                loading: _loading,
+                onPressed: _loading ? null : _join,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
