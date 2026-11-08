@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:nuvo/core/v13/v13.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
@@ -104,16 +105,22 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     final dest = result.destination;
     // Freshness: fold the new membership into the canonical caches before we
     // navigate, so Arena / Compete / race detail are already current.
-    if (result.kind == 'race_join' && dest is RaceDestination) {
-      try {
-        await ref
-            .read(raceControllerProvider.notifier)
-            .refreshJoinedRace(dest.raceId);
-      } catch (_) {
-        // Navigation still proceeds; mark the list stale so the next
-        // revalidate refetches instead of trusting a pre-join cache.
-        if (mounted) ref.read(raceControllerProvider.notifier).markStale();
+    final analytics = ref.read(analyticsProvider);
+    if (result.kind == 'race_join') {
+      if (dest is RaceDestination) {
+        try {
+          await ref
+              .read(raceControllerProvider.notifier)
+              .refreshJoinedRace(dest.raceId);
+        } catch (_) {
+          // Navigation still proceeds; mark the list stale so the next
+          // revalidate refetches instead of trusting a pre-join cache.
+          if (mounted) ref.read(raceControllerProvider.notifier).markStale();
+        }
       }
+      // race_joined fires here — the invite accept bypasses the
+      // controller's join methods, so it owns its own emit.
+      analytics.raceJoined();
     } else if (result.kind == 'crew_connect') {
       // The connection is canonical in CrewController — mark both it and the
       // inbox stale so the new member/request shows without a restart.

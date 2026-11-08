@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -22,10 +23,30 @@ class MotionContributionScreen extends ConsumerStatefulWidget {
 class _MotionContributionScreenState
     extends ConsumerState<MotionContributionScreen> {
   bool _saving = false;
+  DateTime? _stepOpenedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _stepOpenedAt = DateTime.now();
+    ref
+        .read(analyticsProvider)
+        .onboardingStepViewed(stepIndex: 1, stepName: 'motion_consent');
+  }
 
   Future<void> _choose(bool consented) async {
     if (_saving) return;
     setState(() => _saving = true);
+    final openedAt = _stepOpenedAt;
+    ref
+        .read(analyticsProvider)
+        .onboardingStepCompleted(
+          stepIndex: 1,
+          stepName: 'motion_consent',
+          msOnStep: openedAt == null
+              ? null
+              : DateTime.now().difference(openedAt).inMilliseconds,
+        );
     try {
       await ref
           .read(authControllerProvider.notifier)

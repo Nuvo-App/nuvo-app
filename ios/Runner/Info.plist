@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- PostHog native auto-init OFF: the plugin would otherwise self-configure
+	     from plist keys. The Dart PostHogConfig is the only setup path — it
+	     carries session replay off, lifecycle capture off, and the opt-out
+	     flag. -->
+	<key>com.posthog.posthog.AUTO_INIT</key>
+	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

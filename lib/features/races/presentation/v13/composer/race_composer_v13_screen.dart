@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/analytics/analytics_service.dart';
 import '../../../../../core/config/nuvo_flags.dart';
 import '../../../../../core/navigation/nuvo_navigation.dart';
 import '../../../../../core/utils/friendly_error.dart';
@@ -62,6 +63,9 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       _invited.add(prefill!.withUser!.id);
     }
     _draft = draft;
+    // Opening the composer is the start of the create funnel — a successful
+    // _createRace reports race_created with the draft's derived shape.
+    ref.read(analyticsProvider).raceCreateStarted();
     // Warm the friend list early so step 3 never flashes empty.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadFriends();
@@ -176,6 +180,9 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       final controller = ref.read(raceControllerProvider.notifier);
       final race = await _createRace(controller, _draft);
       if (!mounted) return;
+      ref
+          .read(analyticsProvider)
+          .raceCreateCompleted(raceType: _draft.format.backendValue);
 
       final crewId = widget.prefill?.crewId;
       var sent = 0;
@@ -210,6 +217,12 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       );
       context.go('/compete');
     } on ApiException catch (e) {
+      ref
+          .read(analyticsProvider)
+          .raceCreateFailed(
+            raceType: _draft.format.backendValue,
+            error: 'http_${e.statusCode}',
+          );
       if (mounted) {
         setState(() {
           _error = e.statusCode >= 500
@@ -219,6 +232,12 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
         });
       }
     } catch (_) {
+      ref
+          .read(analyticsProvider)
+          .raceCreateFailed(
+            raceType: _draft.format.backendValue,
+            error: 'error',
+          );
       if (mounted) {
         setState(() {
           _error = "Couldn't create the race. Try again.";
