@@ -148,6 +148,9 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
       targetUnit: payload['targetUnit'] as String,
       proofMode: payload['proofMode'] as String,
       scoreDirection: payload['scoreDirection'] as String?,
+      finishLineAt: payload['finishLineAt'] as String?,
+      attemptDurationSeconds: payload['attemptDurationSeconds'] as int?,
+      attemptLimit: payload['attemptLimit'] as int?,
     );
   }
 
