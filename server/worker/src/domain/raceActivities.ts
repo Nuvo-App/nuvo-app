@@ -19,6 +19,15 @@ export interface RaceActivityDefinition {
   supportedFormats: RaceFormat[];
   availability: 'supported' | 'hidden';
   instructions: string[];
+  // How the movement is physically measured: 'repetitions' (default) counts
+  // reps, 'duration' measures held seconds, 'distance' measures metres —
+  // proof plausibility judges each kind by its own physics. The wire metric
+  // stays what the client sends ('reps' for treadmill).
+  measurementType?: 'repetitions' | 'duration' | 'distance';
+  // Optional per-movement rep-rate bound (reps/second). Undefined → the
+  // default generous bound; registry rows may publish their own via
+  // metadata.maxRepsPerSecond.
+  maxRepsPerSecond?: number;
 }
 
 export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
@@ -95,6 +104,7 @@ export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
     suggestedTargets: [20, 30, 60, 120, 600],
     supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt'],
     availability: 'supported',
+    measurementType: 'duration',
     instructions: ['Use a side view.', 'Keep your whole body visible.', 'Keep your body straight.'],
   },
   {
@@ -242,9 +252,12 @@ export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
     verificationMethod: 'camera_pose',
     cameraOrientation: 'front',
     sessionBehavior: 'count_reps',
-    suggestedTargets: [50, 100, 200, 400],
+    // Metres — what the client counts and submits. The wire metric stays
+    // 'reps' so assertSubmissionCompatible and stored races keep working.
+    suggestedTargets: [400, 800, 1600, 3200, 5000],
     supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
     availability: 'supported',
+    measurementType: 'distance',
     instructions: ['Keep your lower body visible.', 'Detected from your gait, not the treadmill.', 'Camera stays fixed on you as you run.'],
   },
   {

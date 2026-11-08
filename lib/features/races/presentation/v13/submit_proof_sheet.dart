@@ -8,6 +8,7 @@ import '../../../auth/data/auth_api.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../../data/race_models.dart';
 import '../../domain/camera_verification_resolver.dart';
+import '../../domain/motion_activity.dart';
 import '../../domain/race_display.dart';
 import '../../domain/race_mode_semantics.dart';
 import '../ai_motion_proof_entry.dart';
@@ -57,8 +58,13 @@ class _SubmitProofV13SheetState extends ConsumerState<SubmitProofV13Sheet> {
   );
 
   int get _maxValue {
-    if (widget.race.proofMode == 'manual') return 100000;
-    return widget.race.metric == 'seconds' ? 28800 : 3000;
+    // The stepper no longer mirrors the retired per-proof caps — the Worker
+    // judges plausibility server-side now. These are only the hidden absolute
+    // bounds: 100 km for a distance mover, the global 1,000,000 otherwise.
+    final isDistance =
+        _eligibility.movementDefinition?.resolvedMeasurementType ==
+        MotionMeasurementType.distance;
+    return isDistance ? 100000 : 1000000;
   }
 
   Future<void> _pickEvidence() async {
