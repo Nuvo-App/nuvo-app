@@ -630,6 +630,12 @@ class _SetupStep extends ConsumerWidget {
                   draft.copyWith(
                     goalKind: RaceGoalKind.manual,
                     metric: RaceMetric.reps,
+                    // Manual goals log progress by hand — there are no
+                    // camera attempts, so an attempt format becomes Most
+                    // total (the finish line is kept).
+                    format: draft.format.isAttemptBased
+                        ? RaceFormat.mostInWindow
+                        : draft.format,
                     clearCustom: true,
                     markEdited: {RaceField.goalKind},
                   ),

@@ -387,12 +387,16 @@ RaceDraft? draftFromIdea(String idea) {
   final activity = i.activity;
   if (activity == null) {
     // Custom subject — the typed name is the race name; goal is honor-logged.
+    // Manual goals have no camera attempts, so an attempt format clamps to
+    // Most total; the interpreted finish line rides along unchanged.
     return RaceDraft(
       title: i.input,
       hasCustomName: true,
       activity: motionActivityDefinitions.first,
       metric: i.metric,
-      format: i.format,
+      format: i.format.isAttemptBased
+          ? RaceFormat.mostInWindow
+          : i.format,
       targetValue: i.targetValue,
       recurrence: i.recurrence,
       goalKind: RaceGoalKind.manual,

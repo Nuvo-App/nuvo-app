@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/domain/race_mode_semantics.dart';
 import 'package:nuvo/features/races/domain/race_name_interpreter.dart';
 
 void main() {
@@ -153,6 +154,48 @@ void main() {
       expect(payload['finishLineAt'], deadline);
       expect(payload['attemptDurationSeconds'], 60);
       expect(payload['attemptLimit'], 3);
+    });
+
+    test('test_gap13_manual_timed_draft_clamps', () {
+      // Interpreted manual goals can't be attempt formats — there is no
+      // camera attempt. They clamp to Most total, keeping a finish line.
+      final timed = draftFromIdea('Most cartwheels in 30 seconds')!;
+      expect(timed.isManual, isTrue);
+      expect(timed.format, RaceFormat.mostInWindow);
+
+      final best = draftFromIdea('Lowest golf score')!;
+      expect(best.isManual, isTrue);
+      expect(best.format.isAttemptBased, isFalse);
+
+      // A deadline survives the clamp — a finish line is never dropped.
+      final deadline = draftFromIdea('Most books by Friday')!;
+      expect(deadline.isManual, isTrue);
+      expect(deadline.format, RaceFormat.mostInWindow);
+      expect(deadline.finishLineAt, isNotNull);
+
+      // The merge path clamps too: typing an attempt-shaped name while on
+      // a manual draft must not leave an attempt format standing.
+      var d = RaceDraft(
+        title: 'x',
+        activity: motionActivityDefinitions.first,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 1,
+        goalKind: RaceGoalKind.manual,
+        manualGoalName: 'Read',
+        manualUnit: 'pages',
+      );
+      d = mergeRaceNameInterpretation(
+        d,
+        interpretRaceName('Most cartwheels in 30 seconds'),
+      );
+      expect(d.isManual, isTrue);
+      expect(d.format, RaceFormat.mostInWindow);
+
+      // Preset activities keep every format — clamping is manual-only.
+      final preset = draftFromIdea('Most jumping jacks in 30 seconds')!;
+      expect(preset.isManual, isFalse);
+      expect(preset.format, RaceFormat.timedAttempt);
     });
 
     test('test_gap5_timed_battle_without_duration_invalid', () {
