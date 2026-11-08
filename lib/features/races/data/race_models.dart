@@ -137,8 +137,7 @@ class Race {
       aiActivityType: jStr(json['aiActivityType']),
       targetUnit: jStr(json['targetUnit']),
       proofMode: jStr(json['proofMode']),
-      activityId:
-          jStr(json['activityId']) ?? jStr(json['aiActivityType']),
+      activityId: jStr(json['activityId']) ?? jStr(json['aiActivityType']),
       metric:
           jStr(json['metric']) ??
           jStr(json['targetUnit']) ??
@@ -147,8 +146,7 @@ class Race {
       scoringRule: jStr(json['scoringRule']) ?? 'cumulative_sum',
       attemptDurationSeconds: jInt(json['attemptDurationSeconds']),
       attemptLimit: jInt(json['attemptLimit']),
-      verificationMethod:
-          jStr(json['verificationMethod']) ?? 'camera_pose',
+      verificationMethod: jStr(json['verificationMethod']) ?? 'camera_pose',
       verifierType: verifierType,
       verifierVersion: jInt(json['verifierVersion']),
       verifierSpec: json['verifierSpec'] is Map
@@ -175,12 +173,15 @@ class Race {
       inviteCode: jStr(json['inviteCode']),
       createdAt: jStr(json['createdAt']) ?? '',
       updatedAt: jStr(json['updatedAt']) ?? '',
-      participants:
-          jMapList(json['participants']).map(RaceParticipant.fromJson).toList(),
-      recentProofs:
-          jMapList(json['recentProofs']).map(RaceProof.fromJson).toList(),
-      finalStandings:
-          jMapList(json['finalStandings']).map(RaceFinalStanding.fromJson).toList(),
+      participants: jMapList(
+        json['participants'],
+      ).map(RaceParticipant.fromJson).toList(),
+      recentProofs: jMapList(
+        json['recentProofs'],
+      ).map(RaceProof.fromJson).toList(),
+      finalStandings: jMapList(
+        json['finalStandings'],
+      ).map(RaceFinalStanding.fromJson).toList(),
       submissionResult: json['submissionResult'] is Map<String, dynamic>
           ? RaceSubmissionResult.fromJson(
               json['submissionResult'] as Map<String, dynamic>,
@@ -321,6 +322,7 @@ class PublicUser {
     this.profilePhotoUrl,
     this.lastActiveAt,
     this.level,
+    this.racesTogether,
   });
 
   final String id;
@@ -330,6 +332,11 @@ class PublicUser {
   final String initials;
   final String? addedAt;
   final String? profilePhotoUrl;
+
+  /// Shared-race count with the viewer (W3 `GET /crew` additive field) —
+  /// "Raced you N times" on the composer invite step. Null when the field
+  /// is absent (older Worker) — the row hides, never fakes.
+  final int? racesTogether;
 
   /// Server-owned Nuvo Level for identity surfaces — null when the viewer
   /// cannot see this member's full profile.
@@ -347,10 +354,9 @@ class PublicUser {
     initials: jStr(json['initials']) ?? 'N',
     addedAt: jStr(json['addedAt']),
     profilePhotoUrl: jStr(json['profilePhotoUrl']),
-    lastActiveAt: DateTime.tryParse(
-      jStr(json['lastActiveAt']) ?? '',
-    )?.toUtc(),
+    lastActiveAt: DateTime.tryParse(jStr(json['lastActiveAt']) ?? '')?.toUtc(),
     level: jInt(json['level']),
+    racesTogether: jInt(json['racesTogether']),
   );
 
   String get handleLine {
@@ -504,8 +510,7 @@ class RaceViewerContext {
         gapToLeader: jInt(json['gapToLeader']),
         gapToNextRank: jInt(json['gapToNextRank']),
         goalRemaining: jInt(json['goalRemaining']),
-        timeRemainingSeconds:
-            jInt(json['timeRemainingSeconds']),
+        timeRemainingSeconds: jInt(json['timeRemainingSeconds']),
         startsInSeconds: jInt(json['startsInSeconds']),
         isLeading: jBool(json['isLeading']) ?? false,
         isTied: jBool(json['isTied']) ?? false,
@@ -587,8 +592,9 @@ class RaceLiveState {
     unchanged: jBool(json['unchanged']) ?? false,
     serverTime: jStr(json['serverTime']),
     winnerUserId: jStr(json['winnerUserId']),
-    participants:
-        jMapList(json['participants']).map(RaceLiveParticipant.fromJson).toList(),
+    participants: jMapList(
+      json['participants'],
+    ).map(RaceLiveParticipant.fromJson).toList(),
     viewer: json['viewer'] is Map<String, dynamic>
         ? RaceViewerContext.fromJson(json['viewer'] as Map<String, dynamic>)
         : null,
@@ -789,13 +795,50 @@ class ProofVetoResult {
       );
 }
 
+/// One row of `GET /leaderboard?scope=friends|global` (W3) — the Compete
+/// weekly leaderboard. Points are the person's verified proof value over the
+/// last 7 days; rank follows competition ranking (shared rank on a tie).
+class LeaderboardEntry {
+  const LeaderboardEntry({
+    required this.userId,
+    required this.displayName,
+    this.profilePhotoUrl,
+    required this.points,
+    required this.rank,
+    required this.isMe,
+  });
+
+  final String userId;
+  final String displayName;
+  final String? profilePhotoUrl;
+  final int points;
+  final int rank;
+  final bool isMe;
+
+  factory LeaderboardEntry.fromJson(Map<String, dynamic> json) =>
+      LeaderboardEntry(
+        userId: jStr(json['userId']) ?? '',
+        displayName: jStr(json['displayName']) ?? 'Nuvo member',
+        profilePhotoUrl: jStr(json['profilePhotoUrl']),
+        points: jInt(json['points']) ?? 0,
+        rank: jInt(json['rank']) ?? 0,
+        isMe: jBool(json['isMe']) ?? false,
+      );
+}
+
 // ── Race creation prefill ─────────────────────────────────────────────────────
 
 /// Navigation extra for `/races/new`. Known entries (quick starts, "Race
 /// {name}", run-it-back) carry a structured [draft] — the title interpreter
 /// is only for USER-WRITTEN [idea] text, read once at the name step.
 class RaceCreatePrefill {
-  const RaceCreatePrefill({this.idea, this.draft, this.withUser, this.crewId, this.crewName});
+  const RaceCreatePrefill({
+    this.idea,
+    this.draft,
+    this.withUser,
+    this.crewId,
+    this.crewName,
+  });
 
   /// User-written idea text — interpreted once into a draft by the composer.
   final String? idea;

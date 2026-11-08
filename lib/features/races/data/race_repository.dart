@@ -454,6 +454,13 @@ class RaceRepository {
   Future<Race> joinRace(String id) =>
       _withRefresh((token) => _api.joinRace(token, id));
 
+  /// `GET /races/open` — friends' joinable races the viewer never joined.
+  Future<List<Race>> getOpenRaces() => _withRefresh(_api.getOpenRaces);
+
+  /// `GET /leaderboard` — weekly proof-points board for the Compete tab.
+  Future<List<LeaderboardEntry>> getLeaderboard({String scope = 'friends'}) =>
+      _withRefresh((token) => _api.getLeaderboard(token, scope: scope));
+
   Future<Race> addRaceParticipant(String raceId, String userId) =>
       _withRefresh((token) => _api.addRaceParticipant(token, raceId, userId));
 
