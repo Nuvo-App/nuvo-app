@@ -6,6 +6,7 @@
 // pageBuilder — see /race/:id/edit); every "open a race" tap lands on /race/:id;
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
+import '../features/notifications/presentation/v13/activity_v13_screen.dart';
 import '../features/social/presentation/v13/crew_tab_v13_screen.dart';
 import '../features/squads/presentation/v13/crew_page_v13_screen.dart';
 import '../features/profile/presentation/v13/badges_v13_screen.dart';
@@ -50,7 +51,6 @@ import '../features/shell/presentation/main_shell.dart';
 import '../features/crew/data/crew_api.dart' show PublicProfileCard;
 import '../features/crew/presentation/public_badges_screen.dart';
 import '../features/notifications/presentation/notification_prefs_screen.dart';
-import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/social/presentation/add_crew_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
 import '../features/squads/presentation/crew_groups_screen.dart';
@@ -203,8 +203,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/notifications',
-        pageBuilder: (_, state) =>
-            _detailPage(state, const NotificationsScreen()),
+        pageBuilder: (_, state) => _detailPage(
+          state,
+          const ActivityV13Screen(),
+        ),
       ),
       GoRoute(
         path: '/settings',

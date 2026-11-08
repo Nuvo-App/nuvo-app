@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nuvo/core/widgets/nuvo_button.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/core/widgets/nuvo_flip_text.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -45,7 +45,11 @@ class _AuthTestRepository extends AuthRepository {
   }
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async {
+  Future<AuthUser> signInReviewer(
+    String email,
+    String password, {
+    String intent = 'signin',
+  }) async {
     reviewers.add(email);
     return user;
   }
@@ -123,6 +127,15 @@ Future<GoRouter> _pumpAuth(
 Finder _flipText(String text) =>
     find.byWidgetPredicate((w) => w is NuvoFlipText && w.text == text);
 
+/// v13 chrome replaced NuvoPrimaryButton/NuvoOutlineButton with one widget
+/// keyed by variant.
+Finder get _primaryButton => find.byWidgetPredicate(
+  (w) => w is V13Button && w.variant == V13ButtonVariant.primary,
+);
+Finder get _secondaryButton => find.byWidgetPredicate(
+  (w) => w is V13Button && w.variant == V13ButtonVariant.secondary,
+);
+
 void main() {
   testWidgets('signup has a clear primary action without legacy branding', (
     tester,
@@ -150,13 +163,13 @@ void main() {
     'signup uses secondary providers, legal links, and reversible login mode',
     (tester) async {
       final router = await _pumpAuth(tester);
-      expect(find.byType(NuvoPrimaryButton), findsOneWidget);
-      expect(find.byType(NuvoOutlineButton), findsNWidgets(2));
+      expect(_primaryButton, findsOneWidget);
+      expect(_secondaryButton, findsNWidgets(2));
       expect(find.text('Continue with Apple'), findsOneWidget);
       expect(find.text('Continue with Google'), findsOneWidget);
       expect(
-        tester.getSize(find.byType(NuvoOutlineButton).first).height,
-        tester.getSize(find.byType(NuvoOutlineButton).last).height,
+        tester.getSize(_secondaryButton.first).height,
+        tester.getSize(_secondaryButton.last).height,
       );
       expect(find.text('By continuing, you agree to our'), findsOneWidget);
       expect(find.text('Terms of Service'), findsOneWidget);
@@ -204,20 +217,10 @@ void main() {
         login: true,
         repository: repository,
       );
-      expect(
-        tester
-            .widget<NuvoPrimaryButton>(find.byType(NuvoPrimaryButton))
-            .onPressed,
-        isNull,
-      );
+      expect(tester.widget<V13Button>(_primaryButton).onPressed, isNull);
       await tester.enterText(find.byType(TextField), 'not-an-email');
       await tester.pump();
-      expect(
-        tester
-            .widget<NuvoPrimaryButton>(find.byType(NuvoPrimaryButton))
-            .onPressed,
-        isNull,
-      );
+      expect(tester.widget<V13Button>(_primaryButton).onPressed, isNull);
       await tester.enterText(find.byType(TextField), '  MEMBER@example.com  ');
       await tester.pump();
       final field = tester.widget<TextField>(find.byType(TextField));
@@ -247,12 +250,7 @@ void main() {
       expect(password.obscureText, isTrue);
       expect(password.autofillHints, contains(AutofillHints.password));
       expect(password.autocorrect, isFalse);
-      expect(
-        tester
-            .widget<NuvoPrimaryButton>(find.byType(NuvoPrimaryButton))
-            .onPressed,
-        isNull,
-      );
+      expect(tester.widget<V13Button>(_primaryButton).onPressed, isNull);
       await tester.enterText(find.byType(TextField).last, 'test-only-password');
       await tester.pump();
       await tester.ensureVisible(find.text('Log in'));
@@ -285,9 +283,7 @@ void main() {
       await tester.ensureVisible(find.text('Log in'));
       await tester.tap(find.text('Log in'));
       await tester.pump();
-      final primary = tester.widget<NuvoPrimaryButton>(
-        find.byType(NuvoPrimaryButton),
-      );
+      final primary = tester.widget<V13Button>(_primaryButton);
       expect(primary.loading, isTrue);
       expect(primary.onPressed, isNull);
       expect(find.text('Email'), findsOneWidget);
@@ -298,12 +294,7 @@ void main() {
         find.text('Could not send code. Please try again.'),
         findsOneWidget,
       );
-      expect(
-        tester
-            .widget<NuvoPrimaryButton>(find.byType(NuvoPrimaryButton))
-            .loading,
-        isFalse,
-      );
+      expect(tester.widget<V13Button>(_primaryButton).loading, isFalse);
       await tester.ensureVisible(find.text('Log in'));
       expect(find.text('Log in').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -378,20 +369,13 @@ void main() {
     await tester.ensureVisible(find.text('Continue with Apple'));
     await tester.tap(find.text('Continue with Apple'));
     await tester.pump();
-    expect(
-      tester
-          .widget<NuvoOutlineButton>(find.byType(NuvoOutlineButton).first)
-          .onPressed,
-      isNull,
-    );
+    expect(tester.widget<V13Button>(_secondaryButton.first).onPressed, isNull);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     response.completeError(PlatformException(code: 'test-cancelled'));
     await tester.pump();
     expect(find.text('Apple Sign In was cancelled or failed.'), findsOneWidget);
     expect(
-      tester
-          .widget<NuvoOutlineButton>(find.byType(NuvoOutlineButton).first)
-          .onPressed,
+      tester.widget<V13Button>(_secondaryButton.first).onPressed,
       isNotNull,
     );
     expect(tester.takeException(), isNull);

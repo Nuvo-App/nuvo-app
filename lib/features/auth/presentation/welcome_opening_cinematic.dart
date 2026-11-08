@@ -3,8 +3,8 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/nuvo_responsive.dart';
+import '../../../core/v13/v13.dart';
 
 /// One opening per mounted onboarding presentation. No account state is written.
 class WelcomeOpeningCinematic extends StatefulWidget {
@@ -170,13 +170,13 @@ class _OpeningPathPainter extends CustomPainter {
     canvas.drawPath(
       revealed,
       stroke
-        ..color = NuvoColors.navy
+        ..color = V13.navy
         ..strokeWidth = 19 * scale,
     );
     canvas.drawPath(
       revealed,
       stroke
-        ..color = NuvoColors.blue
+        ..color = V13.blue
         ..strokeWidth = 8 * scale,
     );
 
@@ -209,7 +209,7 @@ class _OpeningPathPainter extends CustomPainter {
     // Compact finish gate: two structural posts, one blue lintel, a quiet tick.
     // The route ends inside the gate, rather than beside a detached flagpole.
     final ink = Paint()
-      ..color = NuvoColors.navy
+      ..color = V13.navy
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round
@@ -224,12 +224,12 @@ class _OpeningPathPainter extends CustomPainter {
       );
       canvas.drawRRect(
         bar,
-        Paint()..color = NuvoColors.blue.withValues(alpha: crossbar),
+        Paint()..color = V13.blue.withValues(alpha: crossbar),
       );
       canvas.drawRRect(
         bar,
         ink
-          ..color = NuvoColors.navy.withValues(alpha: crossbar)
+          ..color = V13.navy.withValues(alpha: crossbar)
           ..strokeWidth = 3,
       );
       canvas.drawPath(
@@ -238,7 +238,7 @@ class _OpeningPathPainter extends CustomPainter {
           ..lineTo(-1, -22)
           ..lineTo(5, -28),
         ink
-          ..color = NuvoColors.page.withValues(alpha: crossbar)
+          ..color = V13.bg.withValues(alpha: crossbar)
           ..strokeWidth = 2.5,
       );
     }

@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nuvo/core/widgets/nuvo_button.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -54,8 +54,7 @@ const _memberUser = AuthUser(
 /// Scripted auth repo — records calls; reviewer sign-in returns the demo
 /// account; startEmailAuth can be held pending or failed per test.
 class _AuthRepo extends AuthRepository {
-  _AuthRepo({this.user = _memberUser})
-    : super(AuthApi(), SecureTokenStore());
+  _AuthRepo({this.user = _memberUser}) : super(AuthApi(), SecureTokenStore());
 
   AuthUser user;
   RestoreResult restoreResult = const RestoreNoSession();
@@ -75,7 +74,11 @@ class _AuthRepo extends AuthRepository {
   }
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async {
+  Future<AuthUser> signInReviewer(
+    String email,
+    String password, {
+    String intent = 'signin',
+  }) async {
     if (failReviewer) {
       throw const ApiException(401, 'Invalid review credentials');
     }
@@ -119,7 +122,9 @@ class _JourneyRepo extends _AuthRepo {
   }
 
   @override
-  Future<Map<String, dynamic>> setMotionConsent({required bool consented}) async {
+  Future<Map<String, dynamic>> setMotionConsent({
+    required bool consented,
+  }) async {
     user = user.copyWith(motionTrainingConsent: consented);
     return const {};
   }
@@ -161,14 +166,8 @@ class _Screen extends StatelessWidget {
     routes: [
       GoRoute(path: '/welcome', builder: (_, _) => const _Screen('welcome')),
       GoRoute(path: '/splash', builder: (_, _) => const _Screen('splash')),
-      GoRoute(
-        path: '/auth/email',
-        builder: (_, _) => const _Screen('email'),
-      ),
-      GoRoute(
-        path: '/auth/verify',
-        builder: (_, _) => const _Screen('verify'),
-      ),
+      GoRoute(path: '/auth/email', builder: (_, _) => const _Screen('email')),
+      GoRoute(path: '/auth/verify', builder: (_, _) => const _Screen('verify')),
       GoRoute(
         path: '/onboarding/profile',
         builder: (_, _) => const _Screen('account-setup'),
@@ -285,39 +284,44 @@ Future<({GoRouter router, ProviderContainer container})> _pumpWelcome(
   return (router: router, container: container);
 }
 
+/// v13 chrome: one button widget keyed by variant (replaces
+/// NuvoPrimaryButton).
+final _primaryV13 = find.byWidgetPredicate(
+  (w) => w is V13Button && w.variant == V13ButtonVariant.primary,
+);
+
 void main() {
   group('resetDemoExperienceForColdLaunch', () {
-    test('clears only Nuvo-owned experience flags for the demo account',
-        () async {
-      final store = FirstUseStore.memory();
-      await store.ensureLoaded();
-      await store.markNotificationPromptOwed();
-      await store.markCameraPrimerSeen();
-      await store.markIntroSeen();
-      await store.markGuideDone(_reviewerUser.email);
-      await store.markGuideDone('other@example.com');
+    test(
+      'clears only Nuvo-owned experience flags for the demo account',
+      () async {
+        final store = FirstUseStore.memory();
+        await store.ensureLoaded();
+        await store.markNotificationPromptOwed();
+        await store.markCameraPrimerSeen();
+        await store.markIntroSeen();
+        await store.markGuideDone(_reviewerUser.email);
+        await store.markGuideDone('other@example.com');
 
-      final container = ProviderContainer(
-        overrides: [firstUseStoreProvider.overrideWithValue(store)],
-      );
-      addTearDown(container.dispose);
-      container.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.composerGoal;
+        final container = ProviderContainer(
+          overrides: [firstUseStoreProvider.overrideWithValue(store)],
+        );
+        addTearDown(container.dispose);
+        container.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.composerGoal;
 
-      await resetDemoExperienceForColdLaunch(container.read, _reviewerUser);
+        await resetDemoExperienceForColdLaunch(container.read, _reviewerUser);
 
-      expect(container.read(demoReplayProvider), isTrue);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.idle,
-      );
-      expect(store.isNotificationPromptOwed, isFalse);
-      expect(store.isCameraPrimerSeen, isFalse);
-      expect(store.introSeen, isFalse);
-      expect(store.isGuideDone(_reviewerUser.email), isFalse);
-      // Other accounts' completions on the same install are untouched.
-      expect(store.isGuideDone('other@example.com'), isTrue);
-    });
+        expect(container.read(demoReplayProvider), isTrue);
+        expect(container.read(firstRaceGuideProvider), FirstRaceGuideStep.idle);
+        expect(store.isNotificationPromptOwed, isFalse);
+        expect(store.isCameraPrimerSeen, isFalse);
+        expect(store.introSeen, isFalse);
+        expect(store.isGuideDone(_reviewerUser.email), isFalse);
+        // Other accounts' completions on the same install are untouched.
+        expect(store.isGuideDone('other@example.com'), isTrue);
+      },
+    );
 
     test('is a no-op for ordinary accounts', () async {
       final store = FirstUseStore.memory();
@@ -331,10 +335,7 @@ void main() {
       await resetDemoExperienceForColdLaunch(container.read, _memberUser);
 
       expect(container.read(demoReplayProvider), isFalse);
-      expect(
-        container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.idle,
-      );
+      expect(container.read(firstRaceGuideProvider), FirstRaceGuideStep.idle);
       expect(store.isGuideDone(_memberUser.email), isTrue);
     });
 
@@ -369,7 +370,11 @@ void main() {
         built.container.read(demoReplayProvider.notifier).state = true;
         await built.container
             .read(authControllerProvider.notifier)
-            .signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
+            .signInReviewer(
+              'testing@getnuvo.net',
+              'pw',
+              intent: AuthIntent.signUp,
+            );
         await tester.pumpAndSettle();
         for (final loc in ['/arena', '/profile', '/welcome', '/auth/email']) {
           built.router.go(loc);
@@ -389,7 +394,11 @@ void main() {
         built.container.read(demoReplayProvider.notifier).state = true;
         await built.container
             .read(authControllerProvider.notifier)
-            .signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
+            .signInReviewer(
+              'testing@getnuvo.net',
+              'pw',
+              intent: AuthIntent.signUp,
+            );
         await tester.pumpAndSettle();
         expect(_path(built.router), '/onboarding/nuvo');
         expect(tester.takeException(), isNull);
@@ -436,7 +445,10 @@ void main() {
             builder: (_, state) =>
                 Scaffold(body: Text('code for ${state.extra}')),
           ),
-          GoRoute(path: '/welcome', builder: (_, _) => const _Screen('welcome')),
+          GoRoute(
+            path: '/welcome',
+            builder: (_, _) => const _Screen('welcome'),
+          ),
         ],
       );
       addTearDown(router.dispose);
@@ -465,9 +477,7 @@ void main() {
         flow.router.pop();
         await tester.pumpAndSettle();
         expect(_path(flow.router), '/auth/email');
-        final button = tester.widget<NuvoPrimaryButton>(
-          find.byType(NuvoPrimaryButton),
-        );
+        final button = tester.widget<V13Button>(_primaryV13);
         expect(button.loading, isFalse);
         expect(button.onPressed, isNotNull);
 
@@ -489,7 +499,7 @@ void main() {
         await tester.tap(find.text('Send code'));
         await tester.pump();
         // While in-flight the button shows a spinner — tap the widget itself.
-        await tester.tap(find.byType(NuvoPrimaryButton));
+        await tester.tap(_primaryV13);
         await tester.pump();
         expect(repo.emailStarts.length, 1, reason: 'second tap is disabled');
 
@@ -497,12 +507,7 @@ void main() {
         repo.failEmail = true;
         repo.pendingEmail!.complete();
         await tester.pumpAndSettle();
-        expect(
-          tester
-              .widget<NuvoPrimaryButton>(find.byType(NuvoPrimaryButton))
-              .loading,
-          isFalse,
-        );
+        expect(tester.widget<V13Button>(_primaryV13).loading, isFalse);
         expect(find.textContaining('Check your connection'), findsOneWidget);
 
         repo.pendingEmail = null;
@@ -577,12 +582,7 @@ void main() {
 
         // Clean error, live button, no silent navigation.
         expect(find.text('Invalid review credentials.'), findsOneWidget);
-        expect(
-          tester
-              .widget<NuvoPrimaryButton>(find.byType(NuvoPrimaryButton))
-              .loading,
-          isFalse,
-        );
+        expect(tester.widget<V13Button>(_primaryV13).loading, isFalse);
         // A failed credential must not leave the demo replay armed — a normal
         // account signing in next would get bounced into the story.
         expect(flow.container.read(demoReplayProvider), isFalse);
@@ -660,10 +660,7 @@ void main() {
       await tester.tap(find.text('Resend code'));
       await tester.pumpAndSettle();
       expect(repo.emailStarts, isNotEmpty);
-      expect(
-        find.textContaining('Check your connection'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Check your connection'), findsOneWidget);
       // The typed code is preserved — the failure was a send failure, not a
       // code failure.
       expect(
@@ -725,25 +722,23 @@ void main() {
       },
     );
 
-    testWidgets(
-      'another @getnuvo.net account never gets reviewer behavior',
-      (tester) async {
-        // TEST 17 — exact-match identity only; the domain carries no weight.
-        final other = const AuthUser(
-          id: 'other-1',
-          email: 'person@getnuvo.net',
-          onboardingComplete: true,
-          hasMemberPass: true,
-          termsAccepted: true,
-        );
-        final repo = _JourneyRepo(user: other)
-          ..restoreResult = RestoreOk(other);
-        final built = await _pumpAt(tester, repo: repo, location: '/arena');
-        expect(_path(built.router), '/arena');
-        expect(repo.clearCalls, 0);
-        expect(tester.takeException(), isNull);
-      },
-    );
+    testWidgets('another @getnuvo.net account never gets reviewer behavior', (
+      tester,
+    ) async {
+      // TEST 17 — exact-match identity only; the domain carries no weight.
+      final other = const AuthUser(
+        id: 'other-1',
+        email: 'person@getnuvo.net',
+        onboardingComplete: true,
+        hasMemberPass: true,
+        termsAccepted: true,
+      );
+      final repo = _JourneyRepo(user: other)..restoreResult = RestoreOk(other);
+      final built = await _pumpAt(tester, repo: repo, location: '/arena');
+      expect(_path(built.router), '/arena');
+      expect(repo.clearCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets(
       'reviewer sign-in enters the real first-run setup, then story → '
@@ -766,7 +761,11 @@ void main() {
         built.container.read(demoReplayProvider.notifier).state = true;
         await built.container
             .read(authControllerProvider.notifier)
-            .signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
+            .signInReviewer(
+              'testing@getnuvo.net',
+              'pw',
+              intent: AuthIntent.signUp,
+            );
         await tester.pumpAndSettle();
         expect(_path(built.router), '/onboarding/profile');
 
@@ -820,9 +819,7 @@ void main() {
           ..restoreResult = const RestoreOk(_reviewerUser);
         final container = ProviderContainer(
           overrides: [
-            authControllerProvider.overrideWith(
-              (ref) => AuthController(repo),
-            ),
+            authControllerProvider.overrideWith((ref) => AuthController(repo)),
             firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
           ],
         );
@@ -850,24 +847,15 @@ void main() {
         // intent; the provider must track the visible mode exactly.
         final built = await _pumpWelcome(tester);
         await tester.pumpAndSettle();
-        expect(
-          built.container.read(authIntentProvider),
-          AuthIntent.signUp,
-        );
+        expect(built.container.read(authIntentProvider), AuthIntent.signUp);
 
         await tester.tap(find.byKey(const ValueKey('auth-mode-toggle')));
         await tester.pumpAndSettle();
-        expect(
-          built.container.read(authIntentProvider),
-          AuthIntent.signIn,
-        );
+        expect(built.container.read(authIntentProvider), AuthIntent.signIn);
 
         await tester.tap(find.byKey(const ValueKey('auth-mode-toggle')));
         await tester.pumpAndSettle();
-        expect(
-          built.container.read(authIntentProvider),
-          AuthIntent.signUp,
-        );
+        expect(built.container.read(authIntentProvider), AuthIntent.signUp);
         expect(tester.takeException(), isNull);
       },
     );
@@ -887,10 +875,7 @@ void main() {
         // TEST 9 — Sign Up → email → Back → Log in must be a signIn.
         final built = await _pumpWelcome(tester);
         await tester.pumpAndSettle();
-        expect(
-          built.container.read(authIntentProvider),
-          AuthIntent.signUp,
-        );
+        expect(built.container.read(authIntentProvider), AuthIntent.signUp);
 
         await tester.tap(find.text('Create account'));
         await tester.pumpAndSettle();

@@ -551,6 +551,7 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
                   ? Icons.replay_rounded
                   : Icons.check_rounded,
               loading: _busy,
+              fullWidth: true,
               onPressed: onPrimary,
             ),
           ),

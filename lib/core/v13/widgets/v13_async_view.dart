@@ -130,7 +130,11 @@ class V13AsyncView<T> extends StatelessWidget {
           child: content,
         );
       } else {
-        // Non-scrollable states still get the gesture.
+        // Non-scrollable states still get the gesture. `content` must be
+        // captured before reassignment — inside the builder closure the
+        // variable already points at this LayoutBuilder, which would make
+        // the tree contain itself.
+        final inner = content;
         content = LayoutBuilder(
           builder: (context, constraints) => RefreshIndicator(
             color: V13.blue,
@@ -139,7 +143,7 @@ class V13AsyncView<T> extends StatelessWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: content,
+                child: inner,
               ),
             ),
           ),

@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../theme/app_colors.dart';
-import '../theme/app_geometry.dart';
-import '../theme/app_text_styles.dart';
+import '../tokens.dart';
 
-/// Six-box verification code input. Digits typed one at a time advance
-/// focus; a pasted/autofilled run of digits distributes across the boxes
-/// starting at the focused field; backspace on an empty box steps back.
-class OtpInput extends StatefulWidget {
-  const OtpInput({super.key, required this.controllers});
+/// v13 verification-code input — white boxes with the navy outline, blue
+/// while focused. Same interaction contract as the old [OtpInput]: digits
+/// advance focus, a pasted run distributes across boxes, backspace on an
+/// empty box steps back.
+class V13OtpInput extends StatefulWidget {
+  const V13OtpInput({super.key, required this.controllers});
 
   final List<TextEditingController> controllers;
 
   @override
-  State<OtpInput> createState() => _OtpInputState();
+  State<V13OtpInput> createState() => _V13OtpInputState();
 }
 
-class _OtpInputState extends State<OtpInput> {
-  late final List<FocusNode> _nodes =
-      List.generate(widget.controllers.length, (_) => FocusNode());
+class _V13OtpInputState extends State<V13OtpInput> {
+  late final List<FocusNode> _nodes = List.generate(
+    widget.controllers.length,
+    (_) => FocusNode(),
+  );
 
   /// Set while a paste distribute writes sibling controllers — those
   /// writes re-fire onChanged and must not move focus mid-write.
@@ -76,6 +77,10 @@ class _OtpInputState extends State<OtpInput> {
   @override
   Widget build(BuildContext context) {
     final controllers = widget.controllers;
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(V13.radiusButton),
+      borderSide: BorderSide(color: color, width: V13.outline),
+    );
     return Row(
       children: [
         for (var i = 0; i < controllers.length; i++) ...[
@@ -89,30 +94,17 @@ class _OtpInputState extends State<OtpInput> {
               // multi-char write it produces is handled by _onChanged.
               autofillHints: const [AutofillHints.oneTimeCode],
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: AppTextStyles.headlineMedium.copyWith(
-                color: context.themeColors.ink,
-              ),
+              style: V13.sectionHead,
+              cursorColor: V13.blue,
               onChanged: (value) => _onChanged(i, value),
               decoration: InputDecoration(
                 counterText: '',
                 filled: true,
-                fillColor: context.themeColors.surface,
+                fillColor: V13.card,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  borderSide: BorderSide(color: context.themeColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  borderSide: BorderSide(
-                    color: context.themeColors.accent,
-                    width: 1.8,
-                  ),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  borderSide: BorderSide(color: context.themeColors.dangerText),
-                ),
+                enabledBorder: border(V13.navy),
+                focusedBorder: border(V13.blue),
+                errorBorder: border(V13.coral),
               ),
             ),
           ),
