@@ -7,7 +7,7 @@ import '../tokens.dart';
 
 /// Nuvo-branded QR code. Round navy dots, rounded finder eyes with a blue
 /// core, and a clean cutout in the middle that holds the bare Nuvo mark
-/// (`assets/branding/nuvo_mark.png`) — no modules are drawn under it, so the
+/// (`assets/branding/nuvo_logo_graphic.png`) — no modules are drawn under it, so the
 /// logo isn't pasted on top of the code. Uses error-correction level H so the
 /// cutout stays well inside what scanners can recover.
 class V13NuvoQr extends StatelessWidget {
@@ -39,10 +39,19 @@ class V13NuvoQr extends StatelessWidget {
               size: Size.square(size),
               painter: _NuvoQrPainter(image: image),
             ),
-            SizedBox.square(
-              dimension: holeSide * 0.78,
+            // The official logo graphic is a white M with a navy offset
+            // shadow — it sits on a soft sky tile so the white reads.
+            Container(
+              width: holeSide * 0.9,
+              height: holeSide * 0.9,
+              padding: EdgeInsets.all(holeSide * 0.1),
+              decoration: BoxDecoration(
+                color: V13.sky,
+                borderRadius: BorderRadius.circular(holeSide * 0.24),
+                border: Border.all(color: V13.navy, width: V13.outline),
+              ),
               child: Image.asset(
-                'assets/branding/nuvo_mark.png',
+                'assets/branding/nuvo_logo_graphic.png',
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
               ),
