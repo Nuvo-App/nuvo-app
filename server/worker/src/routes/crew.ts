@@ -63,26 +63,36 @@ async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
     .first<CrewUserRow>();
 }
 
-// GET /crew — active connections
+// GET /crew — active connections. Each row also carries `racesTogether`: how
+// many non-deleted races the viewer and that friend have both been on the
+// roster of (any member status except 'removed' — leaving a race still
+// counts as having raced it, being kicked does not).
 crewRouter.get('/', async (c) => {
   const userId = c.get('userId');
-  // Validator: connection count/latest change + member profile/level changes,
-  // plus a 60s bucket so lastActiveAt (presence) is never stale > 1 minute.
+  // Validator: connection count/latest change + member profile/level changes
+  // + shared-race roster changes, plus a 60s bucket so lastActiveAt
+  // (presence) is never stale > 1 minute.
   const stamp = await c.env.DB.prepare(
     `SELECT COUNT(*) as n,
             MAX(COALESCE(cc.updated_at, cc.created_at)) as cc_at,
             MAX(p.updated_at) as p_at,
-            MAX(up.updated_at) as up_at
+            MAX(up.updated_at) as up_at,
+            (SELECT COUNT(*) || ':' || COALESCE(MAX(joined_at), '')
+             FROM race_members rm
+             WHERE rm.status != 'removed'
+               AND (rm.user_id = ? OR rm.user_id IN (
+                      SELECT crew_user_id FROM crew_connections
+                      WHERE user_id = ? AND status = 'active'))) as rm_at
      FROM crew_connections cc
      LEFT JOIN profiles p ON p.user_id = cc.crew_user_id
      LEFT JOIN user_progression up ON up.user_id = cc.crew_user_id
      WHERE cc.user_id = ? AND cc.status = 'active'`,
   )
-    .bind(userId)
-    .first<{ n: number; cc_at: string | null; p_at: string | null; up_at: string | null }>();
+    .bind(userId, userId, userId)
+    .first<{ n: number; cc_at: string | null; p_at: string | null; up_at: string | null; rm_at: string | null }>();
   const notModified = conditional(
     c,
-    weakEtag('crew', stamp?.n, stamp?.cc_at, stamp?.p_at, stamp?.up_at, stalenessBucket(Date.now(), 60_000)),
+    weakEtag('crew', stamp?.n, stamp?.cc_at, stamp?.p_at, stamp?.up_at, stamp?.rm_at, stalenessBucket(Date.now(), 60_000)),
   );
   if (notModified) return notModified;
   const rows = await c.env.DB.prepare(
@@ -90,7 +100,34 @@ crewRouter.get('/', async (c) => {
   )
     .bind(userId)
     .all<CrewUserRow>();
-  return c.json({ ok: true, crew: rows.results.map(serializeCrewUser) });
+
+  // One grouped query for every friend's shared-race count — D1 caps bound
+  // variables, so the friend id list is chunked like levelsForUsers does.
+  const racesTogether = new Map<string, number>();
+  const friendIds = rows.results.map((r) => r.id);
+  for (let i = 0; i < friendIds.length; i += 90) {
+    const chunk = friendIds.slice(i, i + 90);
+    const counts = await c.env.DB.prepare(
+      `SELECT b.user_id AS friend_id, COUNT(DISTINCT a.race_id) AS n
+       FROM race_members a
+       JOIN race_members b ON b.race_id = a.race_id AND b.status != 'removed'
+       JOIN races r ON r.id = a.race_id AND r.deleted_at IS NULL
+       WHERE a.user_id = ? AND a.status != 'removed'
+         AND b.user_id IN (${chunk.map(() => '?').join(',')})
+       GROUP BY b.user_id`,
+    )
+      .bind(userId, ...chunk)
+      .all<{ friend_id: string; n: number }>();
+    for (const row of counts.results) racesTogether.set(row.friend_id, row.n);
+  }
+
+  return c.json({
+    ok: true,
+    crew: rows.results.map((r) => ({
+      ...serializeCrewUser(r),
+      racesTogether: racesTogether.get(r.id) ?? 0,
+    })),
+  });
 });
 
 // GET /crew/requests — incoming pending requests + outgoing requests I sent.
