@@ -802,6 +802,38 @@ class RaceController extends StateNotifier<RaceState> {
     }
   }
 
+  /// Declares an open attempt on attempt-format races (best_attempt,
+  /// timed_attempt) — the Worker rejects proofs with no open attempt
+  /// ("Start an attempt first"). An already-open attempt binds this
+  /// submission, so a 409 is success, not failure. No-op on every other
+  /// format.
+  ///
+  /// [clientAttemptId] is the idempotency key the Worker dedupes on: a
+  /// retry of the same proof rebinds the same attempt instead of opening
+  /// a second one.
+  Future<void> _ensureOpenAttempt(
+    String raceId, {
+    String? clientAttemptId,
+  }) async {
+    final existing = state.races.where((race) => race.id == raceId).firstOrNull;
+    // The list isn't always loaded (deep link → race detail → verify), so a
+    // miss means fetch the format — never skip attempt binding.
+    final format =
+        existing?.format ?? (await _repo.getRaceDetail(raceId)).format;
+    if (!raceFormatUsesAttempts(format)) return;
+    try {
+      await _repo.startAttempt(raceId, clientAttemptId: clientAttemptId);
+    } on ApiException catch (e) {
+      if (e.statusCode != 409) rethrow;
+    }
+  }
+
+  /// Camera proofs derive their attempt key from the proof's own stable
+  /// submission id, so resending the same proof can never open a second
+  /// attempt.
+  String _attemptIdForSubmission(String clientSubmissionId) =>
+      'attempt-$clientSubmissionId';
+
   Race _raceWithParticipants(Race r, List<RaceParticipant> participants) =>
       Race(
         id: r.id,
@@ -871,21 +903,7 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
-    final existing = state.races.where((race) => race.id == raceId).firstOrNull;
-    // The list isn't always loaded (deep link → race detail → verify), so a
-    // miss means fetch the format — never skip attempt binding.
-    final format =
-        existing?.format ?? (await _repo.getRaceDetail(raceId)).format;
-    if (raceFormatUsesAttempts(format)) {
-      // Attempt races reject proofs with no open attempt ("Start an attempt
-      // first"). Declare one; an already-open attempt binds this submission,
-      // so a 409 is success, not failure.
-      try {
-        await _repo.startAttempt(raceId);
-      } on ApiException catch (e) {
-        if (e.statusCode != 409) rethrow;
-      }
-    }
+    await _ensureOpenAttempt(raceId);
     final race = await _repo.submitProof(
       raceId,
       proofType: proofType,
@@ -931,6 +949,10 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
+    await _ensureOpenAttempt(
+      raceId,
+      clientAttemptId: _attemptIdForSubmission(clientSubmissionId),
+    );
     final race = await _sendReconciling(
       raceId,
       () => _repo.submitAiMotionProof(
@@ -985,6 +1007,10 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
+    await _ensureOpenAttempt(
+      raceId,
+      clientAttemptId: _attemptIdForSubmission(clientSubmissionId),
+    );
     final race = await _sendReconciling(
       raceId,
       () => _repo.submitObjectCompositionProof(
@@ -1040,6 +1066,10 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
+    await _ensureOpenAttempt(
+      raceId,
+      clientAttemptId: _attemptIdForSubmission(clientSubmissionId),
+    );
     final race = await _sendReconciling(
       raceId,
       () => _repo.submitCustomPoseProof(

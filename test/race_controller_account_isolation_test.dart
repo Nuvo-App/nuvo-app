@@ -10,6 +10,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
+import 'package:nuvo/features/races/ai/custom_pose/custom_pose_sequence_runtime.dart';
+import 'package:nuvo/features/races/data/ai_motion_models.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
@@ -217,6 +219,123 @@ void main() {
       expect(repo.submitProofCalls, 1);
     });
   });
+
+  group('gap 4 — camera proofs declare attempts', () {
+    // Camera submissions (AI motion, object composition, taught movement)
+    // go through the same attempt binding as manual proofs: best_attempt and
+    // timed_attempt races get an open attempt before the proof is sent.
+
+    Race attemptRace(String format) => Race(
+      id: 'race-attempt',
+      creatorId: 'user-1',
+      title: 'Highest score',
+      goalType: 'target',
+      targetValue: 100,
+      unit: 'points',
+      format: format,
+      proofRequirement: 'ai_check',
+      proofMode: 'ai_check',
+      verificationMethod: 'camera_pose',
+      status: 'active',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    );
+
+    final motionResult = const AiMotionResult(
+      activity: AiMotionActivity.jumpingJacks,
+      targetReps: null,
+      detectedReps: 12,
+      confidence: 0.9,
+      verificationStatus: 'ai_verified',
+      verificationSummary: '12 jumping jacks',
+      framesAnalyzed: 30,
+      validPoseFrames: 28,
+      durationMs: 8000,
+      validatorVersion: 'jumping_jacks_v1',
+    );
+
+    test('test_gap4_camera_proof_opens_attempt_for_attempt_formats',
+        () async {
+      for (final format in ['best_attempt', 'timed_attempt']) {
+        final repo = _AttemptRepo(attemptRace(format));
+        final controller = RaceController(repo);
+        await controller.loadRaces();
+
+        await controller.submitAiMotionProof(
+          'race-attempt',
+          result: motionResult,
+          clientSubmissionId: 'sub-1',
+          metric: 'reps',
+        );
+
+        expect(
+          repo.callOrder,
+          ['attempt', 'aiProof'],
+          reason: '$format must open the attempt before sending the proof',
+        );
+      }
+    });
+
+    test('test_gap4_attempt_open_uses_stable_client_attempt_id', () async {
+      final repo = _AttemptRepo(attemptRace('best_attempt'));
+      final controller = RaceController(repo);
+      await controller.loadRaces();
+
+      // All three camera paths derive the attempt key from the proof's own
+      // clientSubmissionId — resending that proof rebinds the same attempt.
+      await controller.submitAiMotionProof(
+        'race-attempt',
+        result: motionResult,
+        clientSubmissionId: 'sub-42',
+        metric: 'reps',
+      );
+      await controller.submitObjectCompositionProof(
+        'race-attempt',
+        activityId: 'steps',
+        clientSubmissionId: 'sub-42',
+        metric: 'count',
+        value: 40,
+        targetValue: 0,
+        confidence: 0.9,
+        verificationSummary: 'objects',
+        validatorVersion: 'v1',
+        framesAnalyzed: 10,
+        durationMs: 4000,
+      );
+      await controller.submitCustomPoseProof(
+        'race-attempt',
+        result: _customResult(),
+        clientSubmissionId: 'sub-42',
+      );
+
+      expect(repo.clientAttemptIds, hasLength(3));
+      for (final id in repo.clientAttemptIds) {
+        expect(id, 'attempt-sub-42');
+      }
+    });
+
+    test('test_gap4_first_to_and_most_window_skip_attempt_open', () async {
+      for (final format in ['first_to_goal', 'most_in_window']) {
+        final repo = _AttemptRepo(attemptRace(format));
+        final controller = RaceController(repo);
+        await controller.loadRaces();
+
+        await controller.submitAiMotionProof(
+          'race-attempt',
+          result: motionResult,
+          clientSubmissionId: 'sub-1',
+          metric: 'reps',
+        );
+
+        expect(
+          repo.startAttemptCalls,
+          0,
+          reason: '$format has no attempts to open',
+        );
+        expect(repo.callOrder, ['aiProof']);
+      }
+    });
+  });
 }
 
 class _AttemptRepo extends RaceRepository {
@@ -224,6 +343,7 @@ class _AttemptRepo extends RaceRepository {
 
   final Race race;
   final List<String> callOrder = [];
+  final List<String?> clientAttemptIds = [];
   int startAttemptCalls = 0;
   int submitProofCalls = 0;
   int getRaceDetailCalls = 0;
@@ -244,6 +364,7 @@ class _AttemptRepo extends RaceRepository {
     String? clientAttemptId,
   }) async {
     startAttemptCalls++;
+    clientAttemptIds.add(clientAttemptId);
     callOrder.add('attempt');
     final error = startAttemptError;
     if (error != null) throw error;
@@ -267,4 +388,66 @@ class _AttemptRepo extends RaceRepository {
     callOrder.add('proof');
     return race;
   }
+
+  @override
+  Future<Race> submitAiMotionProof(
+    String raceId, {
+    required AiMotionResult result,
+    required String clientSubmissionId,
+    required String metric,
+    String? verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) async {
+    callOrder.add('aiProof');
+    return race;
+  }
+
+  @override
+  Future<Race> submitObjectCompositionProof(
+    String raceId, {
+    required String activityId,
+    required String clientSubmissionId,
+    required String metric,
+    required int value,
+    required int targetValue,
+    required double confidence,
+    required String verificationSummary,
+    required String validatorVersion,
+    required int framesAnalyzed,
+    required int durationMs,
+    String? verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) async {
+    callOrder.add('objectProof');
+    return race;
+  }
+
+  @override
+  Future<Race> submitCustomPoseProof(
+    String raceId, {
+    required CustomPoseRuntimeResult result,
+    required String clientSubmissionId,
+    String? verificationSessionId,
+    ProofSessionResult? sessionResult,
+  }) async {
+    callOrder.add('customProof');
+    return race;
+  }
 }
+
+CustomPoseRuntimeResult _customResult() => const CustomPoseRuntimeResult(
+      verifierType: 'custom_pose_sequence',
+      verifierVersion: 1,
+      movementName: 'Learned move',
+      measurementType: 'repetitions',
+      count: 3,
+      target: null,
+      verificationStatus: 'custom_verified',
+      confidence: 0.8,
+      framesAnalyzed: 20,
+      validFrames: 18,
+      durationMs: 6000,
+      completionEvents: 3,
+      invalidAttemptCount: 0,
+      finalFailureReason: null,
+    );
