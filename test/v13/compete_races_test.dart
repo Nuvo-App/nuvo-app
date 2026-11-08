@@ -10,6 +10,7 @@ import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/features/compete/presentation/v13/compete_v13_screen.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
@@ -59,6 +60,14 @@ Race _race({
   int meProgress = 20,
   bool includeMe = true,
   String creatorId = 'user-1',
+  String format = 'first_to_goal',
+  String scoringRule = 'cumulative_sum',
+  String scoreDirection = 'higher',
+  int? targetValue = 100,
+  int? attemptDurationSeconds,
+  int? attemptLimit,
+  int attemptsUsed = 0,
+  List<RaceProof> recentProofs = const [],
 }) {
   final participants = <RaceParticipant>[
     if (includeMe)
@@ -92,16 +101,22 @@ Race _race({
     creatorId: creatorId,
     title: title,
     goalType: 'first_to_goal',
-    targetValue: 100,
+    targetValue: targetValue,
     unit: 'reps',
     proofRequirement: 'ai_check',
     proofMode: 'ai_check',
     verificationMethod: 'camera_pose',
     activityId: 'pushups',
+    format: format,
+    scoringRule: scoringRule,
+    scoreDirection: scoreDirection,
+    attemptDurationSeconds: attemptDurationSeconds,
+    attemptLimit: attemptLimit,
     status: status,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     participants: participants,
+    recentProofs: recentProofs,
     viewerContext: RaceViewerContext(
       raceId: id,
       status: status,
@@ -110,6 +125,7 @@ Race _race({
       leaderScore: 40,
       timeRemainingSeconds: 86400,
       isMember: includeMe,
+      attemptsUsed: attemptsUsed,
     ),
   );
 }
@@ -145,6 +161,38 @@ void main() {
     // No open races → the whole section hides.
     expect(find.text('Join a race'), findsNothing);
     expect(find.text('Leaderboard'), findsNothing);
+  });
+
+  testWidgets('test_gap15_goalless_race_card_hides_percent', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(
+          races: [
+            _race(),
+            _race(
+              id: 'race-2',
+              title: 'Golf Round',
+              format: 'best_attempt',
+              scoringRule: 'maximum_attempt',
+              targetValue: null,
+            ),
+          ],
+        ),
+        home: const CompeteV13Screen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Only the first-to-goal card carries a bar and a percent — a
+    // best-single card has no finish line to be a share of, so it shows
+    // the score next to the mode name instead.
+    expect(find.byType(V13ProgressBar), findsOneWidget);
+    expect(find.text('20 / 100 reps · 20%'), findsOneWidget);
+    expect(find.text('20 reps · Best single'), findsOneWidget);
+    expect(find.textContaining('%'), findsOneWidget);
+    expect(find.text('0%'), findsNothing);
   });
 
   testWidgets('Compete retires a pending pre-v13 guide step', (tester) async {

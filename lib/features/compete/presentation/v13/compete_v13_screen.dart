@@ -316,6 +316,7 @@ class _LiveRaceCard extends ConsumerWidget {
     final rank = rankForUser(race, userId);
     final prevRank = race.viewerContext?.previousRank;
     final me = userId == null ? null : race.participantFor(userId!);
+    final hasGoal = raceHasFinishLine(race);
     final progress = raceProgressPercent(race, me) / 100;
     final trend = rank != null && prevRank != null && prevRank != rank
         ? (rank < prevRank
@@ -388,12 +389,16 @@ class _LiveRaceCard extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: V13.gapMd),
-                    V13ProgressBar(value: progress),
-                    const SizedBox(height: 4),
+                    if (hasGoal) ...[
+                      V13ProgressBar(value: progress),
+                      const SizedBox(height: 4),
+                    ],
                     Text(
                       me == null
                           ? 'Not on the board yet'
-                          : '${raceProgressLabel(race, me)} · ${(progress * 100).round()}%',
+                          : hasGoal
+                          ? '${raceProgressLabel(race, me)} · ${(progress * 100).round()}%'
+                          : '${raceProgressLabel(race, me)} · ${raceModeLabel(race.format)}',
                       style: V13.caption,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
