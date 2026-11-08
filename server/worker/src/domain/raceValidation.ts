@@ -86,6 +86,19 @@ export function scoreDirectionFromBody(
     : 'higher';
 }
 
+/**
+ * Rules revision stamped on the race at creation (migration 0050).
+ *   0 = legacy semantics — every existing row and every old-build create;
+ *   1 = approved strict rules — the new app opts in on POST /races.
+ * Only 0 and 1 are honoured; anything else (missing, wrong type, future
+ * revisions) falls back to 0 so unknown clients never get stricter races
+ * than they asked for.
+ */
+export function rulesVersionFromBody(body: Record<string, unknown>): number {
+  const raw = body.rulesVersion ?? body.rules_version;
+  return raw === 1 || raw === '1' ? 1 : 0;
+}
+
 const MANUAL_PROOF_REQUIREMENTS = new Set([
   'manual',
   'note',
@@ -444,6 +457,13 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
   const targetValue = intValue(body, 'targetValue', 'target_value');
   if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
 
+  const attemptDurationSeconds = intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
+  if (format === 'timed_attempt' && !attemptDurationSeconds && rulesVersionFromBody(body) >= 1) {
+    // Strict rules require an explicit clock; legacy races keep the
+    // historical 60-second default.
+    return { error: 'Attempt duration is required.' };
+  }
+
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
   const scoringRule = scoringRuleForFormat(format, scoreDirectionFromBody(body));
@@ -455,7 +475,9 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
     scoringRule,
     // A window / attempt race has nothing to reach — never store a placeholder.
     targetValue: effectiveTargetValue(format, targetValue),
-    attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
+    attemptDurationSeconds: format === 'timed_attempt'
+      ? (attemptDurationSeconds ?? 60)
+      : attemptDurationSeconds,
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
@@ -493,6 +515,11 @@ export function registryConfigFromBody(
   const targetValue = intValue(body, 'targetValue', 'target_value');
   if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
 
+  const attemptDurationSeconds = intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
+  if (format === 'timed_attempt' && !attemptDurationSeconds && rulesVersionFromBody(body) >= 1) {
+    return { error: 'Attempt duration is required.' };
+  }
+
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
 
@@ -503,7 +530,9 @@ export function registryConfigFromBody(
     scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
     // A window / attempt race has nothing to reach — never store a placeholder.
     targetValue: effectiveTargetValue(format, targetValue),
-    attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
+    attemptDurationSeconds: format === 'timed_attempt'
+      ? (attemptDurationSeconds ?? 60)
+      : attemptDurationSeconds,
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',

@@ -6,6 +6,9 @@
  * answers with defaults instead of throwing on an unknown column — the same
  * deploy-order tolerance the motion-registry fallback uses. Writes of the
  * columns happen only when the client actually sends a field.
+ *
+ * Note: `raceInvitesFrom` still round-trips (old app builds may send or show
+ * it), but anyone can race anyone — nothing on the race paths consults it.
  */
 
 export type RaceInvitesFrom = 'everyone' | 'friends';
@@ -15,7 +18,7 @@ export interface ProfilePrefs {
   favoriteMovementKey: string | null;
   /** false = GET /users/:id/activity returns an empty map with shared:false. */
   activityMapShared: boolean;
-  /** 'friends' = only active friend connections may add this member to a race. */
+  /** Stored for old app builds only — no race path enforces it. */
   raceInvitesFrom: RaceInvitesFrom;
 }
 
@@ -57,27 +60,4 @@ export async function readProfilePrefs(db: D1Database, userId: string): Promise<
   return prefsFromRow(row);
 }
 
-/**
- * "Who can race me" — the INVITEE's pref gates every add-to-race path: when
- * the target set 'friends', only an active friend connection may put them
- * on a roster. Adding yourself always passes. On a pre-0048 schema the
- * column is absent, prefs default to 'everyone', and nothing changes.
- * (Connections are mirrored, so one direction is enough.)
- */
-export async function raceInviteAllowed(
-  db: D1Database,
-  inviterId: string,
-  targetId: string,
-): Promise<boolean> {
-  if (inviterId === targetId) return true;
-  const prefs = await readProfilePrefs(db, targetId);
-  if (prefs.raceInvitesFrom !== 'friends') return true;
-  const row = await db
-    .prepare(
-      `SELECT id FROM crew_connections
-       WHERE user_id = ? AND crew_user_id = ? AND status = 'active'`,
-    )
-    .bind(inviterId, targetId)
-    .first<{ id: string }>();
-  return Boolean(row);
-}
+

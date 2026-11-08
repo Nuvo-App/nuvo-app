@@ -657,6 +657,7 @@ test('custom race INSERT has matching column count, placeholder count, and bind 
   assert.ok(columns.includes('verifier_version'), 'INSERT must include verifier_version');
   assert.ok(columns.includes('verifier_spec_json'), 'INSERT must include verifier_spec_json');
   assert.ok(columns.includes('custom_activity_name'), 'INSERT must include custom_activity_name');
+  assert.ok(columns.includes('rules_version'), 'INSERT must include rules_version');
 
   // Extract the VALUES section
   const valuesStart = columnSection.indexOf('VALUES (');
@@ -695,6 +696,9 @@ test('custom race INSERT has matching column count, placeholder count, and bind 
   assert.ok(bindArgs[verifierSpecIdx].includes('withVerifierType.spec'), `verifier_spec_json bind must be withVerifierType.spec`);
   const customActivityIdx = columns.indexOf('custom_activity_name');
   assert.ok(bindArgs[customActivityIdx].includes('withVerifierType.name'), `custom_activity_name bind must be withVerifierType.name`);
+  // rules_version is bound last, after the 'active' literal — its position in
+  // the bind list trails the status placeholder offset.
+  assert.ok(bindArgs[bindArgs.length - 1].includes('rulesVersion'), `rules_version must be the final bind, got: ${bindArgs[bindArgs.length - 1]}`);
 });
 
 test('POST /races wraps DB batch in try/catch for useful error responses', () => {

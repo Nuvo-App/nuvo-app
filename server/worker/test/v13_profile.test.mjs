@@ -26,6 +26,7 @@ const SCHEMA = [
   readFileSync(new URL('migrations/0046_squads.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0047_reconcile_prod.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0048_v13_profile.sql', root), 'utf8'),
+  readFileSync(new URL('migrations/0050_race_rules_version.sql', root), 'utf8'),
 ];
 
 // ── D1 adapter over node:sqlite ──────────────────────────────────────────────
@@ -590,25 +591,45 @@ test('notifications: muted requester produces no crew_request row (lifecycle bat
 
 // ── race_invites_from ───────────────────────────────────────────────────────
 
-test('race invites: friends-only invitee blocks stranger adds on /members + /participants', async () => {
+// "Who can race me" is stored (old app builds may send or show it) but is
+// never enforced — anyone can race anyone. The test below pins that a
+// friends-only invitee can be added by a stranger on both add paths.
+
+test('test_anyone_can_race_anyone_invite_ignores_pref', async () => {
   const w = world();
   w.user('A', { name: 'Alice' });
   w.user('B', { name: 'Bob' });
+  w.user('C', { name: 'Cleo' });
   jsonOk(await w.req('B', 'POST', '/profile', { raceInvitesFrom: 'friends' }));
+  jsonOk(await w.req('C', 'POST', '/profile', { raceInvitesFrom: 'friends' }));
   w.race('r1', 'A');
 
-  const deny1 = await w.req('A', 'POST', '/races/r1/members', { userId: 'B' });
-  assert.equal(deny1.status, 403);
-  assert.match(deny1.json.error, /friends/i);
-  const deny2 = await w.req('A', 'POST', '/races/r1/participants', { userId: 'B' });
-  assert.equal(deny2.status, 403);
-  assert.equal(w.one("SELECT id FROM race_members WHERE race_id = 'r1' AND user_id = 'B'"), undefined);
-
-  // Friends pass the gate.
-  w.friend('A', 'B');
-  const ok = await w.req('A', 'POST', '/races/r1/members', { userId: 'B' });
-  assert.equal(ok.status, 200);
+  const ok1 = await w.req('A', 'POST', '/races/r1/members', { userId: 'B' });
+  assert.equal(ok1.status, 200, ok1.text);
   assert.ok(w.one("SELECT id FROM race_members WHERE race_id = 'r1' AND user_id = 'B' AND status = 'active'"));
+
+  const ok2 = await w.req('A', 'POST', '/races/r1/participants', { userId: 'C' });
+  assert.equal(ok2.status, 200, ok2.text);
+  assert.ok(w.one("SELECT id FROM race_members WHERE race_id = 'r1' AND user_id = 'C' AND status = 'active'"));
+
+  // The stored value still round-trips on the profile surface.
+  const me = jsonOk(await w.req('B', 'GET', '/profile/me'));
+  assert.equal(me.raceInvitesFrom, 'friends');
+});
+
+test('test_anyone_can_race_anyone_join_ignores_pref', async () => {
+  const w = world();
+  w.user('A', { name: 'Alice' });
+  w.user('B', { name: 'Bob' });
+  // A friends-only racer can still join a stranger's open race — the pref
+  // does not gate joining either.
+  jsonOk(await w.req('B', 'POST', '/profile', { raceInvitesFrom: 'friends' }));
+  w.race('pub', 'A');
+  w.exec("UPDATE races SET visibility = 'public_demo', public_join_enabled = 1 WHERE id = 'pub'");
+
+  const res = await w.req('B', 'POST', '/races/pub/join', {});
+  assert.equal(res.status, 200, res.text);
+  assert.ok(w.one("SELECT id FROM race_members WHERE race_id = 'pub' AND user_id = 'B' AND status = 'active'"));
 });
 
 test('race invites: default everyone still adds strangers', async () => {
