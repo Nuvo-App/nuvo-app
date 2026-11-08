@@ -63,3 +63,15 @@ test('code is never logged or leaked on send failure', async () => {
     globalThis.fetch = realFetch;
   }
 });
+
+test('logo is an inline CID attachment with alt text and explicit size', async () => {
+  const body = await captureSend('483920');
+  assert.ok(body.html.includes('src="cid:nuvo-logo"'));
+  const img = body.html.match(/<img[^>]*>/)[0];
+  assert.match(img, /alt="Nuvo"/);
+  assert.match(img, /width="\d+"/);
+  assert.match(img, /height="\d+"/);
+  const att = body.attachments.find((a) => a.content_id === 'nuvo-logo');
+  assert.ok(att && att.content.length > 1000 && att.content_type === 'image/png');
+  assert.ok(body.html.includes('10 minutes') && body.text.includes('10 minutes'));
+});
