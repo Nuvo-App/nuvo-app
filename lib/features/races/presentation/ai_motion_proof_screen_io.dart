@@ -40,6 +40,7 @@ import '../data/motion_capabilities.dart';
 import '../data/motion_package_installer.dart';
 import '../data/race_api.dart';
 import '../data/race_models.dart';
+import '../domain/motion_session_target.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_progress_presentation.dart';
@@ -319,15 +320,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       final raceTarget = race.targetValue;
       final alreadyDone = myPart?.progressValue ?? 0;
       final isCustom = race.isCustomVerifierRace;
-      final target = isCustom
-          ? (raceTarget != null && raceTarget > 0
-                ? (raceTarget - alreadyDone).clamp(1, raceTarget)
-                : 1)
-          : race.format == 'first_to_goal'
-          ? (raceTarget != null && raceTarget > 0
-                ? (raceTarget - alreadyDone).clamp(1, raceTarget)
-                : eligibility.movementDefinition?.defaultTarget ?? 1)
-          : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
+      // No finish line → no ceiling (validators clamp to the session
+      // target; a small fallback froze most-total counts at e.g. 5).
+      final target = motionSessionTarget(
+        format: race.format,
+        isCustom: isCustom,
+        raceTarget: raceTarget,
+        alreadyDone: alreadyDone,
+        defaultTarget: eligibility.movementDefinition?.defaultTarget,
+      );
       if (eligibility.objectCompositionSpec != null) {
         await _loadBasketballRelease(
           race: race,
