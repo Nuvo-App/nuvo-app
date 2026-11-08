@@ -18,7 +18,9 @@ import 'package:nuvo/features/races/data/motion_catalog.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
+import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
+import 'package:nuvo/features/races/domain/race_draft.dart';
 import 'package:nuvo/features/races/presentation/motion_catalog_provider.dart';
 import 'package:nuvo/features/races/presentation/race_controller.dart';
 import 'package:nuvo/features/races/presentation/v13/composer/race_composer_v13_screen.dart';
@@ -262,5 +264,54 @@ void main() {
     expect(bodies, hasLength(1));
     expect(bodies.single['format'], 'best_attempt');
     expect(bodies.single['scoreDirection'], 'lower');
+  });
+
+  testWidgets('test_gapN10_custom_movement_offers_all_modes', (tester) async {
+    _size(tester);
+    final repo = _WireRaceRepo(onBody: (_) {});
+    // A taught-custom draft: camera-verified movement without a preset
+    // catalog entry. Edited fields guard the merge so the name step
+    // carries the draft through untouched.
+    final custom = RaceDraft(
+      title: 'Cartwheels',
+      hasCustomName: true,
+      activity: motionActivityDefinitions.first,
+      metric: RaceMetric.reps,
+      format: RaceFormat.firstToGoal,
+      targetValue: 10,
+      customActivityName: 'Cartwheels',
+      userEditedFields: const {
+        RaceField.title,
+        RaceField.activity,
+        RaceField.goalKind,
+        RaceField.format,
+        RaceField.target,
+      },
+    );
+    await tester.pumpWidget(
+      _app(
+        repo,
+        home: RaceComposerV13Screen(
+          prefill: RaceCreatePrefill(draft: custom),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Set it up'));
+    await tester.pumpAndSettle();
+
+    for (final mode in [
+      'First to',
+      'Most total',
+      'Best single',
+      'Timed battle',
+    ]) {
+      await tester.scrollUntilVisible(
+        find.text(mode),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text(mode), findsOneWidget, reason: mode);
+    }
   });
 }

@@ -570,11 +570,16 @@ class _SetupStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customOn = NuvoFlags.customMotionOn;
+    // Manual goals can only run the logged formats; a taught custom movement
+    // is camera-verified like any preset and gets all four modes rather than
+    // whatever the previously selected preset happened to support.
     final modes = draft.isManual
         ? const [RaceFormat.firstToGoal, RaceFormat.mostInWindow]
-        : draft.activity.supportedFormats
-              .where(_modeLabels.containsKey)
-              .toList();
+        : draft.isCustom
+            ? _modeLabels.keys.toList()
+            : draft.activity.supportedFormats
+                  .where(_modeLabels.containsKey)
+                  .toList();
     final finishOptions = draft.isDeadlineMode
         ? const ['today', '3 days', '1 week', '2 weeks']
         : const <String>[];
