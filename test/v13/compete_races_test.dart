@@ -241,6 +241,42 @@ void main() {
     await shot(tester, 'v13_race_detail_racer');
   });
 
+  testWidgets('/race/:id/proof lands on Race detail with the sheet open', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(races: [_race()]),
+        home: const RaceDetailV13Screen(
+          raceId: 'race-1',
+          openProofOnLoad: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SubmitProofV13Sheet), findsOneWidget);
+  });
+
+  testWidgets('openProofOnLoad does nothing for a visitor', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(races: [_race(includeMe: false)]),
+        home: const RaceDetailV13Screen(
+          raceId: 'race-1',
+          openProofOnLoad: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SubmitProofV13Sheet), findsNothing);
+  });
+
   testWidgets('Submit proof sheet: manual requires a photo', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
