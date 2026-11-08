@@ -62,6 +62,7 @@ import {
 import { recordPersonalBestIfImproved, reconcilePersonalBest } from '../domain/raceBests';
 import { castProofVote, VETO_REASON_SET, type VetoReason } from '../domain/proofVeto';
 import { reconcileProgression } from '../domain/progression';
+import { raceInviteAllowed } from '../domain/profilePrefs';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
@@ -2006,6 +2007,11 @@ racesRouter.post('/:id/participants', async (c) => {
   if (await isBlockedEitherWay(c.env.DB, userId, targetUserId)) {
     return c.json(badRequest('You cannot add this user'), 403);
   }
+  // "Who can race me": a member who only accepts race invites from friends
+  // can't be added by anyone else.
+  if (!(await raceInviteAllowed(c.env.DB, userId, targetUserId))) {
+    return c.json(badRequest('This member only races with friends'), 403);
+  }
 
   // An explicit creator add is the one path that may bring back a member the
   // creator removed earlier.
@@ -2051,6 +2057,11 @@ racesRouter.post('/:id/members', async (c) => {
   if (!target) return c.json(badRequest('User not found'), 404);
   if (await isBlockedEitherWay(c.env.DB, userId, targetUserId)) {
     return c.json(badRequest('You cannot add this user'), 403);
+  }
+  // "Who can race me": a member who only accepts race invites from friends
+  // can't be added by anyone else.
+  if (!(await raceInviteAllowed(c.env.DB, userId, targetUserId))) {
+    return c.json(badRequest('This member only races with friends'), 403);
   }
 
   // An explicit creator add is the one path that may bring back a member the
@@ -3174,6 +3185,10 @@ racesRouter.post('/:id/rematch', async (c) => {
     .bind(race.id, userId)
     .all<{ user_id: string }>();
   for (const row of roster.results) {
+    // A former racer who now only races friends isn't re-added by a
+    // non-friend's rematch — same skip treatment as a block, not a 403,
+    // so one friends-only member can't block the whole rematch.
+    if (!(await raceInviteAllowed(c.env.DB, userId, row.user_id))) continue;
     await ensureMember(c.env.DB, newRaceId, row.user_id);
     await ensureProgress(c.env.DB, newRaceId, row.user_id);
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {

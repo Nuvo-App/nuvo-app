@@ -1,4 +1,5 @@
 import { generateId } from '../lib/crypto';
+import { muteStamp } from './mutes';
 
 /**
  * Shared crew lifecycle for search, member pass, profile and invite entry.
@@ -109,9 +110,16 @@ export async function transitionCrew(
       AND NOT EXISTS (SELECT 1 FROM crew_connections WHERE user_id = ? AND crew_user_id = ? AND status = 'pending')
   `).bind(a, b, b, a, a, b);
 
+  // Mute checks run as real rows in the INSERT's WHERE — but only when the
+  // recipient actually has user-mutes, so a pre-0048 schema (no user_mutes
+  // table) never sees the table name inside this batch.
+  const [aMutes, bMutes] = await Promise.all([
+    muteStamp(db, a, 'user'),
+    muteStamp(db, b, 'user'),
+  ]);
   const notifications = [
-    crewNotificationStatement(db, a, b, a, b, action),
-    crewNotificationStatement(db, a, b, b, a, action),
+    crewNotificationStatement(db, a, b, a, b, action, aMutes.n > 0),
+    crewNotificationStatement(db, a, b, b, a, action, bMutes.n > 0),
   ];
   const results = await db.batch<{ id: string; status: string; requested_by: string | null }>([
     canonical, mirror, resolveRequests, ...notifications,
@@ -129,7 +137,13 @@ function crewNotificationStatement(
   recipient: string,
   other: string,
   action: string,
+  checkMute: boolean,
 ): D1PreparedStatement {
+  // A muted actor's lifecycle notification is never written — the muter
+  // asked not to hear from them, and muting stays invisible to the target.
+  const muteClause = checkMute
+    ? `AND NOT EXISTS (SELECT 1 FROM user_mutes WHERE user_id = ? AND target_type = 'user' AND target_id = ?)`
+    : '';
   return db.prepare(`
     WITH connection AS (SELECT * FROM crew_connections WHERE user_id = ? AND crew_user_id = ?),
     content AS (
@@ -151,8 +165,13 @@ function crewNotificationStatement(
     FROM content
     WHERE ? IN ('connect', 'accept')
       AND COALESCE((SELECT in_app FROM notification_preferences WHERE user_id = ? AND category = content.category), 1) = 1
+      ${muteClause}
     RETURNING id
-  `).bind(a, b, action, recipient, other, other, generateId(), recipient, other, other, other, action, recipient);
+  `).bind(
+    a, b, action, recipient, other, other, generateId(), recipient, other,
+    other, other, action, recipient,
+    ...(checkMute ? [recipient, other] : []),
+  );
 }
 
 /**

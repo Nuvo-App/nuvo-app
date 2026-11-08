@@ -6,6 +6,7 @@ import { isBlocked } from '../lib/privacy';
 import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { transitionCrew } from '../domain/crewLifecycle';
 import { deliverNotificationPushes } from '../domain/notifications';
+import { MUTE_ACTOR_EXCLUSION, MUTE_RACE_EXCLUSION, muteStamp } from '../domain/mutes';
 
 export const crewRouter = new Hono<AppEnv>();
 
@@ -273,12 +274,24 @@ crewRouter.get('/feed', async (c) => {
       .first<{ n: number; at: string | null; unread: number | null; rn: number; rat: string | null }>(),
   ]);
 
+  // Muted actors / muted crews drop out of the feed entirely. The stamps
+  // join the etag so muting or unmuting invalidates a cached 304 — and the
+  // clauses only reach the SQL when mutes actually exist, keeping pre-0048
+  // schemas (no user_mutes table) untouched.
+  const [userMute, crewMute] = await Promise.all([
+    muteStamp(db, userId, 'user'),
+    muteStamp(db, userId, 'crew'),
+  ]);
+  const muteActorClause = userMute.n > 0 ? MUTE_ACTOR_EXCLUSION : null;
+  const muteRaceClause = crewMute.n > 0 ? MUTE_RACE_EXCLUSION : null;
+
   const notModified = conditional(
     c,
     weakEtag(
       'feed', limit, encodeURIComponent(cursor ?? ''),
       evStamp?.n, evStamp?.at, evStamp?.rn, evStamp?.rat,
       noteStamp?.n, noteStamp?.at, noteStamp?.unread, noteStamp?.rn, noteStamp?.rat,
+      userMute.n, userMute.latest, crewMute.n, crewMute.latest,
       stalenessBucket(Date.now(), 60_000),
     ),
   );
@@ -309,6 +322,8 @@ crewRouter.get('/feed', async (c) => {
              SELECT blocked_user_id FROM blocked_users WHERE user_id = ?))
        AND (re.actor_user_id IS NULL OR re.actor_user_id NOT IN (
              SELECT user_id FROM blocked_users WHERE blocked_user_id = ?))
+       ${muteActorClause ? `AND ${muteActorClause('re.actor_user_id')}` : ''}
+       ${muteRaceClause ? `AND ${muteRaceClause('re.race_id')}` : ''}
        ${cursor ? 'AND re.created_at < ?' : ''}
      ORDER BY re.created_at DESC
      LIMIT ?`,
@@ -329,18 +344,29 @@ crewRouter.get('/feed', async (c) => {
      LEFT JOIN profiles p ON p.user_id = n.actor_user_id
      WHERE n.user_id = ?
        AND n.category IN ('crew_request', 'crew_request_accepted', 'crew_connected')
+       ${muteActorClause ? `AND ${muteActorClause('n.actor_user_id')}` : ''}
        ${cursor ? 'AND n.created_at < ?' : ''}
      ORDER BY n.created_at DESC
      LIMIT ?`,
   );
 
+  const eventBinds = [
+    userId, userId, userId, userId, userId,
+    ...(muteActorClause ? [userId] : []),
+    ...(muteRaceClause ? [userId] : []),
+    ...(cursor ? [cursor] : []),
+    limit + 1,
+  ];
+  const noteBinds = [
+    userId, userId,
+    ...(muteActorClause ? [userId] : []),
+    ...(cursor ? [cursor] : []),
+    limit + 1,
+  ];
+
   const [events, notes] = await Promise.all([
-    eventQuery
-      .bind(...(cursor ? [userId, userId, userId, userId, userId, cursor, limit + 1] : [userId, userId, userId, userId, userId, limit + 1]))
-      .all<FeedEventRow>(),
-    noteQuery
-      .bind(...(cursor ? [userId, userId, cursor, limit + 1] : [userId, userId, limit + 1]))
-      .all<FeedNoteRow>(),
+    eventQuery.bind(...eventBinds).all<FeedEventRow>(),
+    noteQuery.bind(...noteBinds).all<FeedNoteRow>(),
   ]);
 
   interface FeedItem {
