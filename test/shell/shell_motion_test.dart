@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nuvo/core/theme/app_colors.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/features/arena/data/arena_api.dart';
 import 'package:nuvo/features/arena/data/arena_models.dart';
 import 'package:nuvo/features/arena/data/arena_repository.dart';
@@ -254,15 +254,12 @@ double _scrollOffset(WidgetTester tester, String tag) {
 const _tabMap = <String, (String marker, IconData icon)>{
   'Arena': ('arena-tab', Icons.stadium_outlined),
   'Compete': ('compete-tab', Icons.emoji_events_outlined),
-  'Friends': ('pass-tab', Icons.group_outlined),
+  'Crew': ('pass-tab', Icons.groups_outlined),
   'Profile': ('profile-tab', Icons.person_outline),
 };
 
-Finder _slot(String label) => find.byKey(
-  ValueKey(
-    'nuvo-nav-slot-${['Arena', 'Compete', 'Friends', 'Profile'].indexOf(label)}',
-  ),
-);
+Finder _slot(String label) =>
+    find.descendant(of: find.byType(V13TabBar), matching: find.text(label));
 
 void _expectSelected(WidgetTester tester, String label) {
   final (marker, _) = _tabMap[label]!;
@@ -271,11 +268,11 @@ void _expectSelected(WidgetTester tester, String label) {
     findsOneWidget,
     reason: '$label must show its own page',
   );
-  // Selection reads as a white label on Nuvo's electric-blue pill for every
-  // destination.
+  // The selected destination's label reads in navy (the blue spring
+  // indicator sits underneath it).
   expect(
-    tester.widget<Text>(find.text(label)).style?.color,
-    NuvoColors.white,
+    tester.widget<Text>(_slot(label)).style?.color,
+    V13.navy,
     reason: '$label must be the highlighted nav destination',
   );
 }
@@ -294,7 +291,7 @@ void main() {
 
   testWidgets('body and nav agree across a full tab tour', (tester) async {
     await _pumpShell(tester);
-    for (final label in ['Friends', 'Compete', 'Profile', 'Arena']) {
+    for (final label in ['Crew', 'Compete', 'Profile', 'Arena']) {
       await tester.tap(_slot(label));
       await tester.pumpAndSettle();
       _expectSelected(tester, label);
@@ -306,7 +303,7 @@ void main() {
     _expectSelected(tester, 'Profile');
 
     await _pumpShell(tester, initialLocation: '/pass');
-    _expectSelected(tester, 'Friends');
+    _expectSelected(tester, 'Crew');
   });
 
   testWidgets('tab switch preserves scroll offset and widget state', (
@@ -328,7 +325,7 @@ void main() {
     expect(find.text('taps-arena:1'), findsOneWidget);
 
     // Arena → Crew → Arena.
-    await tester.tap(_slot('Friends'));
+    await tester.tap(_slot('Crew'));
     await tester.pumpAndSettle();
     await tester.tap(_slot('Arena'));
     await tester.pumpAndSettle();
@@ -349,7 +346,7 @@ void main() {
     tester,
   ) async {
     await _pumpShell(tester);
-    await tester.tap(_slot('Friends'));
+    await tester.tap(_slot('Crew'));
     await tester.pumpAndSettle();
 
     // The Crew tab is live; Arena is still mounted but offstage.
@@ -396,7 +393,7 @@ void main() {
     await _pumpShell(tester);
 
     // Arena (index 0) → Crew (index 2): Crew arrives from the right.
-    await tester.tap(_slot('Friends'));
+    await tester.tap(_slot('Crew'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -456,7 +453,7 @@ void main() {
   ) async {
     await _pumpShell(tester);
 
-    await tester.tap(_slot('Friends'));
+    await tester.tap(_slot('Crew'));
     await tester.pump(const Duration(milliseconds: 60));
     await tester.tap(_slot('Compete'));
     await tester.pump(const Duration(milliseconds: 60));
@@ -468,18 +465,14 @@ void main() {
     expect(find.text('compete-tab'), findsNothing);
   });
 
-  testWidgets('selected destination reads through blue on icon + label', (
+  testWidgets('selected destination reads in navy on icon + label', (
     tester,
   ) async {
     await _pumpShell(tester);
-    await tester.tap(_slot('Friends'));
+    await tester.tap(_slot('Crew'));
     await tester.pumpAndSettle();
 
-    final icon = tester.widget<Icon>(find.byIcon(Icons.group));
-    expect(
-      icon.color,
-      NuvoColors.white,
-      reason: 'the selected icon is white on the electric-blue pill',
-    );
+    final icon = tester.widget<Icon>(find.byIcon(Icons.groups));
+    expect(icon.color, V13.navy, reason: 'the selected icon reads in navy');
   });
 }

@@ -6,7 +6,6 @@
 // pageBuilder — see /race/:id/edit); every "open a race" tap lands on /race/:id;
 // pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
 // _tabPage builders; routes that need `extra:` have a null-safe fallback.
-import '../core/config/v13.dart';
 import '../features/notifications/presentation/v13/activity_v13_screen.dart';
 import '../features/social/presentation/v13/crew_tab_v13_screen.dart';
 import '../features/squads/presentation/v13/crew_page_v13_screen.dart';
@@ -28,24 +27,16 @@ import 'package:go_router/go_router.dart';
 import '../core/widgets/bottom_nav.dart';
 import '../core/widgets/nuvo_motion.dart';
 
-import '../features/arena/presentation/arena_screen.dart';
 import '../core/widgets/keep_screen_awake.dart';
 import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
-import '../features/compete/presentation/compete_screen_fixed.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
 import '../features/onboarding/presentation/notification_permission_screen.dart';
 import '../features/onboarding/presentation/nuvo_onboarding_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
-import '../features/pass/presentation/pass_screen.dart';
-import '../features/profile/presentation/badges_screen.dart';
-import '../features/profile/presentation/edit_profile_screen.dart';
-import '../features/profile/presentation/profile_screen.dart';
-import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/data/race_models.dart' show RaceCreatePrefill;
-import '../features/races/presentation/race_composer_screen.dart';
 import '../features/races/presentation/ai_motion_proof_screen.dart';
 import '../features/races/presentation/invite_crew_screen.dart';
 import '../features/races/presentation/join_race_screen.dart';
@@ -59,14 +50,10 @@ import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/crew/data/crew_api.dart' show PublicProfileCard;
 import '../features/crew/presentation/public_badges_screen.dart';
-import '../features/crew/presentation/public_profile_screen.dart';
 import '../features/notifications/presentation/notification_prefs_screen.dart';
-import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/social/presentation/add_crew_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
 import '../features/squads/presentation/crew_groups_screen.dart';
-import '../features/social/presentation/my_nuvo_screen.dart';
-import '../features/social/presentation/qr_scan_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
 // Native interactive page transition used on all pushed routes. CupertinoPage
@@ -104,14 +91,13 @@ String moveRedirect(Uri uri) {
 /// The screen behind each shell destination — keyed by the canonical
 /// destination path so route → screen is declared exactly once.
 Widget _tabScreenFor(String path) {
-  final screen =
-      (kNuvoV13 ? _v13TabScreenFor(path) : null) ??
-      switch (path) {
-        '/compete' => const CompeteScreen(),
-        '/pass' => const PassScreen(),
-        '/profile' => const ProfileScreen(),
-        _ => const ArenaScreen(),
-      };
+  final Widget screen = switch (path) {
+    '/compete' => const CompeteV13Screen(),
+    // The Crew tab keeps the /pass route (auth_gate protects /pass).
+    '/pass' => const CrewTabV13Screen(),
+    '/profile' => const ProfileV13Screen(),
+    _ => const ArenaScreenV13(),
+  };
   // Debug-only trace: pairs with the [NuvoNav] tap print in MainShell so a
   // wrong-page report shows index → path → screen in the console.
   assert(() {
@@ -120,21 +106,6 @@ Widget _tabScreenFor(String path) {
   }());
   return screen;
 }
-
-/// v13 tab screens, keyed like [_tabScreenFor]. A path that returns null
-/// falls through to the pre-v13 screen, so every tab works at every stage of
-/// the redesign.
-Widget? _v13TabScreenFor(String path) => switch (path) {
-  // v13: arena (S4)
-  '/arena' => const ArenaScreenV13(),
-  // v13: compete (S5)
-  '/compete' => const CompeteV13Screen(),
-  // v13: crew (S6) — the Crew tab keeps the /pass route
-  '/pass' => const CrewTabV13Screen(),
-  // v13: profile (S7)
-  '/profile' => const ProfileV13Screen(),
-  _ => null,
-};
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
@@ -172,18 +143,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           InviteScreen(token: state.pathParameters['token']!),
         ),
       ),
-      GoRoute(
-        path: '/scan',
-        redirect: (_, _) => kNuvoV13 ? '/my-nuvo?tab=scan' : null,
-        pageBuilder: (_, state) => _cameraPage(state, const QrScanScreen()),
-      ),
+      GoRoute(path: '/scan', redirect: (_, _) => '/my-nuvo?tab=scan'),
       GoRoute(
         path: '/u/:id',
         pageBuilder: (_, state) => _detailPage(
           state,
-          kNuvoV13
-              ? PublicProfileV13Screen(userId: state.pathParameters['id']!)
-              : PublicProfileScreen(userId: state.pathParameters['id']!),
+          PublicProfileV13Screen(userId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -224,37 +189,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/crews/:id',
         pageBuilder: (_, state) => _authPage(
           state,
-          kNuvoV13
-              ? CrewPageV13Screen(crewId: state.pathParameters['id']!)
-              : CrewGroupDetailScreen(groupId: state.pathParameters['id']!),
+          CrewPageV13Screen(crewId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: '/my-nuvo',
         pageBuilder: (_, state) => _authPage(
           state,
-          kNuvoV13
-              ? MyNuvoCodeV13Screen(
-                  initialTab: state.uri.queryParameters['tab'] == 'scan'
-                      ? 1
-                      : 0,
-                )
-              : const MyNuvoScreen(),
+          MyNuvoCodeV13Screen(
+            initialTab: state.uri.queryParameters['tab'] == 'scan' ? 1 : 0,
+          ),
         ),
       ),
       GoRoute(
         path: '/notifications',
         pageBuilder: (_, state) => _detailPage(
           state,
-          kNuvoV13 ? const ActivityV13Screen() : const NotificationsScreen(),
+          const ActivityV13Screen(),
         ),
       ),
       GoRoute(
         path: '/settings',
-        pageBuilder: (_, state) => _authPage(
-          state,
-          kNuvoV13 ? const SettingsV13Screen() : const SettingsScreen(),
-        ),
+        pageBuilder: (_, state) => _authPage(state, const SettingsV13Screen()),
       ),
       GoRoute(
         path: '/settings/notifications',
@@ -362,17 +318,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/races/new',
         pageBuilder: (_, state) => _authPage(
           state,
-          kNuvoV13
-              ? RaceComposerV13Screen(
-                  prefill: state.extra is RaceCreatePrefill
-                      ? state.extra! as RaceCreatePrefill
-                      : null,
-                )
-              : RaceComposerScreen(
-                  prefill: state.extra is RaceCreatePrefill
-                      ? state.extra! as RaceCreatePrefill
-                      : null,
-                ),
+          RaceComposerV13Screen(
+            prefill: state.extra is RaceCreatePrefill
+                ? state.extra! as RaceCreatePrefill
+                : null,
+          ),
         ),
       ),
       GoRoute(
@@ -406,9 +356,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/race/:id',
         pageBuilder: (_, state) => _detailPage(
           state,
-          kNuvoV13
-              ? RaceDetailV13Screen(raceId: state.pathParameters['id']!)
-              : RaceDetailScreen(id: state.pathParameters['id']!),
+          RaceDetailV13Screen(raceId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -477,17 +425,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile/edit',
-        pageBuilder: (_, state) => _authPage(
-          state,
-          kNuvoV13 ? const EditProfileV13Screen() : const EditProfileScreen(),
-        ),
+        pageBuilder: (_, state) =>
+            _authPage(state, const EditProfileV13Screen()),
       ),
       GoRoute(
         path: '/profile/badges',
-        pageBuilder: (_, state) => _authPage(
-          state,
-          kNuvoV13 ? const BadgesV13Screen() : const BadgesScreen(),
-        ),
+        pageBuilder: (_, state) => _authPage(state, const BadgesV13Screen()),
       ),
       if (kDebugMode)
         GoRoute(

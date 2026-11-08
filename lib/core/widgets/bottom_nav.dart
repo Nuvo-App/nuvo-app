@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 
-import '../config/v13.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
@@ -86,9 +85,8 @@ const v13Destinations = <NuvoDestination>[
   ),
 ];
 
-/// The destination table the running shell uses (v13 unless
-/// `--dart-define=NUVO_V13=false`).
-const activeDestinations = kNuvoV13 ? v13Destinations : nuvoDestinations;
+/// The destination table the shell uses.
+const activeDestinations = v13Destinations;
 
 /// Bottom navigation for Nuvo: a FLOATING pill bar.
 ///
