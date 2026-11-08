@@ -44,9 +44,20 @@ abstract class RemoteVerifierRuntime {
   RemoteVerifierRuntime({required this.spec, required this.target});
 
   final RemoteVerifierSpec spec;
-  final int target;
+
+  /// Session finish line — null when the race format has no goal. The
+  /// runtime then counts everything and never reports `completed`.
+  final int? target;
   int count = 0;
   bool _started = false;
+
+  /// The take crossed its finish line. No goal means never — the athlete
+  /// ends the take with Done, which is what actually submits the count.
+  bool get reachedTarget => target != null && count >= target!;
+
+  /// 0–1 progress toward the finish line; a no-goal session has none.
+  double get targetProgress =>
+      target == null || target! <= 0 ? 0 : math.min(1, count / target!);
 
   void start() => _started = true;
 
@@ -55,7 +66,7 @@ abstract class RemoteVerifierRuntime {
   RemoteVerifierUpdate notReady(String diagnostic) => RemoteVerifierUpdate(
     state: RemoteRuntimeState.notReady,
     count: count,
-    progress: target == 0 ? 0 : count / target,
+    progress: targetProgress,
     confidence: 0,
     guidance: _friendlyDiagnostic(diagnostic),
     diagnostic: diagnostic,
@@ -118,11 +129,11 @@ class StateMachineV1Runtime extends RemoteVerifierRuntime {
     double confidence,
     String diagnostic,
   ) => RemoteVerifierUpdate(
-    state: count >= target ? RemoteRuntimeState.completed : state,
+    state: reachedTarget ? RemoteRuntimeState.completed : state,
     count: count,
-    progress: math.min(1, target == 0 ? 0 : count / target),
+    progress: targetProgress,
     confidence: confidence,
-    guidance: count >= target ? 'Target complete.' : 'Keep going.',
+    guidance: reachedTarget ? 'Target complete.' : 'Keep going.',
     diagnostic: diagnostic,
   );
 }
@@ -162,11 +173,11 @@ class AlternatingRepV1Runtime extends RemoteVerifierRuntime {
     double confidence,
     String diagnostic,
   ) => RemoteVerifierUpdate(
-    state: count >= target ? RemoteRuntimeState.completed : state,
+    state: reachedTarget ? RemoteRuntimeState.completed : state,
     count: count,
-    progress: math.min(1, target == 0 ? 0 : count / target),
+    progress: targetProgress,
     confidence: confidence,
-    guidance: count >= target
+    guidance: reachedTarget
         ? 'Target complete.'
         : 'Alternate sides with control.',
     diagnostic: diagnostic,
@@ -196,10 +207,11 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
       if (delta >= 0 && delta <= 1000)
         _heldMs = math.min(spec.maxHoldMs, _heldMs + delta);
     }
-    final progress = math
-        .min(1, _heldMs / math.max(1, target * 1000))
-        .toDouble();
-    final complete = _heldMs >= target * 1000;
+    final targetMs = (target ?? 0) * 1000;
+    final progress = targetMs <= 0
+        ? 0.0
+        : math.min(1, _heldMs / targetMs).toDouble();
+    final complete = target != null && _heldMs >= targetMs;
     return RemoteVerifierUpdate(
       state: complete
           ? RemoteRuntimeState.completed
@@ -328,11 +340,11 @@ class SequenceMatchV1Runtime extends RemoteVerifierRuntime {
 
   RemoteVerifierUpdate _result(RemoteRuntimeState state, String diagnostic) =>
       RemoteVerifierUpdate(
-        state: count >= target ? RemoteRuntimeState.completed : state,
+        state: reachedTarget ? RemoteRuntimeState.completed : state,
         count: count,
-        progress: math.min(1, target == 0 ? 0 : count / target),
+        progress: targetProgress,
         confidence: state == RemoteRuntimeState.repAccepted ? 0.9 : 0.78,
-        guidance: count >= target
+        guidance: reachedTarget
             ? 'Target complete.'
             : 'Move through the full motion with control.',
         diagnostic: diagnostic,
@@ -361,15 +373,15 @@ class RepTreeV1Runtime extends RemoteVerifierRuntime {
     count = _counter.count;
     final accepted = count > before;
     return RemoteVerifierUpdate(
-      state: count >= target
+      state: reachedTarget
           ? RemoteRuntimeState.completed
           : accepted
           ? RemoteRuntimeState.repAccepted
           : RemoteRuntimeState.tracking,
       count: count,
-      progress: math.min(1, target == 0 ? 0 : count / target),
+      progress: targetProgress,
       confidence: accepted ? 0.9 : 0.78,
-      guidance: count >= target
+      guidance: reachedTarget
           ? 'Target complete.'
           : 'Move through the full motion with control.',
       diagnostic: accepted ? 'rep_accepted' : 'rep_tree_tracking',
@@ -404,7 +416,7 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
     count = result.currentValue;
     final isHold = spec.measurementType == 'duration';
     final accepted = !isHold && count > before;
-    final complete = result.isVerified;
+    final complete = target != null && result.isVerified;
     return RemoteVerifierUpdate(
       state: complete
           ? RemoteRuntimeState.completed
@@ -414,7 +426,7 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
           ? RemoteRuntimeState.holdProgress
           : RemoteRuntimeState.tracking,
       count: count,
-      progress: math.min(1, target == 0 ? 0 : count / target),
+      progress: targetProgress,
       confidence: _validator.confidence,
       guidance: complete ? 'Target complete.' : result.coachingText,
       diagnostic: accepted ? 'rep_accepted' : _validator.failedRuleReason,
@@ -426,9 +438,9 @@ class NativeTunedV1Runtime extends RemoteVerifierRuntime {
 
 RemoteVerifierRuntime createRemoteVerifierRuntime({
   required RemoteVerifierSpec spec,
-  required int target,
+  required int? target,
 }) {
-  if (target < 1 || target > 100000)
+  if (target != null && (target < 1 || target > 100000))
     throw const RemoteVerifierSpecException(
       'Target is outside the supported range.',
     );

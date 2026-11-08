@@ -70,7 +70,7 @@ class VerifierUpdate {
   final MovementDefinition selectedMovement;
   final int count;
   final int holdSeconds;
-  final int target;
+  final int? target;
   final double confidence;
   final bool completed;
   final Map<String, double> debugValues;
@@ -94,7 +94,10 @@ class VerifierResult {
 abstract class VerifierRuntime {
   VerifierType get type;
   MovementDefinition get movement;
-  int get targetValue;
+
+  /// Session finish line — null when the race format has no goal, so the
+  /// runtime reports the raw count and never "completes" mid-take.
+  int? get targetValue;
   int get currentValue;
   bool get fullBodyVisible;
   String get failedRuleReason;
@@ -108,7 +111,7 @@ abstract class VerifierRuntime {
 class PresetPoseVerifierRuntime implements VerifierRuntime {
   PresetPoseVerifierRuntime({
     required MovementDefinition movement,
-    required int target,
+    required int? target,
   }) : _engine = NuvoVerifyEngine(movement: movement, target: target);
 
   factory PresetPoseVerifierRuntime.defaultRuntime() =>
@@ -126,7 +129,7 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
   MovementDefinition get movement => _engine.movement;
 
   @override
-  int get targetValue => _engine.targetValue;
+  int? get targetValue => _engine.targetValue;
 
   @override
   int get currentValue => _engine.currentValue;
@@ -163,7 +166,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   RemotePoseVerifierRuntime({
     required RemoteVerifierSpec spec,
     required MovementDefinition movement,
-    required int target,
+    required int? target,
   }) : _spec = spec,
        _movement = movement,
        _runtime = createRemoteVerifierRuntime(spec: spec, target: target);
@@ -182,7 +185,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   MovementDefinition get movement => _movement;
 
   @override
-  int get targetValue => _runtime.target;
+  int? get targetValue => _runtime.target;
 
   @override
   int get currentValue => _runtime.count;
@@ -225,17 +228,22 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
   @override
   VerifierResult finish() {
     final update = _lastUpdate;
-    final completed = _runtime.count >= targetValue;
+    final target = targetValue;
+    final completed = target == null
+        ? _runtime.count > 0 && _validPoseFrames > 0
+        : _runtime.count >= target;
     return VerifierResult(
       type: VerifierType.presetPose,
       aiMotionResult: AiMotionResult(
         activity: _movement.activity,
-        targetReps: targetValue,
+        targetReps: target,
         detectedReps: _runtime.count,
         confidence: update?.confidence ?? 0,
         verificationStatus: completed ? 'ai_verified' : 'ai_failed',
         verificationSummary: completed
-            ? 'Target complete.'
+            ? (target == null
+                  ? 'Detected ${_runtime.count} ${_movement.title} from live pose tracking.'
+                  : 'Target complete.')
             : (update?.guidance ??
                   'Keep your movement in frame and try again.'),
         framesAnalyzed: _framesAnalyzed,
@@ -283,7 +291,7 @@ class VerifierRuntimeResolution {
           (eligibility?.customMotionV2Spec ?? motionV2Spec) != null);
 
   VerifierRuntime createRuntime({
-    required int target,
+    required int? target,
     CustomPoseVerifierSpec? customSpec,
     RemoteVerifierSpec? remoteSpecOverride,
     TaughtMotionV2Spec? motionV2SpecOverride,

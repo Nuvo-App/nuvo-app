@@ -54,6 +54,7 @@ class Race {
     this.finalStandings = const [],
     this.submissionResult,
     this.scoreDirection = 'higher',
+    this.rulesVersion = 0,
     this.serverTime,
     this.viewerContext,
   });
@@ -113,6 +114,11 @@ class Race {
 
   /// 'higher' or 'lower' — whether a bigger score wins the leaderboard.
   final String scoreDirection;
+
+  /// Rules revision the race was created under (Worker `rules_version`):
+  /// 0 = legacy contract, 1 = strict rules (camera-only proof on camera
+  /// races, custom goals race First to / Most total only).
+  final int rulesVersion;
 
   /// Authoritative server clock from the response — the only clock that
   /// decides starts, deadlines, and eligibility. Device time is display only.
@@ -188,6 +194,7 @@ class Race {
             )
           : null,
       scoreDirection: jStr(json['scoreDirection']) ?? 'higher',
+      rulesVersion: jInt(json['rulesVersion']) ?? 0,
       serverTime: jStr(json['serverTime']),
       viewerContext: json['viewerContext'] is Map<String, dynamic>
           ? RaceViewerContext.fromJson(

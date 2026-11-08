@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nuvo/features/races/ai/motion_v2/motion_v2_models.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
@@ -91,6 +92,39 @@ void main() {
       );
       expect(manual.isManual, isTrue);
       expect(manual.toCreatePayload().containsKey('recurrence'), isFalse);
+    });
+
+    test('test_gapS4_new_races_send_rules_version_1', () async {
+      // Draft payloads declare the strict-rules opt-in.
+      final preset = draftFromIdea('First to 100 pushups')!;
+      expect(preset.toCreatePayload()['rulesVersion'], 1);
+
+      final manual = draftFromIdea('First to 10 cartwheels')!;
+      expect(manual.isManual, isTrue);
+      expect(manual.toCreatePayload()['rulesVersion'], 1);
+
+      // And both create endpoints stamp it onto the wire.
+      Map<String, dynamic>? body;
+      final api = RaceApi(
+        client: MockClient((req) async {
+          body = jsonDecode(req.body) as Map<String, dynamic>;
+          return http.Response(jsonEncode({'race': _raceJson()}), 200);
+        }),
+      );
+      await api.createRace('token', title: 'First to 100 pushups');
+      expect(body!['rulesVersion'], 1);
+
+      body = null;
+      await api.createCustomRace(
+        'token',
+        title: 'Pull Ups',
+        customActivityName: 'Pull Ups',
+        motionV2Spec: const TaughtMotionV2Spec(
+          json: {'verifier': 'motion_v2', 'name': 'Pull Ups'},
+          movementName: 'Pull Ups',
+        ),
+      );
+      expect(body!['rulesVersion'], 1);
     });
   });
 }

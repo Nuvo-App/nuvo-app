@@ -67,6 +67,7 @@ Race _race({
   int? attemptDurationSeconds,
   int? attemptLimit,
   int attemptsUsed = 0,
+  int rulesVersion = 0,
   List<RaceProof> recentProofs = const [],
 }) {
   final participants = <RaceParticipant>[
@@ -112,6 +113,7 @@ Race _race({
     scoreDirection: scoreDirection,
     attemptDurationSeconds: attemptDurationSeconds,
     attemptLimit: attemptLimit,
+    rulesVersion: rulesVersion,
     status: status,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -443,6 +445,38 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Keeps you at 2nd.'), findsOneWidget);
+  });
+
+  testWidgets('test_gap8_manual_tab_hidden_on_camera_only_race', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    // rules_version 1 camera race: the segmented chooser is gone — the
+    // camera path is the only path.
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(races: [_race(rulesVersion: 1)]),
+        home: Scaffold(body: SubmitProofV13Sheet(race: _race(rulesVersion: 1))),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Manual'), findsNothing);
+    expect(find.text('Camera'), findsNothing);
+    expect(find.text('Start camera proof'), findsOneWidget);
+
+    // v0 race with the same movement: both tabs still offered.
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(races: [_race()]),
+        home: Scaffold(body: SubmitProofV13Sheet(race: _race())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Camera'), findsOneWidget);
+    expect(find.text('Manual'), findsOneWidget);
   });
 }
 

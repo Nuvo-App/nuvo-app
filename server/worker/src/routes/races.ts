@@ -1515,7 +1515,9 @@ racesRouter.post('/', async (c) => {
   }
   const manual = manualConfig && !('error' in manualConfig) ? manualConfig : null;
 
-  const verificationType = isCustomConfig
+  // What the client asked for. The stored contract may be stricter under
+  // rules_version >= 1 — resolved below once the configs are known.
+  const clientVerificationType = isCustomConfig
     ? 'movecheck'
     : mapProofRequirementToVerificationType(verificationRaw);
   let structuredConfig = isCustomConfig || manual ? null : configFromBody(body);
@@ -1539,7 +1541,7 @@ racesRouter.post('/', async (c) => {
       structuredConfig = registryConfigFromBody(body, registryActivity);
     }
   }
-  if (!isCustomConfig && !manual && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
+  if (!isCustomConfig && !manual && clientVerificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
     logCreateRejected(c, userId, 'preset', structuredConfig.error, body);
     return c.json(badRequest(structuredConfig.error), 400);
   }
@@ -1548,6 +1550,17 @@ racesRouter.post('/', async (c) => {
   const description = stringOrNull(body.description) ?? null;
   const config = structuredConfig && !('error' in structuredConfig) ? structuredConfig : null;
   const custom = customConfig && !('error' in customConfig) ? customConfig : null;
+  // The stored proof contract. Under strict rules (rules_version >= 1) a
+  // race carries the contract it was created as: a camera-verifiable race
+  // (preset / registry / custom) is always camera proof — a client-sent
+  // photo/manual proofRequirement can never downgrade it — and a custom
+  // goal always takes photo proof (the proof route demands it anyway).
+  // v0 rows keep whatever the client asked for.
+  const verificationType = isCustomConfig
+    ? 'movecheck'
+    : rulesVersion >= 1
+      ? (config ? 'movecheck' : manual ? 'photo' : clientVerificationType)
+      : clientVerificationType;
   const raceType = manual?.format ?? config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
   // A custom race decides its own target (null for window / attempt formats) —
   // a stray body.targetValue must never become a made-up finish line.
@@ -2222,6 +2235,12 @@ racesRouter.post('/:id/proof', async (c) => {
   // never upgrade a photo-proof race to AI Motion Proof.
   if (isAiMotion && !raceSupportsAiMotion(race)) {
     return c.json(badRequest('This race uses photo proof, not AI Motion Proof'), 400);
+  }
+  // Strict-rules camera races are camera-only: the Manual tab is gone and a
+  // self-reported submission can never score one. v0 races keep the
+  // manual + photo path old builds rely on.
+  if (!isAiMotion && (race.rules_version ?? 0) >= 1 && raceSupportsAiMotion(race)) {
+    return c.json(badRequest('This race uses camera proof.'), 400);
   }
   if (!isSubmissionValueInRange(body.value)) {
     return c.json(badRequest('value is out of range'), 400);

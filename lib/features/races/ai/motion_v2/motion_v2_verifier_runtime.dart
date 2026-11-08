@@ -31,7 +31,7 @@ const String motionV2VerifierRuntimeVersion = 'motion_v2-v1';
 class MotionV2VerifierRuntime implements VerifierRuntime {
   MotionV2VerifierRuntime({
     required TaughtMotionV2Spec spec,
-    required int target,
+    required int? target,
     MotionVerifierV2? engine,
   }) : _spec = spec,
        _target = target,
@@ -42,7 +42,10 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
 
   final TaughtMotionV2Spec _spec;
   final MotionVerifierV2 _engine;
-  final int _target;
+
+  /// Session finish line — null when the race format has no goal. The
+  /// matcher's count then stands on its own; nothing is claimed complete.
+  final int? _target;
 
   final List<NuvoPoseFrame> _batch = [];
   MotionV2RuntimeResult _last = MotionV2RuntimeResult.empty;
@@ -65,8 +68,12 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   @override
   MovementDefinition get movement => supportedMovementDefinitions.first;
 
+  /// The take crossed its finish line. No goal means never — the athlete
+  /// ends the take with Done, which is what actually submits the count.
+  bool get _reachedTarget => _target != null && _last.count >= _target;
+
   @override
-  int get targetValue => _target;
+  int? get targetValue => _target;
 
   @override
   int get currentValue => _last.count;
@@ -169,7 +176,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
     state: _ready ? _mappedState : CustomPoseRuntimeState.waitingForSetup,
     count: _last.count,
     target: _target,
-    completed: _last.count >= _target,
+    completed: _reachedTarget,
     sequenceProgress: _last.motionProgress,
     currentTemplateIndex: 0,
     bestCanonicalIndex: 0,
@@ -201,7 +208,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
     holdSeconds: 0,
     target: _target,
     confidence: _last.confidence,
-    completed: _last.count >= _target,
+    completed: _reachedTarget,
     debugValues: {
       'votes': _last.votes.toDouble(),
       'matched': _last.matched ? 1 : 0,
@@ -247,11 +254,14 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
     final duration = _startedAt == null || _lastFrameAt == null
         ? Duration.zero
         : _lastFrameAt!.difference(_startedAt!);
-    final complete = _ready && _last.count >= _target;
+    final complete = _ready &&
+        (_target == null ? _last.count > 0 : _reachedTarget);
     final failure = complete
         ? null
         : _failureReason.isNotEmpty
         ? _failureReason
+        : _target == null
+        ? 'no_verified_repetitions'
         : 'target_not_met';
     return CustomPoseRuntimeResult(
       verifierType: motionV2VerifierType,
