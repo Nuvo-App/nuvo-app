@@ -610,6 +610,7 @@ void main() {
       expect(find.text('#1'), findsOneWidget);
       expect(find.text('View race'), findsOneWidget);
       expect(find.text('Go again'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
       await shot(tester, 'v13_board_moved');
 
       await tester.tap(find.text('View race'));
