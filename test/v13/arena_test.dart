@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nuvo/features/races/presentation/v13/submit_proof_sheet.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/features/arena/data/arena_api.dart';
 import 'package:nuvo/features/arena/data/arena_models.dart';
@@ -515,7 +516,7 @@ void main() {
     expect(repo.getRacesCalls, greaterThanOrEqualTo(2));
   });
 
-  testWidgets('Submit proof opens the proof route for that race', (
+  testWidgets('Submit proof opens the Submit proof sheet for that race', (
     tester,
   ) async {
     _tallViewport(tester);
@@ -526,10 +527,10 @@ void main() {
 
     await tester.tap(find.text('Submit proof').first);
     await _navPumps(tester);
-    expect(find.text('STUB proof r1'), findsOneWidget);
+    expect(find.byType(SubmitProofV13Sheet), findsOneWidget);
   });
 
-  testWidgets('Take it back opens the proof route for the nudge race', (
+  testWidgets('Take it back opens the Submit proof sheet for the nudge race', (
     tester,
   ) async {
     _tallViewport(tester);
@@ -544,7 +545,7 @@ void main() {
 
     await tester.tap(find.text('Take it back'));
     await _navPumps(tester);
-    expect(find.text('STUB proof r1'), findsOneWidget);
+    expect(find.byType(SubmitProofV13Sheet), findsOneWidget);
   });
 
   testWidgets('race card body opens race detail', (tester) async {
