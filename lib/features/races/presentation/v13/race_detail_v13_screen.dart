@@ -749,7 +749,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
                 ),
                 trailing: proofs[i].value != null
                     ? Text(
-                        '+${raceScoreLabel(race, proofs[i].value!)}',
+                        raceIsAccumulating(race)
+                            ? '+${raceScoreLabel(race, proofs[i].value!)}'
+                            : raceScoreLabel(race, proofs[i].value!),
                         style: V13.bodyStrong,
                       )
                     : null,

@@ -310,6 +310,46 @@ void main() {
     await shot(tester, 'v13_race_detail_racer');
   });
 
+  testWidgets('attempt-race proof rows show the bare score, not "+N"', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        _StubRaceRepo(
+          races: [
+            _race(
+              format: 'best_attempt',
+              scoringRule: 'maximum_attempt',
+              targetValue: null,
+              recentProofs: const [
+                RaceProof(
+                  id: 'proof-1',
+                  userId: 'user-2',
+                  displayName: 'Maya Miles',
+                  proofType: 'manual',
+                  value: 30,
+                  verificationStatus: 'verified',
+                  createdAt: '2026-01-02T08:00:00Z',
+                ),
+              ],
+            ),
+          ],
+        ),
+        home: const RaceDetailV13Screen(raceId: 'race-1'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('PROOFS'));
+    await tester.pumpAndSettle();
+    // A best-single proof stands alone — the row shows the score itself,
+    // never a "+N" onto a total that does not exist.
+    expect(find.text('30 reps'), findsOneWidget);
+    expect(find.text('+30 reps'), findsNothing);
+  });
+
   testWidgets('/race/:id/proof lands on Race detail with the sheet open', (
     tester,
   ) async {

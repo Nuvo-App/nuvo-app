@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/v13/v13.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import '../domain/proof_status.dart';
+import '../domain/race_display.dart';
+import 'race_controller.dart';
 
 class BoardMovedArgs {
   const BoardMovedArgs({
@@ -44,19 +46,30 @@ class BoardMovedArgs {
 /// moment: a big "+N" in hero type, a rank pop when the standing changed,
 /// and confetti when the racer took the lead. Pending and failed verdicts
 /// stay calm. Every number comes from the proof response.
-class BoardMovedScreen extends StatefulWidget {
+class BoardMovedScreen extends ConsumerStatefulWidget {
   const BoardMovedScreen({super.key, required this.raceId, required this.args});
 
   final String raceId;
   final BoardMovedArgs args;
 
   @override
-  State<BoardMovedScreen> createState() => _BoardMovedScreenState();
+  ConsumerState<BoardMovedScreen> createState() => _BoardMovedScreenState();
 }
 
-class _BoardMovedScreenState extends State<BoardMovedScreen> {
+class _BoardMovedScreenState extends ConsumerState<BoardMovedScreen> {
   String get raceId => widget.raceId;
   BoardMovedArgs get args => widget.args;
+
+  /// "+N" copy is honest only when the race banks every proof onto a running
+  /// total. Attempt races (Best single, Timed battle) and lower-wins boards
+  /// replace the score instead — the proof stands alone, so the copy does
+  /// too. Resolved from the cached race; an unknown race keeps additive copy.
+  bool get _accumulating {
+    for (final r in ref.watch(raceControllerProvider).races) {
+      if (r.id == raceId) return raceIsAccumulating(r);
+    }
+    return true;
+  }
 
   ProofStatusPresentation get _status => proofStatusPresentation(args.status);
 
@@ -166,7 +179,7 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '+${args.value}',
+                              _accumulating ? '+${args.value}' : '${args.value}',
                               style: V13.hugeNumber.copyWith(fontSize: 72),
                             ),
                             if (args.unit != null)
@@ -187,7 +200,9 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                         if (!hasRank) ...[
                           const SizedBox(height: V13.gapSm),
                           Text(
-                            'Added to your total.',
+                            _accumulating
+                                ? 'Added to your total.'
+                                : 'Attempt logged.',
                             style: V13.body.copyWith(color: V13.muted),
                             textAlign: TextAlign.center,
                           ).animate(delay: 260.ms).fadeIn(duration: 280.ms),
@@ -206,7 +221,9 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                           ).animate(delay: 380.ms).fadeIn(duration: 280.ms),
                           const SizedBox(height: V13.gapLg),
                           V13Pill(
-                            label: '+$_valueLabel added to your total',
+                            label: _accumulating
+                                ? '+$_valueLabel added to your total'
+                                : '$_valueLabel logged',
                             color: V13.mint,
                             icon: Icons.check_rounded,
                           ).animate(delay: 460.ms).fadeIn(duration: 300.ms),
