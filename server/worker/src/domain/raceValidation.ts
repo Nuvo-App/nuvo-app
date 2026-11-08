@@ -457,6 +457,13 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
   const targetValue = intValue(body, 'targetValue', 'target_value');
   if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
 
+  const attemptDurationSeconds = intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
+  if (format === 'timed_attempt' && !attemptDurationSeconds && rulesVersionFromBody(body) >= 1) {
+    // Strict rules require an explicit clock; legacy races keep the
+    // historical 60-second default.
+    return { error: 'Attempt duration is required.' };
+  }
+
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
   const scoringRule = scoringRuleForFormat(format, scoreDirectionFromBody(body));
@@ -468,7 +475,9 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
     scoringRule,
     // A window / attempt race has nothing to reach — never store a placeholder.
     targetValue: effectiveTargetValue(format, targetValue),
-    attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
+    attemptDurationSeconds: format === 'timed_attempt'
+      ? (attemptDurationSeconds ?? 60)
+      : attemptDurationSeconds,
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
@@ -506,6 +515,11 @@ export function registryConfigFromBody(
   const targetValue = intValue(body, 'targetValue', 'target_value');
   if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
 
+  const attemptDurationSeconds = intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
+  if (format === 'timed_attempt' && !attemptDurationSeconds && rulesVersionFromBody(body) >= 1) {
+    return { error: 'Attempt duration is required.' };
+  }
+
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
 
@@ -516,7 +530,9 @@ export function registryConfigFromBody(
     scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
     // A window / attempt race has nothing to reach — never store a placeholder.
     targetValue: effectiveTargetValue(format, targetValue),
-    attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
+    attemptDurationSeconds: format === 'timed_attempt'
+      ? (attemptDurationSeconds ?? 60)
+      : attemptDurationSeconds,
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
