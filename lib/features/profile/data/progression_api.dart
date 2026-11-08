@@ -33,9 +33,9 @@ class ProgressionApi {
   static const _requestTimeout = Duration(seconds: 20);
 
   Map<String, String> _headers(String token) => {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $token',
+    'Content-Type': 'application/json',
+  };
 
   Future<http.Response> _guard(Future<http.Response> Function() send) async {
     try {
@@ -79,7 +79,10 @@ class ProgressionApi {
 
   Future<Map<String, dynamic>> _get(String path, String token) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$kNuvoApiBase$path'), headers: _headers(token)),
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase$path'),
+        headers: _headers(token),
+      ),
     );
     return _decode(res);
   }
@@ -126,7 +129,8 @@ class ProgressionApi {
     final headers = _headers(token);
     if (etag != null) headers['If-None-Match'] = etag;
     final res = await _guard(
-      () => _client.get(Uri.parse('$kNuvoApiBase/progression'), headers: headers),
+      () =>
+          _client.get(Uri.parse('$kNuvoApiBase/progression'), headers: headers),
     );
     final responseEtag = res.headers['etag'];
     if (res.statusCode == 304) {
@@ -148,8 +152,13 @@ class ProgressionApi {
         .toList();
   }
 
-  Future<List<NuvoBadge>> setFeatured(String token, List<String> unlockIds) async {
-    final json = await _put('/progression/featured', token, {'unlockIds': unlockIds});
+  Future<List<NuvoBadge>> setFeatured(
+    String token,
+    List<String> unlockIds,
+  ) async {
+    final json = await _put('/progression/featured', token, {
+      'unlockIds': unlockIds,
+    });
     return (json['badges'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(NuvoBadge.fromJson)

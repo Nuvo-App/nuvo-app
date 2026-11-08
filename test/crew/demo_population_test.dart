@@ -53,9 +53,7 @@ void main() {
 
   test('live payload agrees with the race standings', () {
     final items = PresentationDemoData.crewActivity(userId);
-    final races = {
-      for (final r in PresentationDemoData.races(userId)) r.id: r,
-    };
+    final races = {for (final r in PresentationDemoData.races(userId)) r.id: r};
     final liveItem = items.firstWhere((i) => i.live != null);
     final live = liveItem.live!;
     final race = races[liveItem.raceId];

@@ -26,8 +26,10 @@ class _FakeRepo implements CrewActivityRepository {
     lastEmoji = emoji;
     final err = reactError;
     if (err != null) return Future.error(err);
-    return Future.value(nextSummary ??
-        const ReactionSummary(counts: {'fire': 1}, myReaction: 'fire'));
+    return Future.value(
+      nextSummary ??
+          const ReactionSummary(counts: {'fire': 1}, myReaction: 'fire'),
+    );
   }
 
   @override
@@ -45,16 +47,15 @@ CrewActivityItem _item({
   String? entityId = 'race-1',
   Map<String, int> reactions = const {},
   String? myReaction,
-}) =>
-    CrewActivityItem(
-      id: id,
-      type: 'progress_accepted',
-      occurredAt: DateTime.parse('2026-03-30T12:00:00Z'),
-      entityType: entityType,
-      entityId: entityId,
-      reactions: reactions,
-      myReaction: myReaction,
-    );
+}) => CrewActivityItem(
+  id: id,
+  type: 'progress_accepted',
+  occurredAt: DateTime.parse('2026-03-30T12:00:00Z'),
+  entityType: entityType,
+  entityId: entityId,
+  reactions: reactions,
+  myReaction: myReaction,
+);
 
 void main() {
   group('CrewActivityItem.fromJson', () {
@@ -114,28 +115,31 @@ void main() {
       String type = 'rank_changed',
       String actorId = 'u1',
       Map<String, dynamic> payload = const {},
-    }) =>
-        CrewActivityItem(
-          id: 'e1',
-          type: type,
-          occurredAt: DateTime.parse('2026-03-30T12:00:00Z'),
-          actor: CrewActivityActor(id: actorId, displayName: 'Riley'),
-          payload: payload,
-        );
+    }) => CrewActivityItem(
+      id: 'e1',
+      type: type,
+      occurredAt: DateTime.parse('2026-03-30T12:00:00Z'),
+      actor: CrewActivityActor(id: actorId, displayName: 'Riley'),
+      payload: payload,
+    );
 
     test('an overtake naming me is for-you', () {
       expect(
-        event(payload: const {
-          'newRank': 1,
-          'overtakenUserIds': ['me', 'u2'],
-        }).involvesUser('me'),
+        event(
+          payload: const {
+            'newRank': 1,
+            'overtakenUserIds': ['me', 'u2'],
+          },
+        ).involvesUser('me'),
         isTrue,
       );
       expect(
-        event(payload: const {
-          'newRank': 1,
-          'overtakenUserIds': ['u2'],
-        }).involvesUser('me'),
+        event(
+          payload: const {
+            'newRank': 1,
+            'overtakenUserIds': ['u2'],
+          },
+        ).involvesUser('me'),
         isFalse,
       );
     });
@@ -150,10 +154,7 @@ void main() {
         event(payload: const {'winnerUserId': 'me'}).involvesUser('me'),
         isTrue,
       );
-      expect(
-        event(payload: const {'userId': 'me'}).involvesUser('me'),
-        isTrue,
-      );
+      expect(event(payload: const {'userId': 'me'}).involvesUser('me'), isTrue);
     });
 
     test('crew-only events are not for-you', () {
@@ -194,11 +195,14 @@ void main() {
     });
 
     test('a different reaction switches — one reaction per user', () async {
-      final repo = _FakeRepo([
-        _item(reactions: const {'fire': 1}, myReaction: 'fire'),
-      ])
-        ..nextSummary =
-            const ReactionSummary(counts: {'muscle': 1}, myReaction: 'muscle');
+      final repo =
+          _FakeRepo([
+              _item(reactions: const {'fire': 1}, myReaction: 'fire'),
+            ])
+            ..nextSummary = const ReactionSummary(
+              counts: {'muscle': 1},
+              myReaction: 'muscle',
+            );
       final c = CrewActivityController(repo);
       await c.load();
 
@@ -223,8 +227,7 @@ void main() {
     });
 
     test('non-reactionable items reject the toggle', () async {
-      final repo =
-          _FakeRepo([_item(entityType: null, entityId: null)]);
+      final repo = _FakeRepo([_item(entityType: null, entityId: null)]);
       final c = CrewActivityController(repo);
       await c.load();
       expect(await c.toggleReaction(c.state.items.single, 'fire'), isFalse);

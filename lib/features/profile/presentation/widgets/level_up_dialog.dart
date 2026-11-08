@@ -83,9 +83,7 @@ Future<void> showLevelUpMoment(
                   const SizedBox(height: 4),
                   Text(
                     badge.description!,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: c.inkMuted,
-                    ),
+                    style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
                     textAlign: TextAlign.center,
                   ),
                 ],

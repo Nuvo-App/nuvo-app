@@ -42,7 +42,8 @@ class CrewRepository {
       _withRefresh((t) => _api.acceptRequest(t, userId));
   Future<void> declineRequest(String userId) =>
       _withRefresh((t) => _api.declineRequest(t, userId));
-  Future<void> remove(String userId) => _withRefresh((t) => _api.remove(t, userId));
+  Future<void> remove(String userId) =>
+      _withRefresh((t) => _api.remove(t, userId));
 
   Future<void> reportUser(String userId, {String? reason}) =>
       _withRefresh((t) => _api.reportUser(t, userId, reason: reason));
@@ -54,6 +55,18 @@ class CrewRepository {
       _withRefresh((t) => _api.blockUser(t, userId));
   Future<void> unblockUser(String userId) =>
       _withRefresh((t) => _api.unblockUser(t, userId));
+
+  Future<PublicUserActivity> getUserActivity(String userId) =>
+      _withRefresh((t) => _api.getUserActivity(t, userId));
+
+  Future<void> muteUser(String userId) =>
+      _withRefresh((t) => _api.muteUser(t, userId));
+
+  Future<void> unmuteUser(String userId) =>
+      _withRefresh((t) => _api.unmuteUser(t, userId));
+
+  Future<List<PublicUser>> getBlocked() =>
+      _withRefresh((t) => _api.getBlocked(t));
 
   Future<T> _withRefresh<T>(Future<T> Function(String token) call) async {
     final token = await _store.getAccessToken();

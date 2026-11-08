@@ -19,11 +19,11 @@ enum ConnectOutcome { active, pending }
 enum CrewConnectionStatus { none, connected, pendingOutgoing, pendingIncoming }
 
 CrewConnectionStatus crewConnectionStatusFrom(String? raw) => switch (raw) {
-      'connected' => CrewConnectionStatus.connected,
-      'pending_outgoing' => CrewConnectionStatus.pendingOutgoing,
-      'pending_incoming' => CrewConnectionStatus.pendingIncoming,
-      _ => CrewConnectionStatus.none,
-    };
+  'connected' => CrewConnectionStatus.connected,
+  'pending_outgoing' => CrewConnectionStatus.pendingOutgoing,
+  'pending_incoming' => CrewConnectionStatus.pendingIncoming,
+  _ => CrewConnectionStatus.none,
+};
 
 class CrewSearchResult {
   const CrewSearchResult({
@@ -63,6 +63,15 @@ class PublicProfileCard {
     this.racesFinished,
     this.racesWon,
     this.racesWithYou,
+    this.bio,
+    this.favoriteMovementKey,
+    this.friendsCount,
+    this.mutual,
+    this.versus,
+    this.friendship,
+    this.lockedAchievements = const [],
+    this.muted = false,
+    this.activityShared,
   });
 
   final String id;
@@ -104,34 +113,182 @@ class PublicProfileCard {
   /// Head-to-head racing context between the viewer and this member.
   final PublicRacesWithYou? racesWithYou;
 
-  factory PublicProfileCard.fromJson(Map<String, dynamic> j) => PublicProfileCard(
-        id: (jStr(j['id']) ?? ''),
-        displayName: jStr(j['displayName']) ?? 'Nuvo member',
-        initials: jStr(j['initials']) ?? 'N',
-        connectionStatus: crewConnectionStatusFrom(jStr(j['connectionStatus'])),
-        username: jStr(j['username']),
-        memberId: jStr(j['memberId']),
-        profilePhotoUrl: jStr(j['profilePhotoUrl']),
-        lastActiveAt: DateTime.tryParse(jStr(j['lastActiveAt']) ?? ''),
-        level: jInt(j['level']),
-        levelProgress: jDouble(j['levelProgress']),
-        achievementsEarned: jInt(j['achievementsEarned']),
-        achievementsTotal: jInt(j['achievementsTotal']),
-        featured: (j['featuredAchievements'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map(PublicFeaturedBadge.fromJson)
-            .toList(),
-        earned: (j['earnedAchievements'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map(NuvoBadge.fromJson)
-            .toList(),
-        racesFinished:
-            (j['raceStats'] as Map<String, dynamic>?)?['races'] as int?,
-        racesWon: (j['raceStats'] as Map<String, dynamic>?)?['wins'] as int?,
-        racesWithYou: j['racesWithYou'] is Map<String, dynamic>
-            ? PublicRacesWithYou.fromJson(
-                j['racesWithYou'] as Map<String, dynamic>)
-            : null,
+  /// v13 additive fields (migration 0048) — all null when the server or the
+  /// target's visibility doesn't provide them; the UI hides on null.
+  final String? bio;
+  final String? favoriteMovementKey;
+  final int? friendsCount;
+  final PublicMutual? mutual;
+  final PublicVersus? versus;
+  final PublicFriendship? friendship;
+  final List<PublicLockedAchievement> lockedAchievements;
+  final bool muted;
+  final bool? activityShared;
+
+  factory PublicProfileCard.fromJson(
+    Map<String, dynamic> j,
+  ) => PublicProfileCard(
+    id: (jStr(j['id']) ?? ''),
+    displayName: jStr(j['displayName']) ?? 'Nuvo member',
+    initials: jStr(j['initials']) ?? 'N',
+    connectionStatus: crewConnectionStatusFrom(jStr(j['connectionStatus'])),
+    username: jStr(j['username']),
+    memberId: jStr(j['memberId']),
+    profilePhotoUrl: jStr(j['profilePhotoUrl']),
+    lastActiveAt: DateTime.tryParse(jStr(j['lastActiveAt']) ?? ''),
+    level: jInt(j['level']),
+    levelProgress: jDouble(j['levelProgress']),
+    achievementsEarned: jInt(j['achievementsEarned']),
+    achievementsTotal: jInt(j['achievementsTotal']),
+    featured: (j['featuredAchievements'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(PublicFeaturedBadge.fromJson)
+        .toList(),
+    earned: (j['earnedAchievements'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(NuvoBadge.fromJson)
+        .toList(),
+    racesFinished: (j['raceStats'] as Map<String, dynamic>?)?['races'] as int?,
+    racesWon: (j['raceStats'] as Map<String, dynamic>?)?['wins'] as int?,
+    racesWithYou: j['racesWithYou'] is Map<String, dynamic>
+        ? PublicRacesWithYou.fromJson(j['racesWithYou'] as Map<String, dynamic>)
+        : null,
+    bio: jStr(j['bio']),
+    favoriteMovementKey: jStr(j['favoriteMovementKey']),
+    friendsCount: jInt(j['friendsCount']),
+    mutual: jMap(j['mutual']) != null
+        ? PublicMutual.fromJson(jMap(j['mutual'])!)
+        : null,
+    versus: jMap(j['versus']) != null
+        ? PublicVersus.fromJson(jMap(j['versus'])!)
+        : null,
+    friendship: jMap(j['friendship']) != null
+        ? PublicFriendship.fromJson(jMap(j['friendship'])!)
+        : null,
+    lockedAchievements: jMapList(
+      j['lockedAchievements'],
+    ).map(PublicLockedAchievement.fromJson).toList(),
+    muted: jBool(j['muted']) ?? false,
+    activityShared: jBool(j['activityShared']),
+  );
+}
+
+/// Mutual-friend context between the viewer and a profile — count plus up
+/// to three preview cards for a face stack.
+class PublicMutual {
+  const PublicMutual({required this.count, this.preview = const []});
+
+  final int count;
+  final List<PublicUser> preview;
+
+  factory PublicMutual.fromJson(Map<String, dynamic> j) => PublicMutual(
+    count: jInt(j['count']) ?? 0,
+    preview: jMapList(j['preview']).map(PublicUser.fromJson).toList(),
+  );
+}
+
+/// One side of the "[Name] vs you" scoreboard — identical shape for the
+/// viewer (`you`) and the profile owner (`them`).
+class PublicVersusSide {
+  const PublicVersusSide({
+    required this.level,
+    required this.wins,
+    this.winRatePercent,
+    this.bestStreakDays,
+    this.proofsThisWeek,
+  });
+
+  final int level;
+  final int wins;
+  final int? winRatePercent;
+  final int? bestStreakDays;
+  final int? proofsThisWeek;
+
+  factory PublicVersusSide.fromJson(Map<String, dynamic> j) => PublicVersusSide(
+    level: jInt(j['level']) ?? 0,
+    wins: jInt(j['wins']) ?? 0,
+    winRatePercent: jDouble(j['winRatePercent'])?.round(),
+    bestStreakDays: jInt(j['bestStreakDays']),
+    proofsThisWeek: jInt(j['proofsThisWeek']),
+  );
+}
+
+class PublicVersus {
+  const PublicVersus({required this.you, required this.them});
+
+  final PublicVersusSide you;
+  final PublicVersusSide them;
+
+  factory PublicVersus.fromJson(Map<String, dynamic> j) => PublicVersus(
+    you: PublicVersusSide.fromJson(jMap(j['you']) ?? const {}),
+    them: PublicVersusSide.fromJson(jMap(j['them']) ?? const {}),
+  );
+}
+
+/// One friendship badge between the viewer and a connected friend.
+class PublicFriendshipBadge {
+  const PublicFriendshipBadge({
+    required this.key,
+    required this.name,
+    required this.description,
+    required this.earned,
+    required this.progress,
+    required this.threshold,
+  });
+
+  final String key;
+  final String name;
+  final String description;
+  final bool earned;
+  final int progress;
+  final int threshold;
+
+  factory PublicFriendshipBadge.fromJson(Map<String, dynamic> j) =>
+      PublicFriendshipBadge(
+        key: jStr(j['key']) ?? '',
+        name: jStr(j['name']) ?? 'Badge',
+        description: jStr(j['description']) ?? '',
+        earned: jBool(j['earned']) ?? false,
+        progress: jInt(j['progress']) ?? 0,
+        threshold: jInt(j['threshold']) ?? 1,
+      );
+}
+
+/// Friendship context with a connected person — when the link formed plus
+/// the per-pair badge ladder.
+class PublicFriendship {
+  const PublicFriendship({this.connectedSince, this.badges = const []});
+
+  final String? connectedSince;
+  final List<PublicFriendshipBadge> badges;
+
+  factory PublicFriendship.fromJson(Map<String, dynamic> j) => PublicFriendship(
+    connectedSince: jStr(j['connectedSince']),
+    badges: jMapList(j['badges']).map(PublicFriendshipBadge.fromJson).toList(),
+  );
+}
+
+/// Catalog metadata for an achievement the profile owner hasn't earned —
+/// name + icon + category only; their progress is never exposed.
+class PublicLockedAchievement {
+  const PublicLockedAchievement({
+    required this.key,
+    required this.name,
+    this.iconKey,
+    this.category,
+  });
+
+  final String key;
+  final String name;
+  final String? iconKey;
+  final String? category;
+
+  factory PublicLockedAchievement.fromJson(Map<String, dynamic> j) =>
+      PublicLockedAchievement(
+        key: jStr(j['key']) ?? '',
+        name: jStr(j['name']) ?? 'Achievement',
+        iconKey: jStr(j['iconKey']),
+        category: jStr(j['category']),
       );
 }
 
@@ -173,12 +330,11 @@ class PublicSharedRace {
   final String title;
   final String? winnerUserId;
 
-  factory PublicSharedRace.fromJson(Map<String, dynamic> j) =>
-      PublicSharedRace(
-        raceId: jStr(j['raceId']) ?? '',
-        title: jStr(j['title']) ?? 'Race',
-        winnerUserId: jStr(j['winnerUserId']),
-      );
+  factory PublicSharedRace.fromJson(Map<String, dynamic> j) => PublicSharedRace(
+    raceId: jStr(j['raceId']) ?? '',
+    title: jStr(j['title']) ?? 'Race',
+    winnerUserId: jStr(j['winnerUserId']),
+  );
 }
 
 /// Compact featured achievement on another member's public surfaces.
@@ -209,9 +365,9 @@ class CrewApi {
   final http.Client _client;
 
   Map<String, String> _headers(String token) => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $token',
+  };
 
   Future<http.Response> _guard(Future<http.Response> Function() send) async {
     try {
@@ -228,13 +384,18 @@ class CrewApi {
   Map<String, dynamic> _decode(http.Response res) {
     final Object? body;
     try {
-      body = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body);
+      body = res.body.isEmpty
+          ? const <String, dynamic>{}
+          : jsonDecode(res.body);
     } on FormatException {
       throw ApiException(res.statusCode, 'Something went wrong. Try again.');
     }
     final map = body is Map<String, dynamic> ? body : const <String, dynamic>{};
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, jStr(map['error']) ?? 'Request failed');
+      throw ApiException(
+        res.statusCode,
+        jStr(map['error']) ?? 'Request failed',
+      );
     }
     return map;
   }
@@ -253,30 +414,40 @@ class CrewApi {
     );
     if (res.statusCode == 304) return Conditional.notModified(etag: etag);
     final json = _decode(res);
-    final members = jMapList(json['crew']).map(PublicUser.fromJson)
-        .toList();
+    final members = jMapList(json['crew']).map(PublicUser.fromJson).toList();
     return Conditional(data: members, etag: res.headers['etag'], raw: json);
   }
 
   Future<CrewRequestPage> getRequestPage(String token) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$kNuvoApiBase/crew/requests'), headers: _headers(token)),
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase/crew/requests'),
+        headers: _headers(token),
+      ),
     );
     final json = _decode(res);
     List<PublicUser> users(String key) => (json[key] as List<dynamic>? ?? [])
-        .map((e) => PublicUser.fromJson(e as Map<String, dynamic>)).toList();
-    return CrewRequestPage(incoming: users('requests'), outgoing: users('outgoing'));
+        .map((e) => PublicUser.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return CrewRequestPage(
+      incoming: users('requests'),
+      outgoing: users('outgoing'),
+    );
   }
 
   Future<List<CrewSearchResult>> search(String token, String query) async {
-    final uri = Uri.parse('$kNuvoApiBase/users/search').replace(queryParameters: {'q': query});
+    final uri = Uri.parse(
+      '$kNuvoApiBase/users/search',
+    ).replace(queryParameters: {'q': query});
     final res = await _guard(() => _client.get(uri, headers: _headers(token)));
     final json = _decode(res);
     return (json['users'] as List<dynamic>? ?? []).map((value) {
       final user = value as Map<String, dynamic>;
       return CrewSearchResult(
         user: PublicUser.fromJson(user),
-        connectionStatus: crewConnectionStatusFrom(jStr(user['connectionStatus'])),
+        connectionStatus: crewConnectionStatusFrom(
+          jStr(user['connectionStatus']),
+        ),
         mutualCount: jInt(user['mutualCount']) ?? 0,
       );
     }).toList();
@@ -284,7 +455,10 @@ class CrewApi {
 
   Future<PublicProfileCard> getUser(String token, String userId) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$kNuvoApiBase/users/$userId'), headers: _headers(token)),
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase/users/$userId'),
+        headers: _headers(token),
+      ),
     );
     final json = _decode(res);
     return PublicProfileCard.fromJson(json['user'] as Map<String, dynamic>);
@@ -299,10 +473,16 @@ class CrewApi {
       ),
     );
     final json = _decode(res);
-    return json['status'] == 'pending' ? ConnectOutcome.pending : ConnectOutcome.active;
+    return json['status'] == 'pending'
+        ? ConnectOutcome.pending
+        : ConnectOutcome.active;
   }
 
-  Future<void> _postJson(String token, String path, Map<String, dynamic> body) async {
+  Future<void> _postJson(
+    String token,
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     final res = await _guard(
       () => _client.post(
         Uri.parse('$kNuvoApiBase$path'),
@@ -315,7 +495,10 @@ class CrewApi {
 
   Future<void> _delete(String token, String path) async {
     final res = await _guard(
-      () => _client.delete(Uri.parse('$kNuvoApiBase$path'), headers: _headers(token)),
+      () => _client.delete(
+        Uri.parse('$kNuvoApiBase$path'),
+        headers: _headers(token),
+      ),
     );
     _decode(res);
   }
@@ -326,8 +509,11 @@ class CrewApi {
   Future<void> reportRace(String token, String raceId, {String? reason}) =>
       _postJson(token, '/reports/races/$raceId', {'reason': ?reason});
 
-  Future<void> reportContent(String token, String contentId, {String? reason}) =>
-      _postJson(token, '/reports/content/$contentId', {'reason': ?reason});
+  Future<void> reportContent(
+    String token,
+    String contentId, {
+    String? reason,
+  }) => _postJson(token, '/reports/content/$contentId', {'reason': ?reason});
 
   Future<void> blockUser(String token, String userId) =>
       _postJson(token, '/reports/blocks/$userId', const {});
@@ -364,4 +550,57 @@ class CrewApi {
     );
     _decode(res);
   }
+
+  /// GET /users/:id/activity — another member's activity map. [shared] is
+  /// false when they turned the map off; 404/403 surfaces as [ApiException]
+  /// so the caller can hide the section.
+  Future<PublicUserActivity> getUserActivity(
+    String token,
+    String userId,
+  ) async {
+    final res = await _guard(
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase/users/$userId/activity'),
+        headers: _headers(token),
+      ),
+    );
+    final json = _decode(res);
+    final days = <String, int>{};
+    for (final d in jMapList(json['days'])) {
+      final date = jStr(d['date']);
+      if (date == null) continue;
+      days[date] = jInt(d['proofs']) ?? 0;
+    }
+    return PublicUserActivity(
+      shared: jBool(json['shared']) ?? true,
+      days: days,
+    );
+  }
+
+  Future<void> muteUser(String token, String userId) =>
+      _postJson(token, '/mutes/users/$userId', const {});
+
+  Future<void> unmuteUser(String token, String userId) =>
+      _delete(token, '/mutes/users/$userId');
+
+  /// GET /reports/blocks — the viewer's blocked accounts, for Settings.
+  Future<List<PublicUser>> getBlocked(String token) async {
+    final res = await _guard(
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase/reports/blocks'),
+        headers: _headers(token),
+      ),
+    );
+    final json = _decode(res);
+    return jMapList(json['blocked']).map(PublicUser.fromJson).toList();
+  }
+}
+
+/// Another member's activity-map payload — [days] is verified-proof count
+/// per date; [shared] false means the owner turned the map off.
+class PublicUserActivity {
+  const PublicUserActivity({required this.shared, required this.days});
+
+  final bool shared;
+  final Map<String, int> days;
 }
