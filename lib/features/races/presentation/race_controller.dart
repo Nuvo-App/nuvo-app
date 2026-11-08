@@ -21,7 +21,7 @@ import '../../arena/presentation/arena_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../profile/application/progression_controller.dart';
-import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/cache/cache_store.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/network/conditional.dart';
@@ -178,34 +178,60 @@ class RaceController extends StateNotifier<RaceState> {
   /// Product analytics — null leaves every emit site a no-op. Proof and
   /// attempt events ride these controller seams so the camera implementation
   /// files stay untouched; only sanitized codes ever leave the app.
-  final NuvoAnalytics? analytics;
+  final AnalyticsService? analytics;
 
   /// The just-submitted proof is `recentProofs.first` in every submit
-  /// response (the same read the camera result panel makes). A verified
-  /// verdict fires `proof_submitted`; a definitive failure fires
-  /// `proof_rejected` with the raw status as the reason code — pending and
-  /// under-review land as submitted-not-verified instead.
+  /// response (the same read the camera result panel makes). One
+  /// `proof_result` per landing — outcome is the canonical verdict mapping,
+  /// detected_value is bucketed, duration_s is the attempt window the
+  /// service clocked when the attempt opened. `race_completed` follows when
+  /// the submit closed the racer's race.
   void _emitProofOutcome(Race race) {
-    final status = race.recentProofs.firstOrNull?.verificationStatus;
-    switch (proofStatusFromRaw(status)) {
-      case ProofStatus.verified:
-        analytics?.proofSubmitted(format: race.format, verified: true);
-      case ProofStatus.notVerified:
-        analytics?.proofRejected(
-          reasonCode: (status == null || status.isEmpty) ? 'unknown' : status,
-        );
-      case ProofStatus.needsReview:
-      case ProofStatus.pending:
-      case ProofStatus.unknown:
-        analytics?.proofSubmitted(format: race.format, verified: false);
+    final a = analytics;
+    if (a == null) return;
+    final proof = race.recentProofs.firstOrNull;
+    final status = proof?.verificationStatus;
+    final outcome = switch (proofStatusFromRaw(status)) {
+      ProofStatus.verified => 'verified',
+      ProofStatus.needsReview => 'needs_review',
+      ProofStatus.pending => 'pending',
+      ProofStatus.notVerified => 'rejected',
+      ProofStatus.unknown => 'pending',
+    };
+    a.proofResult(
+      outcome: outcome,
+      failureReason: outcome == 'rejected'
+          ? ((status == null || status.isEmpty) ? 'unknown' : status)
+          : null,
+      detectedValue: proof?.detectedValue ?? race.submissionResult?.verifiedValue,
+      durationS: a.elapsedAttemptSeconds(),
+    );
+    if (race.submissionResult?.raceCompleted ?? false) {
+      a.raceCompleted();
     }
   }
 
   /// A submit that never landed — an HTTP status, or 'error' for anything
   /// else. Never the exception message: free text can carry user data.
-  void _emitProofFailure(Object e) => analytics?.proofRejected(
-    reasonCode: e is ApiException ? 'http_${e.statusCode}' : 'error',
-  );
+  void _emitProofFailure(Object e) {
+    analytics?.proofResult(
+      outcome: 'submit_failed',
+      failureReason: e is ApiException ? 'http_${e.statusCode}' : 'error',
+      durationS: analytics?.elapsedAttemptSeconds(),
+    );
+    if (e is ApiException) {
+      analytics?.apiError(route: 'submit_proof', status: e.statusCode);
+    }
+  }
+
+  void _emitJoinFailure(Object e) {
+    analytics?.raceJoinFailed(
+      reason: e is ApiException ? 'http_${e.statusCode}' : 'error',
+    );
+    if (e is ApiException) {
+      analytics?.apiError(route: 'join_race', status: e.statusCode);
+    }
+  }
 
   static bool _neverPresentationDemo() => false;
   static String _emptyPresentationUserId() => '';
@@ -1203,9 +1229,19 @@ class RaceController extends StateNotifier<RaceState> {
     }
   }
 
+  /// `race_joined`/`race_join_failed` fire here — the single seam every
+  /// join surface (code entry, open card, detail CTA, inbox accept) flows
+  /// through, so screens don't emit their own.
   Future<Race> joinRace(String id) async {
-    final race = await _repo.joinRace(id);
+    final Race race;
+    try {
+      race = await _repo.joinRace(id);
+    } catch (e) {
+      _emitJoinFailure(e);
+      rethrow;
+    }
     _upsertRace(race);
+    analytics?.raceJoined();
     return race;
   }
 
@@ -1321,8 +1357,15 @@ class RaceController extends StateNotifier<RaceState> {
   Future<String> createInviteCode(String id) => _repo.createInviteCode(id);
 
   Future<Race> joinRaceByCode(String code) async {
-    final race = await _repo.joinRaceByCode(code);
+    final Race race;
+    try {
+      race = await _repo.joinRaceByCode(code);
+    } catch (e) {
+      _emitJoinFailure(e);
+      rethrow;
+    }
     _upsertRace(race);
+    analytics?.raceJoined();
     return race;
   }
 
@@ -1340,7 +1383,7 @@ class RaceController extends StateNotifier<RaceState> {
   /// returned `serverTime`/`deadlineAt` are authoritative for the attempt
   /// window — the next verified proof binds to this attempt automatically.
   ///
-  /// This is also the `attempt_started` seam: the camera screen calls it when
+  /// This is also the `race_started` seam: the camera screen calls it when
   /// the racer taps start, while `_ensureOpenAttempt` binds silently through
   /// the repo and never counts as a user-visible start.
   Future<RaceAttemptResult> startAttempt(
@@ -1351,7 +1394,7 @@ class RaceController extends StateNotifier<RaceState> {
       raceId,
       clientAttemptId: clientAttemptId,
     );
-    analytics?.attemptStarted();
+    analytics?.raceStarted();
     return result;
   }
 
@@ -1359,7 +1402,7 @@ class RaceController extends StateNotifier<RaceState> {
   /// cancels instead of spending the attempt limit.
   Future<void> cancelAttempt(String raceId, String attemptId) async {
     await _repo.cancelAttempt(raceId, attemptId);
-    analytics?.attemptCancelled();
+    analytics?.raceAbandoned();
   }
 
   /// Clone a finished race's settings + roster into a fresh race — the

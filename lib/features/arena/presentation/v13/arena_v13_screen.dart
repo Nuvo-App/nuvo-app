@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:nuvo/core/analytics/analytics_service.dart';
 import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/notifications/application/notification_controller.dart';
@@ -50,6 +51,14 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
     // Same self-kick the shell gives tabs — keeps the screen live when it's
     // mounted as a plain pushed route (and inside tests). Every revalidate
     // is a no-op while the cached payload is inside its stale window.
+    final openedAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(analyticsProvider).screen(
+        'arena',
+        ms: DateTime.now().difference(openedAt).inMilliseconds,
+      );
+    });
     Future(() {
       ref.read(raceControllerProvider.notifier).revalidate();
       ref.read(arenaControllerProvider.notifier).revalidate();

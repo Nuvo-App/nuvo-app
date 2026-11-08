@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/analytics/analytics.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/navigation/nuvo_navigation.dart';
 import '../../../../core/utils/friendly_error.dart';
 import '../../../../core/v13/v13.dart';
@@ -64,6 +64,14 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         AppLifecycleState.resumed;
     _load();
     _scheduleNext();
+    final openedAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(analyticsProvider).screen(
+        'race_detail',
+        ms: DateTime.now().difference(openedAt).inMilliseconds,
+      );
+    });
   }
 
   @override
@@ -129,7 +137,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
       );
       if (mounted) {
         setState(() => _race = race);
-        _maybeEmitFinishedView(race);
       }
     } catch (_) {
       _backoff.recordResult(changed: false);
@@ -139,7 +146,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
   }
 
   bool _proofOpened = false;
-  bool _finishedViewEmitted = false;
 
   void _maybeOpenProof() {
     if (!widget.openProofOnLoad || _proofOpened) return;
@@ -151,27 +157,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) openSubmitProof(context, ref, race);
     });
-  }
-
-  /// `race_finished_viewed` — once per screen, the first time the race
-  /// resolves completed with final standings (initial load or a live
-  /// refresh that crosses the finish). [place] is the viewer's final rank;
-  /// 0 when they aren't on the board.
-  void _maybeEmitFinishedView(Race race) {
-    if (_finishedViewEmitted ||
-        !raceIsCompleted(race) ||
-        race.finalStandings.isEmpty) {
-      return;
-    }
-    _finishedViewEmitted = true;
-    final uid = ref.read(authControllerProvider).user?.id;
-    final place =
-        race.finalStandings
-            .where((s) => s.userId == uid)
-            .firstOrNull
-            ?.rank ??
-        0;
-    ref.read(analyticsProvider).raceFinishedViewed(place: place);
   }
 
   Future<void> _load() async {
@@ -186,7 +171,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
         _loading = false;
       });
       _maybeOpenProof();
-      _maybeEmitFinishedView(cached);
       _silentRefresh();
       return;
     }
@@ -204,7 +188,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
           _loading = false;
         });
         _maybeOpenProof();
-        _maybeEmitFinishedView(race);
       }
     } catch (_) {
       if (mounted) {
@@ -229,7 +212,6 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
       final joined = await ref
           .read(raceControllerProvider.notifier)
           .joinRace(_race!.id);
-      ref.read(analyticsProvider).raceJoined(via: 'open');
       if (!mounted) return;
       setState(() {
         _race = joined;

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/v13/v13.dart';
 import '../../onboarding/data/first_use_store.dart';
 import '../data/race_models.dart';
@@ -67,7 +67,9 @@ Future<void> openAiMotionProof(
   // The one funnel entry for camera proofs — fires exactly once, no matter
   // which surface called openAiMotionProof. The verifier screen itself is
   // untouched; its submit/attempt events ride the race controller seams.
-  ref.read(analyticsProvider).proofStarted(method: 'camera');
+  ref
+      .read(analyticsProvider)
+      .proofStarted(activityId: race.activityId ?? 'unknown');
   await context.push('/race/${race.id}/proof/ai-motion');
 }
 

@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
@@ -216,10 +216,33 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
   }
 
   /// Onboarding funnel — one step per story page so drop-off lands on the
-  /// exact page. The rebuild planned elsewhere moves these named helpers
-  /// with the screens; step ids stay 'story_p<index>'.
-  void _trackStepViewed(int page) =>
-      ref.read(analyticsProvider).onboardingStepViewed('story_p$page');
+  /// exact page (story steps are indices 2..9, named 'story_p<index>').
+  /// The rebuild planned elsewhere moves these named helpers with the
+  /// screens.
+  DateTime? _pageEnteredAt;
+
+  void _trackStepViewed(int page) {
+    _pageEnteredAt = DateTime.now();
+    ref
+        .read(analyticsProvider)
+        .onboardingStepViewed(
+          stepIndex: 2 + page,
+          stepName: 'story_p$page',
+        );
+  }
+
+  void _trackStepCompleted(int page) {
+    final entered = _pageEnteredAt;
+    ref
+        .read(analyticsProvider)
+        .onboardingStepCompleted(
+          stepIndex: 2 + page,
+          stepName: 'story_p$page',
+          msOnStep: entered == null
+              ? null
+              : DateTime.now().difference(entered).inMilliseconds,
+        );
+  }
 
   @override
   void dispose() {
@@ -245,7 +268,10 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
   void _skip() {
     ref
         .read(analyticsProvider)
-        .onboardingSkipped(step: 'story_p$_page');
+        .onboardingAbandoned(
+          stepIndex: 2 + _page,
+          stepName: 'story_p$_page',
+        );
     _goToPage(_lastPage);
   }
 
@@ -308,6 +334,7 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
     });
     try {
       await ref.read(authControllerProvider.notifier).completeOnboarding();
+      _trackStepCompleted(_page);
       // The server flag is flipped — the onboarding funnel is complete even
       // if the notification step after this never resolves.
       ref.read(analyticsProvider).onboardingCompleted();
@@ -385,6 +412,7 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
                             child: PageView(
                               controller: _pageController,
                               onPageChanged: (page) {
+                                _trackStepCompleted(_page);
                                 setState(() => _page = page);
                                 _trackStepViewed(page);
                               },

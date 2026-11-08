@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/analytics/analytics.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/v13/v13.dart';
 import '../../../crew/application/crew_controller.dart';
 import '../../../races/data/race_models.dart';
@@ -55,8 +55,13 @@ class _ActivityV13ScreenState extends ConsumerState<ActivityV13Screen> {
   void initState() {
     super.initState();
     _scroll.addListener(_maybeLoadMore);
+    final openedAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      ref.read(analyticsProvider).screen(
+        'activity',
+        ms: DateTime.now().difference(openedAt).inMilliseconds,
+      );
       ref.read(notificationControllerProvider.notifier).load(force: false);
       // If the inbox is already populated (re-open, warm cache), the state
       // listener below never fires for the current value — seed from it.
@@ -180,7 +185,6 @@ class _ActivityV13ScreenState extends ConsumerState<ActivityV13Screen> {
       final race = await ref
           .read(raceControllerProvider.notifier)
           .joinRace(dest.raceId);
-      ref.read(analyticsProvider).raceJoined(via: 'notification');
       _handled.add(n.id);
       if (!mounted) return;
       ref.read(notificationControllerProvider.notifier).markRead(n.id);

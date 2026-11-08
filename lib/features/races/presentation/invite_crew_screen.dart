@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/v13/v13.dart';
@@ -160,6 +161,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       final code = await ref
           .read(raceControllerProvider.notifier)
           .createInviteCode(widget.raceId);
+      ref.read(analyticsProvider).raceInviteSent();
       if (mounted) {
         setState(() {
           _inviteCode = code;

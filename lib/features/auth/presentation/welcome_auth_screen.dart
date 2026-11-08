@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/v13/v13.dart';
 import '../../../core/widgets/nuvo_bottom_fade.dart';
@@ -83,9 +83,16 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 
+  /// signup_failed counts only sign-up failures — a failed sign-in isn't a
+  /// failed sign-up, so the emit stays behind the mode check.
+  void _emitSignupFailed({required String reason}) {
+    if (_mode != _AuthMode.signup) return;
+    ref.read(analyticsProvider).signupFailed(reason: reason);
+  }
+
   Future<void> _signInWithGoogle() async {
     if (_mode == _AuthMode.signup) {
-      ref.read(analyticsProvider).signupStarted();
+      ref.read(analyticsProvider).signupStarted(method: 'google');
     }
     setState(() {
       _googleLoading = true;
@@ -95,12 +102,14 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
     try {
       final account = await _googleSignIn.signIn();
       if (account == null) {
+        _emitSignupFailed(reason: 'cancelled');
         if (mounted) setState(() => _googleLoading = false);
         return;
       }
       final auth = await account.authentication;
       final idToken = auth.idToken;
       if (idToken == null) {
+        _emitSignupFailed(reason: 'error');
         if (mounted) {
           setState(() {
             _googleError = 'Google sign-in failed. Please try again.';
@@ -111,6 +120,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
       }
       await ref.read(authControllerProvider.notifier).signInWithGoogle(idToken);
     } catch (e) {
+      _emitSignupFailed(reason: 'error');
       if (mounted) {
         setState(() {
           _googleError = isNetworkAuthError(e)
@@ -124,7 +134,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
 
   Future<void> _signInWithApple() async {
     if (_mode == _AuthMode.signup) {
-      ref.read(analyticsProvider).signupStarted();
+      ref.read(analyticsProvider).signupStarted(method: 'apple');
     }
     setState(() {
       _appleLoading = true;
@@ -164,6 +174,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
           );
     } catch (e) {
       debugPrint('[AppleSignIn] error: $e');
+      _emitSignupFailed(reason: 'error');
       if (mounted) {
         setState(() {
           _appleError = isNetworkAuthError(e)
@@ -260,7 +271,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                           : () {
                               ref
                                   .read(analyticsProvider)
-                                  .signupStarted();
+                                  .signupStarted(method: 'email');
                               context.push('/auth/email');
                             },
                     )

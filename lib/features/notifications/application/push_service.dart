@@ -7,7 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../arena/presentation/arena_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
@@ -119,9 +119,24 @@ class PushService {
     final granted =
         settings.authorizationStatus == AuthorizationStatus.authorized ||
             settings.authorizationStatus == AuthorizationStatus.provisional;
-    _ref.read(analyticsProvider).notificationPermission(granted: granted);
-    if (granted) unawaited(_sync.syncNow());
+    if (granted) {
+      unawaited(_reportedSync());
+    } else {
+      _ref.read(analyticsProvider).pushRegisterFailed(reason: 'denied');
+    }
     return granted;
+  }
+
+  /// `push_registered` when the token lands on the server,
+  /// `push_register_failed` when the sync reports a failure reason.
+  Future<void> _reportedSync() async {
+    await _sync.syncNow();
+    final a = _ref.read(analyticsProvider);
+    if (_sync.lastFailure == null) {
+      a.pushRegistered();
+    } else {
+      a.pushRegisterFailed(reason: 'error');
+    }
   }
 
   /// Re-sync the token after sign-in (a token minted while logged out isn't
@@ -201,6 +216,12 @@ class PushService {
     _invalidateFor(message.data);
     final dest = destinationFromPushData(message.data);
     if (dest == null) return;
+    // Notification open — the payload's destType enum ('race', 'crew', …),
+    // never the notification body.
+    final type = message.data['destType'];
+    _ref
+        .read(analyticsProvider)
+        .notifOpened(type: type is String ? type : 'unknown');
     // Push taps take the same canonical path as every other inbound link:
     // auth-aware, pending-destination stashed when logged out — never a raw
     // router.go (which skipped requiresAuth and could leak a stale account's

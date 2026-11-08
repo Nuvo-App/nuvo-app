@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../core/analytics/analytics.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/config/legal_links.dart';
 import '../../../../core/demo/presentation_demo.dart';
 import '../../../../core/v13/v13.dart';
@@ -90,6 +90,14 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
     _analyticsOn = ref.read(analyticsProvider).enabled;
     _loadNotifPrefs();
     _loadMotionConsent();
+    final openedAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(analyticsProvider).screen(
+        'settings',
+        ms: DateTime.now().difference(openedAt).inMilliseconds,
+      );
+    });
   }
 
   Future<void> _setAnalyticsEnabled(bool on) async {
@@ -665,7 +673,7 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
             ),
           if (_analyticsOn != null)
             V13ListRow(
-              title: 'Help improve Nuvo',
+              title: 'Help improve Nuvo (usage analytics)',
               subtitle: 'Share anonymous usage stats',
               leading: const V13IconTile(
                 icon: Icons.insights_rounded,

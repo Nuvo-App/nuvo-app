@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart' show ImageSource, XFile;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/legal_links.dart';
 import '../../../core/utils/photo_service.dart';
 import '../../../core/v13/v13.dart';
@@ -35,6 +35,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _usernameChecking = false;
   String? _error;
   Timer? _debounce;
+  DateTime? _stepOpenedAt;
 
   // Avatar pipeline state — four distinct things, never conflated:
   // the local selection preview, the saved remote URL (read from the user
@@ -53,7 +54,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _usernameController = TextEditingController(text: user?.username ?? '');
     _nameController.addListener(() => setState(() {}));
     _usernameController.addListener(_onUsernameChanged);
-    ref.read(analyticsProvider).onboardingStepViewed('profile');
+    // Step 0 of the funnel — the first onboarding surface, so it also owns
+    // onboarding_started. _stepOpenedAt clocks ms_on_step for completed.
+    _stepOpenedAt = DateTime.now();
+    ref.read(analyticsProvider).onboardingStarted();
+    ref
+        .read(analyticsProvider)
+        .onboardingStepViewed(stepIndex: 0, stepName: 'profile');
+  }
+
+  int? _msSinceStepOpened() {
+    final at = _stepOpenedAt;
+    return at == null ? null : DateTime.now().difference(at).inMilliseconds;
   }
 
   /// The real reason a username can't be used, or null when the format is
@@ -285,6 +297,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         fullName: _nameController.text.trim(),
         username: _usernameController.text.trim().toLowerCase(),
       );
+      ref
+          .read(analyticsProvider)
+          .onboardingStepCompleted(
+            stepIndex: 0,
+            stepName: 'profile',
+            msOnStep: _msSinceStepOpened(),
+          );
       if (mounted) context.go('/onboarding/motion-consent');
     } catch (e) {
       if (mounted) {

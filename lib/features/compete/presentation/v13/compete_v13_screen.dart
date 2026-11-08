@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/analytics/analytics.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/v13/v13.dart';
 import '../../../races/data/race_models.dart';
 import '../../../races/domain/chase_context.dart';
@@ -98,8 +98,13 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
     // first run to /compete) where "New race" is the obvious next step, so
     // any composer-era guide step is retired — persisted per account, which
     // also lets later launches open on Arena.
+    final openedAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      ref.read(analyticsProvider).screen(
+        'compete',
+        ms: DateTime.now().difference(openedAt).inMilliseconds,
+      );
       final step = ref.read(firstRaceGuideProvider);
       const retired = {
         FirstRaceGuideStep.competeStart,
@@ -141,7 +146,6 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
     });
     try {
       await ref.read(raceControllerProvider.notifier).joinRace(race.id);
-      ref.read(analyticsProvider).raceJoined(via: 'open');
       if (!mounted) return;
       setState(() => _joinedIds.add(race.id));
       showV13Confetti(context);

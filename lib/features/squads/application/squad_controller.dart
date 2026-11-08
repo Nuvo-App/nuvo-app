@@ -13,7 +13,6 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/analytics/analytics.dart';
 import '../../../core/cache/cache_store.dart';
 import '../../auth/data/auth_api.dart' show ApiException;
 import '../../auth/presentation/auth_controller.dart';
@@ -79,7 +78,6 @@ class SquadController extends StateNotifier<SquadState> {
     this._repo,
     this._store, {
     required this.accountId,
-    this.analytics,
   }) : super(const SquadState());
 
   final SquadRepository _repo;
@@ -87,10 +85,6 @@ class SquadController extends StateNotifier<SquadState> {
 
   /// Current account id, or null when signed out.
   final String? Function() accountId;
-
-  /// Product analytics — `crew_joined` on a successful code join. Invite
-  /// links fire their own event at the accept seam, so they don't land here.
-  final NuvoAnalytics? analytics;
 
   static const _cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
@@ -398,7 +392,6 @@ class SquadController extends StateNotifier<SquadState> {
   /// crew's running races, so my races are reloaded too.
   Future<void> join(String code) async {
     await _repo.join(code);
-    analytics?.crewJoined();
     _invalidateList();
     for (final id in state.details.keys) {
       _invalidateDetail(id);
@@ -534,7 +527,6 @@ final squadControllerProvider =
         ref.watch(squadRepositoryProvider),
         ref.watch(cacheStoreProvider),
         accountId: () => ref.read(authControllerProvider).user?.id,
-        analytics: ref.read(analyticsProvider),
       );
       ref.listen<AuthState>(authControllerProvider, (prev, next) {
         final was = prev?.user?.id;
