@@ -21,6 +21,7 @@
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 import 'race_draft.dart';
+import 'race_mode_semantics.dart';
 
 /// What kind of proof an interpreted race name needs. This is a *need*, not
 /// a verifier: the capability layer decides downstream whether automatic
@@ -1125,13 +1126,24 @@ RaceDraft mergeRaceNameInterpretation(
   final edited = current.userEditedFields;
   T? guard<T>(RaceField field, T? inferred) =>
       edited.contains(field) ? null : inferred;
+  // Interpreted manual goals have no camera attempts to score, so an
+  // attempt format clamps to the deadline-driven Most total — the
+  // interpreted finish line is preserved either way.
+  final kind = edited.contains(RaceField.goalKind)
+      ? current.goalKind
+      : i.goalKind;
+  var format = guard(RaceField.format, i.format);
+  if (kind == RaceGoalKind.manual &&
+      (format ?? current.format).isAttemptBased) {
+    format = RaceFormat.mostInWindow;
+  }
   return current.copyWith(
     title: i.input,
     hasCustomName: true,
     goalKind: guard(RaceField.goalKind, i.goalKind),
     activity: guard(RaceField.activity, i.activity),
     metric: i.metric,
-    format: guard(RaceField.format, i.format),
+    format: format,
     targetValue: guard(RaceField.target, i.targetValue),
     attemptDurationSeconds: guard(RaceField.timing, i.attemptDurationSeconds),
     finishLineAt: guard(

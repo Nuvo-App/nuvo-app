@@ -351,9 +351,7 @@ void main() {
       metric: RaceMetric.reps,
       format: format,
       targetValue: 50,
-      finishLineAt: format == RaceFormat.mostInWindow
-          ? '2026-10-07T00:00:00Z'
-          : null,
+      finishLineAt: format.usesDeadline ? '2026-10-07T00:00:00Z' : null,
       attemptDurationSeconds:
           format == RaceFormat.timedAttempt ? 60 : null,
     );

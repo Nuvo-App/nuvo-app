@@ -145,9 +145,7 @@ class RaceDraft {
     // a window / attempt race has nothing to reach.
     final needsTarget = format.usesScoreTarget || isManual;
     if (needsTarget && targetValue <= 0) return false;
-    if (format == RaceFormat.mostInWindow && (finishLineAt ?? '').isEmpty) {
-      return false;
-    }
+    if (format.usesDeadline && (finishLineAt ?? '').isEmpty) return false;
     if (format == RaceFormat.timedAttempt &&
         (attemptDurationSeconds ?? 0) <= 0) {
       return false;
@@ -205,7 +203,9 @@ class RaceDraft {
             ? 'Lowest score wins — every verified attempt counts.'
             : 'Best single attempt wins — every verified score counts.',
       RaceFormat.timedAttempt =>
-        'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your best single attempt counts.',
+        lowerWins
+            ? 'Least $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your lowest single attempt counts.'
+            : 'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} — your best single attempt counts.',
       // "First to 20 verified jumping jacks wins." — the bare figure for
       // reps, the spoken duration for timed goals.
       _ => 'First to $_winValueText verified $name wins.',
@@ -242,6 +242,7 @@ class RaceDraft {
     String? scoreDirection,
     bool clearTiming = false,
     bool clearAttemptFields = false,
+    bool clearAttemptLimit = false,
     bool clearCustom = false,
     bool clearClarification = false,
     Set<RaceField>? markEdited,
@@ -275,7 +276,7 @@ class RaceDraft {
       attemptDurationSeconds: clearTiming || clearAttemptFields
           ? null
           : attemptDurationSeconds ?? this.attemptDurationSeconds,
-      attemptLimit: clearTiming || clearAttemptFields
+      attemptLimit: clearTiming || clearAttemptFields || clearAttemptLimit
           ? null
           : attemptLimit ?? this.attemptLimit,
       scoreDirection: scoreDirection ?? this.scoreDirection,
@@ -333,25 +334,28 @@ class RaceDraft {
       'activityId': activity.activityId,
       'metric': metric.backendValue,
       'format': format.backendValue,
-      'recurrence': recurrence.backendValue,
       'proofRequirement': 'ai_check',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'aiActivityType': activity.activityId,
-      if (lowerWins) 'scoreDirection': 'lower',
+      // Direction is an attempt-format rule only — a first-to or cumulative
+      // race must not carry a stale interpreted 'lower' onto the wire.
+      if (format.isAttemptBased && lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
   }
 
   /// Finish-line / attempt fields shared by camera and manual payloads —
-  /// omitted entirely when unset so first-to-goal races stay byte-identical
-  /// to the pre-V2 contract.
+  /// emitted only when set so a race with no finish line stays
+  /// byte-identical to the pre-V2 contract even on a stale draft. A
+  /// finish line is optional on first-to-goal and required elsewhere.
   Map<String, dynamic> _timingPayload() => {
     if (finishLineAt != null && finishLineAt!.isNotEmpty)
       'finishLineAt': finishLineAt,
-    if (attemptDurationSeconds != null)
+    if (format.usesAttemptDuration && attemptDurationSeconds != null)
       'attemptDurationSeconds': attemptDurationSeconds,
-    if (attemptLimit != null) 'attemptLimit': attemptLimit,
+    if (format.isAttemptBased && attemptLimit != null)
+      'attemptLimit': attemptLimit,
   };
 
   Map<String, dynamic> _manualCreatePayload() {
@@ -367,13 +371,12 @@ class RaceDraft {
       'targetUnit': unit,
       'metric': 'reps',
       'format': format.backendValue,
-      'recurrence': recurrence.backendValue,
       // Proof contract: Nuvo is evidence-based — anything the camera can't
       // verify automatically requires a photo on every submission.
       'proofRequirement': 'photo_video',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'photo',
-      if (lowerWins) 'scoreDirection': 'lower',
+      if (format.isAttemptBased && lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
   }
@@ -385,12 +388,16 @@ RaceDraft? draftFromIdea(String idea) {
   final activity = i.activity;
   if (activity == null) {
     // Custom subject — the typed name is the race name; goal is honor-logged.
+    // Manual goals have no camera attempts, so an attempt format clamps to
+    // Most total; the interpreted finish line rides along unchanged.
     return RaceDraft(
       title: i.input,
       hasCustomName: true,
       activity: motionActivityDefinitions.first,
       metric: i.metric,
-      format: i.format,
+      format: i.format.isAttemptBased
+          ? RaceFormat.mostInWindow
+          : i.format,
       targetValue: i.targetValue,
       recurrence: i.recurrence,
       goalKind: RaceGoalKind.manual,
