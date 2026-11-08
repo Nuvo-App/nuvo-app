@@ -26,6 +26,7 @@ import { progressionRouter } from './routes/progression';
 import { crewRouter } from './routes/crew';
 import { squadsRouter } from './routes/squads';
 import { reportsRouter } from './routes/reports';
+import { mutesRouter } from './routes/mutes';
 import { invitesRouter } from './routes/invites';
 import { notificationsRouter } from './routes/notifications';
 import { reactionsRouter } from './routes/reactions';
@@ -399,6 +400,7 @@ app.route('/devices', devicesRouter);
 
 // ── Reporting and safety routes ───────────────────────────────────────────────
 app.route('/reports', reportsRouter);
+app.route('/mutes', mutesRouter);
 
 // ── Race routes ───────────────────────────────────────────────────────────────
 app.route('/races', racesRouter);

@@ -59,6 +59,12 @@ export interface ProfileRow {
   is_demo: number;
   created_at: string;
   updated_at: string;
+  // v13 (migration 0048) — optional because SELECT * on a pre-0048 schema
+  // simply doesn't return them.
+  bio?: string | null;
+  favorite_movement_key?: string | null;
+  activity_map_shared?: number;
+  race_invites_from?: string;
 }
 
 export interface PassRow {
@@ -217,6 +223,14 @@ export interface BlockedUserRow {
   id: string;
   user_id: string;
   blocked_user_id: string;
+  created_at: string;
+}
+
+export interface UserMuteRow {
+  id: string;
+  user_id: string;
+  target_type: 'user' | 'crew';
+  target_id: string;
   created_at: string;
 }
 

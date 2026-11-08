@@ -7,6 +7,7 @@ import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked } from '../lib/privacy';
 import { ensureMember, ensureProgress, getProfileName, getRace, recomputeRanks } from '../domain/raceMembership';
+import { raceInviteAllowed } from '../domain/profilePrefs';
 import { effectiveTargetValue } from '../domain/raceTarget';
 import { notifyEvent } from '../domain/notificationPolicy';
 import { bestEffort } from '../lib/safe';
@@ -132,6 +133,11 @@ async function addToRace(
   const db = c.env.DB;
   if (userId !== race.creator_id) {
     if ((await isBlocked(db, userId, race.creator_id)) || (await isBlocked(db, race.creator_id, userId))) {
+      return false;
+    }
+    // "Who can race me": a member who only races friends isn't pulled into
+    // a crew race by a non-friend — same silent-skip as a block.
+    if (!(await raceInviteAllowed(db, race.creator_id, userId))) {
       return false;
     }
   }

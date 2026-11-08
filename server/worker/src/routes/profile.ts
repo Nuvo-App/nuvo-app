@@ -4,6 +4,7 @@ import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
 import { normalizeUsername, isValidUsername } from '../lib/validation';
 import { hasAcceptedTerms } from '../lib/terms';
+import { prefsFromRow } from '../domain/profilePrefs';
 import {
   awsEncode,
   encodeKeyPath,
@@ -15,6 +16,27 @@ import {
 export const profileRouter = new Hono<AppEnv>();
 
 const PROFILE_IMAGE_KEY_PREFIXES = ['profile-photos/', 'profile-avatars/'];
+const BIO_MAX_LENGTH = 80;
+const FAVORITE_MOVEMENT_MAX_LENGTH = 40;
+const RACE_INVITES_FROM_VALUES = new Set(['everyone', 'friends']);
+
+/** The profile payload shape shared by GET /me and POST /. New 0048 fields
+ *  read through prefsFromRow, so a pre-0048 row still serializes. */
+function serializeProfile(profile: ProfileRow | null | undefined) {
+  const prefs = prefsFromRow(profile);
+  return {
+    fullName: profile?.full_name ?? null,
+    username: profile?.username ?? null,
+    profilePhotoUrl: profile?.avatar_url ?? null,
+    avatarUrl: profile?.avatar_url ?? null,
+    privateProfile: false, // legacy key for older app builds; there are no private profiles
+    onboardingComplete: Boolean(profile?.onboarding_complete),
+    bio: prefs.bio,
+    favoriteMovementKey: prefs.favoriteMovementKey,
+    activityMapShared: prefs.activityMapShared,
+    raceInvitesFrom: prefs.raceInvitesFrom,
+  };
+}
 
 profileRouter.put('/photo/upload', async (c) => {
   const token = c.req.query('token');
@@ -117,14 +139,7 @@ profileRouter.get('/me', async (c) => {
     return c.json({ ok: false, error: 'Profile not found' }, 404);
   }
 
-  return c.json({
-    fullName: profile.full_name,
-    username: profile.username,
-    profilePhotoUrl: profile.avatar_url,
-    avatarUrl: profile.avatar_url,
-    privateProfile: false, // legacy key for older app builds; there are no private profiles
-    onboardingComplete: Boolean(profile.onboarding_complete),
-  });
+  return c.json(serializeProfile(profile));
 });
 
 // POST /profile/photo/upload-url
@@ -217,6 +232,10 @@ profileRouter.post('/', async (c) => {
     privateProfile?: unknown; // legacy field from older builds; ignored
     profilePhotoUrl?: unknown;
     avatarUrl?: unknown;
+    bio?: unknown;
+    favoriteMovementKey?: unknown;
+    activityMapShared?: unknown;
+    raceInvitesFrom?: unknown;
   };
   try {
     body = await c.req.json();
@@ -228,7 +247,9 @@ profileRouter.post('/', async (c) => {
     typeof body.fullName === 'string' ||
     typeof body.username === 'string' ||
     body.profilePhotoUrl !== undefined ||
-    body.avatarUrl !== undefined;
+    body.avatarUrl !== undefined ||
+    body.bio !== undefined ||
+    body.favoriteMovementKey !== undefined;
 
   if (isPersonalUpdate && !(await hasAcceptedTerms(c.env.DB, userId))) {
     return c.json({ ok: false, error: 'You must accept the Terms of Service before creating a profile' }, 403);
@@ -298,6 +319,54 @@ profileRouter.post('/', async (c) => {
     bindings.push(newKey);
   }
 
+  // v13 fields (migration 0048). Each is only written when the client sends
+  // it, so older builds and un-migrated schemas keep the old behavior.
+  if (body.bio !== undefined) {
+    if (body.bio !== null && typeof body.bio !== 'string') {
+      return c.json({ ok: false, error: 'bio must be a string' }, 400);
+    }
+    const bio = typeof body.bio === 'string' ? body.bio.trim() : null;
+    if (bio !== null && bio.length > BIO_MAX_LENGTH) {
+      return c.json({ ok: false, error: `Bio too long (max ${BIO_MAX_LENGTH} characters)` }, 400);
+    }
+    fields.push('bio = ?');
+    bindings.push(bio);
+  }
+
+  if (body.favoriteMovementKey !== undefined) {
+    if (body.favoriteMovementKey !== null && typeof body.favoriteMovementKey !== 'string') {
+      return c.json({ ok: false, error: 'favoriteMovementKey must be a string' }, 400);
+    }
+    const key =
+      typeof body.favoriteMovementKey === 'string' && body.favoriteMovementKey.trim()
+        ? body.favoriteMovementKey.trim()
+        : null;
+    if (key !== null && key.length > FAVORITE_MOVEMENT_MAX_LENGTH) {
+      return c.json(
+        { ok: false, error: `favoriteMovementKey too long (max ${FAVORITE_MOVEMENT_MAX_LENGTH} characters)` },
+        400,
+      );
+    }
+    fields.push('favorite_movement_key = ?');
+    bindings.push(key);
+  }
+
+  if (body.activityMapShared !== undefined) {
+    if (typeof body.activityMapShared !== 'boolean') {
+      return c.json({ ok: false, error: 'activityMapShared must be a boolean' }, 400);
+    }
+    fields.push('activity_map_shared = ?');
+    bindings.push(body.activityMapShared ? 1 : 0);
+  }
+
+  if (body.raceInvitesFrom !== undefined) {
+    if (typeof body.raceInvitesFrom !== 'string' || !RACE_INVITES_FROM_VALUES.has(body.raceInvitesFrom)) {
+      return c.json({ ok: false, error: "raceInvitesFrom must be 'everyone' or 'friends'" }, 400);
+    }
+    fields.push('race_invites_from = ?');
+    bindings.push(body.raceInvitesFrom);
+  }
+
   if (fields.length === 1 && body.privateProfile === undefined) {
     // Only the timestamp update — nothing else to change
     return c.json({ ok: false, error: 'No updatable fields provided' }, 400);
@@ -317,14 +386,7 @@ profileRouter.post('/', async (c) => {
     .bind(userId)
     .first<ProfileRow>();
 
-  return c.json({
-    fullName: profile?.full_name ?? null,
-    username: profile?.username ?? null,
-    profilePhotoUrl: profile?.avatar_url ?? null,
-    avatarUrl: profile?.avatar_url ?? null,
-    privateProfile: false,
-    onboardingComplete: Boolean(profile?.onboarding_complete),
-  });
+  return c.json(serializeProfile(profile));
 });
 
 // POST /profile/username/check
