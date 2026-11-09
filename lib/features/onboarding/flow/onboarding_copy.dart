@@ -182,6 +182,7 @@ abstract final class ObCopy {
   static const String levelUpBadgeTile = 'Day One';
   static const String levelUpStreakTile = '1 day streak started';
   static const String levelUpCta = 'Enter the Arena';
+  static const String levelUpTagline = 'You are in. Time to race.';
   static const String levelUpShare = 'Share my level';
   static const String levelUpShareLine = 'Join me on Nuvo';
 

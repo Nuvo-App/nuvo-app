@@ -56,7 +56,6 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
   int _tilesFired = 0;
   bool _started = false;
 
-
   @override
   void initState() {
     super.initState();
@@ -222,6 +221,7 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
       NuvoMotion.springDuration,
       NuvoMotion.spring,
     );
+    final tilesDone = ctaT.clamp(0.0, 1.0);
     final ctaReady = _timeline.value >= 1;
     final name = user?.fullName ?? user?.username ?? 'You';
 
@@ -247,75 +247,78 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                     opacity: avatarT,
                     child: Transform.translate(
                       offset: Offset(0, (1 - avatarT) * 140),
-                      child: SizedBox(
-                        width: 188,
-                        height: 188,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            if (shockT > 0 && shockT < 1)
-                              Opacity(
-                                opacity: 1 - shockT,
-                                child: Transform.scale(
-                                  scale:
-                                      1 +
-                                      (NuvoMotion.levelUpShockwaveScale - 1) *
-                                          shockT,
-                                  child: Container(
-                                    width: 172,
-                                    height: 172,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: V13.white,
-                                        width: V13.outlineThick,
+                      child: Transform.scale(
+                        scale: size.height >= 780 ? 1.25 : 1,
+                        child: SizedBox(
+                          width: 188,
+                          height: 188,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            clipBehavior: Clip.none,
+                            children: [
+                              if (shockT > 0 && shockT < 1)
+                                Opacity(
+                                  opacity: 1 - shockT,
+                                  child: Transform.scale(
+                                    scale:
+                                        1 +
+                                        (NuvoMotion.levelUpShockwaveScale - 1) *
+                                            shockT,
+                                    child: Container(
+                                      width: 172,
+                                      height: 172,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: V13.white,
+                                          width: V13.outlineThick,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            CustomPaint(
-                              size: const Size.square(172),
-                              painter: _RingPainter(
-                                value: ringValue,
-                                flash: _flashed && shockT < 1,
-                              ),
-                            ),
-                            // No photo → big initials, never a blank disc.
-                            if ((user?.profilePhotoUrl ?? '').isNotEmpty)
-                              V13Face(
-                                photoUrl: user?.profilePhotoUrl,
-                                size: 140,
-                                name: name,
-                              )
-                            else
-                              Container(
-                                width: 140,
-                                height: 140,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: V13.navy,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: V13.white,
-                                    width: V13.outlineThick,
-                                  ),
-                                ),
-                                child: Text(
-                                  _initials(name),
-                                  style: V13.hugeNumber.copyWith(
-                                    fontSize: 52,
-                                    color: V13.white,
-                                  ),
+                              CustomPaint(
+                                size: const Size.square(172),
+                                painter: _RingPainter(
+                                  value: ringValue,
+                                  flash: _flashed && shockT < 1,
                                 ),
                               ),
-                          ],
+                              // No photo → big initials, never a blank disc.
+                              if ((user?.profilePhotoUrl ?? '').isNotEmpty)
+                                V13Face(
+                                  photoUrl: user?.profilePhotoUrl,
+                                  size: 140,
+                                  name: name,
+                                )
+                              else
+                                Container(
+                                  width: 140,
+                                  height: 140,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: V13.navy,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: V13.white,
+                                      width: V13.outlineThick,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _initials(name),
+                                    style: V13.hugeNumber.copyWith(
+                                      fontSize: 52,
+                                      color: V13.white,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: V13.gapXl),
+                  SizedBox(height: size.height >= 780 ? 48 : V13.gapXl),
                   Opacity(
                     opacity: avatarT,
                     child: NuvoNumberFlow(
@@ -357,6 +360,15 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                     ),
                   ),
                   const Spacer(),
+                  Opacity(
+                    opacity: tilesDone,
+                    child: Text(
+                      ObCopy.levelUpTagline,
+                      textAlign: TextAlign.center,
+                      style: V13.body.copyWith(color: V13.white),
+                    ),
+                  ),
+                  const SizedBox(height: V13.gapLg),
                   Opacity(
                     opacity: ctaT,
                     child: Transform.translate(
@@ -515,6 +527,9 @@ class _RewardTile extends StatelessWidget {
       child: Transform.translate(
         offset: Offset(0, (1 - t) * 48),
         child: Container(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.sizeOf(context).height >= 780 ? 132 : 0,
+          ),
           padding: const EdgeInsets.symmetric(
             vertical: V13.gapMd,
             horizontal: V13.gapSm,
@@ -528,14 +543,14 @@ class _RewardTile extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: V13.blue, size: 28),
-              const SizedBox(height: V13.gapXs),
+              Icon(icon, color: V13.blue, size: 32),
+              const SizedBox(height: V13.gapSm),
               Text(
                 label,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: V13.bodyStrong.copyWith(fontSize: 12),
+                style: V13.bodyStrong.copyWith(fontSize: 13),
               ),
             ],
           ),

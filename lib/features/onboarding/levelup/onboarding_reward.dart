@@ -68,9 +68,8 @@ class OnboardingReward {
   String get xpTile => '+$xp XP';
   String get levelFromLabel => 'LEVEL $fromLevel';
   String get levelToLabel => 'LEVEL $toLevel';
-  String get streakTile => streakDays <= 1
-      ? ObCopy.levelUpStreakTile
-      : '$streakDays day streak';
+  String get streakTile =>
+      streakDays <= 1 ? ObCopy.levelUpStreakTile : '$streakDays day streak';
 }
 
 /// Calls the idempotent grant. The server write that flips the onboarding
