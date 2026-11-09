@@ -48,6 +48,10 @@ abstract final class ObCopy {
   static const String emailSub =
       'We send a 6 digit code. No password to remember.';
   static const String emailCta = 'Send code';
+  static const String reviewerSignInCta = 'Sign in';
+  static const String reviewerPasswordLabel = 'Password';
+  static const String reviewerSignInFailed =
+      'That password did not match. Try again.';
   static const String emailSending = 'Sending...';
   static const String emailDisabledHint = 'Enter your email';
   static const String emailFieldLabel = 'Email';

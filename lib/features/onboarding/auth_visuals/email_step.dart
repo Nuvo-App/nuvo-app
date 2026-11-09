@@ -10,6 +10,7 @@ import '../flow/onboarding_copy.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
 import '../shell/onboarding_shell.dart';
+import '../shell/onboarding_shell_controller.dart';
 import 'email_utils.dart';
 import 'player_pass.dart';
 
@@ -27,6 +28,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
   late final TextEditingController _ctrl = TextEditingController(
     text: ref.read(onboardingFlowProvider).email ?? '',
   );
+  final _pw = TextEditingController();
   final _focus = FocusNode();
   bool _sending = false;
   bool _wasValid = false;
@@ -34,16 +36,23 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
 
   bool get _valid => ObEmail.isValid(_ctrl.text);
 
+  // The store-review credential signs in with a password through
+  // /auth/reviewer (same call as the v1 email screen), never an inbox code.
+  bool get _reviewer =>
+      isNuvoStoreDemoEmail(ObEmail.normalize(_ctrl.text));
+
   @override
   void initState() {
     super.initState();
     _wasValid = _valid;
     _ctrl.addListener(_onChanged);
+    _pw.addListener(() => setState(() => _error = null));
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _pw.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -64,8 +73,42 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     );
   }
 
+  Future<void> _reviewerSignIn() async {
+    if (_sending || _pw.text.isEmpty) return;
+    final email = ObEmail.normalize(_ctrl.text);
+    final auth = ref.read(authControllerProvider.notifier);
+    final flow = ref.read(onboardingFlowProvider.notifier);
+    final shell = OnboardingShellScope.of(context);
+    final intent = ref.read(authIntentProvider);
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await auth.signInReviewer(email, _pw.text, intent: intent);
+    } catch (e) {
+      debugPrint('[ObEmail] reviewer sign-in failed (${e.runtimeType})');
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = isNetworkAuthError(e)
+            ? ObCopy.authOffline
+            : ObCopy.reviewerSignInFailed;
+      });
+      return;
+    }
+    // Signed in: settle the account, then complete code (+XP) and email.
+    final signedIn = ref.read(authControllerProvider).user?.email;
+    if (signedIn != null) await flow.attachAccount(signedIn);
+    final awarded = await flow.completeStep(OnboardingStep.code);
+    await flow.completeStep(OnboardingStep.email);
+    if (awarded > 0) shell.award(awarded);
+  }
+
   Future<void> _send() async {
     if (!_valid || _sending) return;
+    if (_reviewer) return _reviewerSignIn();
     final email = ObEmail.normalize(_ctrl.text);
     final analytics = ref.read(analyticsProvider);
     final auth = ref.read(authControllerProvider.notifier);
@@ -163,6 +206,34 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
               ),
             ),
           ),
+          if (_reviewer) ...[
+            const SizedBox(height: V13.gapMd),
+            Text(ObCopy.reviewerPasswordLabel, style: V13.bodyStrong),
+            const SizedBox(height: V13.gapSm),
+            SizedBox(
+              height: 60,
+              child: TextField(
+                key: const ValueKey('ob-email-password'),
+                controller: _pw,
+                obscureText: true,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                onSubmitted: (_) => _reviewerSignIn(),
+                style: V13.bodyStrong.copyWith(fontSize: 16),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: V13.card,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: V13.gapLg,
+                    vertical: 18,
+                  ),
+                  enabledBorder: _border(V13.navy),
+                  focusedBorder: _border(V13.blue),
+                  border: _border(V13.navy),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: V13.gapSm),
           if (_error != null)
             Text(
@@ -194,8 +265,12 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
           ],
         ],
       ),
-      ctaLabel: _sending ? ObCopy.emailSending : ObCopy.emailCta,
-      ctaEnabled: valid && !_sending,
+      ctaLabel: _sending
+          ? ObCopy.emailSending
+          : _reviewer
+          ? ObCopy.reviewerSignInCta
+          : ObCopy.emailCta,
+      ctaEnabled: valid && !_sending && (!_reviewer || _pw.text.isNotEmpty),
       onCta: _send,
       onBack: _sending ? null : flow.goBack,
     );

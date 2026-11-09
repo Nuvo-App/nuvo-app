@@ -133,4 +133,25 @@ void main() {
     );
     expect(find.byType(AlertDialog), findsNothing);
   });
+
+  testWidgets('review account: password field, no OTP, signs in via reviewer', (
+    t,
+  ) async {
+    final h = await pump(t);
+    await type(t, 'ava@gmail.com');
+    expect(find.byKey(const ValueKey('ob-email-password')), findsNothing);
+    await type(t, 'testing@getnuvo.net');
+    expect(find.byKey(const ValueKey('ob-email-password')), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
+    await t.enterText(
+      find.byKey(const ValueKey('ob-email-password')),
+      'testing123',
+    );
+    await t.pump();
+    await t.tap(find.byKey(const ValueKey('onboarding-cta')));
+    await t.pump(const Duration(seconds: 1));
+    expect(h.auth.startedFor, isEmpty);
+    expect(h.auth.reviewerSignIns, ['testing@getnuvo.net|testing123|signIn']);
+    expect(h.state.step, isNot(OnboardingStep.email));
+  });
 }

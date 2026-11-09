@@ -34,6 +34,20 @@ class FakeAuth extends StateNotifier<AuthState> implements AuthController {
     if (startError != null) throw startError!;
   }
 
+  final List<String> reviewerSignIns = [];
+  Object? reviewerError;
+
+  @override
+  Future<void> signInReviewer(
+    String email,
+    String password, {
+    required AuthIntent intent,
+  }) async {
+    reviewerSignIns.add('$email|$password|${intent.name}');
+    if (reviewerError != null) throw reviewerError!;
+    state = const AuthState(status: AuthStatus.authenticated, user: testUser);
+  }
+
   @override
   Future<void> verifyEmailCode(String email, String code) async {
     verified.add(code);
