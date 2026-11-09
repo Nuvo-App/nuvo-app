@@ -92,6 +92,43 @@ abstract final class NuvoMotion {
   /// Foreground parallax factor vs the path's 1.0x.
   static const double trackParallax = 1.15;
 
+  // ── Level-up timeline (Part E, spec S15) ───────────────────────────────
+  // Millisecond marks on one linear timeline; the screen derives every
+  // segment from these so no timing is hard-coded in the step file.
+  static const Duration levelUpScrim = Duration(milliseconds: 320);
+  static const Curve levelUpScrimCurve = Curves.easeOut;
+  static const Duration levelUpAvatarAt = Duration(milliseconds: 250);
+  static const Duration levelUpFillAt = Duration(milliseconds: 600);
+  static const Duration levelUpFill = Duration(milliseconds: 450);
+  static const Curve levelUpFillCurve = Curves.easeIn;
+  static const int levelUpFillTicks = 10;
+  static const double levelUpRingStart = 0.96;
+  static const Duration levelUpFlashAt = Duration(milliseconds: 1050);
+  static const Duration levelUpShockwave = Duration(milliseconds: 600);
+  static const Curve levelUpShockwaveCurve = Curves.easeOut;
+  static const double levelUpShockwaveScale = 1.6;
+  static const Duration levelUpNumberAt = Duration(milliseconds: 1100);
+  static const Duration levelUpNumber = Duration(milliseconds: 700);
+  static const Duration levelUpLettersAt = Duration(milliseconds: 1700);
+  static const Duration levelUpLetterStagger = Duration(milliseconds: 40);
+  static const Duration levelUpTilesAt = Duration(milliseconds: 2100);
+  static const Duration levelUpCtaAt = Duration(milliseconds: 2600);
+
+  /// The whole timeline (CTA has risen and settled).
+  static const Duration levelUpTotal = Duration(milliseconds: 3200);
+
+  /// Tap-anywhere speeds to the CTA only after this long (never a trap).
+  static const Duration levelUpSkipAfter = Duration(milliseconds: 900);
+
+  /// How fast a skip-ahead tap fast-forwards the timeline.
+  static const Duration levelUpSkipRun = Duration(milliseconds: 360);
+
+  /// Reward fetch ceiling — past it the spec constants render.
+  static const Duration levelUpFetchTimeout = Duration(seconds: 8);
+
+  /// CTA press: the blue floods out in a circle revealing the Arena.
+  static const Duration levelUpFlood = Duration(milliseconds: 500);
+
   // ── Reduce motion ─────────────────────────────────────────────────────
   /// The one transition that survives reduce-motion: a plain cross-fade.
   static const Duration reduceMotionFade = Duration(milliseconds: 200);
