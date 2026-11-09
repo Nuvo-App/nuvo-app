@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/demo/presentation_demo.dart';
 import '../../../core/offline/outbox.dart';
 import '../../../core/v13/v13.dart';
 import '../../onboarding/data/onboarding_v2_store.dart';
@@ -323,8 +322,6 @@ class _MainShellState extends ConsumerState<MainShell>
                 child: widget.child,
               ),
             ),
-            if (showFakeDataPill(ref.watch(authControllerProvider).user?.email))
-              const Positioned(top: 8, right: 12, child: _FakeDataPill()),
             // Offline indicator: shows when Nuvo is unreachable or writes are
             // waiting to send — cached screens stay up, no error pages.
             Positioned(
@@ -375,74 +372,6 @@ class _MainShellState extends ConsumerState<MainShell>
         ),
       ),
       bottomNavigationBar: navigation,
-    );
-  }
-}
-
-/// R4 gate: the fake-data pill exists for testing@getnuvo.net and nobody else.
-@visibleForTesting
-bool showFakeDataPill(String? email) => isNuvoStoreDemoEmail(email ?? '');
-
-/// R4 — testing@getnuvo.net only: flips fake (presentation) data on/off from
-/// any tab and reloads, so the store-review account starts clean but can
-/// show a full app on demand.
-class _FakeDataPill extends ConsumerStatefulWidget {
-  const _FakeDataPill();
-
-  @override
-  ConsumerState<_FakeDataPill> createState() => _FakeDataPillState();
-}
-
-class _FakeDataPillState extends ConsumerState<_FakeDataPill> {
-  bool _busy = false;
-
-  Future<void> _toggle() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      final on = !presentationModeToggleEnabled;
-      await setPresentationModeEnabled(on);
-      final races = ref.read(raceControllerProvider.notifier)..clearRaces();
-      final arena = ref.read(arenaControllerProvider.notifier)..clearSnapshot();
-      await Future.wait([
-        races.loadRaces(force: true),
-        arena.loadSnapshot(force: true),
-      ]);
-      if (mounted) {
-        showV13Toast(context, on ? 'Fake data on.' : 'Fake data off.');
-      }
-    } catch (_) {
-      if (mounted) {
-        showV13Toast(context, 'Couldn\u2019t switch data. Try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final on = presentationModeToggleEnabled;
-    return V13Pressable(
-      onTap: _toggle,
-      shadow: V13.shadow3,
-      borderRadius: BorderRadius.circular(V13.radiusPill),
-      semanticLabel: on ? 'Turn fake data off' : 'Load fake data',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: on ? V13.sun : V13.card,
-          borderRadius: BorderRadius.circular(V13.radiusPill),
-          border: Border.all(color: V13.navy, width: V13.outline),
-        ),
-        child: Text(
-          _busy ? '\u2026' : (on ? 'Fake data: on' : 'Fake data'),
-          style: V13.caption.copyWith(
-            color: V13.navy,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
     );
   }
 }

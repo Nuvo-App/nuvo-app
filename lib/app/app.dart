@@ -1,3 +1,4 @@
+import '../features/shell/presentation/fake_data_pill.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -170,7 +171,9 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
 
 Widget _appBuilder(BuildContext context, Widget? child) {
   final content = NuvoTextScaleScope(
-    child: _KeyboardDismissScope(child: child ?? const SizedBox.shrink()),
+    child: _KeyboardDismissScope(
+      child: FakeDataPillLayer(child: child ?? const SizedBox.shrink()),
+    ),
   );
   if (kIsWeb) return _webPreviewBuilder(context, content);
   return content;
