@@ -16,6 +16,7 @@ import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_copy.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
+import 'package:nuvo/features/onboarding/intro/intro_board_step.dart';
 import 'package:nuvo/features/onboarding/intro/intro_camera_step.dart';
 import 'package:nuvo/features/onboarding/intro/intro_race_step.dart';
 import 'package:nuvo/features/onboarding/intro/splash_step.dart';
@@ -207,6 +208,59 @@ void main() {
       await tester.tap(cta());
       await _pumpFor(tester, 1);
       expect(_step(c), OnboardingStep.introBoard);
+    });
+  });
+
+  group('S3 ObIntroBoardStep', () {
+    Finder cta() => find.byKey(const ValueKey('onboarding-cta'));
+    Finder meRow() => find.byKey(const ValueKey('You'));
+
+    /// Lands on S3 through the real flow — splash, then the two intros
+    /// each leave on their Next press.
+    Future<ProviderContainer> onBoardStep(WidgetTester tester) async {
+      final c = await _pumpFlow(tester);
+      await _pumpFor(tester, 2.5);
+      await tester.tap(cta());
+      await _pumpFor(tester, 2.5);
+      await tester.tap(cta());
+      await _pumpFor(tester, 1);
+      expect(find.byType(ObIntroBoardStep), findsOneWidget);
+      return c;
+    }
+
+    testWidgets('your row starts 4th and climbs to 1st on the ticks', (
+      tester,
+    ) async {
+      await onBoardStep(tester);
+      expect(find.text(ObCopy.introBoardCta), findsOneWidget);
+      expect(find.text(ObCopy.introBoardLogin), findsOneWidget);
+      expect(find.text(ObCopy.skip), findsOneWidget);
+      expect(tester.widget<AnimatedPositioned>(meRow()).top, 180.0);
+
+      // Three 2.4 s ticks of +18 take 'You' (24) past Maya (68+drift).
+      await _pumpFor(tester, 8);
+      expect(tester.widget<AnimatedPositioned>(meRow()).top, 0.0);
+    });
+
+    testWidgets('Create my player advances with sign-up intent', (
+      tester,
+    ) async {
+      final c = await onBoardStep(tester);
+      await tester.tap(cta());
+      await _pumpFor(tester, 1);
+      expect(_step(c), OnboardingStep.signIn);
+      expect(c.read(authIntentProvider), AuthIntent.signUp);
+    });
+
+    testWidgets('I already have an account advances with sign-in intent', (
+      tester,
+    ) async {
+      final c = await onBoardStep(tester);
+      c.read(authIntentProvider.notifier).state = AuthIntent.signUp;
+      await tester.tap(find.text(ObCopy.introBoardLogin));
+      await _pumpFor(tester, 1);
+      expect(_step(c), OnboardingStep.signIn);
+      expect(c.read(authIntentProvider), AuthIntent.signIn);
     });
   });
 }
