@@ -313,7 +313,14 @@ class _AuthButton extends StatelessWidget {
                 children: [
                   Icon(icon, color: ink, size: 26),
                   const SizedBox(width: V13.gapSm),
-                  Text(label, style: V13.buttonLabel.copyWith(color: ink)),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: V13.buttonLabel.copyWith(color: ink),
+                    ),
+                  ),
                 ],
               ),
       ),
