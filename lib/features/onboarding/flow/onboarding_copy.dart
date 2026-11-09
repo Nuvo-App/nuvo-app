@@ -85,6 +85,8 @@ abstract final class ObCopy {
   static const String codeResendFailed = 'Could not send a new code. Try again.';
   static const String codeVerifyFailed =
       'Code accepted, but Nuvo could not finish sign-in. Try again.';
+  static const String codeServerSnag = 'Nuvo hit a snag. Try again.';
+  static const String codeVerifyCta = 'Verify';
   static const String codeTipsTitle = "Didn't get the code?";
   static const String codeTipSpam = 'Check your spam or promotions folder.';
   static const String codeTipEmail = 'Make sure the email above is right.';
