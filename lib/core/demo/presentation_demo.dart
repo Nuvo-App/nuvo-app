@@ -117,8 +117,11 @@ bool isPresentationDemoUser(AuthUser? user) {
   // Backend-flagged demo identities (the store-review credential — the
   // canonical `testing@getnuvo.net` reviewer account — and any account with
   // is_demo set) always render fixtures.
-  if (user?.isDemo == true) return true;
   final email = user?.email.trim().toLowerCase();
+  // testing@getnuvo.net: starts clean (R1) and shows fixtures only when the
+  // on-device fake-data switch is on (R4) — the floating button in the app.
+  if (email == 'testing@getnuvo.net') return presentationModeToggleEnabled;
+  if (user?.isDemo == true) return true;
   // The account owner's own identity is presentation mode only while they've
   // turned it on (Profile settings) — otherwise they see their real data.
   if (email == presentationDemoEmail) return presentationModeToggleEnabled;

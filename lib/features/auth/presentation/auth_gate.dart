@@ -6,6 +6,7 @@
 // sign-in started from. Email (/auth/verify), Google and Apple (/welcome) must
 // all land in the same place. Do not reintroduce a `loc.startsWith('/auth/')`
 // branch — that was bug B2 ("email login behaves differently from Google").
+import '../../onboarding/data/onboarding_v2_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show BuildContext, ChangeNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,7 +113,11 @@ class RouterNotifier extends ChangeNotifier {
     // Mandatory post-auth setup (legal, identity, consent, then the Nuvo
     // story) applies to every account — a real person's crew shouldn't see
     // "Nuvo member" because profile setup was never required of them.
-    if (!user.onboardingComplete) {
+    // v2: the flow finished on this device but the server write is still
+    // pending (offline) — treat as graduated; the app retries in background.
+    final graduatedLocally =
+        _v2 && _ref.read(onboardingV2StoreProvider).graduationPending;
+    if (!user.onboardingComplete && !graduatedLocally) {
       if (_isAuthPreOnboarding(loc) ||
           // Accounts that owe setup cannot wander the app — protected
           // non-onboarding routes bounce back to the earliest step they

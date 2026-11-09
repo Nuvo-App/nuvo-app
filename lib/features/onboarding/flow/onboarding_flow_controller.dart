@@ -1,3 +1,6 @@
+import '../../../core/network/graduation_sync.dart';
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics_service.dart';
@@ -127,7 +130,15 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     if (state.restored || _restoring) return;
     _restoring = true;
     await _store.ensureLoaded();
-    if (accountEmail != null) await _store.attachAccount(accountEmail);
+    if (accountEmail != null) {
+      await _store.attachAccount(accountEmail);
+    } else if (_store.accountEmail != null) {
+      // Signed out, but the record belongs to an account that already went
+      // through (e.g. the review account after sign-out). The front door
+      // starts fresh instead of resuming someone's finished flow — which
+      // would otherwise try to graduate with no session.
+      await _store.reset();
+    }
     _emitState(advance: true);
     _restoring = false;
     _trackViewed(state.step);
@@ -308,12 +319,18 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   /// true so the host routes out. Returns false when the write fails so the
   /// screen can retry inline (no dialog, spec §S15).
   Future<bool> graduate() async {
-    try {
-      await _onGraduate();
-    } catch (_) {
-      return false;
-    }
+    // Non-blocking: the server write gets a short window; a failure or
+    // timeout never holds the player on this screen. The device records the
+    // graduation as pending (the gate honours it) and retries in the
+    // background until the server has it.
     await _store.ensureLoaded();
+    var synced = false;
+    try {
+      await _onGraduate().timeout(GraduationSync.timeout);
+      synced = true;
+    } catch (_) {}
+    await _store.setGraduationPending(!synced);
+    if (!synced) unawaited(_retryGraduation());
     await _store.markStepCompleted(OnboardingStep.levelUp.name);
     _analytics.obStepCompleted(
       stepIndex: OnboardingStep.levelUp.index,
@@ -322,6 +339,24 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     );
     _emitState();
     return true;
+  }
+
+  bool _retrying = false;
+
+  /// Background retries for a pending graduation (3 s, 10 s, 30 s, 90 s).
+  Future<void> _retryGraduation() async {
+    if (_retrying) return;
+    _retrying = true;
+    for (final wait in GraduationSync.retryDelays) {
+      await Future<void>.delayed(wait);
+      if (!_store.graduationPending) break;
+      try {
+        await _onGraduate().timeout(GraduationSync.retryTimeout);
+        await _store.setGraduationPending(false);
+        break;
+      } catch (_) {}
+    }
+    _retrying = false;
   }
 
   // ── Internals ──────────────────────────────────────────────────────────
@@ -366,6 +401,8 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
       if (step != null) awarded[step] = e.value;
     }
     final owed = advance
+        // Nothing owed = the flow is done (graduating). The host shows a
+        // loader while readyToGraduate, so this pointer is never rendered.
         ? _earliestOwed(completed) ?? OnboardingStep.levelUp
         : state.step;
     state = OnboardingFlowState(

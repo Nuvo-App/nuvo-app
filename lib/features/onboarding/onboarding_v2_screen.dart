@@ -84,13 +84,14 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   ) async {
     if (!next.readyToGraduate || _graduating) return;
     _graduating = true;
-    final ok = await ref.read(onboardingFlowProvider.notifier).graduate();
-    if (!mounted) return;
-    if (ok) {
-      context.go('/arena');
-    } else {
-      _graduating = false;
+    // graduate() never blocks on the network (it falls back to a pending
+    // local graduation + background retry), so this always enters Arena.
+    // Level Up's own CTA already graduated → don't write twice.
+    if (!next.completed.contains(OnboardingStep.levelUp)) {
+      await ref.read(onboardingFlowProvider.notifier).graduate();
     }
+    if (!mounted) return;
+    context.go('/arena');
   }
 
   void _onStepChanged(OnboardingFlowState? prev, OnboardingFlowState next) {
@@ -105,7 +106,9 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     ref.listen(onboardingFlowProvider, _onStepChanged);
 
     final flow = ref.watch(onboardingFlowProvider);
-    if (!flow.restored) {
+    // Not restored yet, or finished and graduating: a calm loader — never a
+    // fallback step (Level Up only appears as the step after the tour).
+    if (!flow.restored || flow.readyToGraduate) {
       return const Scaffold(
         backgroundColor: V13.bg,
         body: Center(child: CircularProgressIndicator()),

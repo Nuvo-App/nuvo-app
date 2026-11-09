@@ -63,6 +63,18 @@ class OnboardingV2Store {
   bool _cameraFallback = false;
   bool _tourSkipped = false;
   String? _notifyOutcome;
+  bool _graduationPending = false;
+
+  /// The flow finished on this device but the server `completeOnboarding`
+  /// write hasn't landed yet (offline / failed). The gate treats the account
+  /// as graduated while this is set, and the app retries in the background.
+  bool get graduationPending => _graduationPending;
+
+  Future<void> setGraduationPending(bool value) async {
+    if (_graduationPending == value) return;
+    _graduationPending = value;
+    await _persist();
+  }
 
   String? get accountEmail => _accountEmail;
   Set<String> get completedSteps => Set.unmodifiable(_completed);
@@ -118,6 +130,7 @@ class OnboardingV2Store {
     _cameraFallback = decoded['cameraFallback'] == true;
     _tourSkipped = decoded['tourSkipped'] == true;
     _notifyOutcome = decoded['notifyOutcome'] as String?;
+    _graduationPending = decoded['graduationPending'] == true;
   }
 
   /// Serializable snapshot — the test seam for kill + relaunch.
@@ -132,6 +145,7 @@ class OnboardingV2Store {
     'cameraFallback': _cameraFallback,
     'tourSkipped': _tourSkipped,
     'notifyOutcome': _notifyOutcome,
+    'graduationPending': _graduationPending,
   };
 
   /// Records the XP granted for [stepName]. Idempotent — an existing entry
@@ -203,6 +217,7 @@ class OnboardingV2Store {
       _cameraFallback = false;
       _tourSkipped = false;
       _notifyOutcome = null;
+      _graduationPending = false;
     }
     _accountEmail = normalized;
     await _persist();
@@ -220,6 +235,7 @@ class OnboardingV2Store {
     _cameraFallback = false;
     _tourSkipped = false;
     _notifyOutcome = null;
+    _graduationPending = false;
     await _persist();
   }
 

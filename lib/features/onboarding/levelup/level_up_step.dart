@@ -56,7 +56,6 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
   int _tilesFired = 0;
   bool _started = false;
 
-  static const int _letterCount = 7; // LEVEL UP, minus the space
 
   @override
   void initState() {
@@ -210,8 +209,7 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
       NuvoMotion.levelUpFillCurve,
     );
     final ringValue =
-        NuvoMotion.levelUpRingStart +
-        (1 - NuvoMotion.levelUpRingStart) * fillT;
+        NuvoMotion.levelUpRingStart + (1 - NuvoMotion.levelUpRingStart) * fillT;
     final shockT = _seg(
       NuvoMotion.levelUpFlashAt,
       NuvoMotion.levelUpShockwave,
@@ -244,7 +242,7 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
             SafeArea(
               child: Column(
                 children: [
-                  const Spacer(flex: 2),
+                  const Spacer(),
                   Opacity(
                     opacity: avatarT,
                     child: Transform.translate(
@@ -284,11 +282,34 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                                 flash: _flashed && shockT < 1,
                               ),
                             ),
-                            V13Face(
-                              photoUrl: user?.profilePhotoUrl,
-                              size: 140,
-                              name: name,
-                            ),
+                            // No photo → big initials, never a blank disc.
+                            if ((user?.profilePhotoUrl ?? '').isNotEmpty)
+                              V13Face(
+                                photoUrl: user?.profilePhotoUrl,
+                                size: 140,
+                                name: name,
+                              )
+                            else
+                              Container(
+                                width: 140,
+                                height: 140,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: V13.navy,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: V13.white,
+                                    width: V13.outlineThick,
+                                  ),
+                                ),
+                                child: Text(
+                                  _initials(name),
+                                  style: V13.hugeNumber.copyWith(
+                                    fontSize: 52,
+                                    color: V13.white,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -307,34 +328,35 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                       ),
                     ),
                   ),
-                  const SizedBox(height: V13.gapMd),
-                  _LevelUpLetters(progress: _letterProgress),
                   const SizedBox(height: V13.gapXl),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: V13.pagePad,
                     ),
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < tiles.length; i++) ...[
-                          if (i > 0) const SizedBox(width: V13.gapMd),
-                          Expanded(
-                            child: _RewardTile(
-                              icon: tiles[i].$1,
-                              label: tiles[i].$2,
-                              t: _seg(
-                                NuvoMotion.levelUpTilesAt +
-                                    NuvoMotion.staggerStep * i,
-                                NuvoMotion.springDuration,
-                                NuvoMotion.spring,
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < tiles.length; i++) ...[
+                            if (i > 0) const SizedBox(width: V13.gapMd),
+                            Expanded(
+                              child: _RewardTile(
+                                icon: tiles[i].$1,
+                                label: tiles[i].$2,
+                                t: _seg(
+                                  NuvoMotion.levelUpTilesAt +
+                                      NuvoMotion.staggerStep * i,
+                                  NuvoMotion.springDuration,
+                                  NuvoMotion.spring,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                  const Spacer(flex: 3),
+                  const Spacer(),
                   Opacity(
                     opacity: ctaT,
                     child: Transform.translate(
@@ -350,45 +372,55 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                               ),
                               const SizedBox(height: V13.gapMd),
                             ],
-                            NuvoFloat(
-                              child: NuvoPressable(
-                                key: _ctaKey,
-                                enabled: ctaReady && !_busy,
-                                onTap: ctaReady && !_busy ? _enter : null,
-                                borderRadius: BorderRadius.circular(
-                                  V13.radiusButton,
+                            NuvoPressable(
+                              key: _ctaKey,
+                              enabled: ctaReady && !_busy,
+                              onTap: ctaReady && !_busy ? _enter : null,
+                              borderRadius: BorderRadius.circular(
+                                V13.radiusButton,
+                              ),
+                              shadow: V13.shadow4,
+                              semanticLabel: ObCopy.levelUpCta,
+                              child: Container(
+                                key: const ValueKey('onboarding-cta'),
+                                height: 56,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: V13.white,
+                                  borderRadius: BorderRadius.circular(
+                                    V13.radiusButton,
+                                  ),
+                                  border: Border.all(
+                                    color: V13.navy,
+                                    width: V13.outlineThick,
+                                  ),
                                 ),
-                                shadow: V13.shadow4,
-                                semanticLabel: ObCopy.levelUpCta,
-                                child: Container(
-                                  key: const ValueKey('onboarding-cta'),
-                                  height: 56,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: V13.white,
-                                    borderRadius: BorderRadius.circular(
-                                      V13.radiusButton,
-                                    ),
-                                    border: Border.all(
-                                      color: V13.navy,
-                                      width: V13.outlineThick,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    ObCopy.levelUpCta,
-                                    style: V13.buttonLabel,
-                                  ),
+                                child: Text(
+                                  ObCopy.levelUpCta,
+                                  style: V13.buttonLabel,
                                 ),
                               ),
                             ),
-                            TextButton(
-                              onPressed: (_busy || _sharing || !ctaReady)
+                            const SizedBox(height: V13.gapSm),
+                            // Plain white link — a themed TextButton painted
+                            // a grey pill that hid the label on blue.
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: (_busy || _sharing || !ctaReady)
                                   ? null
                                   : () => _share(reward),
-                              child: Text(
-                                ObCopy.levelUpShare,
-                                style: V13.bodyStrong.copyWith(
-                                  color: V13.white,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: V13.gapMd,
+                                  horizontal: V13.gapLg,
+                                ),
+                                child: Text(
+                                  ObCopy.levelUpShare,
+                                  style: V13.bodyStrong.copyWith(
+                                    color: V13.white,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: V13.white,
+                                  ),
                                 ),
                               ),
                             ),
@@ -460,16 +492,6 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
 
   static const String _shareError = 'Could not open share. Try again.';
 
-  /// Per-letter drop-in progress (0..1 each).
-  List<double> get _letterProgress => [
-    for (var i = 0; i < _letterCount; i++)
-      _seg(
-        NuvoMotion.levelUpLettersAt + NuvoMotion.levelUpLetterStagger * i,
-        NuvoMotion.springDuration,
-        NuvoMotion.spring,
-      ),
-  ];
-
   Offset _ctaCenter(Size size) {
     final box = _ctaKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) {
@@ -479,70 +501,8 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
   }
 }
 
-/// White text with a navy outline — the level-up's "white + navy outlines".
-class _OutlinedText extends StatelessWidget {
-  const _OutlinedText(this.text, {required this.style});
-
-  final String text;
-  final TextStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Text(
-          text,
-          style: style.copyWith(
-            foreground: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 6
-              ..strokeJoin = StrokeJoin.round
-              ..color = V13.navy,
-          ),
-        ),
-        Text(text, style: style.copyWith(color: V13.white)),
-      ],
-    );
-  }
-}
-
-class _LevelUpLetters extends StatelessWidget {
-  const _LevelUpLetters({required this.progress});
-
-  final List<double> progress;
-
-  @override
-  Widget build(BuildContext context) {
-    const letters = ['L', 'E', 'V', 'E', 'L', 'U', 'P'];
-    final style = V13.title.copyWith(fontSize: 40, letterSpacing: 2);
-    return Semantics(
-      label: ObCopy.levelUpTitle,
-      excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < letters.length; i++) ...[
-            if (i == 5) const SizedBox(width: 16),
-            Opacity(
-              opacity: progress[i].clamp(0.0, 1.0),
-              child: Transform.translate(
-                offset: Offset(0, -48 * (1 - progress[i])),
-                child: _OutlinedText(letters[i], style: style),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _RewardTile extends StatelessWidget {
-  const _RewardTile({
-    required this.icon,
-    required this.label,
-    required this.t,
-  });
+  const _RewardTile({required this.icon, required this.label, required this.t});
 
   final IconData icon;
   final String label;
@@ -566,7 +526,7 @@ class _RewardTile extends StatelessWidget {
             boxShadow: V13.shadow4,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: V13.blue, size: 28),
               const SizedBox(height: V13.gapXs),
@@ -673,8 +633,12 @@ class _ConfettiPainter extends CustomPainter {
       final w = 6 + rng.nextDouble() * 6;
       final dist = speed * size.width * 0.6 * progress;
       final gravity = 0.55 * size.height * progress * progress;
-      final p = origin +
-          Offset(math.cos(angle) * dist, math.sin(angle) * dist * 0.8 + gravity);
+      final p =
+          origin +
+          Offset(
+            math.cos(angle) * dist,
+            math.sin(angle) * dist * 0.8 + gravity,
+          );
       canvas.save();
       canvas.translate(p.dx, p.dy);
       canvas.rotate(spin + progress * 6);
@@ -717,4 +681,11 @@ class _FloodClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(_FloodClipper old) =>
       old.progress != progress || old.center != center;
+}
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+  if (parts.isEmpty) return 'N';
+  if (parts.length == 1) return parts.first[0].toUpperCase();
+  return '${parts.first[0]}${parts.elementAt(1)[0]}'.toUpperCase();
 }

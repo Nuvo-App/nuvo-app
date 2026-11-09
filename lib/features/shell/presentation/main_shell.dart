@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/demo/presentation_demo.dart';
 import '../../../core/v13/v13.dart';
+import '../../onboarding/data/onboarding_v2_store.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../arena/presentation/arena_controller.dart';
@@ -78,6 +80,7 @@ class _MainShellState extends ConsumerState<MainShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_syncPendingGraduation());
     // Self-heal: a canonical controller's own provider-creation-time load can
     // miss (e.g. a load that was in flight across a sign-out — see the
     // _generation guards in RaceController/ArenaController/CrewController/
@@ -133,6 +136,23 @@ class _MainShellState extends ConsumerState<MainShell>
         !activityState.loading) {
       ref.read(crewActivityProvider.notifier).load(force: false);
     }
+  }
+
+  /// Onboarding v2 finished offline earlier: the server write is still owed.
+  /// Retry it once per launch in the background; never blocks the shell.
+  Future<void> _syncPendingGraduation() async {
+    final store = ref.read(onboardingV2StoreProvider);
+    await store.ensureLoaded();
+    final user = ref.read(authControllerProvider).user;
+    if (!store.graduationPending || user == null) return;
+    if (user.onboardingComplete) {
+      await store.setGraduationPending(false);
+      return;
+    }
+    try {
+      await ref.read(authControllerProvider.notifier).completeOnboarding();
+      await store.setGraduationPending(false);
+    } catch (_) {}
   }
 
   @override
@@ -277,15 +297,17 @@ class _MainShellState extends ConsumerState<MainShell>
             FadeTransition(
               opacity: CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
               child: SlideTransition(
-                position: Tween(
-                  begin: const Offset(0, 0.012),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
-                ),
+                position: Tween(begin: const Offset(0, 0.012), end: Offset.zero)
+                    .animate(
+                      CurvedAnimation(parent: _tabIn, curve: Curves.easeOut),
+                    ),
                 child: widget.child,
               ),
             ),
+            if (isNuvoStoreDemoEmail(
+              ref.watch(authControllerProvider).user?.email ?? '',
+            ))
+              const Positioned(top: 8, right: 12, child: _FakeDataPill()),
             // Soft fade behind the floating dock: content dissolves into the
             // page colour instead of hard-cutting at the dock's edge.
             Positioned(
@@ -311,6 +333,68 @@ class _MainShellState extends ConsumerState<MainShell>
         ),
       ),
       bottomNavigationBar: navigation,
+    );
+  }
+}
+
+/// R4 — testing@getnuvo.net only: flips fake (presentation) data on/off from
+/// any tab and reloads, so the store-review account starts clean but can
+/// show a full app on demand.
+class _FakeDataPill extends ConsumerStatefulWidget {
+  const _FakeDataPill();
+
+  @override
+  ConsumerState<_FakeDataPill> createState() => _FakeDataPillState();
+}
+
+class _FakeDataPillState extends ConsumerState<_FakeDataPill> {
+  bool _busy = false;
+
+  Future<void> _toggle() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final on = !presentationModeToggleEnabled;
+      await setPresentationModeEnabled(on);
+      final races = ref.read(raceControllerProvider.notifier)..clearRaces();
+      final arena = ref.read(arenaControllerProvider.notifier)..clearSnapshot();
+      await Future.wait([
+        races.loadRaces(force: true),
+        arena.loadSnapshot(force: true),
+      ]);
+      if (mounted)
+        showV13Toast(context, on ? 'Fake data on.' : 'Fake data off.');
+    } catch (_) {
+      if (mounted)
+        showV13Toast(context, 'Couldn\u2019t switch data. Try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = presentationModeToggleEnabled;
+    return V13Pressable(
+      onTap: _toggle,
+      shadow: V13.shadow3,
+      borderRadius: BorderRadius.circular(V13.radiusPill),
+      semanticLabel: on ? 'Turn fake data off' : 'Load fake data',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: on ? V13.sun : V13.card,
+          borderRadius: BorderRadius.circular(V13.radiusPill),
+          border: Border.all(color: V13.navy, width: V13.outline),
+        ),
+        child: Text(
+          _busy ? '\u2026' : (on ? 'Fake data: on' : 'Fake data'),
+          style: V13.caption.copyWith(
+            color: V13.navy,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 }

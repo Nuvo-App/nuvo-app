@@ -92,15 +92,18 @@ void _group() {
       },
     );
 
-    test('graduate() failure reports false and leaves the step owed', () async {
+    test('graduate() failure never blocks: completes locally, marks pending',
+        () async {
       final c = _controller(onGraduate: () async => throw StateError('x'));
       await c.restore();
       for (final step in OnboardingStep.values) {
         if (step == OnboardingStep.levelUp) break;
         await _act(c, step);
       }
-      expect(await c.graduate(), isFalse);
-      expect(c.state.allStepsComplete, isFalse);
+      // A failed server write still lets the player into Arena — the device
+      // records a pending graduation and retries in the background.
+      expect(await c.graduate(), isTrue);
+      expect(c.state.allStepsComplete, isTrue);
     });
 
     test('skipIntros compresses S1–S2 onto signIn', () async {

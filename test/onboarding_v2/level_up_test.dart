@@ -132,7 +132,7 @@ void main() {
     expect(graduated, 1);
   });
 
-  testWidgets('a failed graduation shows the inline retry and recovers', (
+  testWidgets('a failed graduation never blocks the player (no retry UI)', (
     tester,
   ) async {
     var attempts = 0;
@@ -141,26 +141,23 @@ void main() {
       reward: OnboardingReward.fallback,
       onGraduate: () async {
         attempts++;
-        if (attempts == 1) throw Exception('offline');
+        throw Exception('offline');
       },
     );
     await tester.pump(const Duration(milliseconds: 4000));
-    Future<void> settleFlood() async {
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 700));
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 700));
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byKey(const ValueKey('onboarding-cta')));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 400));
     }
-
-    await tester.tap(find.byKey(const ValueKey('onboarding-cta')));
-    await settleFlood();
-    expect(find.text(ObCopy.genericRetry), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('onboarding-cta')));
-    await settleFlood();
-    expect(attempts, 2);
+    // The write was attempted once in the foreground; failure shows no
+    // inline error — the flow completes and retries in the background.
+    expect(attempts, greaterThanOrEqualTo(1));
+    expect(find.text(ObCopy.genericRetry), findsNothing);
+    // Let the background retry schedule run out (all attempts fail here).
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(seconds: 30));
+    }
+    expect(attempts, greaterThan(1));
   });
 
   testWidgets('tapping after 900 ms fast-forwards to the CTA', (tester) async {
