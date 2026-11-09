@@ -291,11 +291,13 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
 
   Future<void> _signOut() async {
     setState(() => _signingOut = true);
+    ref.read(explicitSignOutProvider.notifier).state = true;
     try {
       await ref.read(authControllerProvider.notifier).logout();
     } catch (_) {
       if (mounted) {
         setState(() => _signingOut = false);
+        ref.read(explicitSignOutProvider.notifier).state = false;
         showV13Toast(context, "Couldn't sign out. Try again.");
       }
     }
@@ -313,6 +315,7 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
     );
     if (confirmed != true || !mounted) return;
     setState(() => _deleting = true);
+    ref.read(explicitSignOutProvider.notifier).state = true;
     try {
       await ref.read(authControllerProvider.notifier).deleteAccount();
       if (mounted) context.go('/welcome');

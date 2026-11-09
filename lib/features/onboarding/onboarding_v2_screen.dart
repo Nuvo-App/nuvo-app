@@ -53,10 +53,23 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         context.go('/arena');
         return;
       }
-      ref
-          .read(onboardingFlowProvider.notifier)
-          .restore(accountEmail: user?.email);
+      _restoreAndRoute(user?.email);
     });
+  }
+
+  Future<void> _restoreAndRoute(String? email) async {
+    final flow = ref.read(onboardingFlowProvider.notifier);
+    await flow.restore(accountEmail: email);
+    if (!mounted || email != null) return;
+    // Explicit sign-out: land on the login sheet, not the intro.
+    if (ref.read(explicitSignOutProvider)) {
+      ref.read(explicitSignOutProvider.notifier).state = false;
+      ref.read(authIntentProvider.notifier).state = AuthIntent.signIn;
+      final s = ref.read(onboardingFlowProvider).step;
+      if (s == OnboardingStep.introRace || s == OnboardingStep.introHow) {
+        await flow.skipIntros();
+      }
+    }
   }
 
   @override

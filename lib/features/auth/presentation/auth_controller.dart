@@ -71,6 +71,11 @@ class AuthState {
 /// resumed auth screen can never accidentally trigger the first-use reset.
 enum AuthIntent { signIn, signUp }
 
+/// Set when the PERSON signs out (Settings > Sign out / delete account), so
+/// the signed-out front door opens on the login sheet instead of the intro.
+/// Cold opens never set it — R1 (clean first-install start) is untouched.
+final explicitSignOutProvider = StateProvider<bool>((ref) => false);
+
 final authIntentProvider = StateProvider<AuthIntent>(
   (ref) => AuthIntent.signIn,
 );
