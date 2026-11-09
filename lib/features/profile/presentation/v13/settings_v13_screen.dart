@@ -21,6 +21,8 @@ import '../../../onboarding/presentation/first_use_guide.dart';
 import '../../../races/data/race_models.dart';
 import '../../../races/presentation/race_controller.dart';
 import '../../data/profile_v13_api.dart';
+import '../../../tour/tour_flags.dart';
+import '../../../tour/tour_getting_started.dart';
 
 /// `/settings` — the v13 settings page. Account card, notification
 /// categories, privacy, app, support and account actions — every row wired
@@ -687,6 +689,23 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
         const V13SectionHeader(title: 'SUPPORT'),
         const SizedBox(height: V13.gapMd),
         _sectionCard([
+          if (ref.watch(tourFeatureEnabledProvider))
+            V13ListRow(
+              key: const ValueKey('settings-replay-tour'),
+              title: 'Replay tour',
+              leading: const V13IconTile(
+                icon: Icons.play_circle_outline_rounded,
+                color: V13.coral,
+              ),
+              trailing: const Icon(
+                Icons.chevron_right_rounded,
+                color: V13.muted,
+              ),
+              onTap: () {
+                replayTour(ref);
+                context.go('/arena');
+              },
+            ),
           V13ListRow(
             title: 'Help & contact',
             leading: const V13IconTile(

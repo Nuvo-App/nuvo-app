@@ -1,3 +1,6 @@
+import '../tour/tour_harness.dart';
+import 'package:nuvo/features/tour/tour_anchors.dart';
+import 'package:nuvo/features/tour/tour_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +44,13 @@ class _StubRaceRepo extends RaceRepository {
   final List<Race> races;
   final List<Race>? openRaces;
   final List<LeaderboardEntry>? leaderboard;
+  final joinCalls = <String>[];
+  @override
+  Future<Race> joinRace(String id) {
+    joinCalls.add(id);
+    throw StateError('joinRace must not be called for a tour race');
+  }
+
   @override
   Future<List<Race>> getRaces() => Future.value(races);
   @override
@@ -166,6 +176,33 @@ void main() {
     // No friends yet → the board invites instead of hiding.
     expect(find.text('Add friends to see a board'), findsOneWidget);
     expect(find.text('No races yet'), findsNothing);
+  });
+
+  testWidgets('tour: Join a race anchor exists; Join is local and pays 10', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tour = runningTour(beat: 'compete');
+    final repo = _StubRaceRepo(races: [_race()]);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [..._overrides(repo), ...tour.overrides],
+        child: const MaterialApp(home: CompeteV13Screen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(TourAnchors.rectOf(TourAnchor.joinCard), isNotNull);
+    expect(find.text('Join a race'), findsOneWidget);
+    await tester.ensureVisible(find.text('Join').first);
+    await tester.tap(find.text('Join').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Joined'), findsOneWidget);
+    expect(tour.store.xpAwarded['compete'], 10);
+    expect(repo.joinCalls, isEmpty);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   group('Compete empty states', () {

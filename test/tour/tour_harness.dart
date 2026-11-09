@@ -92,3 +92,24 @@ Future<ProviderContainer> startTour(
       .sync(email: 'a@b.c', graduated: true);
   return container;
 }
+
+/// Overrides that put the tour in the running state with an in-memory store
+/// (the store is returned so a test can inspect it).
+({List<Override> overrides, TourStore store}) runningTour({
+  TourStore? store,
+  String? beat,
+}) {
+  final s = store ?? TourStore.memory();
+  return (
+    store: s,
+    overrides: [
+      tourFeatureEnabledProvider.overrideWithValue(true),
+      tourStoreProvider.overrideWithValue(s),
+      tourControllerProvider.overrideWith((ref) {
+        final c = TourController(s)..start();
+        if (beat != null) c.debugSetBeat(beat);
+        return c;
+      }),
+    ],
+  );
+}

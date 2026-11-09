@@ -241,6 +241,10 @@ class TourController extends StateNotifier<TourState> {
     );
   }
 
+  /// Test seam: put a specific beat on stage.
+  @visibleForTesting
+  void debugSetBeat(String beat) => state = state.copyWith(beat: beat);
+
   String? firstOwedExcluding(String id) {
     for (final s in kTourSequence) {
       if (s == id) continue;

@@ -1,3 +1,6 @@
+import '../tour/tour_harness.dart';
+import 'package:nuvo/features/tour/tour_anchors.dart';
+import 'package:nuvo/features/tour/tour_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -293,6 +296,21 @@ void _size(WidgetTester tester) {
 void main() {
   setUpAll(loadShotFonts);
   editProfileTests();
+  testWidgets('tour: first badge anchor exists (Day One for a new account)', (
+    tester,
+  ) async {
+    _size(tester);
+    final tour = runningTour(beat: 'profile');
+    await tester.pumpWidget(
+      _app(
+        const ProfileV13Screen(),
+        overrides: [..._overrides(), ...tour.overrides],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(TourAnchors.rectOf(TourAnchor.firstBadge), isNotNull);
+  });
+
   testWidgets('Profile: header, counts, actions, sections', (tester) async {
     _size(tester);
     await tester.pumpWidget(_app(const ProfileV13Screen()));
@@ -480,6 +498,36 @@ void main() {
     expect(find.text('Earned'), findsOneWidget);
     expect(find.text('Locked'), findsOneWidget);
     await shot(tester, 'v13_badges');
+  });
+
+  testWidgets('tour: Replay tour shows in Settings > Help only when on', (
+    tester,
+  ) async {
+    _size(tester);
+    await tester.pumpWidget(_app(const SettingsV13Screen()));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Help & contact'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Replay tour'), findsNothing);
+
+    final tour = runningTour();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      _app(
+        const SettingsV13Screen(),
+        overrides: [..._overrides(), ...tour.overrides],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Replay tour'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Replay tour'), findsOneWidget);
   });
 
   testWidgets('Settings: account card, sections, gated rows hide/show', (

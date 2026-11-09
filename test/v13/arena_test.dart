@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import '../helpers/screenshot.dart';
+import '../tour/tour_harness.dart';
+import 'package:nuvo/features/tour/tour_anchors.dart';
+import 'package:nuvo/features/tour/tour_controller.dart';
+import 'package:nuvo/features/tour/tour_fixtures.dart';
 import 'package:nuvo/features/races/presentation/v13/submit_proof_sheet.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/v13/v13.dart';
@@ -317,6 +321,7 @@ Widget _buildApp({
   List<NuvoBadge> badges = const [],
   Map<String, int> activityDays = const {},
   int unread = 0,
+  List<Override> extra = const [],
 }) {
   final router = GoRouter(
     initialLocation: '/arena',
@@ -371,6 +376,7 @@ Widget _buildApp({
       authControllerProvider.overrideWith(
         (ref) => AuthController(_FakeAuthRepo()),
       ),
+      ...extra,
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -655,6 +661,60 @@ void main() {
     expect(find.text('Pushup Battle'), findsWidgets);
     expect(find.text('Submit proof'), findsOneWidget);
     expect(repo.getRacesCalls, greaterThanOrEqualTo(2));
+  });
+
+  testWidgets('tour: practice card + Submit proof anchors exist, practice '
+      'proof completes client-side for 10 XP', (tester) async {
+    _tallViewport(tester);
+    final tour = runningTour(beat: 'arenaProof');
+    await tester.pumpWidget(
+      _buildApp(
+        races: [_pushupRace()],
+        progression: _progression(),
+        extra: tour.overrides,
+      ),
+    );
+    await _settle(tester);
+
+    expect(
+      TourAnchors.rectOf(TourAnchor.arenaRaceCard),
+      isNotNull,
+      reason: 'race card anchor',
+    );
+    expect(
+      TourAnchors.rectOf(TourAnchor.submitProof),
+      isNotNull,
+      reason: 'Submit proof anchor',
+    );
+    expect(find.text('Practice'), findsWidgets);
+    expect(find.text('Nuvo Crew'), findsNothing); // labels live in the race
+
+    // Practice card is first; the real race is still there after it.
+    expect(find.text('Pushup Battle'), findsWidgets);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(TourAnchors.keyOf(TourAnchor.submitProof)),
+        matching: find.text('Submit proof'),
+      ),
+    );
+    await _navPumps(tester);
+    expect(find.byType(SubmitProofV13Sheet), findsNothing);
+    expect(find.text('Skip camera for now'), findsOneWidget);
+    await tester.tap(find.text('Skip camera for now'));
+    await _navPumps(tester);
+    expect(tour.store.xpAwarded['arenaProof'], 10);
+    expect(tour.store.cameraFallback, isTrue);
+  });
+
+  testWidgets('tour off: no practice card, no anchors', (tester) async {
+    _tallViewport(tester);
+    await tester.pumpWidget(
+      _buildApp(races: [_pushupRace()], progression: _progression()),
+    );
+    await _settle(tester);
+    expect(TourAnchors.rectOf(TourAnchor.arenaRaceCard), isNull);
+    expect(find.text('Practice'), findsNothing);
   });
 
   testWidgets('Submit proof opens the Submit proof sheet for that race', (

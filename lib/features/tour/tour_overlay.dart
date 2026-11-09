@@ -454,6 +454,8 @@ class _SpotlightScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hole = this.hole;
+    if (hole == null) return _ScrimLeaf(hole: null, light: light);
     return TweenAnimationBuilder<RRect?>(
       tween: _RRectTween(end: hole),
       duration: reduce ? Duration.zero : NuvoMotion.trackPan,

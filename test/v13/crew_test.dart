@@ -1,5 +1,8 @@
 // Widget tests for the v13 Crew tab + Crew page: populated / empty / error
 // states (with shots) plus the main tap paths and mutations.
+import '../tour/tour_harness.dart';
+import 'package:nuvo/features/tour/tour_anchors.dart';
+import 'package:nuvo/features/tour/tour_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -451,6 +454,22 @@ void main() {
     expect(find.text('Ask to join'), findsOneWidget);
     expect(find.text('FRIENDS · 2'), findsOneWidget);
     await shot(tester, 'v13_crew_tab_populated');
+  });
+
+  testWidgets('tour: My Nuvo code anchor exists only while the tour runs', (
+    tester,
+  ) async {
+    _size(tester);
+    final tour = runningTour(beat: 'crew');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [..._overrides(), ...tour.overrides],
+        child: const MaterialApp(home: CrewTabV13Screen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(TourAnchors.rectOf(TourAnchor.myNuvoCode), isNotNull);
   });
 
   testWidgets('Crew tab empty state: real next actions, hidden sections', (
