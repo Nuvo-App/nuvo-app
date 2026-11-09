@@ -4,8 +4,9 @@
 /// not in the persisted completed set, which is what makes kill + relaunch
 /// resume exactly where the user left off.
 enum OnboardingStep {
-  /// S0 — app splash; the real handoff lives in Part A. In-flow it
-  /// auto-completes so a fresh install lands on the first intro.
+  /// S0 — retired. The real app shows its own splash before the flow, so
+  /// this step never renders: the controller treats it as always complete
+  /// (kept in the enum so old saved state and analytics indices stay valid).
   splash,
 
   /// S1 — "Race anything." One composed hero: the tap duel is the first

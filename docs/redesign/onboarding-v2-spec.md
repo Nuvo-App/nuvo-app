@@ -36,7 +36,7 @@ No float/parallax/confetti, 200ms cross-fade transitions, XP rail still fills wi
 ## SCREENS
 Side margin 16 CTA, 24 text; titles Manrope 800 28-34px; body 15px/500; muted #5E6A80; back = existing outlined square; Skip = quiet text link top right where allowed.
 
-**S0 Splash 1.2s**: existing logo anim, tap to skip once auth resolved; logo blue dot becomes first Track bead and travels into S1 (shared element 420ms).
+**S0 Splash (retired in-flow)**: the real app shows its own splash before the flow, so the flow renders no second splash. `OnboardingStep.splash` stays in the enum for saved-state/analytics-index compatibility and is always auto-completed; a fresh install goes app splash -> S1 duel directly.
 
 **S1 Intro "Race anything"** (tap duel, no data/permissions): dots + Skip; coral hero card 300px; title "Race anything." sub "Pushups, reading, anything. Beat your friends." Hero: mini lane with 3 racer tokens: you (blue ring, silhouette labeled You) + 2 ghosts (Nuvo Crew photos if assets exist else silhouette bots), beads, finish flag; ghosts creep with float. For 5s each tap moves your token one bead (spring), tick + selectionClick, big count pops. Ghosts scripted so a normal tapper wins by 1-2 beads at the last second (never lose). End: flag drops, confetti, mediumImpact, chip "You won. That took 5 seconds." Idle 3s: hand pointer taps once (one time, no loop). Chip "Tap the card as fast as you can". CTA "Next" (arrow), pressable any time; if pressed early the duel auto-plays and finishes in 1.5s.
 

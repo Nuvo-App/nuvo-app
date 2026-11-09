@@ -12,7 +12,6 @@ import 'flow/onboarding_flow_controller.dart';
 import 'flow/onboarding_step.dart';
 import 'intro/intro_how_step.dart';
 import 'intro/intro_race_step.dart';
-import 'intro/splash_step.dart';
 import 'levelup/level_up_step.dart';
 import 'player/first_race_ready_step.dart';
 import 'player/player_card_step.dart';
@@ -159,7 +158,8 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   }
 
   Widget _stepScreen(OnboardingStep step) => switch (step) {
-    OnboardingStep.splash => const ObSplashStep(),
+    // Retired: auto-completed by the controller, never rendered.
+    OnboardingStep.splash => const SizedBox.shrink(),
     OnboardingStep.introRace => const ObIntroRaceStep(),
     OnboardingStep.introHow => const ObIntroHowStep(),
     OnboardingStep.signIn => const ObSignInStep(),

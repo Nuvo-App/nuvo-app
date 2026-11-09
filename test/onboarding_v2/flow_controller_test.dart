@@ -39,19 +39,24 @@ Future<int> _act(OnboardingFlowController c, OnboardingStep step) {
 
 void _group() {
   group('OnboardingFlowController', () {
-    test('restores onto splash for a fresh store', () async {
-      final c = _controller();
-      await c.restore();
-      expect(c.state.restored, isTrue);
-      expect(c.state.step, OnboardingStep.splash);
-      expect(c.state.totalXp, 0);
-    });
+    test(
+      'restores onto the first intro for a fresh store (splash is retired)',
+      () async {
+        final c = _controller();
+        await c.restore();
+        expect(c.state.restored, isTrue);
+        expect(c.state.step, OnboardingStep.introRace);
+        expect(c.state.completed, contains(OnboardingStep.splash));
+        expect(c.state.totalXp, 0);
+      },
+    );
 
     test('walking the whole flow lands on levelUp with 100 XP', () async {
       final c = _controller();
       await c.restore();
       var expected = 0;
       for (final step in OnboardingStep.values) {
+        if (step == OnboardingStep.splash) continue;
         if (step == OnboardingStep.levelUp) break;
         expect(c.state.step, step, reason: 'expected ${step.name}');
         expected +=
@@ -82,6 +87,7 @@ void _group() {
         final c = _controller(onGraduate: () async => writes++);
         await c.restore();
         for (final step in OnboardingStep.values) {
+          if (step == OnboardingStep.splash) continue;
           if (step == OnboardingStep.levelUp) break;
           await _act(c, step);
         }
@@ -97,6 +103,7 @@ void _group() {
       final c = _controller(onGraduate: () async => throw StateError('x'));
       await c.restore();
       for (final step in OnboardingStep.values) {
+        if (step == OnboardingStep.splash) continue;
         if (step == OnboardingStep.levelUp) break;
         await _act(c, step);
       }
@@ -109,7 +116,6 @@ void _group() {
     test('skipIntros compresses S1–S2 onto signIn', () async {
       final c = _controller();
       await c.restore();
-      await c.completeStep(OnboardingStep.splash);
       expect(c.state.step, OnboardingStep.introRace);
       await c.skipIntros();
       expect(c.state.step, OnboardingStep.signIn);
@@ -193,17 +199,17 @@ void _group() {
       final analytics = FakeAnalyticsService();
       final c = _controller(analytics: analytics);
       await c.restore();
-      await c.completeStep(OnboardingStep.splash);
+      await c.completeStep(OnboardingStep.introRace);
       final names = analytics.events.map((e) => e.event).toList();
       expect(names, [
-        'ob_step_viewed', // splash on restore
-        'ob_step_completed', // splash
-        'ob_step_viewed', // introRace
+        'ob_step_viewed', // introRace on restore (no splash event)
+        'ob_step_completed', // introRace
+        'ob_step_viewed', // introHow
       ]);
-      expect(analytics.events[1].properties['step_name'], 'splash');
+      expect(analytics.events[1].properties['step_name'], 'introRace');
       expect(
         analytics.events[2].properties['step_index'],
-        OnboardingStep.introRace.index,
+        OnboardingStep.introHow.index,
       );
     });
   });

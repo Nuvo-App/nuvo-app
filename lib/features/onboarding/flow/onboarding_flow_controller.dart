@@ -147,7 +147,7 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   /// Re-key progress to the account that just authenticated inside the
   /// flow (safe to call on every auth change — it's a no-op for the same
   /// email). When the store wiped a different account's record the flow
-  /// restarts at splash.
+  /// restarts at the first intro.
   Future<void> attachAccount(String email) async {
     await _store.ensureLoaded();
     final wiped = await _store.attachAccount(email);
@@ -157,7 +157,7 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     }
   }
 
-  /// Demo replay / hard restart: wipes the record and starts at splash.
+  /// Demo replay / hard restart: wipes the record and starts at the first intro.
   Future<void> reset() async {
     await _store.reset();
     _emitState(advance: true);
@@ -215,7 +215,7 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   /// Back square: the previous step in flow order, if any.
   void goBack() {
     final prev = state.step.previous;
-    if (prev == null) return;
+    if (prev == null || prev == OnboardingStep.splash) return;
     _setStep(prev);
   }
 
@@ -394,7 +394,12 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   /// step (complete/skip/restore); flag mutations and back-navigation never
   /// move the pointer on their own.
   void _emitState({bool advance = false}) {
-    final completed = _stepSet(_store.completedSteps);
+    // The in-flow splash is retired (the app's own splash already ran), so
+    // it is always complete — old saves with or without it resume alike.
+    final completed = {
+      ..._stepSet(_store.completedSteps),
+      OnboardingStep.splash,
+    };
     final awarded = <OnboardingStep, int>{};
     for (final e in _store.xpAwarded.entries) {
       final step = _stepNamed(e.key);

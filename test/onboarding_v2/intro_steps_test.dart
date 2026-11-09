@@ -2,7 +2,6 @@
 // (camera proof + board climb on one screen). Tests drive the real OnboardingV2Screen host (not the
 // step widgets in isolation) so completion, skipping and advancement are
 // asserted against the real flow order.
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +17,6 @@ import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
 import 'package:nuvo/features/onboarding/intro/intro_how_step.dart';
 import 'package:nuvo/features/onboarding/intro/intro_race_step.dart';
-import 'package:nuvo/features/onboarding/intro/splash_step.dart';
 import 'package:nuvo/features/onboarding/onboarding_v2_screen.dart';
 import 'package:nuvo/features/onboarding/shell/track_painter.dart';
 
@@ -27,14 +25,6 @@ class _NoSessionRepo extends AuthRepository {
 
   @override
   Future<RestoreResult> restoreSession() async => const RestoreNoSession();
-}
-
-/// A never-resolving auth repo — the splash's tap-to-skip must wait on it.
-class _PendingRepo extends AuthRepository {
-  _PendingRepo() : super(AuthApi(), SecureTokenStore());
-
-  @override
-  Future<RestoreResult> restoreSession() => Completer<RestoreResult>().future;
 }
 
 /// Pumps the real flow host with a signed-out scripted auth repo and an
@@ -77,30 +67,16 @@ Future<void> _pumpFor(WidgetTester tester, double seconds) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('S0 ObSplashStep', () {
-    testWidgets('auto-advances to the duel after the hold', (tester) async {
+  group('S0 splash (retired)', () {
+    testWidgets('fresh install lands on the duel with no second splash', (
+      tester,
+    ) async {
       final c = await _pumpFlow(tester);
-      await _pumpFor(tester, 2.5);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(_step(c), OnboardingStep.introRace);
       expect(find.byType(ObIntroRaceStep), findsOneWidget);
-    });
-
-    testWidgets('tap skips once auth resolved', (tester) async {
-      final c = await _pumpFlow(tester);
-      await tester.pump(); // auth resolves on the microtask flush
-      await tester.tap(find.byType(ObSplashStep));
-      // Let S1 mount and its staggered enter delays fire (they are
-      // Future.delayed timers that would otherwise leak past test end).
       await _pumpFor(tester, 1);
-      expect(_step(c), OnboardingStep.introRace);
-    });
-
-    testWidgets('tap before auth resolves does not skip', (tester) async {
-      final c = await _pumpFlow(tester, authRepo: _PendingRepo());
-      await tester.pump();
-      await tester.tap(find.byType(ObSplashStep));
-      await tester.pump();
-      expect(_step(c), OnboardingStep.splash);
     });
   });
 
@@ -108,7 +84,7 @@ void main() {
     Finder card() => find.byKey(const ValueKey('ob-duel-card'));
     Finder cta() => find.byKey(const ValueKey('onboarding-cta'));
 
-    /// Lands on S1 through the real splash handoff.
+    /// Lands on S1 (the duel) straight from a fresh install.
     Future<ProviderContainer> onRaceStep(WidgetTester tester) async {
       final c = await _pumpFlow(tester);
       await _pumpFor(tester, 2.5);
@@ -216,8 +192,7 @@ void main() {
     double meTop(WidgetTester tester) =>
         tester.widget<AnimatedPositioned>(meRow()).top!;
 
-    /// Lands on S2 through the real flow: splash auto-advances, then the
-    /// S1 duel auto-plays off an early Next.
+    /// Lands on S2 through the real flow: the S1 duel auto-plays off an early Next.
     Future<ProviderContainer> onHowStep(WidgetTester tester) async {
       final c = await _pumpFlow(tester);
       await _pumpFor(tester, 2.5);

@@ -36,7 +36,7 @@ NEVER hard-code `Duration(milliseconds:…)` or `Curves.*` — the lint test
 | `confetti` / `confettiPieces` | 1.1 s / 40 | level-up burst |
 | `trackPan` / `trackPanCurve` / `trackParallax` | 420 ms / easeInOutCubic / 1.15 | Track camera |
 | `reduceMotionFade` | 200 ms | the only transition under reduce-motion |
-| `ctaFade` / `splashHold` | 180 ms / 1200 ms | CTA label fade / S0 hold |
+| `ctaFade` / `splashHold` | 180 ms / 1200 ms | CTA label fade / (unused: S0 retired) |
 
 Helpers:
 
@@ -129,7 +129,7 @@ OnboardingShell(
   | `tourStopViewed(stop)` | `ob_tour_stop` |
   | `levelUpSeen()` | `ob_level_up_seen` + heavy haptic + fanfare |
   | `graduate()` → `Future<bool>` | the `completeOnboarding()` server write (same write v1 makes); true ⇒ host routes to /arena |
-  | `reset()` | wipe + splash (demo replay) |
+  | `reset()` | wipe + first intro (demo replay) |
 
   `OnboardingFlowState`: `restored`, `step`, `completed`,
   `xpAwarded`, `totalXp`, `answerQ1/Q2`, `email`, `cameraFallback`,
@@ -163,7 +163,7 @@ kill+relaunch seam. `attachAccount` wipes a different account's record.
 
 | Step | Enum | File | Widget |
 |---|---|---|---|
-| S0 | `splash` | `intro/splash_step.dart` | `ObSplashStep` |
+| S0 | `splash` | (none: retired, auto-completed, never rendered) | - |
 | S1 | `introRace` | `intro/intro_race_step.dart` | `ObIntroRaceStep` (tap duel hero, 3 lanes) |
 | S2 | `introHow` | `intro/intro_how_step.dart` | `ObIntroHowStep` (camera proof + board climb on one screen) |
 | S3 | `signIn` | `auth_visuals/sign_in_step.dart` | `ObSignInStep` |

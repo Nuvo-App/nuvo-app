@@ -168,11 +168,24 @@ void _group() {
       },
     );
 
+    test(
+      'a save with no splash entry resumes past the retired splash',
+      () async {
+        final store = OnboardingV2Store.fromSnapshot({
+          'version': 1,
+          'completed': <String>[],
+          'xpAwarded': <String, int>{},
+        });
+        final c = _controller(store);
+        await c.restore();
+        expect(c.state.step, OnboardingStep.introRace);
+      },
+    );
+
     test('a step completed pre-kill stays completed post-kill', () async {
       final store1 = OnboardingV2Store.memory();
       final c1 = _controller(store1);
       await c1.restore();
-      await c1.completeStep(OnboardingStep.splash);
       await c1.completeStep(OnboardingStep.introRace);
 
       final store2 = OnboardingV2Store.fromSnapshot(store1.toJson());
