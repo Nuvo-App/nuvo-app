@@ -71,7 +71,7 @@ class _ObFirstRaceReadyStepState extends ConsumerState<ObFirstRaceReadyStep>
     final lead = NuvoMotion.firstRaceTransition ~/ 5;
     return OnboardingShell(
       step: OnboardingStep.firstRaceReady,
-      heroHeight: obHeroHeight(context, tall: 190, small: 150),
+      heroHeight: obHeroHeight(context, tall: 260, small: 150),
       hero: ObRacePreviewCard(
         title: obRacePreviewTitle(q1),
         subtitle: ObCopy.practiceRaceName(obRaceActivity(q1)).split(' · ').last,
@@ -85,7 +85,7 @@ class _ObFirstRaceReadyStepState extends ConsumerState<ObFirstRaceReadyStep>
               Stack(alignment: Alignment.centerLeft, children: [...prev, ?cur]),
           child: V13Pill(
             key: ValueKey(_live),
-            label: _live ? 'Live' : ObCopy.practiceTag,
+            label: _live ? 'Ready' : ObCopy.practiceTag,
             color: _live ? V13.mint : V13.card,
           ),
         ),
@@ -231,7 +231,7 @@ class _RacerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.sizeOf(context).height < 700 ? 48 : 56,
+      height: MediaQuery.sizeOf(context).height < 700 ? 48 : 64,
       padding: const EdgeInsets.symmetric(horizontal: V13.gapMd),
       decoration: BoxDecoration(
         color: isYou ? obSelectedFill : V13.card,

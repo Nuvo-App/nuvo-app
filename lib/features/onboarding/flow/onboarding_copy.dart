@@ -133,7 +133,7 @@ abstract final class ObCopy {
 
   // ── S9 First race ready ────────────────────────────────────────────────
   static const String firstRaceBuilding = 'Building your first race...';
-  static const String firstRaceLive = 'Practice race vs Nuvo Crew is live';
+  static const String firstRaceLive = 'Your first race is ready';
   static String practiceRaceName(String activity) =>
       '$activity Race · First to 10';
 

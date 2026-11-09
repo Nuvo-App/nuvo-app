@@ -174,20 +174,29 @@ class TrackPainter extends CustomPainter {
       _xFor(avatarWorldY, size.width),
       screenY(avatarWorldY, beadProgress),
     );
+    // The token only shows while it travels between beads: at rest it would
+    // sit on top of whatever copy is on screen (a blue dot over body text).
+    final travel = (avatarProgress - avatarProgress.round()).abs();
+    final vis = (travel * 8).clamp(0.0, 1.0);
+    if (vis <= 0.01) return;
     canvas.drawCircle(
       avatarCenter,
       11,
-      Paint()..color = V13.blue.withValues(alpha: 0.55),
+      Paint()..color = V13.blue.withValues(alpha: 0.55 * vis),
     );
     canvas.drawCircle(
       avatarCenter,
       11,
       Paint()
-        ..color = V13.navy.withValues(alpha: 0.3)
+        ..color = V13.navy.withValues(alpha: 0.3 * vis)
         ..style = PaintingStyle.stroke
         ..strokeWidth = V13.outline,
     );
-    canvas.drawCircle(avatarCenter, 4.5, Paint()..color = V13.white);
+    canvas.drawCircle(
+      avatarCenter,
+      4.5,
+      Paint()..color = V13.white.withValues(alpha: vis),
+    );
   }
 
   @override
