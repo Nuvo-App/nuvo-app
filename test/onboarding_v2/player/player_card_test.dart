@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/core/motion/motion.dart';
 import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_copy.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
@@ -57,7 +58,7 @@ void main() {
 
   Future<void> tickTerms(WidgetTester tester) async {
     await tester.ensureVisible(find.byKey(const ValueKey('player-card-terms')));
-    await tester.tap(find.byType(Checkbox).first);
+    await tester.tap(find.byKey(const ValueKey('player-card-terms')));
     await tester.pump();
   }
 
@@ -67,15 +68,34 @@ void main() {
     await pump(tester);
     await fill(tester, 'Akshay P', 'AkshayP');
     expect(
-      tester.widget<Text>(find.byKey(const ValueKey('player-card-name'))).data,
-      'Akshay P',
+      find.descendant(
+        of: find.byKey(const ValueKey('player-card-name')),
+        matching: find.text('Akshay P'),
+      ),
+      findsOneWidget,
     );
     expect(
-      tester
-          .widget<Text>(find.byKey(const ValueKey('player-card-username')))
-          .data,
-      '@akshayp',
+      find.descendant(
+        of: find.byKey(const ValueKey('player-card-username')),
+        matching: find.text('@akshayp'),
+      ),
+      findsOneWidget,
     );
+  });
+
+  testWidgets('a typed character scales in on the card', (tester) async {
+    await pump(tester);
+    await tester.enterText(find.byType(TextField).at(0), 'A');
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).at(0), 'Ak');
+    await tester.pump();
+    final pop = find.descendant(
+      of: find.byKey(const ValueKey('player-card-name')),
+      matching: find.byType(TweenAnimationBuilder<double>),
+    );
+    expect(pop, findsOneWidget);
+    // Settles back to plain text once the next rebuild lands.
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('CTA gated on name + available username + terms', (tester) async {
@@ -134,8 +154,12 @@ void main() {
     await tickTerms(tester);
     await tester.tap(_cta());
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
     expect(saved, hasLength(1));
+    // The card stamps first, then the flow moves on.
+    expect(c.read(onboardingFlowProvider).step, OnboardingStep.playerCard);
+    await tester.pump(
+      NuvoMotion.springDuration + const Duration(milliseconds: 100),
+    );
     expect(saved.single.fullName, 'Akshay');
     expect(saved.single.username, 'akshayp');
     final s = c.read(onboardingFlowProvider);

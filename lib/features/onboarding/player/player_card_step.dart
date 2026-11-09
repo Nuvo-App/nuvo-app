@@ -16,13 +16,15 @@ import '../flow/onboarding_copy.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
 import '../shell/onboarding_shell.dart';
+import 'race_preview.dart' show obHeroHeight;
 import 'username_rules.dart';
 
 /// Username availability seam — production reads the existing
 /// [AuthController.checkUsername]; tests override with a fake.
 final obUsernameCheckerProvider =
     Provider<Future<bool> Function(String username)>(
-      (ref) => (u) => ref.read(authControllerProvider.notifier).checkUsername(u),
+      (ref) =>
+          (u) => ref.read(authControllerProvider.notifier).checkUsername(u),
     );
 
 /// The profile write seam — production runs the exact v1 sequence
@@ -85,6 +87,7 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
   XFile? _photo;
   Uint8List? _photoBytes;
   int _flip = 0;
+  int _stamp = 0;
 
   @override
   void initState() {
@@ -145,10 +148,7 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
   }
 
   bool get _canContinue =>
-      _name.text.trim().isNotEmpty &&
-      _available == true &&
-      _terms &&
-      !_saving;
+      _name.text.trim().isNotEmpty && _available == true && _terms && !_saving;
 
   // ── Photo ───────────────────────────────────────────────────────────────
 
@@ -245,6 +245,13 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
       return;
     }
     if (!mounted) return;
+    // Stamp press: the card slams down, then the flow moves on.
+    setState(() => _stamp++);
+    NuvoHaptics.heavy();
+    if (!NuvoMotion.reduceMotionOf(context)) {
+      await Future<void>.delayed(NuvoMotion.springDuration);
+      if (!mounted) return;
+    }
     await obAdvance(context, ref, OnboardingStep.playerCard);
   }
 
@@ -265,18 +272,28 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
     final flow = ref.read(onboardingFlowProvider.notifier);
     final raw = _normalized;
     final taken = _available == false;
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    // Tall phones get a roomy card; the keyboard (or a small phone) shrinks
+    // the slot and the card scales down to fit so the fields keep the room.
+    final heroHeight = keyboard
+        ? 104.0
+        : obHeroHeight(context, tall: 232, small: 188);
 
     return OnboardingShell(
       step: OnboardingStep.playerCard,
+      heroHeight: heroHeight,
       hero: Center(
-        child: NuvoFloat(
-          child: _PlayerCard(
-            name: _name.text.trim(),
-            username: raw,
-            photoBytes: _photoBytes,
-            flip: _flip,
-            onPhotoTap: _openPhotoSheet,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: NuvoFloat(
+            child: _PlayerCard(
+              name: _name.text.trim(),
+              username: raw,
+              photoBytes: _photoBytes,
+              flip: _flip,
+              stamp: _stamp,
+              onPhotoTap: _openPhotoSheet,
+            ),
           ),
         ),
       ),
@@ -301,11 +318,11 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
             autocorrect: false,
             enableSuggestions: false,
             textInputAction: TextInputAction.done,
-            prefixIcon: const Padding(
-              padding: EdgeInsets.only(left: 14, right: 4),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(left: 14, right: 4),
               child: Align(
                 widthFactor: 1,
-                child: Text('@', style: TextStyle(fontWeight: FontWeight.w800)),
+                child: Text('@', style: V13.bodyStrong),
               ),
             ),
             suffixIcon: _checking
@@ -365,9 +382,6 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
               ),
             ),
           ],
-          // Lets the fields scroll clear of the keyboard (the shell does not
-          // resize for it).
-          SizedBox(height: keyboard),
         ],
       ),
       ctaLabel: ObCopy.playerCardCta,
@@ -386,6 +400,7 @@ class _PlayerCard extends StatelessWidget {
     required this.username,
     required this.photoBytes,
     required this.flip,
+    required this.stamp,
     required this.onPhotoTap,
   });
 
@@ -393,6 +408,7 @@ class _PlayerCard extends StatelessWidget {
   final String username;
   final Uint8List? photoBytes;
   final int flip;
+  final int stamp;
   final VoidCallback onPhotoTap;
 
   @override
@@ -471,26 +487,21 @@ class _PlayerCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name.isEmpty ? ObCopy.playerCardNameField : name,
+                _TypedText(
+                  name,
                   key: const ValueKey('player-card-name'),
+                  placeholder: ObCopy.playerCardNameField,
                   maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: V13.cardTitle.copyWith(
-                    color: name.isEmpty ? V13.navy.withValues(alpha: .45) : null,
-                  ),
+                  style: V13.cardTitle,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  username.isEmpty ? '@username' : '@$username',
+                _TypedText(
+                  username,
                   key: const ValueKey('player-card-username'),
+                  prefix: '@',
+                  placeholder: '@username',
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: V13.bodyStrong.copyWith(
-                    color: username.isEmpty
-                        ? V13.navy.withValues(alpha: .45)
-                        : V13.navy,
-                  ),
+                  style: V13.bodyStrong,
                 ),
                 const SizedBox(height: V13.gapSm),
                 const Row(
@@ -517,7 +528,17 @@ class _PlayerCard extends StatelessWidget {
       ),
     );
 
-    if (reduce || flip == 0) return card;
+    final stamped = (reduce || stamp == 0)
+        ? card
+        : TweenAnimationBuilder<double>(
+            key: ValueKey('stamp$stamp'),
+            tween: Tween(begin: 1.16, end: 1),
+            duration: NuvoMotion.springDuration,
+            curve: NuvoMotion.spring,
+            builder: (_, t, child) => Transform.scale(scale: t, child: child),
+            child: card,
+          );
+    if (reduce || flip == 0) return stamped;
     return TweenAnimationBuilder<double>(
       key: ValueKey(flip),
       tween: Tween(begin: 0, end: 1),
@@ -530,7 +551,97 @@ class _PlayerCard extends StatelessWidget {
           ..rotateY(2 * math.pi * t),
         child: child,
       ),
-      child: card,
+      child: stamped,
+    );
+  }
+}
+
+/// Card text whose newest character scales in as it is typed (a single
+/// appended character only — pasted, deleted or prefilled text just
+/// appears). Reduce-motion renders plain text.
+class _TypedText extends StatefulWidget {
+  const _TypedText(
+    this.text, {
+    super.key,
+    this.prefix = '',
+    required this.placeholder,
+    required this.style,
+    required this.maxLines,
+  });
+
+  final String text;
+  final String prefix;
+  final String placeholder;
+  final TextStyle style;
+  final int maxLines;
+
+  @override
+  State<_TypedText> createState() => _TypedTextState();
+}
+
+class _TypedTextState extends State<_TypedText> {
+  String _prev = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _prev = widget.text;
+  }
+
+  @override
+  void didUpdateWidget(_TypedText old) {
+    super.didUpdateWidget(old);
+    _prev = old.text;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.text;
+    if (t.isEmpty) {
+      return Text(
+        widget.placeholder,
+        maxLines: widget.maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style.copyWith(color: V13.navy.withValues(alpha: .45)),
+      );
+    }
+    final pop =
+        !NuvoMotion.reduceMotionOf(context) &&
+        t.length == _prev.length + 1 &&
+        t.startsWith(_prev);
+    if (!pop) {
+      return Text(
+        '${widget.prefix}$t',
+        maxLines: widget.maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style,
+      );
+    }
+    return Text.rich(
+      TextSpan(
+        style: widget.style,
+        children: [
+          TextSpan(text: '${widget.prefix}$_prev'),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey(t.length),
+              tween: Tween(begin: .4, end: 1),
+              duration: NuvoMotion.springDuration,
+              curve: NuvoMotion.spring,
+              builder: (_, v, child) => Transform.scale(
+                scale: v,
+                alignment: Alignment.bottomCenter,
+                child: child,
+              ),
+              child: Text(t.substring(_prev.length), style: widget.style),
+            ),
+          ),
+        ],
+      ),
+      maxLines: widget.maxLines,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -613,57 +724,84 @@ class _TermsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          key: const ValueKey('player-card-terms'),
-          onTap: () {
-            NuvoHaptics.select();
-            onChanged(!value);
-          },
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Checkbox.adaptive(
-                  value: value,
-                  side: const BorderSide(color: V13.navy, width: 1.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  fillColor: WidgetStateProperty.resolveWith(
-                    (s) => s.contains(WidgetState.selected) ? V13.blue : null,
-                  ),
-                  checkColor: V13.card,
-                  onChanged: (v) {
-                    NuvoHaptics.select();
-                    onChanged(v ?? false);
-                  },
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        V13.gapMd,
+        V13.gapXs,
+        V13.gapMd,
+        V13.gapXs,
+      ),
+      decoration: BoxDecoration(
+        color: value ? V13.blue.withValues(alpha: .08) : V13.card,
+        borderRadius: BorderRadius.circular(V13.radiusButton),
+        border: Border.all(
+          color: value ? V13.blue : V13.navy,
+          width: V13.outline,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          NuvoPressable(
+            key: const ValueKey('player-card-terms'),
+            onTap: () {
+              NuvoHaptics.select();
+              onChanged(!value);
+            },
+            semanticLabel: ObCopy.playerCardTerms,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: V13.gapSm),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedContainer(
+                      duration: NuvoMotion.springDuration,
+                      curve: NuvoMotion.spring,
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: value ? V13.blue : V13.card,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: value ? V13.blue : V13.navy,
+                          width: V13.outlineThick,
+                        ),
+                      ),
+                      child: value
+                          ? const Icon(
+                              Icons.check_rounded,
+                              size: 18,
+                              color: V13.white,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: V13.gapMd),
+                    Expanded(
+                      child: Text(ObCopy.playerCardTerms, style: V13.body),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: Text(ObCopy.playerCardTerms, style: V13.body),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 38),
+            child: Wrap(
+              spacing: V13.gapLg,
+              children: [
+                _LegalLink(label: 'Terms', uri: LegalLinks.termsUri),
+                _LegalLink(label: 'Privacy Policy', uri: LegalLinks.privacyUri),
+                _LegalLink(
+                  label: 'Guidelines',
+                  uri: LegalLinks.communityGuidelinesUri,
                 ),
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 48),
-          child: Wrap(
-            spacing: V13.gapMd,
-            children: [
-              _LegalLink(label: 'Terms', uri: LegalLinks.termsUri),
-              _LegalLink(label: 'Privacy Policy', uri: LegalLinks.privacyUri),
-              _LegalLink(
-                label: 'Guidelines',
-                uri: LegalLinks.communityGuidelinesUri,
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
