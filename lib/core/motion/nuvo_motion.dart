@@ -109,6 +109,12 @@ abstract final class NuvoMotion {
   /// real handoff; the stub uses this).
   static const Duration splashHold = Duration(milliseconds: 1200);
 
+  /// Typing pause before a live availability check fires (S7 username).
+  static const Duration inputDebounce = Duration(milliseconds: 500);
+
+  /// S9 "Your first race is ready" hold: no-input transition length.
+  static const Duration firstRaceTransition = Duration(milliseconds: 2200);
+
   // ── Step transition (the flow host's AnimatedSwitcher builder) ────────
   /// Incoming content springs up from y+28 as it fades in; the outgoing
   /// child eases out upward (−12 px, scale .97). Under reduce-motion both
