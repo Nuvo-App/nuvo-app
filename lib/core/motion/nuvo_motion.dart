@@ -178,6 +178,29 @@ abstract final class NuvoMotion {
   static const int resendCooldownSeconds = 30;
   static const int lockoutSeconds = 60;
 
+  // ── Part A step timings (spec-mandated values, one name each) ─────────
+  /// S1: the tap-duel race window (spec: "for 5s each tap moves your token").
+  static const Duration duelWindow = Duration(seconds: 5);
+
+  /// S1: pressing Next before the duel ends auto-plays it to the finish
+  /// (spec: "the duel auto-plays and finishes in 1.5s").
+  static const Duration duelAutoPlay = Duration(milliseconds: 1500);
+
+  /// S1: the one-time hand pointer appears after this idle delay
+  /// (spec: "Idle 3s: hand pointer taps once").
+  static const Duration pointerIdle = Duration(seconds: 3);
+
+  /// The hand pointer's single tap press length (spec: "700ms press" —
+  /// shared with the tour engine's pointer).
+  static const Duration pointerTap = Duration(milliseconds: 700);
+
+  /// S2: one down-and-up rep of the skeleton squat loop.
+  static const Duration squatRep = Duration(milliseconds: 1400);
+
+  /// S3: cadence of the leaderboard points tick / row swap
+  /// (spec: "every 2.4s points tick up").
+  static const Duration boardTick = Duration(milliseconds: 2400);
+
   // ── Step transition (the flow host's AnimatedSwitcher builder) ────────
   /// Incoming content springs up from y+28 as it fades in; the outgoing
   /// child eases out upward (−12 px, scale .97). Under reduce-motion both
