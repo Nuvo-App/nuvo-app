@@ -23,11 +23,7 @@ void main() {
   OnboardingShellController? shellOrNull;
   late ProviderContainer c;
 
-  Future<void> pump(
-    WidgetTester tester,
-    Widget child,
-    OnboardingStep at,
-  ) async {
+  Future<void> pump(WidgetTester tester, Widget child, OnboardingStep at) async {
     shellOrNull = OnboardingShellController();
     await tester.pumpWidget(
       playerHarness(

@@ -21,13 +21,14 @@ String _boxText(WidgetTester t, int i) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<AuthHarness> pump(WidgetTester t, {String? clipboard}) async {
+  Future<AuthHarness> pump(
+    WidgetTester t, {
+    String? clipboard,
+  }) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
           if (call.method == 'Clipboard.getData') {
-            return clipboard == null
-                ? null
-                : <String, dynamic>{'text': clipboard};
+            return clipboard == null ? null : <String, dynamic>{'text': clipboard};
           }
           return null;
         });
@@ -80,15 +81,13 @@ void main() {
   ) async {
     final h = await pump(t);
     await enter(t, '123');
-    expect(
-      [for (var i = 0; i < 6; i++) _boxText(t, i)],
-      ['1', '2', '3', '', '', ''],
-    );
+    expect([for (var i = 0; i < 6; i++) _boxText(t, i)], [
+      '1', '2', '3', '', '', '',
+    ]);
     await enter(t, '12');
-    expect(
-      [for (var i = 0; i < 6; i++) _boxText(t, i)],
-      ['1', '2', '', '', '', ''],
-    );
+    expect([for (var i = 0; i < 6; i++) _boxText(t, i)], [
+      '1', '2', '', '', '', '',
+    ]);
     expect(h.auth.verified, isEmpty);
   });
 
@@ -96,10 +95,9 @@ void main() {
     final h = await pump(t);
     h.auth.verifyError = const ApiException(0, 'offline'); // keep the boxes
     await enter(t, '482 915');
-    expect(
-      [for (var i = 0; i < 6; i++) _boxText(t, i)],
-      ['4', '8', '2', '9', '1', '5'],
-    );
+    expect([for (var i = 0; i < 6; i++) _boxText(t, i)], [
+      '4', '8', '2', '9', '1', '5',
+    ]);
     expect(h.auth.verified, ['482915']);
     await advance(t, 300);
   });
@@ -202,10 +200,7 @@ void main() {
     t,
   ) async {
     final h = await pump(t);
-    await t.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(0, -400),
-    );
+    await t.drag(find.byType(SingleChildScrollView).first, const Offset(0, -400));
     await t.pump(const Duration(seconds: 1));
     await t.tap(find.byKey(const ValueKey('ob-code-tips')));
     await t.pump(const Duration(seconds: 1));

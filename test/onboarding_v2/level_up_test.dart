@@ -174,12 +174,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 700));
     final cta = tester.widget<Opacity>(
-      find
-          .ancestor(
-            of: find.text(ObCopy.levelUpCta),
-            matching: find.byType(Opacity),
-          )
-          .first,
+      find.ancestor(
+        of: find.text(ObCopy.levelUpCta),
+        matching: find.byType(Opacity),
+      ).first,
     );
     expect(cta.opacity, closeTo(1.0, 0.01));
   });

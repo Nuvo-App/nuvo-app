@@ -25,9 +25,7 @@ Widget playerHarness({
   overrides: [
     onboardingV2StoreProvider.overrideWithValue(store),
     analyticsProvider.overrideWithValue(FakeAnalyticsService()),
-    authControllerProvider.overrideWith(
-      (ref) => AuthController(FakeAuthRepo()),
-    ),
+    authControllerProvider.overrideWith((ref) => AuthController(FakeAuthRepo())),
     ...overrides,
   ],
   child: MaterialApp(
