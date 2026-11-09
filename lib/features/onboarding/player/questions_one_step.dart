@@ -31,6 +31,7 @@ class ObQuestionsOneStep extends ConsumerWidget {
     final flow = ref.read(onboardingFlowProvider.notifier);
     return OnboardingShell(
       step: OnboardingStep.questions1,
+      heroHeight: obHeroHeight(context, tall: 220, small: 156),
       hero: ObRacePreviewCard(
         title: obRacePreviewTitle(picked),
         color: V13.mint,
@@ -91,8 +92,9 @@ class _PickChip extends StatelessWidget {
         duration: NuvoMotion.springDuration,
         curve: NuvoMotion.spring,
         padding: const EdgeInsets.symmetric(horizontal: V13.gapMd),
+        alignment: Alignment.centerLeft,
         decoration: BoxDecoration(
-          color: selected ? V13.blue.withValues(alpha: .14) : V13.card,
+          color: selected ? obSelectedFill : V13.card,
           borderRadius: BorderRadius.circular(V13.radiusButton),
           border: Border.all(
             color: selected ? V13.blue : V13.navy,
@@ -101,14 +103,17 @@ class _PickChip extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: selected ? V13.blue : V13.navy),
+            Icon(icon, size: 20, color: selected ? V13.blue : V13.navy),
             const SizedBox(width: V13.gapSm),
             Expanded(
               child: Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: V13.bodyStrong,
+                style: V13.bodyStrong.copyWith(
+                  height: 1.15,
+                  color: selected ? V13.blue : V13.navy,
+                ),
               ),
             ),
           ],
