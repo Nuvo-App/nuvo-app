@@ -113,3 +113,16 @@ extension OnboardingStepX on OnboardingStep {
       this != OnboardingStep.arenaTour &&
       this != OnboardingStep.levelUp;
 }
+
+/// Steps that exist in code but are CUT from the shipped flow until they are
+/// finished to the quality bar: the tour (practice race S10, notification
+/// sheet S11, three stops S12-S14) are still placeholder screens. Cut steps
+/// resolve silently (no XP, no screen) so the flow runs S9 -> Level Up.
+/// Re-enable a step by removing it here; nothing else changes.
+const Set<OnboardingStep> kCutSteps = {
+  OnboardingStep.arenaTour,
+  OnboardingStep.notifyOptIn,
+  OnboardingStep.tourCompete,
+  OnboardingStep.tourCrew,
+  OnboardingStep.tourProfile,
+};

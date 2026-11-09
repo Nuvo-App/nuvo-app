@@ -82,7 +82,9 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     required AnalyticsService analytics,
     required Future<void> Function() onGraduate,
     NuvoSounds sounds = const NoopNuvoSounds(),
-  }) : _store = store,
+    Set<OnboardingStep> cutSteps = const {},
+  }) : _cutSteps = cutSteps,
+       _store = store,
        _analytics = analytics,
        _onGraduate = onGraduate,
        _sounds = sounds,
@@ -101,6 +103,9 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   final AnalyticsService _analytics;
   final Future<void> Function() _onGraduate;
   final NuvoSounds _sounds;
+
+  /// Steps removed from this build's flow (see [kCutSteps]); always complete.
+  final Set<OnboardingStep> _cutSteps;
 
   DateTime _enteredAt = DateTime.now();
   bool _restoring = false;
@@ -399,6 +404,7 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     final completed = {
       ..._stepSet(_store.completedSteps),
       OnboardingStep.splash,
+      ..._cutSteps,
     };
     final awarded = <OnboardingStep, int>{};
     for (final e in _store.xpAwarded.entries) {
@@ -451,6 +457,7 @@ final onboardingFlowProvider =
         store: ref.watch(onboardingV2StoreProvider),
         analytics: ref.watch(analyticsProvider),
         sounds: ref.watch(nuvoSoundsProvider),
+        cutSteps: kCutSteps,
         // The same server write the v1 story makes — the flag's meaning for
         // old builds is untouched (build plan: additive grant is Part E's).
         onGraduate: () =>

@@ -408,11 +408,13 @@ class _FakeDataPillState extends ConsumerState<_FakeDataPill> {
         races.loadRaces(force: true),
         arena.loadSnapshot(force: true),
       ]);
-      if (mounted)
+      if (mounted) {
         showV13Toast(context, on ? 'Fake data on.' : 'Fake data off.');
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         showV13Toast(context, 'Couldn\u2019t switch data. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
