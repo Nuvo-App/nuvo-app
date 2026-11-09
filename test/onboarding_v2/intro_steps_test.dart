@@ -16,6 +16,7 @@ import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_copy.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
+import 'package:nuvo/features/onboarding/intro/intro_camera_step.dart';
 import 'package:nuvo/features/onboarding/intro/intro_race_step.dart';
 import 'package:nuvo/features/onboarding/intro/splash_step.dart';
 import 'package:nuvo/features/onboarding/onboarding_v2_screen.dart';
@@ -155,6 +156,57 @@ void main() {
       expect(find.byIcon(Icons.back_hand_rounded), findsOneWidget);
       await _pumpFor(tester, 2.5);
       expect(find.byIcon(Icons.back_hand_rounded), findsNWidgets(1));
+    });
+  });
+
+  group('S2 ObIntroCameraStep', () {
+    Finder card() => find.byKey(const ValueKey('ob-camera-card'));
+    Finder cta() => find.byKey(const ValueKey('onboarding-cta'));
+
+    AnimatedOpacity pill(WidgetTester tester) =>
+        tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('ob-verified-pill')),
+        );
+
+    /// Lands on S2 through the real flow: splash auto-advances, then the
+    /// S1 duel auto-plays off an early Next.
+    Future<ProviderContainer> onCameraStep(WidgetTester tester) async {
+      final c = await _pumpFlow(tester);
+      await _pumpFor(tester, 2.5);
+      await tester.tap(cta());
+      await _pumpFor(tester, 2.5);
+      expect(find.byType(ObIntroCameraStep), findsOneWidget);
+      return c;
+    }
+
+    testWidgets('reps count on squat bottoms and verify after three', (
+      tester,
+    ) async {
+      await onCameraStep(tester);
+      expect(pill(tester).opacity, 0);
+
+      await _pumpFor(tester, 2.4); // ~2 squat bottoms at 1.4 s/rep
+      expect(pill(tester).opacity, 0);
+
+      await _pumpFor(tester, 1.5); // third bottom lands
+      expect(pill(tester).opacity, 1);
+      expect(find.text(ObCopy.introCameraPill), findsOneWidget);
+    });
+
+    testWidgets('tapping the card restarts the rep count', (tester) async {
+      await onCameraStep(tester);
+      await _pumpFor(tester, 2.5);
+      await tester.tap(card(), warnIfMissed: false);
+      await tester.pump();
+      expect(find.text('0'), findsOneWidget);
+      expect(pill(tester).opacity, 0);
+    });
+
+    testWidgets('Next lands on the leaderboard intro', (tester) async {
+      final c = await onCameraStep(tester);
+      await tester.tap(cta());
+      await _pumpFor(tester, 1);
+      expect(_step(c), OnboardingStep.introBoard);
     });
   });
 }
