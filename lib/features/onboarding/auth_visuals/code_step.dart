@@ -13,6 +13,7 @@ import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
 import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
+import 'auth_layout.dart';
 import 'ob_shake.dart';
 import 'player_pass.dart';
 
@@ -186,6 +187,8 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     }
     if (!mounted) return;
     setState(() => _phase = _Phase.verified);
+    _focus
+        .unfocus(); // the keyboard drops, the ticket returns to take its stamp
     NuvoHaptics.medium();
     unawaited(NuvoHaptics.success());
     final account = ref.read(authControllerProvider).user?.email;
@@ -286,6 +289,15 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     if (pick != null) flow.goTo(pick);
   }
 
+  static const double _slotHeight = 36;
+
+  /// Box height follows the box width (they stay roughly 4:5 at any phone
+  /// width) between 52 and 64.
+  double _boxHeight(BuildContext context) {
+    final w = (MediaQuery.sizeOf(context).width - V13.pagePad * 2 - 40) / 6;
+    return (w * 1.3).clamp(52.0, 64.0);
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────
 
   @override
@@ -294,19 +306,34 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     final email = ref.watch(onboardingFlowProvider.select((s) => s.email));
     final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
     final locked = _phase == _Phase.locked;
+    final tight = obTightScreen(context);
+    final lean = keyboardUp || tight;
+    final below =
+        20 +
+        30 +
+        (lean ? 0 : 28) +
+        16 +
+        44 +
+        12 +
+        _boxHeight(context) +
+        8 +
+        _slotHeight +
+        12 +
+        44 +
+        40;
+    final hero = obHeroHeight(context, below: below, max: 280);
 
     return OnboardingShell(
       step: OnboardingStep.code,
-      heroHeight: keyboardUp ? 112 : 240,
+      heroHeight: hero,
       hero: ObPlayerPass(
         email: email ?? '',
         stamp: _phase == _Phase.verified
             ? ObStampState.verified
             : ObStampState.none,
-        compact: keyboardUp,
       ),
       title: ObCopy.codeTitle,
-      subtitle: ObCopy.codeSub,
+      subtitle: lean ? null : ObCopy.codeSub,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -332,6 +359,7 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
             key: _shake,
             count: 3,
             child: _CodeBoxes(
+              height: _boxHeight(context),
               controller: _ctrl,
               focusNode: _focus,
               phase: _phase,
@@ -340,27 +368,30 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
               onChanged: _onChanged,
             ),
           ),
-          const SizedBox(height: V13.gapMd),
-          _StatusLine(
-            verifying: _phase == _Phase.verifying,
-            error: _error,
-            note: _note,
-            lockLeft: _lockLeft,
-          ),
-          if (_clipboardCode != null &&
-              _code.isEmpty &&
-              !_busy &&
-              !locked) ...[
-            const SizedBox(height: V13.gapSm),
-            Align(
+          const SizedBox(height: V13.gapSm),
+          // One fixed slot: status / error when there is one, otherwise the
+          // paste chip, otherwise nothing — the rows below never jump.
+          SizedBox(
+            height: _slotHeight,
+            child: Align(
               alignment: Alignment.centerLeft,
-              child: _PasteChip(
-                code: _clipboardCode!,
-                onTap: () => _fill(_clipboardCode!),
-              ),
+              child:
+                  _phase == _Phase.verifying || _error != null || _note != null
+                  ? _StatusLine(
+                      verifying: _phase == _Phase.verifying,
+                      error: _error,
+                      note: _note,
+                      lockLeft: _lockLeft,
+                    )
+                  : _clipboardCode != null && _code.isEmpty && !_busy && !locked
+                  ? _PasteChip(
+                      code: _clipboardCode!,
+                      onTap: () => _fill(_clipboardCode!),
+                    )
+                  : null,
             ),
-          ],
-          const SizedBox(height: V13.gapLg),
+          ),
+          const SizedBox(height: V13.gapMd),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -396,6 +427,7 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
 
 class _CodeBoxes extends StatelessWidget {
   const _CodeBoxes({
+    required this.height,
     required this.controller,
     required this.focusNode,
     required this.phase,
@@ -404,6 +436,7 @@ class _CodeBoxes extends StatelessWidget {
     required this.onChanged,
   });
 
+  final double height;
   final TextEditingController controller;
   final FocusNode focusNode;
   final _Phase phase;
@@ -421,7 +454,7 @@ class _CodeBoxes extends StatelessWidget {
             ? code.length.clamp(0, ObCodeStep.length - 1)
             : -1;
         return SizedBox(
-          height: 64,
+          height: height,
           child: Stack(
             children: [
               Row(
@@ -431,6 +464,7 @@ class _CodeBoxes extends StatelessWidget {
                     if (i > 0) const SizedBox(width: 8),
                     _CodeBox(
                       index: i,
+                      height: height,
                       char: i < code.length ? code[i] : '',
                       active: i == active,
                       phase: phase,
@@ -481,6 +515,7 @@ class _CodeBoxes extends StatelessWidget {
 class _CodeBox extends StatelessWidget {
   const _CodeBox({
     required this.index,
+    required this.height,
     required this.char,
     required this.active,
     required this.phase,
@@ -488,6 +523,7 @@ class _CodeBox extends StatelessWidget {
   });
 
   final int index;
+  final double height;
   final String char;
   final bool active;
   final _Phase phase;
@@ -525,7 +561,7 @@ class _CodeBox extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 52),
         child: Container(
           key: ValueKey('ob-code-box-$index'),
-          height: 64,
+          height: height,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: fill,
@@ -616,16 +652,13 @@ class _StatusLine extends StatelessWidget {
         : verifying
         ? V13.muted
         : V13.blue;
-    return SizedBox(
-      height: 22,
-      child: text == null
-          ? null
-          : Text(
-              text,
-              key: const ValueKey('ob-code-status'),
-              textAlign: TextAlign.center,
-              style: V13.bodyStrong.copyWith(color: color),
-            ),
+    if (text == null) return const SizedBox.shrink();
+    return Text(
+      text,
+      key: const ValueKey('ob-code-status'),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: V13.bodyStrong.copyWith(color: color, fontSize: 13, height: 1.25),
     );
   }
 }
@@ -642,12 +675,16 @@ class _TextAction extends StatelessWidget {
       onTap: onTap,
       enabled: onTap != null,
       semanticLabel: label,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: V13.gapSm),
-        child: Text(
-          label,
-          style: V13.bodyStrong.copyWith(
-            color: onTap == null ? V13.muted : V13.blue,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        child: Align(
+          widthFactor: 1,
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: V13.bodyStrong.copyWith(
+              color: onTap == null ? V13.muted : V13.blue,
+            ),
           ),
         ),
       ),
@@ -685,7 +722,8 @@ class _PasteChip extends StatelessWidget {
   }
 }
 
-/// "Didn't get the code?" — tips plus the two escape hatches.
+/// "Didn't get the code?" — tips plus the two escape hatches. Same sheet
+/// look as S4 (handle, outlined top, white).
 class _TipsSheet extends StatelessWidget {
   const _TipsSheet();
 
@@ -698,7 +736,7 @@ class _TipsSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.only(top: 6, right: V13.gapSm),
+            padding: EdgeInsets.only(top: 8, right: V13.gapSm),
             child: Icon(Icons.circle, size: 6, color: V13.navy),
           ),
           Expanded(child: Text(t, style: V13.body)),
@@ -706,9 +744,10 @@ class _TipsSheet extends StatelessWidget {
       ),
     );
     return Container(
+      key: const ValueKey('ob-tips-sheet'),
       padding: EdgeInsets.fromLTRB(
         V13.pagePad,
-        V13.gapLg,
+        V13.gapMd,
         V13.pagePad,
         V13.gapLg + bottom,
       ),
@@ -727,31 +766,55 @@ class _TipsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(ObCopy.codeTipsTitle, style: V13.sectionHead),
+          Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: V13.divider,
+                borderRadius: BorderRadius.circular(V13.radiusPill),
+              ),
+            ),
+          ),
+          const SizedBox(height: V13.gapLg),
+          Text(ObCopy.codeTipsTitle, style: V13.title),
           const SizedBox(height: V13.gapMd),
           tip(ObCopy.codeTipSpam),
           tip(ObCopy.codeTipEmail),
           const SizedBox(height: V13.gapSm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _TextAction(
-                key: const ValueKey('ob-tip-change'),
-                label: ObCopy.codeTipChangeEmail,
-                onTap: () => Navigator.of(context).pop(OnboardingStep.email),
-              ),
-              _TextAction(
-                key: const ValueKey('ob-tip-social'),
-                label: ObCopy.codeTipSocial,
-                onTap: () => Navigator.of(context).pop(OnboardingStep.signIn),
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _TextAction(
+              key: const ValueKey('ob-tip-change'),
+              label: ObCopy.codeTipChangeEmail,
+              onTap: () => Navigator.of(context).pop(OnboardingStep.email),
+            ),
           ),
-          const SizedBox(height: V13.gapSm),
-          _TextAction(
-            key: const ValueKey('ob-tip-done'),
-            label: ObCopy.codeTipsDone,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _TextAction(
+              key: const ValueKey('ob-tip-social'),
+              label: ObCopy.codeTipSocial,
+              onTap: () => Navigator.of(context).pop(OnboardingStep.signIn),
+            ),
+          ),
+          const SizedBox(height: V13.gapMd),
+          NuvoPressable(
             onTap: () => Navigator.of(context).pop(),
+            borderRadius: BorderRadius.circular(V13.radiusButton),
+            shadow: V13.shadow4,
+            semanticLabel: ObCopy.codeTipsDone,
+            child: Container(
+              key: const ValueKey('ob-tip-done'),
+              height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: V13.card,
+                borderRadius: BorderRadius.circular(V13.radiusButton),
+                border: Border.all(color: V13.navy, width: V13.outlineThick),
+              ),
+              child: Text(ObCopy.codeTipsDone, style: V13.buttonLabel),
+            ),
           ),
         ],
       ),

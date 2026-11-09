@@ -18,9 +18,7 @@ Widget _app({
   // copyWith so the real viewInsets survive — a fresh MediaQueryData here
   // would zero the keyboard inset the dock is supposed to read.
   builder: (context, child) => MediaQuery(
-    data: MediaQuery.of(
-      context,
-    ).copyWith(disableAnimations: disableAnimations),
+    data: MediaQuery.of(context).copyWith(disableAnimations: disableAnimations),
     child: child!,
   ),
   home: OnboardingShellScope(

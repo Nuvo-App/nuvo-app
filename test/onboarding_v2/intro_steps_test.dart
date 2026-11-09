@@ -164,10 +164,9 @@ void main() {
     Finder card() => find.byKey(const ValueKey('ob-camera-card'));
     Finder cta() => find.byKey(const ValueKey('onboarding-cta'));
 
-    AnimatedOpacity pill(WidgetTester tester) =>
-        tester.widget<AnimatedOpacity>(
-          find.byKey(const ValueKey('ob-verified-pill')),
-        );
+    AnimatedOpacity pill(WidgetTester tester) => tester.widget<AnimatedOpacity>(
+      find.byKey(const ValueKey('ob-verified-pill')),
+    );
 
     /// Lands on S2 through the real flow: splash auto-advances, then the
     /// S1 duel auto-plays off an early Next.
