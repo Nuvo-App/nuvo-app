@@ -12,17 +12,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'auth_controller.dart';
+import '../../../core/config/nuvo_flags.dart';
 import '../data/auth_models.dart';
 import '../../onboarding/data/first_use_store.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
 class RouterNotifier extends ChangeNotifier {
-  RouterNotifier(Ref ref) {
+  RouterNotifier(Ref ref, {bool? onboardingV2}) {
     ref.listen<AuthState>(authControllerProvider, (_, _) => notifyListeners());
     _ref = ref;
+    _v2 = onboardingV2 ?? NuvoFlags.onboardingV2;
   }
 
   late final Ref _ref;
+
+  // Onboarding v2 flag. When on, `/onboarding-v2` is the ONE owner of every
+  // owed-setup state: this gate sends owed accounts straight there (never via
+  // a v1 route that would redirect back), and the route layer never redirects
+  // out of it, so no redirect chain can loop.
+  late final bool _v2;
 
   String? redirect(BuildContext context, GoRouterState state) {
     final authState = _ref.read(authControllerProvider);
@@ -87,9 +95,11 @@ class RouterNotifier extends ChangeNotifier {
     // account must walk the REAL first-run setup first — replay owns the
     // session, not the ordering. The story is the last setup step, reached
     // through the genuine profile/consent screens.
-    if (replayingDemo) {
+    // With v2 on, a completed account has nothing left to replay: the v1
+    // story route folds into v2, so replaying it would loop — fall through.
+    if (replayingDemo && !(_v2 && user.onboardingComplete)) {
       if (!user.onboardingComplete) {
-        return loc.startsWith('/onboarding/') ? null : _firstRunTarget(user);
+        return _isOnboardingRoute(loc) ? null : _firstRunTarget(user);
       }
       return loc == '/onboarding/nuvo' ? null : '/onboarding/nuvo';
     }
@@ -116,6 +126,7 @@ class RouterNotifier extends ChangeNotifier {
     // auto-skip) clears the flag, so this never replays — and demo replay
     // never reaches this point (it is already handled above).
     if (!replayingDemo &&
+        !_v2 &&
         _ref.read(firstUseStoreProvider).isNotificationPromptOwed) {
       return loc == '/onboarding/notifications'
           ? null
@@ -165,6 +176,7 @@ class RouterNotifier extends ChangeNotifier {
   // Motion consent is a yes/no screen, so "declined" is indistinguishable
   // from "not yet seen" — both correctly resume at the consent screen once.
   String _firstRunTarget(AuthUser user) {
+    if (_v2) return '/onboarding-v2';
     final profileDone =
         user.termsAccepted &&
         user.ageAttested &&
@@ -213,8 +225,12 @@ class RouterNotifier extends ChangeNotifier {
       loc == '/welcome' || loc.startsWith('/auth/');
 
   // All pre-app routes
+  bool _isOnboardingRoute(String loc) =>
+      loc.startsWith('/onboarding/') || loc == '/onboarding-v2';
+
   bool _isAuthOrOnboarding(String loc) =>
       loc == '/welcome' ||
+      loc == '/onboarding-v2' ||
       loc.startsWith('/auth/') ||
       loc.startsWith('/onboarding/');
 }
