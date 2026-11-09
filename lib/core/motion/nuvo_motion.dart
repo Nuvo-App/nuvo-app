@@ -201,6 +201,40 @@ abstract final class NuvoMotion {
   /// (spec: "every 2.4s points tick up").
   static const Duration boardTick = Duration(milliseconds: 2400);
 
+  // ── Guided tour (lib/features/tour) ───────────────────────────────────
+  /// "Skip tour" link appears after this long on a stop.
+  static const Duration tourSkipAfter = Duration(seconds: 2);
+
+  /// A target that never mounts within this window is skipped, never blocks.
+  static const Duration tourTargetWait = Duration(milliseconds: 1500);
+
+  /// Polling cadence while waiting for a target to mount / settle.
+  static const Duration tourTargetPoll = Duration(milliseconds: 100);
+
+  /// Hand pointer: taps once on arrival, then once more after this idle.
+  static const Duration tourPointerIdle = Duration(seconds: 6);
+
+  /// Off-screen target auto-scroll.
+  static const Duration tourScroll = Duration(milliseconds: 400);
+  static const Curve tourScrollCurve = Curves.easeInOutCubic;
+
+  /// Pause between a finished stop and the next one appearing.
+  static const Duration tourStopGap = Duration(milliseconds: 700);
+
+  /// The scripted "passed you" beat after the first practice proof.
+  static const Duration tourNudgeDelay = Duration(seconds: 3);
+
+  /// How long an award / info chip stays on screen.
+  static const Duration tourChipHold = Duration(milliseconds: 1800);
+
+  /// Scrim opacity (navy at 72%).
+  static const double tourScrimOpacity = 0.72;
+
+  /// Cutout padding around the target and the cutout's outline / shadow.
+  static const double tourCutoutPad = 8;
+  static const double tourCutoutOutline = 2.5;
+  static const double tourCutoutShadow = 4;
+
   // ── Step transition (the flow host's AnimatedSwitcher builder) ────────
   /// Incoming content springs up from y+28 as it fades in; the outgoing
   /// child eases out upward (−12 px, scale .97). Under reduce-motion both

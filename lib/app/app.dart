@@ -14,6 +14,7 @@ import '../features/notifications/application/push_service.dart';
 import '../features/onboarding/data/first_use_store.dart';
 import '../features/onboarding/presentation/first_use_guide.dart';
 import '../features/social/application/deep_link_controller.dart';
+import '../features/tour/tour_overlay.dart';
 import 'router.dart';
 
 /// Whether the stashed link destination should be drained now. It drains when
@@ -172,7 +173,10 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
 Widget _appBuilder(BuildContext context, Widget? child) {
   final content = NuvoTextScaleScope(
     child: _KeyboardDismissScope(
-      child: FakeDataPillLayer(child: child ?? const SizedBox.shrink()),
+      child: TourOverlayLayer(
+        router: ProviderScope.containerOf(context).read(routerProvider),
+        child: FakeDataPillLayer(child: child ?? const SizedBox.shrink()),
+      ),
     ),
   );
   if (kIsWeb) return _webPreviewBuilder(context, content);
