@@ -16,12 +16,17 @@ class ObQuestionsTwoStep extends ConsumerWidget {
   const ObQuestionsTwoStep({super.key});
 
   static const options = [
-    (ObCopy.q2WithFriends, 'Invite a friend with your Nuvo code.',
-        Icons.group_rounded),
-    (ObCopy.q2Solo, 'Practice alone, add friends later.',
-        Icons.person_rounded),
-    (ObCopy.q2Surprise, 'We pick a good start for you.',
-        Icons.auto_awesome_rounded),
+    (
+      ObCopy.q2WithFriends,
+      'Invite a friend with your Nuvo code.',
+      Icons.group_rounded,
+    ),
+    (ObCopy.q2Solo, 'Practice alone, add friends later.', Icons.person_rounded),
+    (
+      ObCopy.q2Surprise,
+      'We pick a good start for you.',
+      Icons.auto_awesome_rounded,
+    ),
   ];
 
   @override
@@ -31,6 +36,7 @@ class ObQuestionsTwoStep extends ConsumerWidget {
     final flow = ref.read(onboardingFlowProvider.notifier);
     return OnboardingShell(
       step: OnboardingStep.questions2,
+      heroHeight: obHeroHeight(context, tall: 220, small: 156),
       hero: ObRacePreviewCard(
         title: obRacePreviewTitle(q1),
         color: V13.lilac,
@@ -39,8 +45,9 @@ class ObQuestionsTwoStep extends ConsumerWidget {
       title: ObCopy.questionsTitle2,
       subtitle: ObCopy.questionsSub,
       body: Column(
+        spacing: V13.gapMd,
         children: [
-          for (final (label, sub, icon) in options) ...[
+          for (final (label, sub, icon) in options)
             _ChoiceCard(
               label: label,
               sub: sub,
@@ -51,8 +58,6 @@ class ObQuestionsTwoStep extends ConsumerWidget {
                 flow.setAnswer(2, label);
               },
             ),
-            const SizedBox(height: V13.gapMd),
-          ],
         ],
       ),
       ctaLabel: ObCopy.next,
@@ -90,9 +95,12 @@ class _ChoiceCard extends StatelessWidget {
         duration: NuvoMotion.springDuration,
         curve: NuvoMotion.spring,
         constraints: const BoxConstraints(minHeight: 76),
-        padding: const EdgeInsets.all(V13.gapLg),
+        padding: const EdgeInsets.symmetric(
+          horizontal: V13.gapLg,
+          vertical: V13.gapMd,
+        ),
         decoration: BoxDecoration(
-          color: selected ? V13.blue.withValues(alpha: .14) : V13.card,
+          color: selected ? obSelectedFill : V13.card,
           borderRadius: BorderRadius.circular(V13.radiusCard),
           border: Border.all(
             color: selected ? V13.blue : V13.navy,
@@ -108,9 +116,23 @@ class _ChoiceCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label, style: V13.cardTitle),
+                  const SizedBox(height: 2),
                   Text(sub, style: V13.caption),
                 ],
               ),
+            ),
+            const SizedBox(width: V13.gapSm),
+            AnimatedSwitcher(
+              duration: NuvoMotion.springDuration,
+              switchInCurve: NuvoMotion.spring,
+              child: selected
+                  ? const Icon(
+                      Icons.check_circle_rounded,
+                      key: ValueKey('on'),
+                      size: 24,
+                      color: V13.blue,
+                    )
+                  : const SizedBox(key: ValueKey('off'), width: 24, height: 24),
             ),
           ],
         ),
