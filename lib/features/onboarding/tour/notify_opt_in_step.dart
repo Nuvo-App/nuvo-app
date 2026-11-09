@@ -108,7 +108,7 @@ class _ObNotifyOptInStepState extends ConsumerState<ObNotifyOptInStep> {
   }
 }
 
-/// The hero: the practice nudge row ("<racer> passed you"). Practice data,
+/// The hero: the practice nudge row (a practice racer passed you). Practice data,
 /// labeled as such; never sent anywhere.
 class _NudgeRow extends StatelessWidget {
   const _NudgeRow();
