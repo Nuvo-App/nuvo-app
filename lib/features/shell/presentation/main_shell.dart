@@ -18,6 +18,8 @@ import '../../social/data/crew_activity.dart';
 import '../../races/presentation/motion_catalog_provider.dart';
 import '../../profile/application/progression_controller.dart';
 import '../../profile/presentation/widgets/level_up_dialog.dart';
+import '../../tour/tour_anchors.dart';
+import '../../tour/tour_controller.dart';
 
 /// Bottom-nav host. Also the app-wide **freshness trigger point**: on app
 /// resume and on switching to a data tab it asks the canonical controllers to
@@ -300,6 +302,9 @@ class _MainShellState extends ConsumerState<MainShell>
       ],
       currentIndex: currentIndex,
       onTap: _onTapTab,
+      slotKeys: ref.watch(tourActiveProvider)
+          ? [for (var i = 0; i < 4; i++) TourAnchors.dockSlot(i)]
+          : null,
     );
 
     return Scaffold(

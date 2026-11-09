@@ -16,6 +16,9 @@ import '../../../races/domain/race_draft.dart';
 import '../../../races/presentation/motion_catalog_provider.dart';
 import '../../../races/presentation/race_controller.dart';
 import '../../../auth/presentation/auth_controller.dart';
+import '../../../tour/tour_anchors.dart';
+import '../../../tour/tour_controller.dart';
+import '../../../tour/tour_fixtures.dart';
 
 /// `GET /races/open` (W3) — friends' joinable races. The provider returns
 /// null when the call fails (older Worker → 404): the section hides instead
@@ -141,6 +144,14 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
 
   Future<void> _joinOpenRace(Race race) async {
     if (_joining) return;
+    if (isTourRace(race)) {
+      // Guided-tour practice race: joined locally, nothing is sent.
+      setState(() => _joinedIds.add(race.id));
+      showV13Confetti(context);
+      showV13Toast(context, 'Joined. You can start your own anytime.');
+      unawaited(ref.read(tourControllerProvider.notifier).practiceJoined());
+      return;
+    }
     setState(() {
       _joining = true;
       _joiningId = race.id;
@@ -567,9 +578,10 @@ class _OpenRacesSectionState extends ConsumerState<_OpenRacesSection> {
 
   @override
   Widget build(BuildContext context) {
-    final races = ref.watch(openRacesProvider).valueOrNull;
+    final tourRace = ref.watch(tourFixturesProvider)?.joinableRace;
+    final races = [?tourRace, ...?ref.watch(openRacesProvider).valueOrNull];
     // Hidden on error or empty — the section is opportunistic, not required.
-    if (races == null || races.isEmpty) return const SizedBox.shrink();
+    if (races.isEmpty) return const SizedBox.shrink();
 
     // Group by host, keeping first-seen order.
     final groups = <String, List<Race>>{};
@@ -602,6 +614,18 @@ class _OpenRacesSectionState extends ConsumerState<_OpenRacesSection> {
         .trim()
         .split(RegExp(r'\s+'))
         .first;
+    if (races.length == 1 && isTourRace(races.first)) {
+      return KeyedSubtree(
+        key: TourAnchors.keyOf(TourAnchor.joinCard),
+        child: _row(
+          face: host,
+          boldName: name,
+          rest: ' is racing ${races.first.displayTitle}',
+          meta: 'Practice',
+          trailing: _joinPill(races.first),
+        ),
+      );
+    }
     if (races.length == 1) {
       return _row(
         face: host,

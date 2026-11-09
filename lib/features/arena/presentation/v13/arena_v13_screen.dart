@@ -16,6 +16,8 @@ import '../arena_controller.dart';
 import 'arena_v13_data.dart';
 import 'arena_v13_race_swiper.dart';
 import 'arena_v13_sections.dart';
+import 'package:nuvo/features/tour/tour_fixtures.dart';
+import 'package:nuvo/features/tour/tour_getting_started.dart';
 
 /// The v13 Arena tab — `/arena` (also mounted by the shell as the home tab).
 ///
@@ -126,7 +128,11 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
       });
     }
 
-    final races = arenaOrderedRaces(raceState.races, arenaState.snapshot);
+    final tourFx = ref.watch(tourFixturesProvider);
+    final races = [
+      ?tourFx?.practiceRace,
+      ...arenaOrderedRaces(raceState.races, arenaState.snapshot),
+    ];
     final cards = [for (final r in races) arenaCardData(r, myId)];
     final progressionValue = progression.valueOrNull;
     final nudge = pickArenaNudge(
@@ -184,6 +190,7 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
                 onAvatarTap: () => context.go('/profile'),
               ),
             ),
+            const TourGettingStartedRow(),
             const SizedBox(height: V13.gapXxl),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
@@ -277,7 +284,7 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
   }
 
   Widget _racesSection(RaceState raceState, List<ArenaCardData> cards) {
-    if (raceState.loading && !raceState.hasData) {
+    if (raceState.loading && !raceState.hasData && cards.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(horizontal: V13.pagePad),
         child: V13Skeleton.box(
@@ -286,7 +293,7 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
         ),
       );
     }
-    if (raceState.error != null && !raceState.hasData) {
+    if (raceState.error != null && !raceState.hasData && cards.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
         child: ArenaSectionError(

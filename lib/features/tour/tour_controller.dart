@@ -211,10 +211,11 @@ class TourController extends StateNotifier<TourState> {
   Future<int> practiceProofDone({required bool fallback}) async {
     if (fallback) await _store.setCameraFallback(true);
     final stop = tourStopById('arenaProof')!;
+    final xp = fallback ? stop.fallbackXp! : stop.xp;
     return completeBeat(
       'arenaProof',
-      xp: fallback ? stop.fallbackXp : stop.xp,
-      chipText: 'You passed Nuvo Crew',
+      xp: xp,
+      chipText: 'You passed Nuvo Crew \u00b7 +$xp XP',
       next: NuvoMotion.tourNudgeDelay,
     );
   }

@@ -20,6 +20,8 @@ import '../../application/progression_controller.dart';
 import '../../data/profile_v13_api.dart';
 import '../../data/progression_models.dart';
 import 'v13_profile_shared.dart';
+import '../../../tour/tour_anchors.dart';
+import '../../../tour/tour_fixtures.dart';
 
 /// `/profile` — the v13 identity tab: photo, level, bio, counts, favorite
 /// movement, activity map, featured badges and race history.
@@ -105,7 +107,11 @@ class ProfileV13Screen extends ConsumerWidget {
                     const SizedBox(height: V13.gapSection),
                     _activitySection(activity),
                     const SizedBox(height: V13.gapSection),
-                    _achievementsSection(context, progression),
+                    _achievementsSection(
+                      context,
+                      progression,
+                      tourBadge: ref.watch(tourFixturesProvider)?.badge,
+                    ),
                     const SizedBox(height: V13.gapSection),
                     _historySection(context, finished, user?.id),
                   ],
@@ -201,9 +207,13 @@ class ProfileV13Screen extends ConsumerWidget {
 
   Widget _achievementsSection(
     BuildContext context,
-    NuvoProgression? progression,
-  ) {
+    NuvoProgression? progression, {
+    NuvoBadge? tourBadge,
+  }) {
     final featured = progression?.featuredBadges ?? const <NuvoBadge>[];
+    // Guided tour: a new account has no earned badge yet, so the tour shows
+    // a client-only "Day One" tile (never saved) as the spotlight target.
+    final tourTile = featured.isEmpty ? tourBadge : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -223,7 +233,33 @@ class ProfileV13Screen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: V13.gapMd),
-        if (featured.isEmpty)
+        if (tourTile != null)
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    V13BadgeTile.badge(
+                      tourTile,
+                      key: TourAnchors.keyOf(TourAnchor.firstBadge),
+                      onTap: () => context.push('/profile/badges'),
+                      semanticLabel: tourTile.name,
+                    ),
+                    const SizedBox(height: V13.gapXs),
+                    Text(
+                      tourTile.name,
+                      style: V13.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(flex: 2),
+            ],
+          )
+        else if (featured.isEmpty)
           V13Card.dashed(
             onTap: () => context.push('/profile/badges'),
             padding: const EdgeInsets.all(V13.gapLg),
@@ -243,12 +279,15 @@ class ProfileV13Screen extends ConsumerWidget {
         else
           Row(
             children: [
-              for (final badge in featured.take(3)) ...[
+              for (final (i, badge) in featured.take(3).indexed) ...[
                 Expanded(
                   child: Column(
                     children: [
                       V13BadgeTile.badge(
                         badge,
+                        key: i == 0 && tourBadge != null
+                            ? TourAnchors.keyOf(TourAnchor.firstBadge)
+                            : null,
                         onTap: () => context.push('/profile/badges'),
                         semanticLabel: badge.name,
                       ),

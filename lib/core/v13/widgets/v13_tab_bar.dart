@@ -37,7 +37,11 @@ class V13TabBar extends StatelessWidget {
     required this.items,
     required this.currentIndex,
     required this.onTap,
+    this.slotKeys,
   });
+
+  /// Optional keys for the slot boxes (the guided tour spotlights them).
+  final List<GlobalKey?>? slotKeys;
 
   final List<V13TabItem> items;
   final int currentIndex;
@@ -132,6 +136,7 @@ class V13TabBar extends StatelessWidget {
                   children: [
                     for (var i = 0; i < items.length; i++)
                       SizedBox(
+                        key: i < (slotKeys?.length ?? 0) ? slotKeys![i] : null,
                         width: slotWidth,
                         child: _TabSlot(
                           key: ValueKey('v13-tab-slot-$i'),

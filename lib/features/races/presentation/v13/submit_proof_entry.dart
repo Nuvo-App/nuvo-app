@@ -5,6 +5,8 @@ import '../../../../core/v13/v13.dart';
 import '../../data/race_models.dart';
 import '../../domain/race_display.dart';
 import 'submit_proof_sheet.dart';
+import '../../../tour/tour_fixtures.dart';
+import '../../../tour/tour_practice_proof.dart';
 
 /// The single "Submit proof" entry for the v13 shell. Every v13 surface
 /// (Arena race cards, nudges, Race detail, Compete live cards) calls this,
@@ -18,6 +20,8 @@ Future<void> openSubmitProof(
   WidgetRef ref,
   Race race,
 ) async {
+  // Guided-tour practice race: client-only, never reaches the proof flow.
+  if (isTourRace(race)) return openTourPracticeProof(context, ref);
   final outcome = await showV13Sheet<SubmitProofOutcome>(
     context,
     builder: (_) => SubmitProofV13Sheet(race: race),

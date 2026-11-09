@@ -21,6 +21,8 @@ import 'package:nuvo/features/squads/application/squad_controller.dart';
 import 'package:nuvo/features/squads/data/squad_api.dart';
 
 import 'crew_tab_v13_widgets.dart';
+import '../../../tour/tour_anchors.dart';
+import '../../../tour/tour_controller.dart';
 
 /// "Your friends' crews" (W2 `GET /squads/discover`). Returns null whenever
 /// the call can't produce rows — the section hides, never errors the tab.
@@ -238,6 +240,9 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
               title: 'Crew',
               trailing: [
                 V13IconButton(
+                  key: ref.watch(tourActiveProvider)
+                      ? TourAnchors.keyOf(TourAnchor.myNuvoCode)
+                      : null,
                   icon: Icons.qr_code_2,
                   semanticLabel: 'My Nuvo code',
                   onTap: () => context.push('/my-nuvo'),

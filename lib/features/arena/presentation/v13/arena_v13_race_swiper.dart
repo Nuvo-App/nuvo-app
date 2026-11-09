@@ -10,6 +10,8 @@ import 'package:nuvo/features/races/presentation/race_controller.dart';
 import 'package:nuvo/features/races/presentation/v13/submit_proof_entry.dart';
 
 import 'arena_v13_data.dart';
+import 'package:nuvo/features/tour/tour_anchors.dart';
+import 'package:nuvo/features/tour/tour_fixtures.dart';
 
 /// The Arena race swiper — one snapping card per active race (~318 px wide
 /// with the next card peeking), then a dashed "Up for another one?" card as
@@ -218,12 +220,16 @@ class ArenaRaceCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final race = data.race;
+    final tour = isTourRace(race);
     return V13Card(
+      key: tour ? TourAnchors.keyOf(TourAnchor.arenaRaceCard) : null,
       color: color ?? V13.raceColor(race.id),
       radius: V13.radiusCard,
       shadow: V13.shadow6,
       padding: const EdgeInsets.all(V13.gapMd + 2),
-      onTap: () => context.push('/race/${Uri.encodeComponent(race.id)}'),
+      onTap: tour
+          ? null
+          : () => context.push('/race/${Uri.encodeComponent(race.id)}'),
       semanticLabel: race.title,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,6 +266,10 @@ class ArenaRaceCard extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (tour) ...[
+                const SizedBox(width: V13.gapSm),
+                const V13Pill(label: 'Practice'),
+              ],
               if (data.timeLeft != null) ...[
                 const SizedBox(width: V13.gapSm),
                 V13Pill(label: data.timeLeft!, icon: Icons.schedule_rounded),
@@ -349,6 +359,7 @@ class ArenaRaceCard extends ConsumerWidget {
           ),
           const Spacer(),
           V13Button.primary(
+            key: tour ? TourAnchors.keyOf(TourAnchor.submitProof) : null,
             label: 'Submit proof',
             icon: Icons.photo_camera_rounded,
             fullWidth: true,
