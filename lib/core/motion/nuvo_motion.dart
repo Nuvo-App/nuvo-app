@@ -109,6 +109,32 @@ abstract final class NuvoMotion {
   /// real handoff; the stub uses this).
   static const Duration splashHold = Duration(milliseconds: 1200);
 
+  // ── Auth visuals (Part B) — sheet, ticket, code boxes ─────────────────
+  /// Error shake: [shakeDistance] px side to side over [shake].
+  static const double shakeDistance = 6;
+  static const Duration shake = Duration(milliseconds: 280);
+
+  /// Coral error flash on the code boxes.
+  static const Duration errorFlash = Duration(milliseconds: 600);
+
+  /// Paste fills the six boxes with this stagger.
+  static const Duration pasteStagger = Duration(milliseconds: 40);
+
+  /// Success: boxes flip to checkmarks with this stagger.
+  static const Duration checkStagger = Duration(milliseconds: 80);
+
+  /// "VERIFIED" holds this long before the Track advances.
+  static const Duration verifiedHold = Duration(milliseconds: 700);
+
+  /// Ticket "print" lift while sending (px up, then back).
+  static const double printLift = 12;
+
+  /// Resend countdown: one tick, the server's send window, and the
+  /// wrong-code lockout.
+  static const Duration clockTick = Duration(seconds: 1);
+  static const int resendCooldownSeconds = 30;
+  static const int lockoutSeconds = 60;
+
   // ── Step transition (the flow host's AnimatedSwitcher builder) ────────
   /// Incoming content springs up from y+28 as it fades in; the outgoing
   /// child eases out upward (−12 px, scale .97). Under reduce-motion both

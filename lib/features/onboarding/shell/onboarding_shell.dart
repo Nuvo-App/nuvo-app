@@ -58,7 +58,11 @@ class OnboardingShell extends StatelessWidget {
     this.showDots,
     this.dotIndex,
     this.dotCount = 3,
+    this.heroHeight = 320,
   });
+
+  /// Height of the hero slot (Part B shrinks it while the keyboard is up).
+  final double heroHeight;
 
   /// The step this frame renders — drives track/rail/dots defaults.
   final OnboardingStep step;
@@ -143,7 +147,14 @@ class OnboardingShell extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                               horizontal: V13.pagePad,
                             ),
-                            child: SizedBox(height: 320, child: hero),
+                            child: AnimatedContainer(
+                              duration: reduce
+                                  ? Duration.zero
+                                  : NuvoMotion.springDuration,
+                              curve: NuvoMotion.spring,
+                              height: heroHeight,
+                              child: hero,
+                            ),
                           ),
                         ),
                         const SizedBox(height: V13.gapXl),
