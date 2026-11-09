@@ -305,6 +305,7 @@ class _TourStageState extends ConsumerState<TourStage>
 
     if (view.phase != TourPhase.hidden &&
         view.phase != TourPhase.sheet &&
+        view.phase != TourPhase.done &&
         _skipVisible) {
       children.add(
         Positioned(
@@ -1102,7 +1103,7 @@ class _NudgeRow extends StatelessWidget {
               Text(
                 '$kTourBotName passed you',
                 style: V13.bodyStrong,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               Text('Practice', style: V13.caption),

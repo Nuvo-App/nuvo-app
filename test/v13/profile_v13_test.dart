@@ -1,6 +1,5 @@
 import '../tour/tour_harness.dart';
 import 'package:nuvo/features/tour/tour_anchors.dart';
-import 'package:nuvo/features/tour/tour_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';

@@ -5,8 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../helpers/screenshot.dart';
 import '../tour/tour_harness.dart';
 import 'package:nuvo/features/tour/tour_anchors.dart';
-import 'package:nuvo/features/tour/tour_controller.dart';
-import 'package:nuvo/features/tour/tour_fixtures.dart';
 import 'package:nuvo/features/races/presentation/v13/submit_proof_sheet.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/v13/v13.dart';
