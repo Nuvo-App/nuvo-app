@@ -11,6 +11,7 @@
 // cache; force:true always refetches. Every screen reads state via
 // raceControllerProvider and calls mutations via .notifier — never a second
 // source of truth, never a direct RaceApi call.
+import '../../../core/offline/outbox.dart';
 import '../../../core/utils/friendly_error.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -95,7 +96,33 @@ class RaceController extends StateNotifier<RaceState> {
     this.cache,
     this.accountId = _noAccountId,
     this.analytics,
-  }) : super(const RaceState());
+    this.outbox,
+  }) : super(const RaceState()) {
+    // Offline replay: queued writes go straight to the repo (never back
+    // through the queueing wrappers below, so a replay can't re-enqueue).
+    outbox?.registerHandler('race.join', (p) async {
+      final race = await _repo.joinRace(p['raceId'] as String);
+      _upsertRace(race);
+    });
+    outbox?.registerHandler('race.leave', (p) async {
+      await _repo.leaveRace(p['raceId'] as String);
+    });
+    outbox?.registerHandler('race.proof.manual', (p) async {
+      final raceId = p['raceId'] as String;
+      final race = await _repo.submitProof(
+        raceId,
+        proofType: p['proofType'] as String? ?? 'manual',
+        note: p['note'] as String?,
+        value: (p['value'] as num).toInt(),
+        mediaObjectKey: p['mediaObjectKey'] as String?,
+      );
+      _upsertRace(race);
+      onMutated?.call();
+    });
+  }
+
+  /// Persistent queue for writes made without a connection (optional).
+  final Outbox? outbox;
 
   /// Disk snapshot store + signed-in user id (the cache account key). Both
   /// optional: without them the controller behaves as a pure in-memory cache.
@@ -203,7 +230,8 @@ class RaceController extends StateNotifier<RaceState> {
       failureReason: outcome == 'rejected'
           ? ((status == null || status.isEmpty) ? 'unknown' : status)
           : null,
-      detectedValue: proof?.detectedValue ?? race.submissionResult?.verifiedValue,
+      detectedValue:
+          proof?.detectedValue ?? race.submissionResult?.verifiedValue,
       durationS: a.elapsedAttemptSeconds(),
     );
     if (race.submissionResult?.raceCompleted ?? false) {
@@ -981,6 +1009,24 @@ class RaceController extends StateNotifier<RaceState> {
         mediaObjectKey: mediaObjectKey,
       );
     } catch (e) {
+      // Unreachable (not a timeout — a manual proof has no idempotency key,
+      // so only a request that never left is safe to replay).
+      if (outbox != null && isNetworkFailure(e, includeTimeout: false)) {
+        await outbox!.enqueue(
+          OutboxEntry(
+            id: 'proof:$raceId:${DateTime.now().microsecondsSinceEpoch}',
+            kind: 'race.proof.manual',
+            payload: {
+              'raceId': raceId,
+              'proofType': proofType,
+              'note': ?note,
+              'value': value,
+              'mediaObjectKey': ?mediaObjectKey,
+            },
+          ),
+        );
+        throw const OfflineQueuedException();
+      }
       _emitProofFailure(e);
       rethrow;
     }
@@ -1218,7 +1264,19 @@ class RaceController extends StateNotifier<RaceState> {
   }
 
   Future<void> leaveRace(String id) async {
-    await _repo.leaveRace(id);
+    try {
+      await _repo.leaveRace(id);
+    } catch (e) {
+      if (outbox == null || !isNetworkFailure(e)) rethrow;
+      // Leaving is idempotent server-side: queue it and drop locally now.
+      await outbox!.enqueue(
+        OutboxEntry(
+          id: 'leave:$id',
+          kind: 'race.leave',
+          payload: {'raceId': id},
+        ),
+      );
+    }
     if (mounted) {
       state = state.copyWith(
         races: state.races.where((race) => race.id != id).toList(),
@@ -1237,6 +1295,17 @@ class RaceController extends StateNotifier<RaceState> {
     try {
       race = await _repo.joinRace(id);
     } catch (e) {
+      if (outbox != null && isNetworkFailure(e)) {
+        // Joining twice is a no-op server-side, so a timeout is safe too.
+        await outbox!.enqueue(
+          OutboxEntry(
+            id: 'join:$id',
+            kind: 'race.join',
+            payload: {'raceId': id},
+          ),
+        );
+        throw const OfflineQueuedException();
+      }
       _emitJoinFailure(e);
       rethrow;
     }
@@ -1668,6 +1737,7 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
       cache: ref.read(cacheStoreProvider),
       accountId: () => ref.read(authControllerProvider).user?.id,
       analytics: ref.read(analyticsProvider),
+      outbox: ref.read(outboxProvider),
       // Any race write immediately revalidates the Arena snapshot (it is
       // derived from races) so a race created in the composer shows up in the
       // Arena without the user navigating there and back. Progression

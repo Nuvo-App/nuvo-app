@@ -6,6 +6,7 @@
 // crew domain-event log exists, crew-lifecycle notification rows — both
 // projected server-side by GET /crew/feed. Models live in
 // crew_activity_models.dart.
+import '../../../core/offline/outbox.dart';
 import 'dart:async';
 import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
@@ -177,6 +178,14 @@ class CrewActivityRepository {
           entityType: item.entityType!,
           entityId: item.entityId!,
           emoji: emoji));
+  /// Raw forms for offline replay (the outbox has ids, not items).
+  Future<ReactionSummary> reactRaw(String type, String id, String emoji) =>
+      _withRefresh(
+        (t) => _api.react(t, entityType: type, entityId: id, emoji: emoji),
+      );
+  Future<ReactionSummary> unreactRaw(String type, String id) => _withRefresh(
+    (t) => _api.unreact(t, entityType: type, entityId: id),
+  );
   Future<ReactionSummary> unreact(CrewActivityItem item) => _withRefresh(
       (t) => _api.unreact(t,
           entityType: item.entityType!, entityId: item.entityId!));
@@ -254,7 +263,21 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
     this.demoUserId = _noDemoUser,
     this.cache,
     this.accountId = _noAccount,
-  }) : super(const CrewActivityState());
+    this.outbox,
+  }) : super(const CrewActivityState()) {
+    outbox?.registerHandler('reaction.set', (p) async {
+      final type = p['entityType'] as String, id = p['entityId'] as String;
+      final emoji = p['emoji'] as String?;
+      if (emoji == null) {
+        await _repo.unreactRaw(type, id);
+      } else {
+        await _repo.reactRaw(type, id, emoji);
+      }
+    });
+  }
+
+  /// Persistent queue for reactions made without a connection (optional).
+  final Outbox? outbox;
 
   /// Disk snapshot of the first page. Null disables hydration/persistence.
   final CacheStore? cache;
@@ -444,6 +467,22 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
               myReaction: () => summary.myReaction));
       return true;
     } catch (error) {
+      if (outbox != null && isNetworkFailure(error)) {
+        // Offline: keep the optimistic reaction and send the latest choice
+        // for this item when the connection is back.
+        await outbox!.upsert(
+          OutboxEntry(
+            id: 'react:${item.entityType}:${item.entityId}',
+            kind: 'reaction.set',
+            payload: {
+              'entityType': item.entityType,
+              'entityId': item.entityId,
+              'emoji': removing ? null : emoji,
+            },
+          ),
+        );
+        return true;
+      }
       if (mounted && generation == _generation) {
         _replaceItem(item.id, (_) => item);
         if (error is ApiException && error.statusCode == 401) {
@@ -521,6 +560,7 @@ final crewActivityProvider =
     accountId: () => ref.read(authControllerProvider).user?.id,
     onSessionExpired: () =>
         ref.read(authControllerProvider.notifier).sessionExpired(),
+    outbox: ref.read(outboxProvider),
   );
   var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
   if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {

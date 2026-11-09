@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/demo/presentation_demo.dart';
+import '../../../core/offline/outbox.dart';
 import '../../../core/v13/v13.dart';
 import '../../onboarding/data/onboarding_v2_store.dart';
 import '../../../core/widgets/bottom_nav.dart';
@@ -81,6 +82,11 @@ class _MainShellState extends ConsumerState<MainShell>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_syncPendingGraduation());
+    unawaited(_flushOutbox());
+    // While anything is queued, retry on a gentle tick (backoff inside).
+    _outboxTick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (ref.read(outboxProvider).pendingCount > 0) _flushOutbox();
+    });
     // Self-heal: a canonical controller's own provider-creation-time load can
     // miss (e.g. a load that was in flight across a sign-out — see the
     // _generation guards in RaceController/ArenaController/CrewController/
@@ -159,11 +165,24 @@ class _MainShellState extends ConsumerState<MainShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabIn.dispose();
+    _outboxTick?.cancel();
     super.dispose();
+  }
+
+  Timer? _outboxTick;
+
+  /// Sends writes that were saved while offline (launch, resume, tick).
+  Future<void> _flushOutbox({bool force = false}) async {
+    final sent = await ref.read(outboxProvider).flush(force: force);
+    if (sent > 0 && mounted) {
+      ref.read(raceControllerProvider.notifier).revalidate();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed)
+      unawaited(_flushOutbox(force: true));
     if (state == AppLifecycleState.resumed && _authIsUp) {
       // High-value user state, revalidated the moment the app comes forward.
       unawaited(refreshMotionCatalog(ref));
@@ -308,6 +327,31 @@ class _MainShellState extends ConsumerState<MainShell>
               ref.watch(authControllerProvider).user?.email ?? '',
             ))
               const Positioned(top: 8, right: 12, child: _FakeDataPill()),
+            // Offline indicator: shows when Nuvo is unreachable or writes are
+            // waiting to send — cached screens stay up, no error pages.
+            Positioned(
+              top: 8,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Center(
+                  child: ListenableBuilder(
+                    listenable: ref.read(outboxProvider),
+                    builder: (context, _) {
+                      final o = ref.read(outboxProvider);
+                      final offline =
+                          ref.watch(authControllerProvider).status ==
+                              AuthStatus.offline ||
+                          o.lastReachable == false;
+                      if (!offline && o.pendingCount == 0) {
+                        return const SizedBox.shrink();
+                      }
+                      return _OfflinePill(waiting: o.pendingCount);
+                    },
+                  ),
+                ),
+              ),
+            ),
             // Soft fade behind the floating dock: content dissolves into the
             // page colour instead of hard-cutting at the dock's edge.
             Positioned(
@@ -394,6 +438,36 @@ class _FakeDataPillState extends ConsumerState<_FakeDataPill> {
             fontWeight: FontWeight.w800,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _OfflinePill extends StatelessWidget {
+  const _OfflinePill({required this.waiting});
+  final int waiting;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: V13.navy,
+        borderRadius: BorderRadius.circular(V13.radiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 14, color: V13.card),
+          const SizedBox(width: 6),
+          Text(
+            waiting > 0 ? 'Offline \u00b7 $waiting waiting to send' : 'Offline',
+            style: V13.caption.copyWith(
+              color: V13.card,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

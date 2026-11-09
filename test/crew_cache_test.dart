@@ -194,6 +194,12 @@ void main() {
 
 class _FeedRepo
     implements CrewActivityRepository, CrewActivityConditionalSource {
+  @override
+  Future<ReactionSummary> reactRaw(String type, String id, String emoji) =>
+      throw UnimplementedError();
+  @override
+  Future<ReactionSummary> unreactRaw(String type, String id) =>
+      throw UnimplementedError();
   final seenEtags = <String?>[];
 
   @override

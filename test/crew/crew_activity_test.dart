@@ -7,6 +7,13 @@ import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/social/data/crew_activity.dart';
 
 class _FakeRepo implements CrewActivityRepository {
+  @override
+  Future<ReactionSummary> reactRaw(String type, String id, String emoji) =>
+      throw UnimplementedError();
+  @override
+  Future<ReactionSummary> unreactRaw(String type, String id) =>
+      throw UnimplementedError();
+
   _FakeRepo(this.feed);
 
   final List<CrewActivityItem> feed;
