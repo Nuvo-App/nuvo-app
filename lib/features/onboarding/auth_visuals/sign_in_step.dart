@@ -43,10 +43,8 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
   @override
   void initState() {
     super.initState();
-    // The v2 flow is always a first-account experience.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(authIntentProvider.notifier).state = AuthIntent.signUp;
       if (NuvoMotion.reduceMotionOf(context)) {
         _rise.value = 1;
       } else {
