@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../data/auth_api.dart';
 import '../data/auth_models.dart';
+import '../data/demo_account_marker.dart';
 import '../data/auth_repository.dart';
 import '../data/secure_token_store.dart';
 
@@ -75,12 +76,17 @@ final authIntentProvider = StateProvider<AuthIntent>(
 );
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repo)
-    : super(const AuthState(status: AuthStatus.loading)) {
+  AuthController(this._repo, {DemoAccountMarker? demoMarker})
+    : _marker = demoMarker ?? FileDemoAccountMarker(),
+      super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
 
   final AuthRepository _repo;
+
+  // R1 (docs/statements/demo-account.md): remembers the last signed-in
+  // account was the demo account so the next cold start opens clean.
+  final DemoAccountMarker _marker;
 
   /// Runs at the top of [logout], while the stored tokens are still valid —
   /// this is the only moment device-token unregister can authenticate against
@@ -97,6 +103,15 @@ class AuthController extends StateNotifier<AuthState> {
     // branch is an empty scaffold. That mid-session bounce is the white
     // screen; keeping the current status keeps the retry in place.
     try {
+      // R1: the last account on this device was the demo account — open
+      // exactly like a first-ever install: no session, no onboarding state.
+      if (await _marker.isSet()) {
+        await _repo.clearSession();
+        await _marker.wipeLocalState();
+        if (!mounted) return;
+        state = const AuthState(status: AuthStatus.unauthenticated);
+        return;
+      }
       final result = await _repo.restoreSession();
       debugPrint('[AuthController] restore result: ${result.runtimeType}');
       if (!mounted) return;
@@ -143,6 +158,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> verifyEmailCode(String email, String code) async {
     final user = await _repo.verifyEmailCode(email, code);
+    await _marker.set(false);
     if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
     }
@@ -150,6 +166,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> signInWithGoogle(String idToken) async {
     final user = await _repo.signInWithGoogle(idToken);
+    await _marker.set(false);
     if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
     }
@@ -165,6 +182,7 @@ class AuthController extends StateNotifier<AuthState> {
       fullName: fullName,
       authorizationCode: authorizationCode,
     );
+    await _marker.set(false);
     if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
     }
@@ -193,6 +211,7 @@ class AuthController extends StateNotifier<AuthState> {
         password,
         intent: intent == AuthIntent.signUp ? 'signup' : 'signin',
       );
+      await _marker.set(true);
       if (mounted) {
         state = AuthState(status: AuthStatus.authenticated, user: user);
       }
@@ -203,12 +222,14 @@ class AuthController extends StateNotifier<AuthState> {
       // rather than masquerading as bad credentials.
       if (e.statusCode == 401 || !_offlineDemoAllowed(email)) rethrow;
       final user = await _repo.signInOfflineDemo();
+      await _marker.set(true);
       if (mounted) {
         state = AuthState(status: AuthStatus.authenticated, user: user);
       }
     } catch (_) {
       if (!_offlineDemoAllowed(email)) rethrow;
       final user = await _repo.signInOfflineDemo();
+      await _marker.set(true);
       if (mounted) {
         state = AuthState(status: AuthStatus.authenticated, user: user);
       }
