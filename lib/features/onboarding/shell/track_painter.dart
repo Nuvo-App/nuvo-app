@@ -90,7 +90,7 @@ class TrackPainter extends CustomPainter {
     required this.pathProgress,
     required this.beadProgress,
     required this.avatarProgress,
-    this.totalSteps = 17,
+    this.totalSteps = 16,
     this.spacing = 88,
   });
 
@@ -145,16 +145,16 @@ class TrackPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = V13.navy.withValues(alpha: 0.14)
+        ..color = V13.navy.withValues(alpha: 0.07)
         ..style = PaintingStyle.stroke
         ..strokeWidth = V13.outlineThick
         ..strokeCap = StrokeCap.round,
     );
 
     // ── Beads: filled behind the avatar, outlined ahead of it ─────────
-    final fill = Paint()..color = V13.navy;
+    final fill = Paint()..color = V13.navy.withValues(alpha: 0.22);
     final ring = Paint()
-      ..color = V13.navy.withValues(alpha: 0.35)
+      ..color = V13.navy.withValues(alpha: 0.16)
       ..style = PaintingStyle.stroke
       ..strokeWidth = V13.outline;
     for (var i = 0; i < totalSteps; i++) {
@@ -174,12 +174,16 @@ class TrackPainter extends CustomPainter {
       _xFor(avatarWorldY, size.width),
       screenY(avatarWorldY, beadProgress),
     );
-    canvas.drawCircle(avatarCenter, 11, Paint()..color = V13.blue);
+    canvas.drawCircle(
+      avatarCenter,
+      11,
+      Paint()..color = V13.blue.withValues(alpha: 0.55),
+    );
     canvas.drawCircle(
       avatarCenter,
       11,
       Paint()
-        ..color = V13.navy
+        ..color = V13.navy.withValues(alpha: 0.3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = V13.outline,
     );

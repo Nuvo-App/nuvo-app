@@ -121,7 +121,7 @@ void _group() {
       final store1 = OnboardingV2Store.memory();
       final c1 = _controller(store1);
       await c1.restore();
-      await _walk(c1, 7); // through code (+10 XP recorded)
+      await _walk(c1, 6); // through code (+10 XP recorded)
       await c1.attachAccount('first@example.com');
 
       // Same account → no-op.
@@ -134,6 +134,40 @@ void _group() {
       expect(store1.completedSteps, isEmpty);
     });
 
+    test(
+      'state saved by older builds never crashes: unknown ids are ignored',
+      () async {
+        // Pre-merge build: introCamera/introBoard existed, introHow did not.
+        final store = OnboardingV2Store.fromSnapshot({
+          'version': 1,
+          'completed': ['splash', 'introRace', 'introCamera', 'introBoard'],
+          'xpAwarded': {'introCamera': 0, 'code': 10},
+        });
+        final c = _controller(store);
+        await c.restore();
+        // introBoard maps onto the merged screen; introCamera is dropped.
+        expect(c.state.completed, {
+          OnboardingStep.splash,
+          OnboardingStep.introRace,
+          OnboardingStep.introHow,
+        });
+        expect(c.state.step, OnboardingStep.signIn);
+        expect(c.state.totalXp, 10);
+
+        // An id with no mapping at all is simply ignored.
+        final store2 = OnboardingV2Store.fromSnapshot({
+          'version': 1,
+          'completed': ['splash', 'someFutureStep'],
+          'xpAwarded': {'someFutureStep': 5},
+        });
+        final c2 = _controller(store2);
+        await c2.restore();
+        expect(c2.state.completed, {OnboardingStep.splash});
+        expect(c2.state.step, OnboardingStep.introRace);
+        expect(c2.state.totalXp, 0);
+      },
+    );
+
     test('a step completed pre-kill stays completed post-kill', () async {
       final store1 = OnboardingV2Store.memory();
       final c1 = _controller(store1);
@@ -144,10 +178,10 @@ void _group() {
       final store2 = OnboardingV2Store.fromSnapshot(store1.toJson());
       final c2 = _controller(store2);
       await c2.restore();
-      expect(c2.state.step, OnboardingStep.introCamera);
+      expect(c2.state.step, OnboardingStep.introHow);
       // And completing the resumed step continues forward, not backward.
-      await c2.completeStep(OnboardingStep.introCamera);
-      expect(c2.state.step, OnboardingStep.introBoard);
+      await c2.completeStep(OnboardingStep.introHow);
+      expect(c2.state.step, OnboardingStep.signIn);
     });
   });
 }

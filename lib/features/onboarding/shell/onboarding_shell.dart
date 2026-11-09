@@ -57,9 +57,15 @@ class OnboardingShell extends StatelessWidget {
     this.showRail,
     this.showDots,
     this.dotIndex,
-    this.dotCount = 3,
+    this.dotCount = 2,
     this.heroHeight = 320,
+    this.fillHero = false,
   });
+
+  /// The hero takes every pixel the title/body/CTA leave free (no scroll,
+  /// no fixed [heroHeight]) — the pre-auth intros use it so the hero owns
+  /// ~60% of the screen with no dead space under it.
+  final bool fillHero;
 
   /// Height of the hero slot (Part B shrinks it while the keyboard is up).
   final double heroHeight;
@@ -98,7 +104,10 @@ class OnboardingShell extends StatelessWidget {
   final Color? titleColor;
   final Color? subtitleColor;
 
-  /// Paint the Track (off only for the immersive level-up).
+  /// Paint the Track. It only ever shows on post-auth XP-rail steps
+  /// ([OnboardingStepX.showsTrack]) — pre-auth pages use dots or the bare
+  /// rail, so no path runs behind their copy — and is off for the
+  /// immersive level-up.
   final bool showTrack;
 
   /// Rail/dots overrides — defaults come from the step ([showsRail],
@@ -120,7 +129,8 @@ class OnboardingShell extends StatelessWidget {
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          if (showTrack) TrackBackground(controller: shell),
+          if (showTrack && rail && step.showsTrack)
+            TrackBackground(controller: shell),
           SafeArea(
             child: Column(
               children: [
@@ -135,75 +145,7 @@ class OnboardingShell extends StatelessWidget {
                   dotCount: dotCount,
                   shell: shell,
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        NuvoEnter(
-                          index: 0,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: V13.pagePad,
-                            ),
-                            child: AnimatedContainer(
-                              duration: reduce
-                                  ? Duration.zero
-                                  : NuvoMotion.springDuration,
-                              curve: NuvoMotion.spring,
-                              height: heroHeight,
-                              child: hero,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: V13.gapXl),
-                        NuvoEnter(
-                          index: 1,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: V13.pagePad,
-                            ),
-                            child: Text(
-                              title,
-                              style: V13.title.copyWith(color: titleColor),
-                            ),
-                          ),
-                        ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: V13.gapSm),
-                          NuvoEnter(
-                            index: 2,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: V13.pagePad,
-                              ),
-                              child: Text(
-                                subtitle!,
-                                style: V13.body.copyWith(
-                                  color: subtitleColor ?? V13.muted,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        if (body != null) ...[
-                          const SizedBox(height: V13.gapLg),
-                          NuvoEnter(
-                            index: 3,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: V13.pagePad,
-                              ),
-                              child: body!,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: V13.gapSection),
-                      ],
-                    ),
-                  ),
-                ),
+                Expanded(child: fillHero ? _filledBody() : _scrollBody(reduce)),
                 _CtaDock(
                   label: ctaLabel,
                   enabled: ctaEnabled,
@@ -213,6 +155,76 @@ class OnboardingShell extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _text(int index, Widget child) => NuvoEnter(
+    index: index,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
+      child: child,
+    ),
+  );
+
+  List<Widget> _copyBlock() => [
+    _text(1, Text(title, style: V13.title.copyWith(color: titleColor))),
+    if (subtitle != null) ...[
+      const SizedBox(height: V13.gapSm),
+      _text(
+        2,
+        Text(
+          subtitle!,
+          style: V13.body.copyWith(color: subtitleColor ?? V13.muted),
+        ),
+      ),
+    ],
+  ];
+
+  /// [fillHero] layout: the hero flexes to whatever the copy + CTA leave.
+  Widget _filledBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: _text(0, hero)),
+        const SizedBox(height: V13.gapLg),
+        ..._copyBlock(),
+        if (body != null) ...[
+          const SizedBox(height: V13.gapSm),
+          _text(3, body!),
+        ],
+        const SizedBox(height: V13.gapSm),
+      ],
+    );
+  }
+
+  /// Default layout: fixed-height hero, copy, body, scrollable.
+  Widget _scrollBody(bool reduce) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NuvoEnter(
+            index: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
+              child: AnimatedContainer(
+                duration: reduce ? Duration.zero : NuvoMotion.springDuration,
+                curve: NuvoMotion.spring,
+                height: heroHeight,
+                child: hero,
+              ),
+            ),
+          ),
+          const SizedBox(height: V13.gapXl),
+          ..._copyBlock(),
+          if (body != null) ...[
+            const SizedBox(height: V13.gapLg),
+            _text(3, body!),
+          ],
+          const SizedBox(height: V13.gapSection),
         ],
       ),
     );

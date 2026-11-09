@@ -46,8 +46,7 @@ void main() {
       for (final step in [
         OnboardingStep.splash,
         OnboardingStep.introRace,
-        OnboardingStep.introCamera,
-        OnboardingStep.introBoard,
+        OnboardingStep.introHow,
         OnboardingStep.signIn,
         OnboardingStep.email,
         OnboardingStep.questions1,

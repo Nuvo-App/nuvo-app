@@ -14,10 +14,14 @@ import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
 import '../shell/onboarding_shell.dart';
 
-/// S1 — "Race anything." The tap duel: a coral hero card holding a mini
-/// lane where each tap advances your token one bead for 5 s. Two Nuvo
-/// Crew ghost tokens creep ahead early, then the script concedes — the
-/// user always wins by 1–2 beads at the last second (spec: "never lose").
+/// S1 — "Race anything." The tap duel is the first thing on screen: a
+/// coral hero card (~60% of the screen) holding three stacked lanes — a
+/// Nuvo Crew ghost above and below, YOU in the middle. Every tap on the
+/// card advances your token one bead along its lane for [NuvoMotion.duelWindow].
+///
+/// The ghosts are scripted relative to you: they lead early, then concede
+/// in the last stretch so a normal tapper always wins by 1–2 beads at the
+/// last second (spec: "never lose").
 ///
 /// Next is pressable at any time: pressed early, the duel auto-plays a
 /// scripted win over [NuvoMotion.duelAutoPlay] then hands S2 the stage.
@@ -30,20 +34,19 @@ class ObIntroRaceStep extends ConsumerStatefulWidget {
 
 class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
     with TickerProviderStateMixin {
-  /// Bead positions on the lane (0 = start, [_lastBead] = finish).
-  static const int _lastBead = 12;
+  /// Beads per lane — the finish flag sits after bead [_finish]. One tap is
+  /// one bead, so a brisk tapper reaches the flag inside the 5 s window.
+  static const int _finish = 20;
 
-  /// Ghosts' scripted early lead and final lag, in beads — ghost 1 leads by
-  /// two and concedes to one back, ghost 2 leads by one and ends two back.
+  /// Ghosts' early lead and final lag, in beads — Maya leads by two and
+  /// concedes to one back, Leo leads by one and ends two back.
   static const _leads = [2.0, 1.0];
   static const _lags = [1.0, 2.0];
 
-  /// Scripted taps the auto-play adds on top of whatever the user did.
-  static const int _autoTaps = 13;
-
-  /// Fraction of the window in which ghosts hold their lead before the
-  /// script concedes them behind the user ("the last second").
-  static const double _concedeFrom = 0.55;
+  /// Race progress (0–1) after which the ghosts concede. Progress is the
+  /// larger of elapsed time and the user's distance, so a fast tapper and
+  /// a slow one both see the same late swing.
+  static const double _concedeFrom = 0.6;
 
   late final AnimationController _duel = AnimationController(
     vsync: this,
@@ -63,28 +66,33 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
   bool _ended = false;
   bool _advanced = false;
 
-  /// Elapsed fraction of the race (auto-play reuses the same clock face).
-  double get _t =>
-      _auto.isAnimating || _auto.isCompleted ? _auto.value : _duel.value;
+  bool get _autoPlaying => _auto.isAnimating || _auto.isCompleted;
 
-  /// Ghost [i]'s scripted bead — leads early, concedes behind the user at
-  /// the end. [userBeads] is continuous during auto-play.
-  double _ghostBead(int i, double userBeads) {
-    final t = _t.clamp(0.0, 1.0);
-    final concede =
-        ((t - _concedeFrom) / (1 - _concedeFrom)).clamp(0.0, 1.0) *
-        ((t - _concedeFrom) / (1 - _concedeFrom)).clamp(0.0, 1.0);
-    final surge = _leads[i] + (-_lags[i] - _leads[i]) * concede;
-    return (userBeads + surge).clamp(0.0, _lastBead.toDouble());
+  /// The user's bead position (continuous during auto-play, the full lane
+  /// once the duel is over).
+  double get _userBeads {
+    if (_ended) return _finish.toDouble();
+    if (_autoPlaying) {
+      final u = (_auto.value / 0.8).clamp(0.0, 1.0);
+      return _autoBase + (_finish - _autoBase) * u;
+    }
+    return _count.clamp(0, _finish).toDouble();
   }
 
-  double get _userBeads {
-    if (_auto.isAnimating || _auto.isCompleted) {
-      final target = (_autoBase + _autoTaps).clamp(0, _lastBead).toDouble();
-      final u = (_t / 0.8).clamp(0.0, 1.0);
-      return _autoBase + (target - _autoBase) * u;
-    }
-    return _count.clamp(0, _lastBead).toDouble();
+  /// Race progress 0–1 — time or distance, whichever is further along.
+  double get _progress {
+    final time = _autoPlaying ? _auto.value : _duel.value;
+    return math.max(time, _userBeads / _finish).clamp(0.0, 1.0);
+  }
+
+  /// Ghost [i]'s bead — leads while you tap, then concedes behind you.
+  double _ghostBeads(int i) {
+    final user = _userBeads;
+    if (_ended) return _finish - _lags[i];
+    final c = ((_progress - _concedeFrom) / (1 - _concedeFrom)).clamp(0.0, 1.0);
+    final lead = _leads[i] * (user / 3).clamp(0.0, 1.0);
+    final g = user + lead + (-_lags[i] - lead) * c * c;
+    return g.clamp(0.0, _finish - 1.0);
   }
 
   void _armIdlePointer() {
@@ -99,13 +107,13 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
   void initState() {
     super.initState();
     _duel.addStatusListener((status) {
-      if (status == AnimationStatus.completed) _finish();
+      if (status == AnimationStatus.completed) _finishDuel();
     });
     _duel.addListener(_onRaceClock);
     _auto.addListener(_onRaceClock);
     _auto.addStatusListener((status) {
       if (status != AnimationStatus.completed) return;
-      _finish();
+      _finishDuel();
       _advance();
     });
     _armIdlePointer();
@@ -121,21 +129,30 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
   }
 
   /// A tap on the card — starts the 5 s window on first contact, then one
-  /// bead per tap with the spec's tick + selectionClick.
+  /// bead per tap with the spec's tick + selectionClick. Reaching the flag
+  /// ends the duel on the spot.
   void _onCardTap() {
-    if (_ended || _auto.isAnimating || _auto.isCompleted) return;
+    if (_ended || _autoPlaying) return;
     if (!_started) {
       _started = true;
       _idleTimer?.cancel();
       _duel.forward();
     }
-    setState(() => _count++);
+    setState(() {
+      _count++;
+      _showPointer = false;
+    });
     NuvoHaptics.select();
     ref.read(nuvoSoundsProvider).pressTick();
+    if (_count >= _finish) {
+      _duel.stop();
+      _finishDuel();
+    }
   }
 
-  /// The duel resolves: flag drops, confetti, mediumImpact, the win chip.
-  void _finish() {
+  /// The duel resolves: everyone settles on the flag, confetti,
+  /// mediumImpact, the win chip.
+  void _finishDuel() {
     if (_ended) return;
     setState(() {
       _ended = true;
@@ -161,7 +178,7 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
     if (_auto.isAnimating) return;
     _idleTimer?.cancel();
     setState(() {
-      _autoBase = _count.clamp(0, _lastBead);
+      _autoBase = _count.clamp(0, _finish);
       _showPointer = false;
     });
     _duel.stop();
@@ -180,12 +197,23 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
   Widget build(BuildContext context) {
     return OnboardingShell(
       step: OnboardingStep.introRace,
+      fillHero: true,
       hero: _DuelCard(
         count: _count,
-        userBeads: _userBeads,
-        ghost1Beads: _ghostBead(0, _userBeads),
-        ghost2Beads: _ghostBead(1, _userBeads),
-        lastBead: _lastBead,
+        lanes: [
+          _LaneState(
+            name: ObCopy.introRaceGhostA,
+            beads: _ghostBeads(0),
+            kind: _LaneKind.ghost,
+          ),
+          _LaneState(name: ObCopy.you, beads: _userBeads, kind: _LaneKind.you),
+          _LaneState(
+            name: ObCopy.introRaceGhostB,
+            beads: _ghostBeads(1),
+            kind: _LaneKind.ghost,
+          ),
+        ],
+        finish: _finish,
         ended: _ended,
         showPointer: _showPointer,
         onTap: _onCardTap,
@@ -199,329 +227,327 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
   }
 }
 
-/// The coral race card — lane, three racer tokens, the score, flag and
-/// chips. The whole card is the tap surface.
+enum _LaneKind { ghost, you }
+
+class _LaneState {
+  const _LaneState({
+    required this.name,
+    required this.beads,
+    required this.kind,
+  });
+
+  final String name;
+  final double beads;
+  final _LaneKind kind;
+}
+
+/// The coral race card — header (tap count + hint/win chip) over three
+/// stacked lanes. The whole card is the tap surface.
 class _DuelCard extends StatelessWidget {
   const _DuelCard({
     required this.count,
-    required this.userBeads,
-    required this.ghost1Beads,
-    required this.ghost2Beads,
-    required this.lastBead,
+    required this.lanes,
+    required this.finish,
     required this.ended,
     required this.showPointer,
     required this.onTap,
   });
 
   final int count;
-  final double userBeads;
-  final double ghost1Beads;
-  final double ghost2Beads;
-  final int lastBead;
+  final List<_LaneState> lanes;
+  final int finish;
   final bool ended;
   final bool showPointer;
   final VoidCallback onTap;
 
+  static const double _pad = 16;
+  static const double _gap = 10;
+
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(V13.radiusCardLg);
-    return Center(
-      child: NuvoPressable(
-        onTap: onTap,
-        borderRadius: radius,
-        shadow: V13.shadow6,
-        // The press sinks the card; the per-bead tick is fired by the
-        // step (selectionClick + pressTick), not the pressable's light.
-        haptic: false,
-        semanticLabel: ObCopy.introRaceHint,
-        child: Container(
-          key: const ValueKey('ob-duel-card'),
-          height: 300,
-          decoration: BoxDecoration(
-            color: V13.coral,
-            borderRadius: radius,
-            border: Border.all(color: V13.navy, width: V13.outlineThick),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final lane = _LaneGeometry(
-                width: constraints.maxWidth,
-                height: 150,
-                lastBead: lastBead,
-              );
-              return Stack(
-                children: [
-                  Positioned(
-                    top: V13.gapLg,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: V13NumberPop(
+    return NuvoPressable(
+      onTap: onTap,
+      borderRadius: radius,
+      shadow: V13.shadow6,
+      // The press sinks the card; the per-bead tick is fired by the step
+      // (selectionClick + pressTick), not the pressable's light.
+      haptic: false,
+      semanticLabel: ObCopy.introRaceHint,
+      child: Container(
+        key: const ValueKey('ob-duel-card'),
+        decoration: BoxDecoration(
+          color: V13.coral,
+          borderRadius: radius,
+          border: Border.all(color: V13.navy, width: V13.outlineThick),
+        ),
+        clipBehavior: Clip.antiAlias,
+        padding: const EdgeInsets.all(_pad),
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 44,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      V13NumberPop(
                         value: count,
-                        style: V13.hugeNumber.copyWith(fontSize: 56),
+                        style: V13.hugeNumber.copyWith(fontSize: 38),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 92,
-                    height: lane.height,
-                    child: _Lane(lane: lane, ended: ended),
-                  ),
-                  // Ghosts first so the user's token rides on top.
-                  for (final (beads, dy, isYou) in [
-                    (ghost2Beads, 22.0, false),
-                    (ghost1Beads, 6.0, false),
-                    (userBeads, -10.0, true),
-                  ])
-                    _Token(
-                      lane: lane,
-                      beads: beads,
-                      laneOffset: dy,
-                      isYou: isYou,
-                      float: !isYou,
-                    ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: V13.gapLg,
-                    child: Center(
-                      child: AnimatedSwitcher(
-                        duration: NuvoMotion.ctaFade,
-                        child: _Chip(
-                          key: ValueKey(ended),
-                          label: ended
-                              ? ObCopy.introRaceWin
-                              : ObCopy.introRaceHint,
-                          won: ended,
+                      const SizedBox(width: V13.gapSm),
+                      Text(ObCopy.introRaceTaps, style: V13.label),
+                      const SizedBox(width: V13.gapMd),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: AnimatedSwitcher(
+                            duration: NuvoMotion.ctaFade,
+                            child: _Chip(
+                              key: ValueKey(ended),
+                              label: ended
+                                  ? ObCopy.introRaceWin
+                                  : ObCopy.introRaceHint,
+                              won: ended,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                  if (ended)
-                    const Positioned.fill(
-                      child: IgnorePointer(
-                        child: V13Confetti(
-                          particleCount: NuvoMotion.confettiPieces,
-                          duration: NuvoMotion.confetti,
-                        ),
-                      ),
-                    ),
-                  if (showPointer)
-                    const Positioned.fill(
-                      child: IgnorePointer(child: _TapPointer()),
-                    ),
+                ),
+                const SizedBox(height: _gap),
+                for (var i = 0; i < lanes.length; i++) ...[
+                  if (i > 0) const SizedBox(height: _gap),
+                  Expanded(
+                    child: _Lane(state: lanes[i], finish: finish, ended: ended),
+                  ),
                 ],
-              );
-            },
-          ),
+              ],
+            ),
+            if (ended)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: V13Confetti(
+                    particleCount: NuvoMotion.confettiPieces,
+                    duration: NuvoMotion.confetti,
+                  ),
+                ),
+              ),
+            if (showPointer)
+              const Positioned.fill(child: IgnorePointer(child: _TapPointer())),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Maps bead indices to offsets on the lane's gentle sine path — a
-/// miniature of the onboarding Track.
-class _LaneGeometry {
-  _LaneGeometry({
-    required this.width,
-    required this.height,
-    required this.lastBead,
-  });
-
-  final double width;
-  final double height;
-  final int lastBead;
-
-  static const double _padX = 34;
-
-  Offset beadAt(double bead) {
-    final u = (bead / lastBead).clamp(0.0, 1.0);
-    final x = _padX + u * (width - 2 * _padX);
-    final y = height / 2 + math.sin(u * math.pi * 1.5 - 0.4) * 16;
-    return Offset(x, y);
-  }
-}
-
-/// The lane painting — navy path, bead dots, the finish flag post.
+/// One horizontal lane — name pill over a bead row, the racer token riding
+/// the beads, and the finish flag at the end. The token is clamped to the
+/// bead row, so it can never leave the lane or reach the flag's pole.
 class _Lane extends StatelessWidget {
-  const _Lane({required this.lane, required this.ended});
+  const _Lane({required this.state, required this.finish, required this.ended});
 
-  final _LaneGeometry lane;
+  final _LaneState state;
+  final int finish;
   final bool ended;
+
+  static const double _inset = 12;
+  static const double _pillH = 20;
+  static const double _flagW = 24;
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _LanePainter(lane: lane),
-      child: Align(
-        alignment: Alignment.topRight,
-        child: _FinishFlag(dropIn: ended),
-      ),
+    final you = state.kind == _LaneKind.you;
+    final reduce = NuvoMotion.reduceMotionOf(context);
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        final h = c.maxHeight;
+        // Tokens, beads and flag grow with the lane so tall phones are
+        // not a sea of white.
+        final token = math
+            .min(h * 0.4, h - _inset - _pillH - 12)
+            .clamp(26.0, 68.0);
+        final grow = (token / 34).clamp(1.0, 1.9);
+        final r = token / 2;
+        // The bead row sits centered in the space under the pill.
+        final rowTop = _inset + _pillH;
+        final beadY = rowTop + (h - rowTop - 6) / 2;
+        final startX = _inset + r;
+        final endX = w - _inset - _flagW - 12 - r;
+        double xFor(double beads) =>
+            startX + (endX - startX) * (beads / finish).clamp(0.0, 1.0);
+        return Container(
+          decoration: BoxDecoration(
+            color: V13.card,
+            borderRadius: BorderRadius.circular(V13.radiusCard - 6),
+            border: Border.all(
+              color: you ? V13.blue : V13.navy,
+              width: you ? V13.outlineThick : V13.outline,
+            ),
+            boxShadow: V13.hardShadow(x: 0, y: 3),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _BeadsPainter(
+                    startX: startX,
+                    endX: endX,
+                    y: beadY,
+                    count: finish,
+                    reached: state.beads,
+                    beadR: 2.5 * grow.clamp(1.0, 1.4),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: _inset,
+                top: _inset - 4,
+                child: Transform.scale(
+                  scale: grow.clamp(1.0, 1.25),
+                  alignment: Alignment.topLeft,
+                  child: _NamePill(name: state.name, you: you),
+                ),
+              ),
+              Positioned(
+                right: _inset,
+                top: beadY - 17,
+                child: Transform.scale(
+                  scale: grow.clamp(1.0, 1.5),
+                  alignment: Alignment.centerRight,
+                  child: const _CheckeredFlag(),
+                ),
+              ),
+              AnimatedPositioned(
+                duration: reduce ? Duration.zero : NuvoMotion.pressDown,
+                curve: NuvoMotion.pressDownCurve,
+                left: xFor(state.beads) - r,
+                top: beadY - r,
+                width: token,
+                height: token,
+                child: V13Face(size: token, isMe: you),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-class _LanePainter extends CustomPainter {
-  const _LanePainter({required this.lane});
+/// The dotted bead row — beads you have passed fill in navy.
+class _BeadsPainter extends CustomPainter {
+  const _BeadsPainter({
+    required this.startX,
+    required this.endX,
+    required this.y,
+    required this.count,
+    required this.reached,
+    required this.beadR,
+  });
 
-  final _LaneGeometry lane;
+  final double startX;
+  final double endX;
+  final double y;
+  final int count;
+  final double reached;
+  final double beadR;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path();
-    for (var i = 0; i <= 40; i++) {
-      final p = lane.beadAt(lane.lastBead * i / 40);
-      if (i == 0) {
-        path.moveTo(p.dx, p.dy);
-      } else {
-        path.lineTo(p.dx, p.dy);
-      }
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = V13.navy
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = V13.outlineThick
-        ..strokeCap = StrokeCap.round,
-    );
-    final ring = Paint()
-      ..color = V13.card
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = V13.outline;
-    final fill = Paint()..color = V13.card;
-    for (var i = 0; i <= lane.lastBead; i++) {
-      canvas.drawCircle(lane.beadAt(i.toDouble()), 3.5, fill);
-      canvas.drawCircle(lane.beadAt(i.toDouble()), 3.5, ring);
+    final dim = Paint()..color = V13.navy.withValues(alpha: 0.22);
+    final lit = Paint()..color = V13.navy;
+    for (var i = 0; i <= count; i++) {
+      final x = startX + (endX - startX) * i / count;
+      canvas.drawCircle(Offset(x, y), beadR, i <= reached ? lit : dim);
     }
   }
 
   @override
-  bool shouldRepaint(_LanePainter old) => false;
+  bool shouldRepaint(_BeadsPainter old) =>
+      old.reached != reached ||
+      old.beadR != beadR ||
+      old.startX != startX ||
+      old.endX != endX ||
+      old.y != y;
 }
 
-/// A racer token — the user gets the blue ring + "You" label; the ghosts
-/// are neutral silhouettes (spec D1: no Nuvo Crew photo assets exist) that
-/// bob with [NuvoFloat].
-class _Token extends StatelessWidget {
-  const _Token({
-    required this.lane,
-    required this.beads,
-    required this.laneOffset,
-    required this.isYou,
-    required this.float,
-  });
+/// "You" (blue — the one place blue marks the player) or a ghost's name.
+class _NamePill extends StatelessWidget {
+  const _NamePill({required this.name, required this.you});
 
-  final _LaneGeometry lane;
-  final double beads;
-  final double laneOffset;
-  final bool isYou;
-  final bool float;
+  final String name;
+  final bool you;
 
   @override
   Widget build(BuildContext context) {
-    final reduce = NuvoMotion.reduceMotionOf(context);
-    final target = lane.beadAt(beads) + Offset(0, laneOffset);
-    final token = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        V13Face(size: 38, isMe: isYou, name: isYou ? ObCopy.you : null),
-        if (isYou) ...[
-          const SizedBox(height: 2),
-          Text(ObCopy.you, style: V13.label.copyWith(color: V13.navy)),
-        ],
-      ],
-    );
-    return Positioned(
-      left: 0,
-      top: 92,
-      right: 0,
-      bottom: 0,
-      child: TweenAnimationBuilder<Offset>(
-        tween: Tween<Offset>(begin: target, end: target),
-        duration: reduce ? Duration.zero : NuvoMotion.springDuration,
-        curve: NuvoMotion.spring,
-        builder: (context, pos, _) {
-          final child = float ? NuvoFloat(child: token) : token;
-          return Transform.translate(
-            offset: pos - const Offset(19, 19),
-            child: child,
-          );
-        },
+    return Container(
+      height: 20,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: V13.gapMd),
+      decoration: BoxDecoration(
+        color: you ? V13.blue : V13.bg,
+        borderRadius: BorderRadius.circular(V13.radiusPill),
+        border: Border.all(color: V13.navy, width: V13.outline),
+      ),
+      child: Text(
+        name,
+        maxLines: 1,
+        style: V13.label.copyWith(
+          fontSize: 10.5,
+          height: 1.1,
+          color: you ? V13.white : V13.navy,
+        ),
       ),
     );
   }
 }
 
-/// The checkered finish flag at the lane's end — drops in on the win.
-class _FinishFlag extends StatelessWidget {
-  const _FinishFlag({required this.dropIn});
-
-  final bool dropIn;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduce = NuvoMotion.reduceMotionOf(context);
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: dropIn ? -46 : 0, end: 0),
-      duration: dropIn
-          ? (reduce ? Duration.zero : NuvoMotion.springDuration)
-          : Duration.zero,
-      curve: NuvoMotion.spring,
-      builder: (context, dy, child) =>
-          Transform.translate(offset: Offset(0, dy), child: child),
-      child: const Padding(
-        padding: EdgeInsets.only(right: 18, top: 6),
-        child: _CheckeredFlag(),
-      ),
-    );
-  }
-}
-
-/// A tiny checkered flag — navy pole, alternating squares.
+/// A tiny checkered finish flag — navy pole, 2x2 squares. 24 x 34.
 class _CheckeredFlag extends StatelessWidget {
   const _CheckeredFlag();
 
   @override
   Widget build(BuildContext context) {
-    Widget square(Color c) => Container(
-      width: 7,
-      height: 7,
-      color: c,
-    );
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(width: 3, height: 34, color: V13.navy),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: V13.navy, width: V13.outline),
+    Widget square(Color c) => Container(width: 8, height: 8, color: c);
+    return SizedBox(
+      width: 24,
+      height: 34,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(width: 3, height: 34, color: V13.navy),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: V13.navy, width: V13.outline),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [square(V13.navy), square(V13.card)],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [square(V13.card), square(V13.navy)],
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [square(V13.navy), square(V13.card)],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [square(V13.card), square(V13.navy)],
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// The hint / win chip at the card's foot.
+/// The hint / win chip in the header.
 class _Chip extends StatelessWidget {
   const _Chip({super.key, required this.label, required this.won});
 
@@ -532,7 +558,7 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: V13.gapLg,
+        horizontal: V13.gapMd,
         vertical: V13.gapSm,
       ),
       decoration: BoxDecoration(
@@ -541,10 +567,13 @@ class _Chip extends StatelessWidget {
         border: Border.all(color: V13.navy, width: V13.outline),
         boxShadow: V13.hardShadow(x: 2, y: 2),
       ),
-      child: Text(
-        label,
-        style: V13.bodyStrong.copyWith(fontSize: 13),
-        textAlign: TextAlign.center,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          maxLines: 1,
+          style: V13.bodyStrong.copyWith(fontSize: 13),
+        ),
       ),
     );
   }

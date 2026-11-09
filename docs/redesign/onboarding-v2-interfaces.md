@@ -72,19 +72,23 @@ OnboardingShell(
   skipLabel: ObCopy.skip,       // 'Skip tour' on the tour stops
   background: V13.bg,           // V13.blue only for level-up
   titleColor, subtitleColor,    // level-up only
-  showTrack: true,              // off only for level-up
+  showTrack: true,              // painted only when step.showsTrack too
+  fillHero: false,              // true: hero takes the free height
   showRail / showDots / dotIndex / dotCount,  // chrome overrides
 )
 ```
 
-- **Track** — `TrackBackground`/`TrackPainter` paint the navy 2.5 px curved
-  path + beads; camera pans `trackPan` 420 ms from
+- **Track** — `TrackBackground`/`TrackPainter` paint the curved path +
+  beads, faint (7% navy path) and ONLY on post-auth rail steps
+  (`step.showsTrack`: player card onward) — never behind pre-auth copy; camera pans `trackPan` 420 ms from
   `OnboardingShellController.trackFrom → trackIndex`; path at 1.0x, beads at
   1.15x, avatar bead on the spring. Never resets — the pan origin lives in
   the controller, not the widget.
 - **XpRail** — outlined bar, Level 1 / Level 2 badges, spring fill toward
-  `OnboardingXp.total` (100). Rides S4–S15 (`step.showsRail`); S1–S3 show
-  3 page dots instead (`step.showsDots`).
+  `OnboardingXp.total` (100). Rides from the sign-in sheet to level-up (`step.showsRail`); the two
+  pre-auth intros (S1 duel, S2 how-it-works) show 2 page dots instead
+  (`step.showsDots`). `fillHero: true` makes the hero flex to all free
+  height (no scroll) — the intros use it.
 - **CTA** — identical geometry on every step; label cross-fades
   `ctaFade`; docks above the keyboard with the spring
   (`resizeToAvoidBottomInset: false` + animated bottom pad).
@@ -100,8 +104,8 @@ OnboardingShell(
 
 ## 3. Flow — `lib/features/onboarding/flow/`
 
-- **`OnboardingStep`** — S0–S16 enum in flow order:
-  `splash, introRace, introCamera, introBoard, signIn, email, code,
+- **`OnboardingStep`** — S0–S15 enum in flow order:
+  `splash, introRace, introHow, signIn, email, code,
   playerCard, questions1, questions2, firstRaceReady, arenaTour,
   notifyOptIn, tourCompete, tourCrew, tourProfile, levelUp`.
   Extension: `index`, `analyticsName`, `next`, `previous`, `showsDots`,
@@ -160,22 +164,31 @@ kill+relaunch seam. `attachAccount` wipes a different account's record.
 | Step | Enum | File | Widget |
 |---|---|---|---|
 | S0 | `splash` | `intro/splash_step.dart` | `ObSplashStep` |
-| S1 | `introRace` | `intro/intro_race_step.dart` | `ObIntroRaceStep` |
-| S2 | `introCamera` | `intro/intro_camera_step.dart` | `ObIntroCameraStep` |
-| S3 | `introBoard` | `intro/intro_board_step.dart` | `ObIntroBoardStep` |
-| S4 | `signIn` | `auth_visuals/sign_in_step.dart` | `ObSignInStep` |
-| S5 | `email` | `auth_visuals/email_step.dart` | `ObEmailStep` |
-| S6 | `code` | `auth_visuals/code_step.dart` | `ObCodeStep` |
-| S7 | `playerCard` | `player/player_card_step.dart` | `ObPlayerCardStep` |
-| S8 | `questions1` | `player/questions_one_step.dart` | `ObQuestionsOneStep` |
-| S9 | `questions2` | `player/questions_two_step.dart` | `ObQuestionsTwoStep` |
-| S10 | `firstRaceReady` | `player/first_race_ready_step.dart` | `ObFirstRaceReadyStep` |
-| S11 | `arenaTour` | `tour/arena_tour_step.dart` | `ObArenaTourStep` |
-| S12 | `notifyOptIn` | `tour/notify_opt_in_step.dart` | `ObNotifyOptInStep` |
-| S13 | `tourCompete` | `tour/tour_compete_step.dart` | `ObTourCompeteStep` |
-| S14 | `tourCrew` | `tour/tour_crew_step.dart` | `ObTourCrewStep` |
-| S15 | `tourProfile` | `tour/tour_profile_step.dart` | `ObTourProfileStep` |
-| S16 | `levelUp` | `levelup/level_up_step.dart` | `ObLevelUpStep` |
+| S1 | `introRace` | `intro/intro_race_step.dart` | `ObIntroRaceStep` (tap duel hero, 3 lanes) |
+| S2 | `introHow` | `intro/intro_how_step.dart` | `ObIntroHowStep` (camera proof + board climb on one screen) |
+| S3 | `signIn` | `auth_visuals/sign_in_step.dart` | `ObSignInStep` |
+| S4 | `email` | `auth_visuals/email_step.dart` | `ObEmailStep` |
+| S5 | `code` | `auth_visuals/code_step.dart` | `ObCodeStep` |
+| S6 | `playerCard` | `player/player_card_step.dart` | `ObPlayerCardStep` |
+| S7 | `questions1` | `player/questions_one_step.dart` | `ObQuestionsOneStep` |
+| S8 | `questions2` | `player/questions_two_step.dart` | `ObQuestionsTwoStep` |
+| S9 | `firstRaceReady` | `player/first_race_ready_step.dart` | `ObFirstRaceReadyStep` |
+| S10 | `arenaTour` | `tour/arena_tour_step.dart` | `ObArenaTourStep` |
+| S11 | `notifyOptIn` | `tour/notify_opt_in_step.dart` | `ObNotifyOptInStep` |
+| S12 | `tourCompete` | `tour/tour_compete_step.dart` | `ObTourCompeteStep` |
+| S13 | `tourCrew` | `tour/tour_crew_step.dart` | `ObTourCrewStep` |
+| S14 | `tourProfile` | `tour/tour_profile_step.dart` | `ObTourProfileStep` |
+| S15 | `levelUp` | `levelup/level_up_step.dart` | `ObLevelUpStep` |
+
+**Intro rework (quality round 1).** The three slow intro pages (duel,
+camera, board) became two: S1 is the duel as the first thing on screen,
+S2 merges the camera proof and the leaderboard climb. `introCamera` and
+`introBoard` were removed from the enum, so every later step's `index`
+(analytics `step_index`, Track position) is one lower than the S-numbers
+used in `onboarding-v2-spec.md` suggest from S4 on. Saved state from older
+builds is safe: `introBoard` maps onto `introHow` (that screen carries the
+"Create my player" CTA it used to), `introCamera` and any other unknown
+id are ignored on restore (`OnboardingFlowController._stepNamed`).
 
 Host: `onboarding_v2_screen.dart` → `OnboardingV2Screen`. Shared stub hero:
 `shell/placeholder_hero.dart` → `ObPlaceholderHero`.

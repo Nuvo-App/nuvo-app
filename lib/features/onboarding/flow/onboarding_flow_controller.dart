@@ -66,7 +66,7 @@ class OnboardingFlowState {
       (tourSkipped && earliestOwed == OnboardingStep.levelUp);
 }
 
-/// The onboarding-v2 state machine — S0–S16, one [OnboardingStep] at a time.
+/// The onboarding-v2 state machine — S0–S15, one [OnboardingStep] at a time.
 ///
 /// Responsibilities: step advancement, XP awarding (idempotent via
 /// [OnboardingV2Store]), resume-at-earliest-owed, the ob_* analytics
@@ -102,11 +102,20 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   DateTime _enteredAt = DateTime.now();
   bool _restoring = false;
 
-  static OnboardingStep _stepNamed(String name) =>
-      OnboardingStep.values.asNameMap()[name] ?? OnboardingStep.splash;
+  /// Ids saved by older builds that were folded into another step. The
+  /// old leaderboard intro maps onto the merged "how it works" screen;
+  /// `introCamera` (and any other unknown id) is simply ignored.
+  static const Map<String, OnboardingStep> _legacyStepIds = {
+    'introBoard': OnboardingStep.introHow,
+  };
+
+  /// The step for a persisted id, or null when the id is unknown (a step
+  /// removed in a later build) — never crashes on stale state.
+  static OnboardingStep? _stepNamed(String name) =>
+      OnboardingStep.values.asNameMap()[name] ?? _legacyStepIds[name];
 
   static Set<OnboardingStep> _stepSet(Iterable<String> names) => {
-    for (final n in names) _stepNamed(n),
+    for (final n in names) ?_stepNamed(n),
   };
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -199,15 +208,11 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     _setStep(prev);
   }
 
-  /// S1–S3 Skip — compresses the intros; lands on the sign-in step.
+  /// S1–S2 Skip — compresses the intros; lands on the sign-in step.
   Future<void> skipIntros() async {
     await _skip(
       from: state.step,
-      skipped: const [
-        OnboardingStep.introRace,
-        OnboardingStep.introCamera,
-        OnboardingStep.introBoard,
-      ],
+      skipped: const [OnboardingStep.introRace, OnboardingStep.introHow],
     );
   }
 
@@ -355,9 +360,11 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   /// move the pointer on their own.
   void _emitState({bool advance = false}) {
     final completed = _stepSet(_store.completedSteps);
-    final awarded = {
-      for (final e in _store.xpAwarded.entries) _stepNamed(e.key): e.value,
-    };
+    final awarded = <OnboardingStep, int>{};
+    for (final e in _store.xpAwarded.entries) {
+      final step = _stepNamed(e.key);
+      if (step != null) awarded[step] = e.value;
+    }
     final owed = advance
         ? _earliestOwed(completed) ?? OnboardingStep.levelUp
         : state.step;

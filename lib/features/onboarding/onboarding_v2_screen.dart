@@ -10,8 +10,7 @@ import 'auth_visuals/email_step.dart';
 import 'auth_visuals/sign_in_step.dart';
 import 'flow/onboarding_flow_controller.dart';
 import 'flow/onboarding_step.dart';
-import 'intro/intro_board_step.dart';
-import 'intro/intro_camera_step.dart';
+import 'intro/intro_how_step.dart';
 import 'intro/intro_race_step.dart';
 import 'intro/splash_step.dart';
 import 'levelup/level_up_step.dart';
@@ -121,7 +120,11 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
             duration: NuvoMotion.reduceMotionOf(context)
                 ? NuvoMotion.reduceMotionFade
                 : NuvoMotion.springDuration,
-            transitionBuilder: NuvoMotion.stepTransition,
+            // The outgoing screen is gone in the quick exit, and the
+            // incoming one only starts fading in once it is — no frames
+            // where two hero cards are on screen at once.
+            reverseDuration: NuvoMotion.exit,
+            transitionBuilder: _stepTransition,
             child: KeyedSubtree(
               key: ValueKey(flow.step),
               child: _stepScreen(flow.step),
@@ -133,11 +136,29 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     );
   }
 
+  /// [NuvoMotion.stepTransition], with the entering child held back until
+  /// the leaving one has faded (first 40% of the enter is still).
+  static Widget _stepTransition(Widget child, Animation<double> animation) {
+    final entering = AnimatedBuilder(
+      animation: animation,
+      child: NuvoMotion.stepTransition(child, animation),
+      builder: (context, c) => Opacity(
+        opacity: ((animation.value - 0.4) / 0.6).clamp(0.0, 1.0),
+        child: c,
+      ),
+    );
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) => animation.status == AnimationStatus.reverse
+          ? NuvoMotion.stepTransition(child, animation)
+          : entering,
+    );
+  }
+
   Widget _stepScreen(OnboardingStep step) => switch (step) {
     OnboardingStep.splash => const ObSplashStep(),
     OnboardingStep.introRace => const ObIntroRaceStep(),
-    OnboardingStep.introCamera => const ObIntroCameraStep(),
-    OnboardingStep.introBoard => const ObIntroBoardStep(),
+    OnboardingStep.introHow => const ObIntroHowStep(),
     OnboardingStep.signIn => const ObSignInStep(),
     OnboardingStep.email => const ObEmailStep(),
     OnboardingStep.code => const ObCodeStep(),
