@@ -416,8 +416,8 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                             const SizedBox(height: V13.gapSm),
                             // Plain white link — a themed TextButton painted
                             // a grey pill that hid the label on blue.
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
+                            NuvoPressable(
+                              semanticLabel: ObCopy.levelUpShare,
                               onTap: (_busy || _sharing || !ctaReady)
                                   ? null
                                   : () => _share(reward),

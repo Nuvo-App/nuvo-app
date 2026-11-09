@@ -814,8 +814,9 @@ class _LegalLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return NuvoPressable(
       onTap: () => openLegalLink(context, uri),
+      semanticLabel: label,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Text(
