@@ -77,7 +77,7 @@ final authIntentProvider = StateProvider<AuthIntent>(
 
 class AuthController extends StateNotifier<AuthState> {
   AuthController(this._repo, {DemoAccountMarker? demoMarker})
-    : _marker = demoMarker ?? FileDemoAccountMarker(),
+    : _marker = demoMarker ?? MemoryDemoAccountMarker(),
       super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
@@ -362,6 +362,11 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   (ref) {
-    return AuthController(ref.watch(authRepositoryProvider));
+    // Production wires the file-backed R1 marker; tests that build an
+    // AuthController directly get an in-memory one.
+    return AuthController(
+      ref.watch(authRepositoryProvider),
+      demoMarker: FileDemoAccountMarker(),
+    );
   },
 );

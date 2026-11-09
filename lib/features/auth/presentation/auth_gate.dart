@@ -69,7 +69,12 @@ class RouterNotifier extends ChangeNotifier {
     if (loc == '/splash') return null;
 
     if (authState.status == AuthStatus.unauthenticated) {
-      final dest = _isProtected(loc) ? '/welcome' : null;
+      // With v2 on, the v2 flow IS the signed-out front door (intro, sign-in
+      // sheet, "I already have an account") — the old /welcome never shows.
+      final front = _v2 ? '/onboarding-v2' : '/welcome';
+      final dest = (_isProtected(loc) || (_v2 && loc == '/welcome'))
+          ? front
+          : null;
       debugPrint('[Router] unauthenticated → $loc : redirect=$dest');
       return dest;
     }
