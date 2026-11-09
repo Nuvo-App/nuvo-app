@@ -323,9 +323,7 @@ class _MainShellState extends ConsumerState<MainShell>
                 child: widget.child,
               ),
             ),
-            if (isNuvoStoreDemoEmail(
-              ref.watch(authControllerProvider).user?.email ?? '',
-            ))
+            if (showFakeDataPill(ref.watch(authControllerProvider).user?.email))
               const Positioned(top: 8, right: 12, child: _FakeDataPill()),
             // Offline indicator: shows when Nuvo is unreachable or writes are
             // waiting to send — cached screens stay up, no error pages.
@@ -380,6 +378,10 @@ class _MainShellState extends ConsumerState<MainShell>
     );
   }
 }
+
+/// R4 gate: the fake-data pill exists for testing@getnuvo.net and nobody else.
+@visibleForTesting
+bool showFakeDataPill(String? email) => isNuvoStoreDemoEmail(email ?? '');
 
 /// R4 — testing@getnuvo.net only: flips fake (presentation) data on/off from
 /// any tab and reloads, so the store-review account starts clean but can

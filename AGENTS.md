@@ -164,6 +164,12 @@ For all other changes, follow the task declaration format above.
 
 ---
 
+## Demo account (testing@getnuvo.net)
+Rules R1-R4 in `docs/statements/demo-account.md` are a contract: clean cold open,
+sign-in skips onboarding, create-account walks it, fake-data pill for this
+account only. Each has a named test; keep them green and update the statement
+first if behaviour must change.
+
 ## Commit attribution
 
 Do NOT add any AI-tool attribution to commits or commit messages. No
