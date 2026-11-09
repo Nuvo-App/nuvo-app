@@ -18,9 +18,7 @@ Widget _app({
   // copyWith so the real viewInsets survive — a fresh MediaQueryData here
   // would zero the keyboard inset the dock is supposed to read.
   builder: (context, child) => MediaQuery(
-    data: MediaQuery.of(
-      context,
-    ).copyWith(disableAnimations: disableAnimations),
+    data: MediaQuery.of(context).copyWith(disableAnimations: disableAnimations),
     child: child!,
   ),
   home: OnboardingShellScope(
@@ -102,7 +100,11 @@ void main() {
         ..trackFrom = 2
         ..trackIndex = 5;
       await tester.pumpWidget(
-        _app(shell: shell, step: OnboardingStep.email, disableAnimations: true),
+        _app(
+          shell: shell,
+          step: OnboardingStep.playerCard,
+          disableAnimations: true,
+        ),
       );
       await tester.pump();
       final painter =
@@ -119,7 +121,10 @@ void main() {
       expect(painter.pathProgress, 5);
       expect(painter.beadProgress, 5);
       expect(painter.avatarProgress, 5);
-      expect(find.text('Step 5'), findsOneWidget);
+      expect(
+        find.text('Step ${OnboardingStep.playerCard.index}'),
+        findsOneWidget,
+      );
       shell.dispose();
     });
 
@@ -163,7 +168,7 @@ void main() {
     ) async {
       final shell = OnboardingShellController();
       await tester.pumpWidget(
-        _app(shell: shell, step: OnboardingStep.introCamera),
+        _app(shell: shell, step: OnboardingStep.introHow),
       );
       await tester.pumpAndSettle();
       expect(find.byType(XpRail), findsNothing);

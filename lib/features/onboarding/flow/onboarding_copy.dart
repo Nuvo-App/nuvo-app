@@ -18,19 +18,17 @@ abstract final class ObCopy {
   static const String introRaceTitle = 'Race anything.';
   static const String introRaceSub =
       'Pushups, reading, anything. Beat your friends.';
-  static const String introRaceHint = 'Tap the card as fast as you can';
-  static const String introRaceWin = 'You won. That took 5 seconds.';
+  static const String introRaceHint = 'Tap fast to race';
+  static const String introRaceWin = 'You won in 5 seconds';
+  static const String introRaceTaps = 'TAPS';
+  static const String introRaceGhostA = 'Maya';
+  static const String introRaceGhostB = 'Leo';
 
-  // ── S2 Intro — Prove it on camera ──────────────────────────────────────
-  static const String introCameraTitle = 'Prove it on camera.';
-  static const String introCameraSub =
-      'Nuvo counts every rep. No faking, no arguing.';
+  // ── S2 Intro — How it works (camera proof + leaderboard climb) ─────────
+  static const String introHowTitle = 'Prove it. Climb.';
+  static const String introHowSub =
+      'Nuvo counts every rep on camera. Every proof moves you up.';
   static const String introCameraPill = 'AI Motion verified';
-
-  // ── S3 Intro — Climb the board ─────────────────────────────────────────
-  static const String introBoardTitle = 'Climb the board.';
-  static const String introBoardSub =
-      'Every proof moves you up. Friends see it live.';
   static const String introBoardCta = 'Create my player';
   static const String introBoardLogin = 'I already have an account';
 
@@ -77,7 +75,8 @@ abstract final class ObCopy {
   static String emailTypoHintFor(String domain) => 'Did you mean $domain?';
   static const String emailRateLimited =
       'Too many codes. Wait a minute and try again.';
-  static const String emailSendFailed = 'Could not send code. Please try again.';
+  static const String emailSendFailed =
+      'Could not send code. Please try again.';
   static const String authOffline =
       "Can't reach Nuvo. Check your connection and try again.";
   static const String signInAppleFailed =
@@ -86,7 +85,8 @@ abstract final class ObCopy {
       'Google sign-in failed. Please try again.';
   static String codePaste(String code) => 'Paste $code?';
   static const String codeNewSent = 'New code sent';
-  static const String codeResendFailed = 'Could not send a new code. Try again.';
+  static const String codeResendFailed =
+      'Could not send a new code. Try again.';
   static const String codeVerifyFailed =
       'Code accepted, but Nuvo could not finish sign-in. Try again.';
   static const String codeServerSnag = 'Nuvo hit a snag. Try again.';

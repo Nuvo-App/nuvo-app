@@ -1,4 +1,4 @@
-/// The onboarding-v2 step machine — one enum value per spec screen S0–S16.
+/// The onboarding-v2 step machine — one enum value per spec screen S0–S15.
 ///
 /// Enum order IS flow order: `earliestOwed` is computed as the first value
 /// not in the persisted completed set, which is what makes kill + relaunch
@@ -8,14 +8,14 @@ enum OnboardingStep {
   /// auto-completes so a fresh install lands on the first intro.
   splash,
 
-  /// S1 — "Race anything." tap duel.
+  /// S1 — "Race anything." One composed hero: the tap duel is the first
+  /// thing on screen.
   introRace,
 
-  /// S2 — "Prove it on camera." skeleton hero.
-  introCamera,
-
-  /// S3 — "Climb the board." leaderboard hero + "Create my player".
-  introBoard,
+  /// S2 — "How it works": camera proof + leaderboard climb on a single
+  /// screen, with "Create my player" and "I already have an account".
+  /// Replaces the old introCamera / introBoard pair.
+  introHow,
 
   /// S4 — "Save your spot" sign-in sheet (Apple / Google / email).
   signIn,
@@ -58,7 +58,7 @@ enum OnboardingStep {
 }
 
 extension OnboardingStepX on OnboardingStep {
-  /// Position in the flow (S0–S16) — used for the Track, the analytics
+  /// Position in the flow (S0–S15) — used for the Track, the analytics
   /// `step_index`, and ordering.
   int get index => OnboardingStep.values.indexOf(this);
 
@@ -74,14 +74,12 @@ extension OnboardingStepX on OnboardingStep {
   OnboardingStep? get previous =>
       index > 0 ? OnboardingStep.values[index - 1] : null;
 
-  /// Pre-auth intro pages show 3 page dots instead of the XP rail
-  /// (spec: "Pre-auth: 3 page dots instead").
+  /// Pre-auth intro pages show page dots (and no Track) instead of the XP
+  /// rail.
   bool get showsDots =>
-      this == OnboardingStep.introRace ||
-      this == OnboardingStep.introCamera ||
-      this == OnboardingStep.introBoard;
+      this == OnboardingStep.introRace || this == OnboardingStep.introHow;
 
-  /// The dot this step lights (0–2). Only meaningful when [showsDots].
+  /// The dot this step lights (0–1). Only meaningful when [showsDots].
   int get dotIndex => index - OnboardingStep.introRace.index;
 
   /// The XP rail rides from S4 until level-up (spec). Neither the splash
@@ -90,7 +88,13 @@ extension OnboardingStepX on OnboardingStep {
       index >= OnboardingStep.signIn.index &&
       index < OnboardingStep.levelUp.index;
 
-  /// Steps the user may pass without acting — S1–S3 (Skip), the two
+  /// The Track paints only once the player is in: post-auth XP-rail steps
+  /// (player card onward). Pre-auth screens — splash, intros, the sheet,
+  /// email and code — carry dots or the rail alone, so no path ever runs
+  /// behind their copy.
+  bool get showsTrack => showsRail && index >= OnboardingStep.playerCard.index;
+
+  /// Steps the user may pass without acting — S1–S2 (Skip), the two
   /// starter questions (skippable), and the tour stops (Skip tour).
   bool get isSkippable =>
       showsDots ||

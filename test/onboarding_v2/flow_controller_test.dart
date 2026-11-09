@@ -103,7 +103,7 @@ void _group() {
       expect(c.state.allStepsComplete, isFalse);
     });
 
-    test('skipIntros compresses S1–S3 onto signIn', () async {
+    test('skipIntros compresses S1–S2 onto signIn', () async {
       final c = _controller();
       await c.restore();
       await c.completeStep(OnboardingStep.splash);
@@ -112,11 +112,7 @@ void _group() {
       expect(c.state.step, OnboardingStep.signIn);
       expect(
         c.state.completed,
-        containsAll([
-          OnboardingStep.introRace,
-          OnboardingStep.introCamera,
-          OnboardingStep.introBoard,
-        ]),
+        containsAll([OnboardingStep.introRace, OnboardingStep.introHow]),
       );
     });
 
@@ -125,7 +121,7 @@ void _group() {
       () async {
         final c = _controller();
         await c.restore();
-        for (final s in OnboardingStep.values.take(8)) {
+        for (final s in OnboardingStep.values.take(7)) {
           await _act(c, s);
         }
         expect(c.state.step, OnboardingStep.questions1);
@@ -138,7 +134,7 @@ void _group() {
     test('skipTour defers level-up but leaves the flow graduatable', () async {
       final c = _controller();
       await c.restore();
-      for (final s in OnboardingStep.values.take(13)) {
+      for (final s in OnboardingStep.values.take(12)) {
         await _act(c, s);
       }
       expect(c.state.step, OnboardingStep.tourCompete);
@@ -152,7 +148,7 @@ void _group() {
     test('goBack revisits a completed step without un-earning it', () async {
       final c = _controller();
       await c.restore();
-      for (final s in OnboardingStep.values.take(7)) {
+      for (final s in OnboardingStep.values.take(6)) {
         await _act(c, s);
       }
       expect(c.state.step, OnboardingStep.playerCard);
@@ -168,7 +164,7 @@ void _group() {
     test('camera fallback pays the reduced proof award', () async {
       final c = _controller();
       await c.restore();
-      for (final s in OnboardingStep.values.take(11)) {
+      for (final s in OnboardingStep.values.take(10)) {
         await _act(c, s);
       }
       expect(c.state.step, OnboardingStep.arenaTour);
@@ -181,7 +177,7 @@ void _group() {
     test('declined notification pays nothing', () async {
       final c = _controller();
       await c.restore();
-      for (final s in OnboardingStep.values.take(12)) {
+      for (final s in OnboardingStep.values.take(11)) {
         await _act(c, s);
       }
       expect(c.state.step, OnboardingStep.notifyOptIn);

@@ -9,18 +9,14 @@ import '../../../core/v13/tokens.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
-import '../shell/onboarding_shell_controller.dart';
-import '../shell/track_painter.dart';
 
 /// S0 — splash handoff (spec: "existing logo anim, tap to skip once auth
-/// resolved; logo blue dot becomes first Track bead and travels into S1").
+/// resolved"). Pre-auth screens carry no Track, so the splash is just the
+/// wordmark and the launch frame sequence; the step transition carries it
+/// into S1.
 ///
 /// The existing launch frame sequence plays once over
-/// [NuvoMotion.splashHold]; the image is laid out so the animation's final
-/// resting ball lands exactly on the Track's avatar bead (progress 0 sits
-/// at width/2, height·0.44 in [TrackPainter]). When the step advances, the
-/// frame image drops and the identical bead beneath keeps moving — the dot
-/// literally becomes the first bead and rides the 420 ms pan into S1.
+/// [NuvoMotion.splashHold], settling the blue ball under the wordmark.
 ///
 /// Advance = animation finished AND auth resolved ([AuthStatus] != loading);
 /// a tap skips the rest of the hold only once auth has resolved, mirroring
@@ -41,8 +37,7 @@ class _ObSplashStepState extends ConsumerState<ObSplashStep>
   /// frame image (the launch animation settles top-center).
   static const Offset _ballRest = Offset(0.5, 0.19);
 
-  /// The Track's avatar bead at progress 0 — [TrackPainter] puts it at
-  /// (w/2, h·0.44).
+  /// Where the ball rests, as a fraction of the screen height.
   static const double _beadYFraction = 0.44;
 
   late final AnimationController _frames = AnimationController(
@@ -83,9 +78,6 @@ class _ObSplashStepState extends ConsumerState<ObSplashStep>
   void _tryAdvance() {
     if (!mounted || _done || !_animEnded || !_authResolved) return;
     _done = true;
-    // Dropping the frame image reveals the identical bead painted by the
-    // Track underneath — the "dot becomes a bead" handoff.
-    setState(() {});
     ref
         .read(onboardingFlowProvider.notifier)
         .completeStep(OnboardingStep.splash);
@@ -111,7 +103,6 @@ class _ObSplashStepState extends ConsumerState<ObSplashStep>
     // Auth resolving mid-hold completes the step without a tap.
     ref.listen(authControllerProvider, (_, _) => _tryAdvance());
 
-    final shell = OnboardingShellScope.of(context);
     return Scaffold(
       backgroundColor: V13.bg,
       body: GestureDetector(
@@ -119,7 +110,6 @@ class _ObSplashStepState extends ConsumerState<ObSplashStep>
         onTap: _onTap,
         child: Stack(
           children: [
-            TrackBackground(controller: shell),
             LayoutBuilder(
               builder: (context, constraints) {
                 final bead = Offset(
@@ -159,29 +149,29 @@ class _ObSplashStepState extends ConsumerState<ObSplashStep>
                       ),
                     ),
                     // The launch frame sequence — ends with the blue ball
-                    // resting exactly on the Track's first bead.
-                    if (!_done)
-                      Positioned(
-                        left: bead.dx - _ballRest.dx * _imgSize,
-                        top: imgTop,
-                        child: AnimatedBuilder(
-                          animation: _frames,
-                          builder: (context, _) {
-                            final frame = (_frames.value *
-                                    (AssetPaths.splashFrameCount - 1))
-                                .round()
-                                .clamp(0, AssetPaths.splashFrameCount - 1);
-                            return Image.asset(
-                              AssetPaths.splashFrame(frame),
-                              width: _imgSize,
-                              height: _imgSize,
-                              gaplessPlayback: true,
-                              filterQuality: FilterQuality.medium,
-                              errorBuilder: (_, _, _) => const _SplashDot(),
-                            );
-                          },
-                        ),
+                    // resting under the wordmark.
+                    Positioned(
+                      left: bead.dx - _ballRest.dx * _imgSize,
+                      top: imgTop,
+                      child: AnimatedBuilder(
+                        animation: _frames,
+                        builder: (context, _) {
+                          final frame =
+                              (_frames.value *
+                                      (AssetPaths.splashFrameCount - 1))
+                                  .round()
+                                  .clamp(0, AssetPaths.splashFrameCount - 1);
+                          return Image.asset(
+                            AssetPaths.splashFrame(frame),
+                            width: _imgSize,
+                            height: _imgSize,
+                            gaplessPlayback: true,
+                            filterQuality: FilterQuality.medium,
+                            errorBuilder: (_, _, _) => const _SplashDot(),
+                          );
+                        },
                       ),
+                    ),
                   ],
                 );
               },
