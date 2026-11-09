@@ -141,6 +141,24 @@ class _ObIntroHowStepState extends ConsumerState<ObIntroHowStep>
   }
 }
 
+/// The S2 hero (phone demo over the climbing board), exposed so S4 can use
+/// the REAL widget as its blurred backdrop instead of a copy that could
+/// drift. It shows the end of the story (proof verified, YOU 1st)
+/// with every ticker paused and no input.
+class ObIntroHowHero extends StatelessWidget {
+  const ObIntroHowHero({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return TickerMode(
+      enabled: false,
+      child: IgnorePointer(
+        child: _HowHero(elapsed: _HowTimeline.total, onPhoneTap: () {}),
+      ),
+    );
+  }
+}
+
 /// The scripted story, in [NuvoMotion] time: three squats (one per
 /// [NuvoMotion.squatRep]), then the board climbs one rank per third of a
 /// [NuvoMotion.boardTick], then a beat on 1st before the loop restarts.

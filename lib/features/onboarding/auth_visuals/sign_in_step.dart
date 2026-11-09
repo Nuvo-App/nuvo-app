@@ -8,11 +8,11 @@ import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/legal_links.dart';
 import '../../../core/motion/motion.dart';
 import '../../../core/v13/tokens.dart';
-import '../../../core/v13/widgets/v13_face.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../flow/onboarding_copy.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
+import '../intro/intro_how_step.dart';
 import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
 import 'ob_shake.dart';
@@ -121,7 +121,14 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
       children: [
         OnboardingShell(
           step: OnboardingStep.signIn,
-          hero: const ObBoardBackdrop(),
+          fillHero: true,
+          // The REAL S2 hero (frozen at the end of its story), blurred 6 px
+          // per spec — one widget, so S2 and S4 cannot drift apart.
+          hero: ImageFiltered(
+            key: const ValueKey('ob-board-backdrop'),
+            imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: const _SheetAwareHero(),
+          ),
           title: '',
           // The S3 CTA sits behind the sheet (continuity), disabled.
           ctaLabel: ObCopy.introBoardCta,
@@ -372,99 +379,34 @@ class _LegalLineState extends State<_LegalLine> {
   }
 }
 
-/// The leaderboard hero the sheet rises over: the S3 board card (same card,
-/// row sizes, sky "You" row, faces) frozen at 1st place and blurred 6 px
-/// (spec S4). Self-contained so S4 does not depend on S3's live board.
-class ObBoardBackdrop extends StatelessWidget {
-  const ObBoardBackdrop({super.key});
+/// Lays the live S2 hero out in the room ABOVE the sheet (so the board
+/// shows, not just the phone), scaled down to fit; on very short screens
+/// the sheet simply covers it, as before.
+class _SheetAwareHero extends StatelessWidget {
+  const _SheetAwareHero();
 
-  static const _rows = [
-    ('You', 100, true),
-    ('Maya', 86, false),
-    ('Leo', 72, false),
-    ('Sam', 59, false),
-  ];
-
-  static const double _rowH = 52;
-  static const double _rowGap = 8;
+  /// Approximate sheet height (title, two buttons, link, legal).
+  static const double _sheet = 340;
+  static const double _natural = 470;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          key: const ValueKey('ob-board-backdrop'),
-          padding: const EdgeInsets.all(V13.gapLg),
-          decoration: BoxDecoration(
-            color: V13.card,
-            borderRadius: BorderRadius.circular(V13.radiusCardLg),
-            border: Border.all(color: V13.navy, width: V13.outlineThick),
-            boxShadow: V13.shadow6,
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < _rows.length; i++) ...[
-                if (i > 0) const SizedBox(height: _rowGap),
-                _BackdropRow(
-                  rank: i + 1,
-                  name: _rows[i].$1,
-                  points: _rows[i].$2,
-                  isMe: _rows[i].$3,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackdropRow extends StatelessWidget {
-  const _BackdropRow({
-    required this.rank,
-    required this.name,
-    required this.points,
-    required this.isMe,
-  });
-
-  final int rank;
-  final String name;
-  final int points;
-  final bool isMe;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: ObBoardBackdrop._rowH,
-      padding: const EdgeInsets.symmetric(horizontal: V13.gapMd),
-      decoration: BoxDecoration(
-        color: isMe ? V13.sky : V13.card,
-        borderRadius: BorderRadius.circular(V13.radiusCardLg - 10),
-        border: Border.all(
-          color: V13.navy,
-          width: isMe ? V13.outlineThick : V13.outline,
-        ),
-        boxShadow: isMe ? V13.hardShadow(x: 2, y: 2) : null,
-      ),
-      child: Row(
-        children: [
-          SizedBox(width: 22, child: Text('$rank', style: V13.numberSm)),
-          const SizedBox(width: V13.gapSm),
-          V13Face(size: 34, isMe: isMe),
-          const SizedBox(width: V13.gapMd),
-          Expanded(
-            child: Text(
-              name,
-              style: V13.bodyStrong,
-              overflow: TextOverflow.ellipsis,
+    return LayoutBuilder(
+      builder: (context, c) {
+        final room = c.maxHeight - _sheet + 40;
+        if (room < 260) return const ObIntroHowHero();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: _sheet - 40),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: SizedBox(
+              width: c.maxWidth,
+              height: _natural,
+              child: const ObIntroHowHero(),
             ),
           ),
-          Text('$points', style: V13.numberSm),
-        ],
-      ),
+        );
+      },
     );
   }
 }
