@@ -52,6 +52,8 @@ class _ObIntroBoardStepState extends ConsumerState<ObIntroBoardStep> {
   }
 
   void _tick(Timer _) {
+    final me = _rows.firstWhere((r) => r.isMe);
+    final before = _standings.indexOf(me);
     setState(() {
       var bot = 0;
       for (final row in _rows) {
@@ -59,6 +61,16 @@ class _ObIntroBoardStepState extends ConsumerState<ObIntroBoardStep> {
       }
       if (_standings.first.isMe) _crowned = true;
     });
+    final after = _standings.indexOf(me);
+    if (_crowned && after == 0 && before != 0) {
+      // 1st place — the flash + confetti moment.
+      NuvoHaptics.medium();
+      ref.read(nuvoSoundsProvider).xpChime();
+    } else if (after < before) {
+      // A pass — the climb should be felt, not just seen.
+      NuvoHaptics.light();
+      ref.read(nuvoSoundsProvider).pressTick();
+    }
   }
 
   @override
@@ -135,53 +147,55 @@ class _BoardCard extends StatelessWidget {
     final reduce = NuvoMotion.reduceMotionOf(context);
     final radius = BorderRadius.circular(V13.radiusCardLg);
     return Center(
-      child: Container(
-        key: const ValueKey('ob-board-card'),
-        height: 300,
-        decoration: BoxDecoration(
-          color: V13.card,
-          borderRadius: radius,
-          border: Border.all(color: V13.navy, width: V13.outlineThick),
-          boxShadow: V13.shadow6,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              top: V13.gapLg,
-              left: V13.gapLg,
-              right: V13.gapLg,
-              child: Stack(
-                children: [
-                  for (final row in standings)
-                    AnimatedPositioned(
-                      key: ValueKey(row.name),
-                      top: standings.indexOf(row) * (_rowH + _rowGap),
-                      left: 0,
-                      right: 0,
-                      height: _rowH,
-                      duration:
-                          reduce ? Duration.zero : NuvoMotion.springDuration,
-                      curve: NuvoMotion.spring,
-                      child: _BoardRow(
-                        row: row,
-                        rank: standings.indexOf(row) + 1,
-                        crowned: crowned && row.isMe,
+      child: NuvoFloat(
+        child: Container(
+          key: const ValueKey('ob-board-card'),
+          height: 300,
+          decoration: BoxDecoration(
+            color: V13.card,
+            borderRadius: radius,
+            border: Border.all(color: V13.navy, width: V13.outlineThick),
+            boxShadow: V13.shadow6,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                top: V13.gapLg,
+                left: V13.gapLg,
+                right: V13.gapLg,
+                child: Stack(
+                  children: [
+                    for (final row in standings)
+                      AnimatedPositioned(
+                        key: ValueKey(row.name),
+                        top: standings.indexOf(row) * (_rowH + _rowGap),
+                        left: 0,
+                        right: 0,
+                        height: _rowH,
+                        duration:
+                            reduce ? Duration.zero : NuvoMotion.springDuration,
+                        curve: NuvoMotion.spring,
+                        child: _BoardRow(
+                          row: row,
+                          rank: standings.indexOf(row) + 1,
+                          crowned: crowned && row.isMe,
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-            if (crowned)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: V13Confetti(
-                    particleCount: NuvoMotion.confettiPieces ~/ 2,
-                    duration: NuvoMotion.confetti,
-                  ),
+                  ],
                 ),
               ),
-          ],
+              if (crowned)
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: V13Confetti(
+                      particleCount: NuvoMotion.confettiPieces ~/ 2,
+                      duration: NuvoMotion.confetti,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

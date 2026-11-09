@@ -51,6 +51,12 @@ class _ObIntroCameraStepState extends ConsumerState<ObIntroCameraStep>
     if (!past) return;
     setState(() => _reps++);
     NuvoHaptics.light();
+    // The verification payoff — a heavier tick and the XP chime the
+    // moment the pill is earned.
+    if (_reps == _verifyAfter) {
+      NuvoHaptics.medium();
+      ref.read(nuvoSoundsProvider).xpChime();
+    }
   }
 
   void _restart() {
