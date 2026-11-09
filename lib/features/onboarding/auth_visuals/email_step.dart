@@ -11,6 +11,7 @@ import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
 import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
+import 'auth_layout.dart';
 import 'email_utils.dart';
 import 'player_pass.dart';
 
@@ -30,6 +31,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
   );
   final _pw = TextEditingController();
   final _focus = FocusNode();
+  final _pwFocus = FocusNode();
   bool _sending = false;
   bool _wasValid = false;
   String? _error;
@@ -38,8 +40,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
 
   // The store-review credential signs in with a password through
   // /auth/reviewer (same call as the v1 email screen), never an inbox code.
-  bool get _reviewer =>
-      isNuvoStoreDemoEmail(ObEmail.normalize(_ctrl.text));
+  bool get _reviewer => isNuvoStoreDemoEmail(ObEmail.normalize(_ctrl.text));
 
   @override
   void initState() {
@@ -54,6 +55,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     _ctrl.dispose();
     _pw.dispose();
     _focus.dispose();
+    _pwFocus.dispose();
     super.dispose();
   }
 
@@ -151,118 +153,83 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     final valid = _valid;
     final typo = ObEmail.typoSuggestion(text);
     final chips = ObEmail.domainChips(text);
+    final tight = obTightScreen(context);
+    // The title already asks for the email: drop the field label and the
+    // subtitle when the keyboard (or a short phone) takes the room.
+    final lean = keyboardUp || tight;
+    // Everything under the hero: gap + title + subtitle + body + tail.
+    final below =
+        20 +
+        30 +
+        (lean ? 0 : 28) +
+        16 +
+        (lean ? 0 : 28) +
+        60 +
+        (_reviewer ? 80 : 0) +
+        8 +
+        _statusSlotHeight +
+        40;
+    final hero = obHeroHeight(context, below: below);
 
     return OnboardingShell(
       step: OnboardingStep.email,
-      heroHeight: keyboardUp ? 112 : 280,
-      hero: Column(
-        children: [
-          if (!keyboardUp)
-            Padding(
-              padding: const EdgeInsets.only(bottom: V13.gapMd),
-              child: Text(ObCopy.emailStepCounter, style: V13.caption),
-            ),
-          Expanded(
-            child: ObPlayerPass(
-              email: text.trim(),
-              stamp: valid ? ObStampState.ready : ObStampState.none,
-              compact: keyboardUp,
-              printing: _sending,
-            ),
-          ),
-        ],
+      heroHeight: hero,
+      hero: ObPlayerPass(
+        email: text.trim(),
+        stamp: valid ? ObStampState.ready : ObStampState.none,
+        printing: _sending,
+        header: ObCopy.emailStepCounter,
       ),
       title: ObCopy.emailTitle,
-      subtitle: ObCopy.emailSub,
+      subtitle: lean ? null : ObCopy.emailSub,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(ObCopy.emailFieldLabel, style: V13.bodyStrong),
-          const SizedBox(height: V13.gapSm),
-          SizedBox(
-            height: 60,
-            child: TextField(
-              key: const ValueKey('ob-email-field'),
-              controller: _ctrl,
-              focusNode: _focus,
-              autofocus: true,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.send,
-              autofillHints: const [AutofillHints.email],
-              autocorrect: false,
-              enableSuggestions: false,
-              onSubmitted: (_) => _send(),
-              style: V13.bodyStrong.copyWith(fontSize: 16),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: V13.card,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: V13.gapLg,
-                  vertical: 18,
-                ),
-                enabledBorder: _border(V13.navy),
-                focusedBorder: _border(V13.blue),
-                border: _border(V13.navy),
-              ),
-            ),
+          if (!lean) ...[
+            Text(ObCopy.emailFieldLabel, style: V13.bodyStrong),
+            const SizedBox(height: V13.gapSm),
+          ],
+          _field(
+            key: const ValueKey('ob-email-field'),
+            controller: _ctrl,
+            focusNode: _focus,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: _reviewer
+                ? TextInputAction.next
+                : TextInputAction.send,
+            autofillHints: const [AutofillHints.email],
+            autocorrect: false,
+            hint: 'you@email.com',
+            onSubmitted: (_) => _reviewer ? _pwFocus.requestFocus() : _send(),
           ),
           if (_reviewer) ...[
             const SizedBox(height: V13.gapMd),
-            Text(ObCopy.reviewerPasswordLabel, style: V13.bodyStrong),
-            const SizedBox(height: V13.gapSm),
-            SizedBox(
-              height: 60,
-              child: TextField(
-                key: const ValueKey('ob-email-password'),
-                controller: _pw,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.password],
-                onSubmitted: (_) => _reviewerSignIn(),
-                style: V13.bodyStrong.copyWith(fontSize: 16),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: V13.card,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: V13.gapLg,
-                    vertical: 18,
-                  ),
-                  enabledBorder: _border(V13.navy),
-                  focusedBorder: _border(V13.blue),
-                  border: _border(V13.navy),
-                ),
-              ),
+            _field(
+              key: const ValueKey('ob-email-password'),
+              controller: _pw,
+              focusNode: _pwFocus,
+              obscure: true,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.password],
+              hint: ObCopy.reviewerPasswordLabel,
+              onSubmitted: (_) => _reviewerSignIn(),
             ),
           ],
           const SizedBox(height: V13.gapSm),
-          if (_error != null)
-            Text(
-              _error!,
-              key: const ValueKey('ob-email-error'),
-              style: V13.bodyStrong.copyWith(color: V13.danger),
-            )
-          else if (typo != null)
-            _TypoHint(
-              domain: typo,
-              onTap: () => _insertDomain(typo),
-            )
-          else if (!valid)
-            Text(
-              ObCopy.emailDisabledHint,
-              key: const ValueKey('ob-email-hint'),
-              style: V13.caption,
+          // One fixed slot for hint / error / typo / domain chips, so the
+          // layout never jumps as the state changes.
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: _statusSlotHeight),
+            child: AnimatedSwitcher(
+              duration: NuvoMotion.ctaFade,
+              layoutBuilder: (current, previous) => Stack(
+                alignment: Alignment.centerLeft,
+                children: [...previous, ?current],
+              ),
+              child: _status(typo, chips, valid),
             ),
-          if (chips.isNotEmpty) ...[
-            const SizedBox(height: V13.gapMd),
-            Wrap(
-              spacing: V13.gapSm,
-              runSpacing: V13.gapSm,
-              children: [
-                for (final d in chips)
-                  _DomainChip(domain: d, onTap: () => _insertDomain(d)),
-              ],
-            ),
-          ],
+          ),
         ],
       ),
       ctaLabel: _sending
@@ -273,6 +240,103 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
       ctaEnabled: valid && !_sending && (!_reviewer || _pw.text.isNotEmpty),
       onCta: _send,
       onBack: _sending ? null : flow.goBack,
+    );
+  }
+
+  static const double _statusSlotHeight = 36;
+
+  Widget _status(String? typo, List<String> chips, bool valid) {
+    if (_error != null) {
+      return Align(
+        key: const ValueKey('status-error'),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _error!,
+          key: const ValueKey('ob-email-error'),
+          style: V13.bodyStrong.copyWith(color: V13.danger),
+        ),
+      );
+    }
+    if (typo != null) {
+      return Align(
+        key: const ValueKey('status-typo'),
+        alignment: Alignment.centerLeft,
+        child: _TypoHint(domain: typo, onTap: () => _insertDomain(typo)),
+      );
+    }
+    if (chips.isNotEmpty) {
+      return Align(
+        key: const ValueKey('status-chips'),
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: V13.gapSm,
+          runSpacing: V13.gapSm,
+          children: [
+            for (final d in chips)
+              _DomainChip(domain: d, onTap: () => _insertDomain(d)),
+          ],
+        ),
+      );
+    }
+    if (!valid) {
+      return Align(
+        key: const ValueKey('status-hint'),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          ObCopy.emailDisabledHint,
+          key: const ValueKey('ob-email-hint'),
+          style: V13.caption,
+        ),
+      );
+    }
+    return const SizedBox.shrink(key: ValueKey('status-none'));
+  }
+
+  Widget _field({
+    required Key key,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required TextInputAction textInputAction,
+    required List<String> autofillHints,
+    required String hint,
+    required ValueChanged<String> onSubmitted,
+    bool autofocus = false,
+    bool obscure = false,
+    bool autocorrect = true,
+    TextInputType? keyboardType,
+  }) {
+    return SizedBox(
+      height: 60,
+      child: TextField(
+        key: key,
+        controller: controller,
+        focusNode: focusNode,
+        autofocus: autofocus,
+        obscureText: obscure,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autofillHints: autofillHints,
+        autocorrect: autocorrect,
+        enableSuggestions: autocorrect,
+        onSubmitted: onSubmitted,
+        style: V13.bodyStrong.copyWith(fontSize: 16),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: V13.bodyStrong.copyWith(
+            fontSize: 16,
+            color: V13.muted.withValues(alpha: 0.6),
+          ),
+          filled: true,
+          fillColor: V13.card,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: V13.gapLg,
+            vertical: 18,
+          ),
+          enabledBorder: _border(V13.navy),
+          focusedBorder: _border(V13.blue),
+          border: _border(V13.navy),
+        ),
+      ),
     );
   }
 

@@ -8,6 +8,7 @@ import '../../../core/v13/tokens.dart';
 import '../flow/onboarding_copy.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
+import 'cta_pop.dart';
 import 'onboarding_shell_controller.dart';
 import 'track_painter.dart';
 import 'xp_rail.dart';
@@ -417,28 +418,31 @@ class _CtaDock extends StatelessWidget {
       padding: EdgeInsets.only(bottom: math.max(keyboard, 16.0)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: sideMargin),
-        child: NuvoPressable(
-          onTap: interactive ? onTap : null,
-          enabled: interactive,
-          borderRadius: BorderRadius.circular(V13.radiusButton),
-          shadow: V13.shadow4,
-          semanticLabel: label,
-          child: Container(
-            key: const ValueKey('onboarding-cta'),
-            height: height,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: interactive ? V13.blue : V13.card,
-              borderRadius: BorderRadius.circular(V13.radiusButton),
-              border: Border.all(color: V13.navy, width: V13.outlineThick),
-            ),
-            child: AnimatedSwitcher(
-              duration: NuvoMotion.ctaFade,
-              child: Text(
-                label,
-                key: ValueKey(label),
-                style: V13.buttonLabel.copyWith(
-                  color: interactive ? V13.white : V13.muted,
+        child: CtaPop(
+          active: interactive,
+          child: NuvoPressable(
+            onTap: interactive ? onTap : null,
+            enabled: interactive,
+            borderRadius: BorderRadius.circular(V13.radiusButton),
+            shadow: V13.shadow4,
+            semanticLabel: label,
+            child: Container(
+              key: const ValueKey('onboarding-cta'),
+              height: height,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: interactive ? V13.blue : V13.card,
+                borderRadius: BorderRadius.circular(V13.radiusButton),
+                border: Border.all(color: V13.navy, width: V13.outlineThick),
+              ),
+              child: AnimatedSwitcher(
+                duration: NuvoMotion.ctaFade,
+                child: Text(
+                  label,
+                  key: ValueKey(label),
+                  style: V13.buttonLabel.copyWith(
+                    color: interactive ? V13.white : V13.muted,
+                  ),
                 ),
               ),
             ),

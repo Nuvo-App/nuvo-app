@@ -91,6 +91,7 @@ void main() {
     expect(find.text('Did you mean gmail.com?'), findsOneWidget);
     await t.ensureVisible(find.byKey(const ValueKey('ob-email-typo')));
     await t.tap(find.byKey(const ValueKey('ob-email-typo')));
+    await t.pump(const Duration(milliseconds: 100));
     await t.pump(const Duration(milliseconds: 600));
     final field = t.widget<TextField>(
       find.byKey(const ValueKey('ob-email-field')),
@@ -104,7 +105,9 @@ void main() {
     await type(t, 'Ava@Gmail.com');
     await t.tap(find.byKey(const ValueKey('onboarding-cta')));
     await t.pump();
-    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     await t.pump(const Duration(seconds: 1));
     expect(h.auth.startedFor, ['ava@gmail.com']);
     expect(h.state.step, OnboardingStep.code);

@@ -7,55 +7,82 @@ import '../flow/onboarding_copy.dart';
 enum ObStampState { none, ready, verified }
 
 /// The "player pass" ticket shared by S5 and S6: outlined sky ticket with a
-/// perforated stub, the Nuvo mark, PLAYER PASS, the typed email on a
-/// monospace line and a stamp slot. [compact] shrinks it to 60% (keyboard
-/// up); [printing] lifts it while a code is being sent.
+/// perforated stub, the Nuvo mark, PLAYER PASS, the typed email (each
+/// character springs in as it is typed) and a stamp slot. It scales to fit
+/// whatever hero slot the screen gives it (never overflowing, never tiny on a
+/// tall phone); [printing] lifts it while a code is being sent.
 class ObPlayerPass extends StatelessWidget {
   const ObPlayerPass({
     super.key,
     required this.email,
     this.stamp = ObStampState.none,
-    this.compact = false,
     this.printing = false,
     this.caption,
+    this.header,
   });
 
   final String email;
   final ObStampState stamp;
-  final bool compact;
   final bool printing;
 
   /// Optional line under the email ("Code sent to ...").
   final String? caption;
 
+  /// Optional small line above the ticket ("Step 1 of 4"); only drawn when
+  /// the slot is tall enough to carry it.
+  final String? header;
+
   static const double width = 300;
-  static const double height = 170;
+  static const double height = 176;
 
   @override
   Widget build(BuildContext context) {
     final reduce = NuvoMotion.reduceMotionOf(context);
     final duration = reduce ? Duration.zero : NuvoMotion.springDuration;
-    return Center(
-      child: OverflowBox(
-        maxWidth: width,
-        maxHeight: height,
-        child: AnimatedScale(
-          scale: compact ? 0.6 : 1,
-          duration: duration,
-          curve: NuvoMotion.spring,
-          child: AnimatedSlide(
-            offset: Offset(0, printing ? -NuvoMotion.printLift / height : 0),
-            duration: duration,
-            curve: NuvoMotion.spring,
-            child: NuvoFloat(
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: _Ticket(email: email, stamp: stamp, caption: caption),
+    return ClipRect(
+      clipBehavior: Clip.none,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final showHeader = header != null && c.maxHeight >= 230;
+          // Room for the hard shadow (6) and the float travel.
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (showHeader)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: V13.gapMd),
+                  child: Text(header!, style: V13.caption),
+                ),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                  child: AnimatedSlide(
+                    offset: Offset(
+                      0,
+                      printing ? -NuvoMotion.printLift / height : 0,
+                    ),
+                    duration: duration,
+                    curve: NuvoMotion.spring,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: NuvoFloat(
+                        child: SizedBox(
+                          width: width,
+                          height: height,
+                          child: _Ticket(
+                            email: email,
+                            stamp: stamp,
+                            caption: caption,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -72,7 +99,7 @@ class _Ticket extends StatelessWidget {
   final ObStampState stamp;
   final String? caption;
 
-  static const double stubWidth = 96;
+  static const double stubWidth = 92;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +114,12 @@ class _Ticket extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(V13.gapLg),
+              padding: const EdgeInsets.fromLTRB(
+                V13.gapLg,
+                V13.gapLg,
+                V13.gapMd,
+                V13.gapLg,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -118,29 +150,17 @@ class _Ticket extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
-                  Text(
-                    email.isEmpty ? 'you@email.com' : email,
-                    key: const ValueKey('ob-pass-email'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: email.isEmpty
-                          ? V13.navy.withValues(alpha: 0.4)
-                          : V13.navy,
-                    ),
-                  ),
-                  if (caption != null) ...[
-                    const SizedBox(height: V13.gapXs),
+                  _EmailLine(email: email),
+                  const SizedBox(height: V13.gapSm),
+                  if (caption != null)
                     Text(
                       caption!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: V13.caption.copyWith(color: V13.navy),
-                    ),
-                  ],
+                    )
+                  else
+                    const _Barcode(),
                 ],
               ),
             ),
@@ -150,6 +170,100 @@ class _Ticket extends StatelessWidget {
             width: stubWidth,
             child: Center(child: ObStamp(state: stamp)),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The typed address on the ticket. Each character springs in from 40% as it
+/// lands (keyed by position + glyph, so only new characters animate); a long
+/// address shrinks to fit rather than clipping.
+class _EmailLine extends StatelessWidget {
+  const _EmailLine({required this.email});
+
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    final empty = email.isEmpty;
+    final text = empty ? 'you@email.com' : email;
+    final style = V13.bodyStrong.copyWith(
+      fontSize: 15,
+      height: 1.2,
+      letterSpacing: 0.4,
+      color: empty ? V13.navy.withValues(alpha: 0.4) : V13.navy,
+    );
+    return Semantics(
+      label: text,
+      excludeSemantics: true,
+      child: SizedBox(
+        height: 22,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            key: const ValueKey('ob-pass-email'),
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < text.length; i++)
+                  empty
+                      ? Text(text[i], style: style)
+                      : _CharPop(
+                          key: ValueKey('$i${text[i]}'),
+                          child: Text(text[i], style: style),
+                        ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CharPop extends StatelessWidget {
+  const _CharPop({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (NuvoMotion.reduceMotionOf(context)) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.4, end: 1),
+      duration: NuvoMotion.springDuration,
+      curve: NuvoMotion.spring,
+      builder: (context, scale, child) => Opacity(
+        opacity: ((scale - 0.4) / 0.4).clamp(0.0, 1.0),
+        child: Transform.scale(scale: scale, child: child),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// The decorative barcode strip along the ticket's bottom edge.
+class _Barcode extends StatelessWidget {
+  const _Barcode();
+
+  static const _bars = [2, 1, 3, 1, 2, 2, 1, 3, 2, 1, 1, 3, 1, 2, 3, 1, 2, 1];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 18,
+      child: Row(
+        children: [
+          for (var i = 0; i < _bars.length; i++) ...[
+            Container(
+              width: _bars[i].toDouble(),
+              color: V13.navy.withValues(alpha: 0.75),
+            ),
+            const SizedBox(width: 2),
+          ],
         ],
       ),
     );
