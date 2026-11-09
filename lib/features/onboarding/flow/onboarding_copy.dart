@@ -69,6 +69,28 @@ abstract final class ObCopy {
   static String codeResendIn(int seconds) => 'Resend in ${seconds}s';
   static String codeSentTo(String email) => 'Code sent to $email';
   static const String codeChange = 'Change';
+  // Part B additions (auth visuals).
+  static String emailTypoHintFor(String domain) => 'Did you mean $domain?';
+  static const String emailRateLimited =
+      'Too many codes. Wait a minute and try again.';
+  static const String emailSendFailed = 'Could not send code. Please try again.';
+  static const String authOffline =
+      "Can't reach Nuvo. Check your connection and try again.";
+  static const String signInAppleFailed =
+      'Apple Sign In was cancelled or failed.';
+  static const String signInGoogleFailed =
+      'Google sign-in failed. Please try again.';
+  static String codePaste(String code) => 'Paste $code?';
+  static const String codeNewSent = 'New code sent';
+  static const String codeResendFailed = 'Could not send a new code. Try again.';
+  static const String codeVerifyFailed =
+      'Code accepted, but Nuvo could not finish sign-in. Try again.';
+  static const String codeTipsTitle = "Didn't get the code?";
+  static const String codeTipSpam = 'Check your spam or promotions folder.';
+  static const String codeTipEmail = 'Make sure the email above is right.';
+  static const String codeTipChangeEmail = 'Change email';
+  static const String codeTipSocial = 'Use Apple or Google instead';
+  static const String codeTipsDone = 'Got it';
 
   // ── S7 Player card ─────────────────────────────────────────────────────
   static const String playerCardStepCounter = 'Step 2 of 4';
