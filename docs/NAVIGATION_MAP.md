@@ -35,9 +35,11 @@ If you are adding a control that references a race, its tap target is
 | `/welcome` | `WelcomeAuthScreen` | cupertino | `?mode=login` (optional) | The same signup/login composition as the final intro page. Email / Google / Apple behavior is unchanged. Default remains signup. No pre-auth completion flag or completion API write; account completion remains server-owned. |
 | `/auth/email` | `EmailStartScreen` | cupertino | — | |
 | `/auth/verify` | `EmailVerifyScreen` | cupertino | `extra: String email` | On success sets auth state; router redirects. |
-| `/onboarding/profile` | `OnboardingScreen` | cupertino | — | |
-| `/onboarding/motion-consent` | `MotionContributionScreen` | cupertino | — | |
-| `/onboarding/nuvo` | `NuvoOnboardingScreen` | cupertino | — | First-use story; final "Start your first race" CTA calls completeOnboarding() → /arena |
+| `/onboarding/profile` | `OnboardingScreen` | cupertino | — | Redirects to `/onboarding-v2` when `NUVO_ONBOARDING_V2=true`. |
+| `/onboarding/motion-consent` | `MotionContributionScreen` | cupertino | — | Redirects to `/onboarding-v2` when `NUVO_ONBOARDING_V2=true`. |
+| `/onboarding/nuvo` | `NuvoOnboardingScreen` | cupertino | — | First-use story; final "Start your first race" CTA calls completeOnboarding() → /arena. Redirects to `/onboarding-v2` when `NUVO_ONBOARDING_V2=true`. |
+| `/onboarding/notifications` | `NotificationPermissionScreen` | cupertino | — | Redirects to `/onboarding-v2` when `NUVO_ONBOARDING_V2=true`. |
+| `/onboarding-v2` | `OnboardingV2Screen` | cupertino | — | Guided S0–S16 flow; compile-time flag `NUVO_ONBOARDING_V2=true` only (default off — off builds redirect to `/onboarding/nuvo`). Outside the `/onboarding/` prefix so it is reachable signed-out and signed-in-incomplete; the host graduates to /arena itself. |
 | **ShellRoute** (`MainShell` + bottom nav) | | | | Tabs below. Switch with `context.go`. |
 | `/arena` | `ArenaScreen` | none (tab) | — | Home. "Your next move". |
 | `/pass` | `PassScreen` | none (tab) | — | Crew / member pass. |
@@ -92,6 +94,19 @@ profile/legal incomplete → /onboarding/profile, consent unanswered →
 Incomplete accounts are bounced off protected non-onboarding routes back to
 setup; completed accounts are bounced off auth/onboarding routes to /arena.
 Provider never participates in the decision.
+
+Onboarding v2 (`NUVO_ONBOARDING_V2=true`): `/onboarding-v2` is deliberately
+outside the `/onboarding/` prefix — the guard's protected/auth-or-onboarding
+buckets do not cover it, which is what lets the v2 flow own BOTH the pre-auth
+intros/sign-in and the post-auth setup on one continuous path. The guard's
+`_firstRunTarget` still names the v1 routes above; under the flag those
+routes redirect to `/onboarding-v2` at the route level, so the landing
+decision still depends only on onboarding flags. `OnboardingV2Screen` calls
+the same `completeOnboarding()` write (the server flag's meaning is
+unchanged) and `go`es to `/arena` when the flow is resolved — including the
+skip-tour deferral that leaves the level-up owed to the Getting-started row.
+A signed-in-and-complete account landing on `/onboarding-v2` bounces to
+`/arena` from the host itself.
 
 ┌──────────── bottom-nav tabs (context.go, never push) ────────────┐
 │  arena   pass   compete   move   profile                          │

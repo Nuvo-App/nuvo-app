@@ -98,6 +98,23 @@ pages (`story_p0..7`), `10` notifications.
 | `screen_loaded` | `screen`, `ms` | First frame on the 5 key screens: `compete`, `arena`, `race_detail`, `activity`, `settings`. |
 | `api_error` | `route` (logical tag), `status` | `ApiException` at controller submit/join seams. Max 5/session. |
 
+### Onboarding v2 (`ob_*`)
+
+The guided flow (NUVO_ONBOARDING_V2=true) emits its own vocabulary — kept
+separate from the v1 `onboarding_*` funnel so both read cleanly.
+`step_name` is the `OnboardingStep` enum name (`splash`, `introRace`, …,
+`levelUp`); `step_index` is its 0–16 position.
+
+| Event | Properties | Fired when |
+|---|---|---|
+| `ob_step_viewed` | `step_index`, `step_name` | A step becomes the viewed step (advance, back-nav, restore). |
+| `ob_step_completed` | `step_index`, `step_name`, `ms_on_step` | `completeStep` resolves a step (includes level-up after the server write). |
+| `ob_skipped` | `step_index`, `step_name`, `ms_on_step` | A skip resolves a group: intro Skip (S1–3), questions Skip (S8–9), Skip tour (S13–15). |
+| `ob_tour_stop` | `step_index`, `step_name` | A tour stop (S13–15) renders. |
+| `ob_proof_started` | `step_name` | The S11 practice proof session opens. |
+| `ob_proof_completed` | `step_name`, `outcome`: `verified` \| `fallback_practice`, `ms_on_step` | The S11 practice proof resolves — `fallback_practice` is the camera-denied reduced-XP path. |
+| `ob_level_up_seen` | `step_index`, `step_name`, `ms_on_step` | The S16 level-up moment actually played. |
+
 ### Camera funnel call sites
 
 All three camera events are wired in

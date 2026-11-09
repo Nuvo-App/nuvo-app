@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'analytics_store.dart';
-import 'posthog_sink_stub.dart'
-    if (dart.library.io) 'posthog_sink_io.dart';
+import 'posthog_sink_stub.dart' if (dart.library.io) 'posthog_sink_io.dart';
 
 /// PostHog product analytics — compile-time configured, anonymous by design.
 ///
@@ -107,6 +106,15 @@ class AnalyticsService {
     'notif_opened',
     'screen_loaded',
     'api_error',
+    // Onboarding v2 (ob_* = the guided S0–S16 flow; step_name is the
+    // OnboardingStep enum name, step_index its 0–16 position).
+    'ob_step_viewed',
+    'ob_step_completed',
+    'ob_skipped',
+    'ob_tour_stop',
+    'ob_proof_started',
+    'ob_proof_completed',
+    'ob_level_up_seen',
   };
 
   /// Every property key an event may ever carry — enums, ints, booleans only.
@@ -242,11 +250,13 @@ class AnalyticsService {
 
   void onboardingStarted() => track('onboarding_started');
 
-  void onboardingStepViewed({required int stepIndex, required String stepName}) =>
-      track('onboarding_step_viewed', {
-        'step_index': stepIndex,
-        'step_name': stepName,
-      });
+  void onboardingStepViewed({
+    required int stepIndex,
+    required String stepName,
+  }) => track('onboarding_step_viewed', {
+    'step_index': stepIndex,
+    'step_name': stepName,
+  });
 
   void onboardingStepCompleted({
     required int stepIndex,
@@ -299,14 +309,12 @@ class AnalyticsService {
   );
 
   /// [error] enum: `http_<status>` | 'error'.
-  void raceCreateFailed({String? raceType, required String error}) => track(
-    'race_create_failed',
-    {
-      'race_type': raceType,
-      'ms': _elapsedMs(_raceCreateStartedAt),
-      'error': error,
-    },
-  );
+  void raceCreateFailed({String? raceType, required String error}) =>
+      track('race_create_failed', {
+        'race_type': raceType,
+        'ms': _elapsedMs(_raceCreateStartedAt),
+        'error': error,
+      });
 
   /// A race invite code was created/shared from the invite sheet.
   void raceInviteSent() => track('race_invite_sent');
@@ -361,8 +369,7 @@ class AnalyticsService {
   }) => track('proof_result', {
     'outcome': outcome,
     'failure_reason': failureReason,
-    'detected_value':
-        detectedValue == null ? null : _bucket(detectedValue),
+    'detected_value': detectedValue == null ? null : _bucket(detectedValue),
     'duration_s': durationS,
   });
 
@@ -393,6 +400,67 @@ class AnalyticsService {
   void notifOpened({required String type}) =>
       track('notif_opened', {'type': type});
 
+  // ── Onboarding v2 (ob_*) ────────────────────────────────────────────────
+  // The guided flow's own vocabulary — kept separate from the v1
+  // onboarding_* funnel so both can be read without colliding.
+  // step_name = OnboardingStep.name, step_index = S0–S16; ms_on_step is the
+  // measured dwell when the event ends a step.
+
+  void obStepViewed({required int stepIndex, required String stepName}) =>
+      track('ob_step_viewed', {'step_index': stepIndex, 'step_name': stepName});
+
+  void obStepCompleted({
+    required int stepIndex,
+    required String stepName,
+    int? msOnStep,
+  }) => track('ob_step_completed', {
+    'step_index': stepIndex,
+    'step_name': stepName,
+    'ms_on_step': msOnStep,
+  });
+
+  /// A skippable step (or a skip group: intros, questions, tour) resolved
+  /// without its action.
+  void obSkipped({
+    required int stepIndex,
+    required String stepName,
+    int? msOnStep,
+  }) => track('ob_skipped', {
+    'step_index': stepIndex,
+    'step_name': stepName,
+    'ms_on_step': msOnStep,
+  });
+
+  /// One of the three tour stops rendered (S13–S15).
+  void obTourStop({required int stepIndex, required String stepName}) =>
+      track('ob_tour_stop', {'step_index': stepIndex, 'step_name': stepName});
+
+  /// The practice proof sheet opened on S11's seeded race.
+  void obProofStarted({required String stepName}) =>
+      track('ob_proof_started', {'step_name': stepName});
+
+  /// The practice proof resolved. [outcome]: 'verified' | 'fallback_practice'.
+  void obProofCompleted({
+    required String stepName,
+    required String outcome,
+    int? msOnStep,
+  }) => track('ob_proof_completed', {
+    'step_name': stepName,
+    'outcome': outcome,
+    'ms_on_step': msOnStep,
+  });
+
+  /// The S16 level-up moment actually played.
+  void obLevelUpSeen({
+    required int stepIndex,
+    required String stepName,
+    int? msOnStep,
+  }) => track('ob_level_up_seen', {
+    'step_index': stepIndex,
+    'step_name': stepName,
+    'ms_on_step': msOnStep,
+  });
+
   // ── Errors (capped) ─────────────────────────────────────────────────────
 
   /// [route]: the logical API route tag ('submit_proof', 'join_race', …).
@@ -417,9 +485,7 @@ Future<void> ensureAnalyticsLoaded({AnalyticsStore? store}) async {
 }
 
 /// The analytics facade. Tests override with [FakeAnalyticsService].
-final analyticsProvider = Provider<AnalyticsService>(
-  (_) => _sharedAnalytics,
-);
+final analyticsProvider = Provider<AnalyticsService>((_) => _sharedAnalytics);
 
 /// Test fake — records events locally, never touches the SDK. Widget tests
 /// override [analyticsProvider] with this; unit tests drive

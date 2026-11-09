@@ -121,6 +121,11 @@ final v13HapticsEnabledProvider = Provider<bool>((ref) {
   return _v13HapticsStore.enabled;
 });
 
+/// Synchronous read of the persisted haptics preference — non-widget callers
+/// (haptic/sound vocabularies like `NuvoHaptics`) gate on this; widgets watch
+/// [v13HapticsEnabledProvider] instead.
+bool get v13HapticsEnabled => _v13HapticsStore.enabled;
+
 /// v13 haptic vocabulary — every call is gated on the local pref.
 abstract final class V13Haptics {
   static bool get _on => _v13HapticsStore.enabled;
@@ -140,7 +145,6 @@ abstract final class V13Haptics {
     if (_on) HapticFeedback.mediumImpact();
   }
 }
-
 
 /// First-load list entrance: fade + rise, staggered by [index]. The delay is
 /// capped so a long list never waits on its tail, and it plays once per

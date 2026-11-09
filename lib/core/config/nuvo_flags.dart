@@ -12,6 +12,15 @@ import '../network/api_base.dart';
 class NuvoFlags {
   NuvoFlags._();
 
+  /// Onboarding v2 — the guided first-run flow (Part 0+ build, spec:
+  /// docs/redesign/onboarding-v2-spec.md). Compile-time only: off in every
+  /// shipped build until the flow is complete; a dev/QA build opts in with
+  /// `--dart-define=NUVO_ONBOARDING_V2=true`. When on, the v2 flow replaces
+  /// the old onboarding destinations via router-level redirects —
+  /// auth_gate's flags-only rule and the flag-off path are untouched.
+  static const bool onboardingV2 =
+      String.fromEnvironment('NUVO_ONBOARDING_V2') == 'true';
+
   /// Teach Nuvo / custom camera-counted movements. Off until the worker says on.
   static final ValueNotifier<bool> customMotion = ValueNotifier<bool>(false);
 

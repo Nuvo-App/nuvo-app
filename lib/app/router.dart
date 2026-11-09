@@ -34,6 +34,7 @@ import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
 import '../features/onboarding/presentation/notification_permission_screen.dart';
+import '../features/onboarding/onboarding_v2_screen.dart';
 import '../features/onboarding/presentation/nuvo_onboarding_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/races/data/race_models.dart' show RaceCreatePrefill;
@@ -78,6 +79,30 @@ Page<void> _detailPage(GoRouterState state, Widget child) =>
 /// just swaps instantly and the shell animates around it.
 Page<void> _tabPage(GoRouterState state, Widget child) =>
     NoTransitionPage<void>(key: state.pageKey, child: child);
+
+/// The onboarding-v2 flag's whole routing surface — one decision, unit
+/// tested for both flag positions (the flag itself is a compile-time
+/// `String.fromEnvironment`, so tests exercise this function, not the
+/// const). Returns the destination the route should land on, or null to
+/// let it render.
+///
+/// ON: the v1 onboarding destinations all resolve to `/onboarding-v2` —
+/// auth_gate's `_firstRunTarget` keeps naming them, so the landing stays
+/// flags-only while the v2 flow replaces every old surface.
+/// OFF: `/onboarding-v2` folds back to `/onboarding/nuvo` — no v2 build can
+/// ever surface the unfinished flow.
+@visibleForTesting
+String? onboardingV2RouteRedirect(String loc, {required bool enabled}) {
+  const v1Destinations = {
+    '/onboarding/profile',
+    '/onboarding/motion-consent',
+    '/onboarding/nuvo',
+    '/onboarding/notifications',
+  };
+  if (loc == '/onboarding-v2') return enabled ? null : '/onboarding/nuvo';
+  if (enabled && v1Destinations.contains(loc)) return '/onboarding-v2';
+  return null;
+}
 
 /// Redirect target for the retired `/move` (Verify) route.
 @visibleForTesting
@@ -202,10 +227,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/notifications',
-        pageBuilder: (_, state) => _detailPage(
-          state,
-          const ActivityV13Screen(),
-        ),
+        pageBuilder: (_, state) =>
+            _detailPage(state, const ActivityV13Screen()),
       ),
       GoRoute(
         path: '/settings',
@@ -231,12 +254,36 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // ── Onboarding ────────────────────────────────────────────────────────
+      // Onboarding v2 (NUVO_ONBOARDING_V2=true): the guided S0–S16 flow.
+      // Deliberately OUTSIDE the /onboarding/ prefix so auth_gate's
+      // protected/auth-or-onboarding buckets leave it alone — the v2 flow
+      // owns pre-auth intros AND post-auth setup, and the host screen
+      // performs the graduation handoff itself. auth_gate is untouched:
+      // its _firstRunTarget still names the v1 routes below, which redirect
+      // here when the flag is on ("destination depends only on onboarding
+      // flags" preserved — the flags now just include a compile-time one).
+      GoRoute(
+        path: '/onboarding-v2',
+        redirect: (_, state) => onboardingV2RouteRedirect(
+          state.matchedLocation,
+          enabled: NuvoFlags.onboardingV2,
+        ),
+        pageBuilder: (_, state) => _authPage(state, const OnboardingV2Screen()),
+      ),
       GoRoute(
         path: '/onboarding/profile',
+        redirect: (_, state) => onboardingV2RouteRedirect(
+          state.matchedLocation,
+          enabled: NuvoFlags.onboardingV2,
+        ),
         pageBuilder: (_, state) => _authPage(state, const OnboardingScreen()),
       ),
       GoRoute(
         path: '/onboarding/motion-consent',
+        redirect: (_, state) => onboardingV2RouteRedirect(
+          state.matchedLocation,
+          enabled: NuvoFlags.onboardingV2,
+        ),
         pageBuilder: (_, state) =>
             _authPage(state, const MotionContributionScreen()),
       ),
@@ -245,14 +292,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       // server write that graduates the account into Arena.
       GoRoute(
         path: '/onboarding/nuvo',
+        redirect: (_, state) => onboardingV2RouteRedirect(
+          state.matchedLocation,
+          enabled: NuvoFlags.onboardingV2,
+        ),
         pageBuilder: (_, state) =>
             _authPage(state, const NuvoOnboardingScreen()),
       ),
       // First-run notification education — between the Nuvo story and the
       // first-race guide. The OS prompt fires only from its CTA; every
-      // resolution clears the owed flag and continues to Arena.
+      // resolution clears the owed flag and continues to Arena. Under v2 the
+      // flow owns opt-in (S12), so the route folds into it.
       GoRoute(
         path: '/onboarding/notifications',
+        redirect: (_, state) => onboardingV2RouteRedirect(
+          state.matchedLocation,
+          enabled: NuvoFlags.onboardingV2,
+        ),
         pageBuilder: (_, state) =>
             _authPage(state, const NotificationPermissionScreen()),
       ),
