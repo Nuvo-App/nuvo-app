@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -122,12 +121,11 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
         OnboardingShell(
           step: OnboardingStep.signIn,
           fillHero: true,
-          // The REAL S2 hero (frozen at the end of its story), blurred 6 px
-          // per spec — one widget, so S2 and S4 cannot drift apart.
-          hero: ImageFiltered(
-            key: const ValueKey('ob-board-backdrop'),
-            imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-            child: const _SheetAwareHero(),
+          // The REAL S2 hero, live and sharp (Akshay: the login screen must feel
+          // full, not a blurred backdrop) — one widget, so S2 and S4 cannot drift apart.
+          hero: const KeyedSubtree(
+            key: ValueKey('ob-board-backdrop'),
+            child: _SheetAwareHero(),
           ),
           title: '',
           // The S3 CTA sits behind the sheet (continuity), disabled.
@@ -179,6 +177,7 @@ class _SignInSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final short = MediaQuery.sizeOf(context).height < 640;
     return Container(
       key: const ValueKey('ob-signin-sheet'),
       padding: EdgeInsets.fromLTRB(
@@ -212,11 +211,13 @@ class _SignInSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: V13.gapLg),
+          SizedBox(height: short ? V13.gapSm : V13.gapLg),
           Text(ObCopy.signInTitle, style: V13.title),
-          const SizedBox(height: V13.gapXs),
-          Text(ObCopy.signInSub, style: V13.body.copyWith(color: V13.muted)),
-          const SizedBox(height: V13.gapXl),
+          if (!short) ...[
+            const SizedBox(height: V13.gapXs),
+            Text(ObCopy.signInSub, style: V13.body.copyWith(color: V13.muted)),
+          ],
+          SizedBox(height: short ? V13.gapMd : V13.gapXl),
           AnimatedOpacity(
             duration: NuvoMotion.ctaFade,
             opacity: busy == _Busy.google ? 0.4 : 1,
@@ -386,25 +387,31 @@ class _SheetAwareHero extends StatelessWidget {
   const _SheetAwareHero();
 
   /// Approximate sheet height (title, two buttons, link, legal).
-  static const double _sheet = 340;
+  static const double _sheet = 375;
   static const double _natural = 470;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final room = c.maxHeight - _sheet + 40;
-        if (room < 260) return const ObIntroHowHero();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: _sheet - 40),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: SizedBox(
-              width: c.maxWidth,
-              height: _natural,
-              child: const ObIntroHowHero(),
-            ),
-          ),
+        // The hero slot starts under the rail (~70) and runs behind the
+        // sheet; lay the story out in the strip that is actually visible.
+        final screenH = MediaQuery.sizeOf(context).height;
+        final sheet = screenH < 640 ? 335.0 : _sheet;
+        final avail = (screenH - sheet - 76).clamp(120.0, 520.0);
+        final Widget hero = avail >= 420
+            ? const ObIntroHowHero()
+            : FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: c.maxWidth,
+                  height: _natural,
+                  child: const ObIntroHowHero(),
+                ),
+              );
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(width: c.maxWidth, height: avail, child: hero),
         );
       },
     );

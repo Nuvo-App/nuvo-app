@@ -145,15 +145,47 @@ class _ObIntroHowStepState extends ConsumerState<ObIntroHowStep>
 /// the REAL widget as its blurred backdrop instead of a copy that could
 /// drift. It shows the end of the story (proof verified, YOU 1st)
 /// with every ticker paused and no input.
-class ObIntroHowHero extends StatelessWidget {
-  const ObIntroHowHero({super.key});
+class ObIntroHowHero extends StatefulWidget {
+  const ObIntroHowHero({super.key, this.live = true});
+
+  /// Live: the story loops (login backdrop). Not live: the end frame.
+  final bool live;
+
+  @override
+  State<ObIntroHowHero> createState() => _ObIntroHowHeroState();
+}
+
+class _ObIntroHowHeroState extends State<ObIntroHowHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _clock = AnimationController(
+    vsync: this,
+    duration: _HowTimeline.total,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.live) _clock.repeat();
+  }
+
+  @override
+  void dispose() {
+    _clock.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TickerMode(
-      enabled: false,
-      child: IgnorePointer(
-        child: _HowHero(elapsed: _HowTimeline.total, onPhoneTap: () {}),
+    final reduce = NuvoMotion.reduceMotionOf(context);
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _clock,
+        builder: (context, _) => _HowHero(
+          elapsed: (widget.live && !reduce)
+              ? _HowTimeline.total * _clock.value
+              : _HowTimeline.total,
+          onPhoneTap: () {},
+        ),
       ),
     );
   }
