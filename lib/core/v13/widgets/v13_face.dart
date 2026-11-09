@@ -16,10 +16,16 @@ class V13Face extends StatelessWidget {
     this.onTap,
     this.name,
     this.semanticLabel,
+    this.emptyFill,
   });
 
   final String? photoUrl;
   final double size;
+
+  /// Background for the no-photo silhouette; null keeps the plain page
+  /// colour. A colour also darkens the silhouette so it never reads as a
+  /// bare grey disc.
+  final Color? emptyFill;
 
   /// Blue ring — the signed-in user's own face.
   final bool isMe;
@@ -42,11 +48,11 @@ class V13Face extends StatelessWidget {
         fit: BoxFit.cover,
         width: size,
         height: size,
-        placeholder: (_, _) => const _FaceSilhouette(),
-        errorWidget: (_, _, _) => const _FaceSilhouette(),
+        placeholder: (_, _) => _FaceSilhouette(dark: emptyFill != null),
+        errorWidget: (_, _, _) => _FaceSilhouette(dark: emptyFill != null),
       );
     } else {
-      inner = const _FaceSilhouette();
+      inner = _FaceSilhouette(dark: emptyFill != null);
     }
 
     Widget face = Container(
@@ -54,7 +60,7 @@ class V13Face extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: V13.bg,
+        color: (url == null || url.isEmpty) ? (emptyFill ?? V13.bg) : V13.bg,
         border: Border.all(color: ringColor, width: ringWidth),
       ),
       clipBehavior: Clip.antiAlias,
@@ -84,7 +90,9 @@ class V13Face extends StatelessWidget {
 
 /// Neutral grey person — the no-photo state. No initials, ever.
 class _FaceSilhouette extends StatelessWidget {
-  const _FaceSilhouette();
+  const _FaceSilhouette({this.dark = false});
+
+  final bool dark;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +103,7 @@ class _FaceSilhouette extends StatelessWidget {
           child: Icon(
             Icons.person_rounded,
             size: s.isFinite ? s * 0.62 : 28,
-            color: V13.muted,
+            color: dark ? V13.navy.withValues(alpha: 0.7) : V13.muted,
           ),
         );
       },

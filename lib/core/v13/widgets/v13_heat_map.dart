@@ -12,6 +12,8 @@ class V13HeatMap extends StatelessWidget {
     this.weeks = 18,
     this.showLegend = true,
     this.semanticLabel,
+    this.faded = false,
+    this.highlightToday = false,
   });
 
   /// Proof counts keyed by day. Time-of-day is ignored.
@@ -21,6 +23,12 @@ class V13HeatMap extends StatelessWidget {
   final int weeks;
   final bool showLegend;
   final String? semanticLabel;
+
+  /// Lighter empty squares — the "your map starts here" empty state.
+  final bool faded;
+
+  /// Draws today's square outlined in blue.
+  final bool highlightToday;
 
   static const double _gap = 4;
   static const List<double> _levels = [0.35, 0.55, 0.8, 1.0];
@@ -117,7 +125,18 @@ class V13HeatMap extends StatelessWidget {
       return SizedBox.square(dimension: size);
     }
     final count = counts[day] ?? 0;
-    Color fill = V13.divider;
+    if (highlightToday && day == today) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: V13.card,
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: V13.blue, width: 2),
+        ),
+      );
+    }
+    Color fill = faded ? V13.divider.withValues(alpha: 0.6) : V13.divider;
     if (count > 0 && maxCount > 0) {
       final level = ((count / maxCount) * _levels.length).ceil().clamp(
         1,

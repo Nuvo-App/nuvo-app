@@ -170,6 +170,11 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
     final races = raceState.races;
     final live = races.where(raceIsActive).toList();
     final finished = races.where(raceIsCompleted).toList();
+    final showEmptyHero =
+        live.isEmpty &&
+        finished.isEmpty &&
+        !raceState.loading &&
+        raceState.error == null;
 
     return Scaffold(
       backgroundColor: V13.bg,
@@ -194,6 +199,7 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                     summary: _summary(live, user?.id),
                     onNewRace: () => context.push('/races/new'),
                     onJoinCode: () => context.push('/races/join'),
+                    showStart: !showEmptyHero,
                     focus: _YouRightNow.pick(live, user?.id) == null
                         ? null
                         : _YouRightNow(
@@ -202,6 +208,20 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                           ),
                   ),
                   const SizedBox(height: V13.gapSection),
+                  if (showEmptyHero) ...[
+                    V13EmptyHero(
+                      color: V13.coral,
+                      art: const V13GhostRace(),
+                      title: 'No races yet',
+                      body: 'Start one and your friends can join in.',
+                      ctaLabel: 'Start a race',
+                      ctaIcon: Icons.flag_rounded,
+                      onCta: () => context.push('/races/new'),
+                      linkLabel: 'Join with a code',
+                      onLink: () => context.push('/races/join'),
+                    ),
+                    const SizedBox(height: V13.gapSection),
+                  ],
                   if (live.isNotEmpty) ...[
                     const _SectionHead('Live races'),
                     const SizedBox(height: V13.gapLg),
@@ -268,8 +288,13 @@ class _Header extends StatelessWidget {
     this.focus,
     this.firstName,
     this.summary,
+    this.showStart = true,
   });
   final VoidCallback onNewRace;
+
+  /// False while the empty-state hero is on screen — it carries the one
+  /// Start a race action, so the blue card steps aside.
+  final bool showStart;
   final VoidCallback onJoinCode;
 
   /// "You right now" — the one race that most needs you. Optional.
@@ -297,72 +322,73 @@ class _Header extends StatelessWidget {
         ],
         const SizedBox(height: V13.gapLg),
         if (focus != null) ...[focus!, const SizedBox(height: V13.gapMd)],
-        V13Card(
-          color: V13.blue,
-          shadow: V13.shadow6,
-          onTap: onNewRace,
-          semanticLabel: 'Start a race',
-          padding: const EdgeInsets.all(V13.gapLg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Start a race',
-                      style: V13.cardTitle.copyWith(color: V13.card),
-                    ),
-                  ),
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: V13.card,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: V13.navy, width: V13.outline),
-                    ),
-                    child: const Icon(Icons.flag_rounded, color: V13.navy),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Pick a move, set the rules, invite friends.',
-                style: V13.body.copyWith(
-                  color: V13.card.withValues(alpha: 0.9),
-                ),
-              ),
-              const SizedBox(height: V13.gapMd),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onJoinCode,
-                child: Row(
+        if (showStart)
+          V13Card(
+            color: V13.blue,
+            shadow: V13.shadow6,
+            onTap: onNewRace,
+            semanticLabel: 'Start a race',
+            padding: const EdgeInsets.all(V13.gapLg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Icon(
-                      Icons.vpn_key_rounded,
-                      size: 16,
-                      color: V13.card.withValues(alpha: 0.9),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
+                    Expanded(
                       child: Text(
-                        'Have a code? Join with a code',
-                        style: V13.bodyStrong.copyWith(
-                          color: V13.card,
-                          decoration: TextDecoration.underline,
-                          decorationColor: V13.card,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        'Start a race',
+                        style: V13.cardTitle.copyWith(color: V13.card),
                       ),
+                    ),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: V13.card,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: V13.navy, width: V13.outline),
+                      ),
+                      child: const Icon(Icons.flag_rounded, color: V13.navy),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  'Pick a move, set the rules, invite friends.',
+                  style: V13.body.copyWith(
+                    color: V13.card.withValues(alpha: 0.9),
+                  ),
+                ),
+                const SizedBox(height: V13.gapMd),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onJoinCode,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.vpn_key_rounded,
+                        size: 16,
+                        color: V13.card.withValues(alpha: 0.9),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Have a code? Join with a code',
+                          style: V13.bodyStrong.copyWith(
+                            color: V13.card,
+                            decoration: TextDecoration.underline,
+                            decorationColor: V13.card,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -742,7 +768,24 @@ class _LeaderboardSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(friendsLeaderboardProvider).valueOrNull;
-    if (rows == null || rows.isEmpty) return const SizedBox.shrink();
+    if (rows == null) return const SizedBox.shrink();
+    // No friends yet (nobody, or only you at 0): invite instead of hiding.
+    if (rows.isEmpty ||
+        (rows.length <= 1 && rows.every((r) => r.points <= 0))) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHead('Leaderboard'),
+          const SizedBox(height: V13.gapMd),
+          V13BoardEmpty(
+            title: 'Add friends to see a board',
+            buttonLabel: 'My Nuvo code',
+            onPressed: () => context.push('/my-nuvo'),
+          ),
+          const SizedBox(height: V13.gapSection),
+        ],
+      );
+    }
     // A board where everyone sits on 0 is noise ("#1 … #1, 0 pts"): hide it
     // until somebody scores.
     if (rows.every((r) => r.points <= 0)) return const SizedBox.shrink();

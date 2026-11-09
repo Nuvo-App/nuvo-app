@@ -163,7 +163,67 @@ void main() {
     expect(find.text('Pushup Race'), findsWidgets);
     // No open races → the whole section hides.
     expect(find.text('Join a race'), findsNothing);
-    expect(find.text('Leaderboard'), findsNothing);
+    // No friends yet → the board invites instead of hiding.
+    expect(find.text('Add friends to see a board'), findsOneWidget);
+    expect(find.text('No races yet'), findsNothing);
+  });
+
+  group('Compete empty states', () {
+    Future<void> pumpEmpty(WidgetTester tester, Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _app(_StubRaceRepo(races: const []), home: const CompeteV13Screen()),
+      );
+      // The hero floats forever; bounded pumps instead of pumpAndSettle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    testWidgets('no races: hero + leaderboard invite', (tester) async {
+      await pumpEmpty(tester, const Size(390, 844));
+      expect(find.text('No races yet'), findsOneWidget);
+      expect(find.byType(V13GhostRace), findsOneWidget);
+      expect(find.text('Join with a code'), findsOneWidget);
+      expect(find.text('Add friends to see a board'), findsOneWidget);
+      expect(find.text('My Nuvo code'), findsOneWidget);
+      expect(find.text('Trophy shelf'), findsNothing);
+    });
+
+    for (final (name, size) in [
+      ('390x844', const Size(390, 844)),
+      ('320x568', const Size(320, 568)),
+    ]) {
+      testWidgets('layout at $name', (tester) async {
+        await pumpEmpty(tester, size);
+        await shot(tester, 'compete_empty_top_$name');
+        expect(tester.takeException(), isNull);
+        await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+        await tester.pump(const Duration(milliseconds: 300));
+        await shot(tester, 'compete_empty_bottom_$name');
+        expect(tester.takeException(), isNull);
+        // Let the refresh indicator's settle timer fire before teardown.
+        await tester.pump(const Duration(seconds: 2));
+      });
+    }
+
+    testWidgets('reduce motion settles', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: _app(
+            _StubRaceRepo(races: const []),
+            home: const CompeteV13Screen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      expect(find.text('No races yet'), findsOneWidget);
+    });
   });
 
   testWidgets('test_gap15_goalless_race_card_hides_percent', (tester) async {
@@ -214,7 +274,9 @@ void main() {
         child: const MaterialApp(home: CompeteV13Screen()),
       ),
     );
-    await tester.pumpAndSettle();
+    // The empty hero floats forever, so pumpAndSettle would never return.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(container.read(firstRaceGuideProvider), FirstRaceGuideStep.complete);
   });
 
@@ -251,7 +313,8 @@ void main() {
         home: const CompeteV13Screen(),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Join a race'), findsOneWidget);
     expect(
       find.textContaining('is racing Squat Sprint', findRichText: true),

@@ -325,11 +325,34 @@ class _CrewTabV13ScreenState extends ConsumerState<CrewTabV13Screen> {
                   ),
                 ),
             ],
-            const SizedBox(height: V13.gapSection),
-            _feedSection(feedState, myId),
-            _friendsCrewsSection(discover),
-            const SizedBox(height: V13.gapSection),
-            _friendsSection(crewState),
+            if (crewState.loading ||
+                crewState.error != null ||
+                crewState.members.isNotEmpty)
+              const SizedBox(height: V13.gapSection),
+            if (!crewState.loading &&
+                crewState.error == null &&
+                crewState.members.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
+                child: V13EmptyHero(
+                  color: V13.lilac,
+                  art: const V13QrPreview(),
+                  artHeight: 128,
+                  title: 'Racing is better together',
+                  body: 'Share your code and friends join your races.',
+                  ctaLabel: 'Share my code',
+                  ctaIcon: Icons.ios_share_rounded,
+                  onCta: () => context.push('/my-nuvo'),
+                  linkLabel: 'Add friend',
+                  onLink: () => openScan(context),
+                ),
+              )
+            else ...[
+              _feedSection(feedState, myId),
+              _friendsCrewsSection(discover),
+              const SizedBox(height: V13.gapSection),
+              _friendsSection(crewState),
+            ],
           ],
         ),
       ),

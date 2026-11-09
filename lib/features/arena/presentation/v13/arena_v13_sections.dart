@@ -8,6 +8,7 @@ import 'package:nuvo/features/races/presentation/race_controller.dart';
 import 'package:nuvo/features/races/presentation/v13/submit_proof_entry.dart';
 
 import 'arena_v13_data.dart';
+import 'arena_v13_empty.dart';
 
 /// "Hey [first name]" + the streak/level line, notification bell with its
 /// coral unread badge, and the avatar inside the XP ring.
@@ -21,6 +22,7 @@ class ArenaHeader extends StatelessWidget {
     this.xpProgress = 0,
     this.photoUrl,
     this.unreadCount = 0,
+    this.dayOne = false,
     required this.onBellTap,
     required this.onAvatarTap,
   });
@@ -37,6 +39,9 @@ class ArenaHeader extends StatelessWidget {
   final double xpProgress;
   final String? photoUrl;
   final int unreadCount;
+
+  /// Brand-new account — the level line ends with "Day 1".
+  final bool dayOne;
   final VoidCallback onBellTap;
   final VoidCallback onAvatarTap;
 
@@ -45,6 +50,7 @@ class ArenaHeader extends StatelessWidget {
     final sub = <String>[
       if ((streakDays ?? 0) > 0) '$streakDays day streak',
       if (level != null) 'Level $level',
+      if (dayOne && level != null) 'Day 1',
     ].join(' · ');
     return Row(
       children: [
@@ -101,6 +107,10 @@ class ArenaHeader extends StatelessWidget {
           photoUrl: photoUrl,
           name: firstName,
           size: 46,
+          emptyFill: V13.sky,
+          trackColor: (photoUrl ?? '').isEmpty
+              ? V13.blue.withValues(alpha: 0.2)
+              : V13.divider,
           onTap: onAvatarTap,
           semanticLabel: 'Your profile',
         ),
@@ -204,12 +214,7 @@ class ArenaActivitySection extends StatelessWidget {
     }
     final proofs = arenaProofTotal(days);
     final active = arenaActiveDayCount(days);
-    if (proofs == 0) {
-      return Text(
-        'No proofs in the last 18 weeks — your map fills in as proof lands.',
-        style: V13.caption,
-      );
-    }
+    if (proofs == 0) return const ArenaActivityEmpty();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -238,6 +243,15 @@ class ArenaAchievementsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (progression.achievementsEarned == 0 &&
+        tiles.isNotEmpty &&
+        tiles.every((t) => !t.unlocked)) {
+      return ArenaAchievementsEmpty(
+        progression: progression,
+        tiles: tiles,
+        onOpenBadges: onOpenBadges,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

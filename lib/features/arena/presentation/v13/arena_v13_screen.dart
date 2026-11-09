@@ -134,7 +134,25 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
       activeRaces: races,
       myId: myId,
     );
-    final stats = arenaStats(progressionValue?.record, raceState.races, myId);
+    // Brand-new account: races loaded and empty, nothing won, no streak.
+    final noRaces =
+        !raceState.loading && raceState.error == null && cards.isEmpty;
+    final record = progressionValue?.record;
+    final dayOne =
+        noRaces &&
+        (record == null ||
+            (record.finished == 0 &&
+                record.wins == 0 &&
+                (record.streakDays ?? 0) == 0));
+    var stats = arenaStats(record, raceState.races, myId);
+    if (stats == null && noRaces) {
+      stats = (racing: '0', wins: '0', winRate: '—');
+    }
+    final statsAllZero =
+        stats != null &&
+        stats.racing == '0' &&
+        stats.wins == '0' &&
+        (stats.winRate == '—' || stats.winRate == '0%');
 
     return ColoredBox(
       color: V13.bg,
@@ -161,6 +179,7 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
                 xpProgress: progressionValue?.progress ?? 0,
                 photoUrl: auth.user?.profilePhotoUrl,
                 unreadCount: unread,
+                dayOne: dayOne,
                 onBellTap: () => context.push('/notifications'),
                 onAvatarTap: () => context.go('/profile'),
               ),
@@ -201,6 +220,17 @@ class _ArenaScreenV13State extends ConsumerState<ArenaScreenV13> {
                   ],
                 ),
               ),
+              if (statsAllZero) ...[
+                const SizedBox(height: V13.gapMd),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
+                  child: Text(
+                    'Your first win is 1 proof away',
+                    style: V13.bodyStrong.copyWith(color: V13.navy),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
               const SizedBox(height: V13.gapSection),
             ],
             Padding(

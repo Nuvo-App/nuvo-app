@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:nuvo/core/cache/cache_store.dart';
 import 'package:nuvo/core/config/nuvo_flags.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/core/network/conditional.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
@@ -462,7 +463,9 @@ void main() {
         child: const MaterialApp(home: CrewTabV13Screen()),
       ),
     );
-    await tester.pumpAndSettle();
+    // The hero floats forever; bounded pumps instead of pumpAndSettle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('YOUR CREWS · 0'), findsOneWidget);
     expect(
@@ -473,17 +476,55 @@ void main() {
     expect(find.text('Join with a code'), findsOneWidget);
     expect(find.text('RACING RIGHT NOW'), findsNothing);
     expect(find.text('Kai wants to race'), findsNothing);
-    expect(
-      find.text(
-        'Race with your friends — their proof, wins and badges land here.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Start a race'), findsOneWidget);
     expect(find.text("YOUR FRIENDS' CREWS"), findsNothing);
-    expect(find.text('FRIENDS'), findsOneWidget);
-    expect(find.text('Add your first friend'), findsOneWidget);
+    // No friends: the designed hero replaces the empty feed + friends rows.
+    expect(find.text('Racing is better together'), findsOneWidget);
+    expect(find.byType(V13QrPreview), findsOneWidget);
+    expect(find.text('Share my code'), findsOneWidget);
+    expect(find.text('Add friend'), findsNWidgets(2)); // top bar + hero link
+    expect(find.text('Add your first friend'), findsNothing);
+    expect(find.text('WHAT YOUR CREW IS DOING'), findsNothing);
     await shot(tester, 'v13_crew_tab_empty');
+  });
+
+  for (final (name, size) in [
+    ('390x844', const Size(390, 844)),
+    ('320x568', const Size(320, 568)),
+  ]) {
+    testWidgets('Crew tab empty hero layout at $name', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _overrides(),
+          child: const MaterialApp(home: CrewTabV13Screen()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await shot(tester, 'crew_empty_top_$name');
+      expect(tester.takeException(), isNull);
+      await tester.drag(find.byType(ListView).first, const Offset(0, -400));
+      await tester.pump(const Duration(milliseconds: 300));
+      await shot(tester, 'crew_empty_bottom_$name');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('Crew tab empty hero: reduce motion settles', (tester) async {
+    _size(tester);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: ProviderScope(
+          overrides: _overrides(),
+          child: const MaterialApp(home: CrewTabV13Screen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    expect(find.text('Racing is better together'), findsOneWidget);
   });
 
   testWidgets('Crew tab error rows + retry recovers', (tester) async {

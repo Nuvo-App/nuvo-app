@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../helpers/screenshot.dart';
 import 'package:nuvo/features/races/presentation/v13/submit_proof_sheet.dart';
 import 'package:nuvo/core/cache/cache_store.dart';
+import 'package:nuvo/core/v13/v13.dart';
 import 'package:nuvo/features/arena/data/arena_api.dart';
 import 'package:nuvo/features/arena/data/arena_models.dart';
 import 'package:nuvo/features/arena/data/arena_repository.dart';
@@ -481,18 +482,155 @@ void main() {
     expect(find.textContaining('day streak'), findsNothing);
   });
 
-  testWidgets('zero active races renders the dashed hero card only', (
+  testWidgets('zero active races renders the first-race hero only', (
     tester,
   ) async {
     _tallViewport(tester);
     await tester.pumpWidget(_buildApp(progression: _progression()));
     await _settle(tester);
 
-    expect(find.text('Up for another one?'), findsOneWidget);
+    expect(find.text('Your first race'), findsOneWidget);
+    expect(find.text('Up for another one?'), findsNothing);
+    expect(find.byType(V13GhostRace), findsOneWidget);
     expect(find.text('Start a race'), findsOneWidget);
     expect(find.text('Join a race'), findsOneWidget);
     expect(find.text('Swipe for more'), findsNothing);
     expect(find.text('Submit proof'), findsNothing);
+  });
+
+  group('empty states for a brand-new account', () {
+    NuvoProgression fresh({Map<String, dynamic>? next}) =>
+        NuvoProgression.fromBody({
+          'progression': {
+            'level': 1,
+            'totalXp': 0,
+            'progress': 0.0,
+            'achievementsEarned': 0,
+            'achievementsTotal': 43,
+            'nextAchievement': ?next,
+          },
+          'record': const {'active': 0, 'finished': 0, 'wins': 0},
+        });
+
+    const firstProof = {
+      'unlockId': 'bdg-first',
+      'type': 'achievement',
+      'key': 'first_proof',
+      'name': 'First Proof',
+      'unlocked': false,
+      'category': 'proof',
+      'iconKey': 'flag',
+      'statKey': 'progresses_accepted',
+      'threshold': 1,
+      'progressValue': 0,
+    };
+
+    Future<void> pumpFresh(WidgetTester tester) async {
+      _tallViewport(tester);
+      await tester.pumpWidget(
+        _buildApp(
+          progression: fresh(next: firstProof),
+          badges: [NuvoBadge.fromJson(firstProof)],
+        ),
+      );
+      await _settle(tester);
+    }
+
+    testWidgets('header, hero, zero stats, map and achievements', (
+      tester,
+    ) async {
+      await pumpFresh(tester);
+
+      // Header: name, "Level 1 · Day 1", silhouette in the XP ring.
+      expect(find.text('Hey Test'), findsOneWidget);
+      expect(find.text('Level 1 · Day 1'), findsOneWidget);
+      final ring = tester.widget<V13XpRing>(find.byType(V13XpRing));
+      expect(ring.emptyFill, isNotNull);
+      expect(find.byIcon(Icons.person_rounded), findsWidgets);
+
+      // Hero.
+      expect(find.text('Your first race'), findsOneWidget);
+
+      // Zero stats.
+      expect(find.text('Your first win is 1 proof away'), findsOneWidget);
+
+      // Activity map.
+      expect(find.text('Today starts your map'), findsOneWidget);
+      expect(find.byType(V13HeatMap), findsOneWidget);
+
+      // Achievements: 0 of 43, locked tile, closest is tappable.
+      expect(find.text('0 of 43'), findsOneWidget);
+      expect(find.byIcon(Icons.lock_rounded), findsWidgets);
+      expect(find.text('First Proof · 1 proof to go'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('closest achievement opens the badges page', (tester) async {
+      await pumpFresh(tester);
+      await tester.ensureVisible(find.text('First Proof · 1 proof to go'));
+      await tester.tap(find.text('First Proof · 1 proof to go'));
+      await _navPumps(tester);
+      expect(find.text('STUB badges'), findsOneWidget);
+    });
+
+    testWidgets('no countable target: no "to go" line', (tester) async {
+      _tallViewport(tester);
+      await tester.pumpWidget(
+        _buildApp(
+          progression: fresh(),
+          badges: [
+            NuvoBadge.fromJson(const {
+              'unlockId': 'bdg-x',
+              'type': 'achievement',
+              'key': 'x',
+              'name': 'Mystery',
+              'unlocked': false,
+            }),
+          ],
+        ),
+      );
+      await _settle(tester);
+      expect(find.text('0 of 43'), findsOneWidget);
+      expect(find.textContaining('to go'), findsNothing);
+    });
+
+    for (final (name, size) in [
+      ('390x844', const Size(390, 844)),
+      ('320x568', const Size(320, 568)),
+    ]) {
+      testWidgets('layout at $name', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          _buildApp(
+            progression: fresh(next: firstProof),
+            badges: [NuvoBadge.fromJson(firstProof)],
+          ),
+        );
+        await _settle(tester);
+        await shot(tester, 'arena_empty_top_$name');
+        expect(tester.takeException(), isNull);
+        await tester.drag(find.byType(ListView).first, const Offset(0, -520));
+        await tester.pump(const Duration(milliseconds: 300));
+        await shot(tester, 'arena_empty_bottom_$name');
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('reduce motion: hero renders still', (tester) async {
+      _tallViewport(tester);
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: _buildApp(progression: fresh(next: firstProof)),
+        ),
+      );
+      await _settle(tester);
+      expect(find.text('Your first race'), findsOneWidget);
+      // No repeating controllers: the frame queue drains.
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+    });
   });
 
   testWidgets('race fetch error shows retry; retry loads the cards', (

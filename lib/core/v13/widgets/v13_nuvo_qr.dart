@@ -56,6 +56,7 @@ class V13NuvoQr extends StatelessWidget {
                 'assets/branding/nuvo_logo_graphic.png',
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           ],

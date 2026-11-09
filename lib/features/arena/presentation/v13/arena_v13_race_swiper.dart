@@ -13,8 +13,8 @@ import 'arena_v13_data.dart';
 
 /// The Arena race swiper — one snapping card per active race (~318 px wide
 /// with the next card peeking), then a dashed "Up for another one?" card as
-/// the last page, dots underneath. With zero active races the dashed card is
-/// the only page — still a real next action.
+/// the last page, dots underneath. With zero active races the designed
+/// first-race hero is the only page — still a real next action.
 class ArenaRaceSwiper extends ConsumerStatefulWidget {
   const ArenaRaceSwiper({
     super.key,
@@ -127,6 +127,8 @@ class _ArenaRaceSwiperState extends ConsumerState<ArenaRaceSwiper> {
                     final child = i == shown.length
                         ? (overflow > 0
                               ? ArenaSeeAllCard(total: widget.cards.length)
+                              : shown.isEmpty
+                              ? const ArenaFirstRaceCard()
                               : const ArenaAnotherCard())
                         : ArenaRaceCard(
                             data: shown[i],
@@ -364,8 +366,31 @@ class ArenaRaceCard extends ConsumerWidget {
   }
 }
 
-/// The dashed last page — "Up for another one?" — and the hero card when
-/// there are no active races.
+/// The brand-new-account hero: a coral card the size of a race card with a
+/// ghost race preview, one sentence and the one blue CTA.
+class ArenaFirstRaceCard extends StatelessWidget {
+  const ArenaFirstRaceCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return V13EmptyHero(
+      color: V13.coral,
+      expandArt: true,
+      art: const V13GhostRace(),
+      title: 'Your first race',
+      body: 'Challenge a friend and prove it on camera.',
+      ctaLabel: 'Start a race',
+      ctaIcon: Icons.flag_rounded,
+      onCta: () => context.push('/races/new'),
+      linkLabel: 'Join a race',
+      onLink: () => context.go('/compete'),
+      semanticLabel: 'Your first race',
+    );
+  }
+}
+
+/// The dashed last page — "Up for another one?" — shown after the race
+/// cards.
 class ArenaAnotherCard extends StatelessWidget {
   const ArenaAnotherCard({super.key});
 

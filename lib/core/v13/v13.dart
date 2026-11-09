@@ -10,6 +10,7 @@ export 'widgets/v13_button.dart';
 export 'widgets/v13_card.dart';
 export 'widgets/v13_chip_row.dart';
 export 'widgets/v13_confetti.dart';
+export 'widgets/v13_empty_hero.dart';
 export 'widgets/v13_error_banner.dart';
 export 'widgets/v13_face.dart';
 export 'widgets/v13_floating_plus.dart';

@@ -16,6 +16,8 @@ class V13XpRing extends StatelessWidget {
     this.onTap,
     this.name,
     this.semanticLabel,
+    this.emptyFill,
+    this.trackColor = V13.divider,
   });
 
   /// XP to next level, 0.0–1.0 (clamped).
@@ -26,6 +28,12 @@ class V13XpRing extends StatelessWidget {
   final VoidCallback? onTap;
   final String? name;
   final String? semanticLabel;
+
+  /// Fill for the no-photo silhouette (see [V13Face.emptyFill]).
+  final Color? emptyFill;
+
+  /// The unfilled part of the ring.
+  final Color trackColor;
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +49,16 @@ class V13XpRing extends StatelessWidget {
               value: clamped,
               strokeWidth: strokeWidth,
               strokeCap: StrokeCap.round,
-              backgroundColor: V13.divider,
+              backgroundColor: trackColor,
               valueColor: const AlwaysStoppedAnimation<Color>(V13.blue),
             ),
           ),
-          V13Face(photoUrl: photoUrl, size: faceSize, name: name),
+          V13Face(
+            photoUrl: photoUrl,
+            size: faceSize,
+            name: name,
+            emptyFill: emptyFill,
+          ),
         ],
       ),
     );
