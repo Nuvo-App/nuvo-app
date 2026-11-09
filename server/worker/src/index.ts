@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { cors } from 'hono/cors';
 import type { AppEnv, ProfileRow } from './types';
+import { grantOnboardingReward, type OnboardingReward } from './domain/onboardingReward';
 import { purgeExpiredMotionData } from './lib/motion_privacy';
 import { appleServiceConfig, retryPendingAppleRevocations } from './lib/apple';
 import { purgeExpiredAuthData } from './lib/dataRetention';
@@ -458,9 +459,22 @@ app.post('/onboarding/complete', requireAuth, async (c) => {
     .bind(userId)
     .first<ProfileRow>();
 
+  // Onboarding v2 reward: 100 XP once (idempotent ledger row). Additive —
+  // the original { ok, onboardingComplete } shape is unchanged; old builds
+  // ignore the extra fields. A reward failure must never fail completion.
+  let reward: OnboardingReward | null = null;
+  try {
+    reward = await grantOnboardingReward(c.env.DB, userId);
+  } catch (err) {
+    console.error(
+      JSON.stringify({ evt: 'onboarding_reward_failed', userId, message: errorMessage(err) }),
+    );
+  }
+
   return c.json({
     ok: true,
     onboardingComplete: Boolean(profile?.onboarding_complete),
+    ...(reward ? { reward } : {}),
   });
 });
 
