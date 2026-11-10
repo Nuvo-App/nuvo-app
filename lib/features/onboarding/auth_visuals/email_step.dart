@@ -178,7 +178,6 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
         email: text.trim(),
         stamp: valid ? ObStampState.ready : ObStampState.none,
         printing: _sending,
-        header: ObCopy.emailStepCounter,
       ),
       title: ObCopy.emailTitle,
       subtitle: lean ? null : ObCopy.emailSub,

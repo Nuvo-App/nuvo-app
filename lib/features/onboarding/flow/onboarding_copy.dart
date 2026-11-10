@@ -57,7 +57,6 @@ abstract final class ObCopy {
   static const String emailStampNotVerified = 'Not verified yet';
   static const String emailTypoHint = 'Did you mean gmail.com?';
   static const String playerPassLabel = 'PLAYER PASS';
-  static const String emailStepCounter = 'Step 1 of 4';
 
   // ── S6 Code ────────────────────────────────────────────────────────────
   static const String codeTitle = 'Check your email.';
@@ -99,7 +98,7 @@ abstract final class ObCopy {
   static const String codeTipsDone = 'Got it';
 
   // ── S7 Player card ─────────────────────────────────────────────────────
-  static const String playerCardStepCounter = 'Step 2 of 4';
+  static const String playerCardTitle = 'Your player card.';
   static const String playerCardNameField = 'Name';
   static const String playerCardUsernameField = 'Username';
   static const String playerCardNameWhy = 'Friends find you by this';
