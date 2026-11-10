@@ -1,3 +1,4 @@
+import '../../../../core/offline/online_gate.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,6 +23,15 @@ Future<void> openSubmitProof(
 ) async {
   // Guided-tour practice race: client-only, never reaches the proof flow.
   if (isTourRace(race)) return openTourPracticeProof(context, ref);
+  // Proof verification is server-side — never queued, never attempted
+  // offline. Calm line, no sheet that can't finish.
+  if (!appOnlineNow(ref)) {
+    showV13Toast(
+      context,
+      'Proofs need internet. Try again when you\u2019re back online.',
+    );
+    return;
+  }
   final outcome = await showV13Sheet<SubmitProofOutcome>(
     context,
     builder: (_) => SubmitProofV13Sheet(race: race),
@@ -51,14 +61,17 @@ String proofOutcomeMessage({
   int peoplePassed = 0,
 }) => switch ((raceCompleted, newRank, peoplePassed)) {
   (true, _, _) => 'Proof logged — you crossed the finish line.',
-  (_, 1, _) => accumulating
-      ? '+$value — you took the lead.'
-      : 'New best — you took the lead.',
-  (_, final r?, > 0) => accumulating
-      ? '+$value — passed $peoplePassed ${peoplePassed == 1 ? 'racer' : 'racers'}, now #$r.'
-      : 'Attempt logged — passed $peoplePassed ${peoplePassed == 1 ? 'racer' : 'racers'}, now #$r.',
-  (_, final r?, _) => accumulating
-      ? '+$value logged — you are #$r.'
-      : 'Attempt logged — you are #$r.',
+  (_, 1, _) =>
+    accumulating
+        ? '+$value — you took the lead.'
+        : 'New best — you took the lead.',
+  (_, final r?, > 0) =>
+    accumulating
+        ? '+$value — passed $peoplePassed ${peoplePassed == 1 ? 'racer' : 'racers'}, now #$r.'
+        : 'Attempt logged — passed $peoplePassed ${peoplePassed == 1 ? 'racer' : 'racers'}, now #$r.',
+  (_, final r?, _) =>
+    accumulating
+        ? '+$value logged — you are #$r.'
+        : 'Attempt logged — you are #$r.',
   _ => accumulating ? '+$value logged.' : 'Attempt logged.',
 };

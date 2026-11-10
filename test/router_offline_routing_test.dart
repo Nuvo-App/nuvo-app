@@ -68,6 +68,7 @@ class _Screen extends StatelessWidget {
 ({GoRouter router, ProviderContainer container}) _buildRouter({
   RestoreResult? restoreResult,
   required String initialLocation,
+  AuthUser? savedUser,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -76,6 +77,7 @@ class _Screen extends StatelessWidget {
           restoreResult == null
               ? _PendingAuthRepo()
               : _ScriptedAuthRepo(restoreResult),
+          offlineUser: () async => savedUser,
         ),
       ),
     ],
@@ -90,6 +92,7 @@ class _Screen extends StatelessWidget {
       GoRoute(path: '/welcome', builder: (c, s) => const _Screen('welcome')),
       GoRoute(path: '/arena', builder: (c, s) => const _Screen('arena')),
       GoRoute(path: '/compete', builder: (c, s) => const _Screen('compete')),
+      GoRoute(path: '/pass', builder: (c, s) => const _Screen('crew')),
       GoRoute(path: '/profile', builder: (c, s) => const _Screen('profile')),
     ],
   );
@@ -101,10 +104,12 @@ Future<GoRouter> _pumpRouter(
   RestoreResult? restoreResult,
   String initialLocation = '/splash',
   bool settle = true,
+  AuthUser? savedUser,
 }) async {
   final built = _buildRouter(
     restoreResult: restoreResult,
     initialLocation: initialLocation,
+    savedUser: savedUser,
   );
   addTearDown(built.container.dispose);
   await tester.pumpWidget(
@@ -205,6 +210,31 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    for (final loc in const ['/compete', '/pass', '/profile', '/arena']) {
+      testWidgets(
+        'offline with the saved user: $loc opens (every tab works offline)',
+        (tester) async {
+          final router = await _pumpRouter(
+            tester,
+            restoreResult: const RestoreUnreachable(),
+            initialLocation: loc,
+            savedUser: const AuthUser(
+              id: 'u1',
+              email: 'owner@example.com',
+              username: 'akshay',
+              fullName: 'Akshay',
+              onboardingComplete: true,
+              hasMemberPass: true,
+              termsAccepted: true,
+              ageAttested: true,
+            ),
+          );
+          expect(_currentPath(router), loc);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
 
     testWidgets('offline: /splash itself is left alone (not force-redirected)', (
       tester,

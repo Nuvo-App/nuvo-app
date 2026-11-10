@@ -92,8 +92,6 @@ class ReachabilityMonitor extends ChangeNotifier {
   }
 }
 
-final reachabilityProvider = Provider<ReachabilityMonitor>((ref) {
-  final m = ReachabilityMonitor();
-  ref.onDispose(m.dispose);
-  return m;
-});
+final reachabilityProvider = ChangeNotifierProvider<ReachabilityMonitor>(
+  (ref) => ReachabilityMonitor(),
+);

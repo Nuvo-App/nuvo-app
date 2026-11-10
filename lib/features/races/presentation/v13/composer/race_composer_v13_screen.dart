@@ -1,3 +1,4 @@
+import '../../../../../core/offline/online_gate.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -294,6 +295,7 @@ class _RaceComposerV13ScreenState extends ConsumerState<RaceComposerV13Screen> {
         error: _error,
         onJump: (i) => setState(() => _step = i),
         onStart: _startRace,
+        online: appOnline(ref),
       ),
     ];
     return PopScope(
@@ -1438,7 +1440,10 @@ class _ReviewStep extends StatelessWidget {
     required this.error,
     required this.onJump,
     required this.onStart,
+    this.online = true,
   });
+
+  final bool online;
   final RaceDraft draft;
   final int invitedCount;
   final List<PublicUser> invitedFriends;
@@ -1586,6 +1591,10 @@ class _ReviewStep extends StatelessWidget {
       ctaLabel: error == null ? 'Start race' : 'Try again',
       onCta: onStart,
       ctaLoading: loading,
+      // Creating a race is server-only — greyed with one line offline,
+      // re-enabled automatically on reconnect.
+      ctaEnabled: online,
+      ctaHint: 'Starting a race needs internet.',
     );
   }
 

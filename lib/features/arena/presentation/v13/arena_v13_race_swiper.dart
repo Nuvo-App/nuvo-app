@@ -1,3 +1,4 @@
+import '../../../../core/offline/online_gate.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -363,14 +364,17 @@ class ArenaRaceCard extends ConsumerWidget {
             label: 'Submit proof',
             icon: Icons.photo_camera_rounded,
             fullWidth: true,
-            onPressed: () async {
-              await openSubmitProof(context, ref, race);
-              if (!context.mounted) return;
-              // Back from proof — pull fresh standings so a landed score
-              // change animates the card (+N, number pop).
-              ref.read(raceControllerProvider.notifier).markStale();
-            },
+            onPressed: !tour && !appOnline(ref)
+                ? null
+                : () async {
+                    await openSubmitProof(context, ref, race);
+                    if (!context.mounted) return;
+                    // Back from proof — pull fresh standings so a landed score
+                    // change animates the card (+N, number pop).
+                    ref.read(raceControllerProvider.notifier).markStale();
+                  },
           ),
+          if (!tour && !appOnline(ref)) const NeedsInternetLine(),
         ],
       ),
     );

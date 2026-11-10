@@ -1,3 +1,4 @@
+import '../../../../core/offline/online_gate.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -88,10 +89,12 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
     final openedAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(analyticsProvider).screen(
-        'race_detail',
-        ms: DateTime.now().difference(openedAt).inMilliseconds,
-      );
+      ref
+          .read(analyticsProvider)
+          .screen(
+            'race_detail',
+            ms: DateTime.now().difference(openedAt).inMilliseconds,
+          );
     });
   }
 
@@ -805,8 +808,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
             label: 'Submit proof',
             icon: Icons.check_rounded,
             fullWidth: true,
-            onPressed: onSubmit,
+            onPressed: appOnline(ref) ? onSubmit : null,
           ),
+          if (!appOnline(ref)) const NeedsInternetLine(),
         ],
       ],
     );
@@ -1132,7 +1136,9 @@ class _RaceDetailV13ScreenState extends ConsumerState<RaceDetailV13Screen>
           V13Button.secondary(
             label: 'Invite friends',
             icon: Icons.person_add_alt_1_rounded,
-            onPressed: () => context.push('/race/${race.id}/invite'),
+            onPressed: appOnline(ref)
+                ? () => context.push('/race/${race.id}/invite')
+                : null,
           ),
         ],
       ],

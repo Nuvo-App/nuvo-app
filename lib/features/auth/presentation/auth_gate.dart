@@ -62,6 +62,12 @@ class RouterNotifier extends ChangeNotifier {
       if (loc == '/splash' || loc == '/arena' || loc == '/profile') {
         return null;
       }
+      // With the saved user (offline cold open), the whole app is usable
+      // from cache: every tab, sheet and detail opens. Only sign-in /
+      // onboarding routes fold back to Arena.
+      if (authState.user != null) {
+        return _isAuthOrOnboarding(loc) ? '/arena' : null;
+      }
       final dest = _isProtected(loc) ? '/arena' : null;
       debugPrint('[Router] offline → $loc : redirect=$dest');
       return dest;

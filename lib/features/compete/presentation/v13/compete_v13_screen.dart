@@ -1,3 +1,4 @@
+import '../../../../core/offline/online_gate.dart';
 import '../../../onboarding/presentation/first_use_guide.dart';
 import 'dart:async';
 
@@ -105,10 +106,12 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
     final openedAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(analyticsProvider).screen(
-        'compete',
-        ms: DateTime.now().difference(openedAt).inMilliseconds,
-      );
+      ref
+          .read(analyticsProvider)
+          .screen(
+            'compete',
+            ms: DateTime.now().difference(openedAt).inMilliseconds,
+          );
       final step = ref.read(firstRaceGuideProvider);
       const retired = {
         FirstRaceGuideStep.competeStart,
@@ -209,6 +212,7 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
                     firstName: _firstName(user?.fullName),
                     summary: _summary(live, user?.id),
                     onNewRace: () => context.push('/races/new'),
+                    online: appOnline(ref),
                     onJoinCode: () => context.push('/races/join'),
                     showStart: !showEmptyHero,
                     focus: _YouRightNow.pick(live, user?.id) == null
@@ -295,6 +299,7 @@ class _CompeteV13ScreenState extends ConsumerState<CompeteV13Screen> {
 class _Header extends StatelessWidget {
   const _Header({
     required this.onNewRace,
+    this.online = true,
     required this.onJoinCode,
     this.focus,
     this.firstName,
@@ -302,6 +307,9 @@ class _Header extends StatelessWidget {
     this.showStart = true,
   });
   final VoidCallback onNewRace;
+
+  /// Offline: starting a race needs the server — greyed with one line.
+  final bool online;
 
   /// False while the empty-state hero is on screen — it carries the one
   /// Start a race action, so the blue card steps aside.
@@ -335,9 +343,9 @@ class _Header extends StatelessWidget {
         if (focus != null) ...[focus!, const SizedBox(height: V13.gapMd)],
         if (showStart)
           V13Card(
-            color: V13.blue,
+            color: online ? V13.blue : V13.muted,
             shadow: V13.shadow6,
-            onTap: onNewRace,
+            onTap: online ? onNewRace : null,
             semanticLabel: 'Start a race',
             padding: const EdgeInsets.all(V13.gapLg),
             child: Column(
@@ -365,7 +373,9 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Pick a move, set the rules, invite friends.',
+                  online
+                      ? 'Pick a move, set the rules, invite friends.'
+                      : 'Needs internet \u2014 back when you\u2019re online.',
                   style: V13.body.copyWith(
                     color: V13.card.withValues(alpha: 0.9),
                   ),
@@ -373,7 +383,7 @@ class _Header extends StatelessWidget {
                 const SizedBox(height: V13.gapMd),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: onJoinCode,
+                  onTap: online ? onJoinCode : null,
                   child: Row(
                     children: [
                       Icon(
