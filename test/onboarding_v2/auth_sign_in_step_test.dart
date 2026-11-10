@@ -32,7 +32,7 @@ void main() {
     addTearDown(t.view.reset);
     await pump(t);
     expect(find.text('Save your spot'), findsOneWidget);
-    expect(find.text('Race anything.'), findsOneWidget); // the hero headline
+    expect(find.byKey(const ValueKey('ob-login-headline')), findsOneWidget);
     expect(find.byKey(const ValueKey('ob-login-logo')), findsOneWidget);
     expect(find.text('Continue with Apple'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
@@ -111,6 +111,19 @@ void main() {
     final top = t.getTopLeft(sheet).dy;
     final title = t.getTopLeft(find.text('Save your spot')).dy;
     expect(title - top, lessThan(40));
+  });
+
+  testWidgets('Apple button is pure black with white label (HIG)', (t) async {
+    await pump(t);
+    final box = t.widget<Container>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('ob-apple')),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect((box.decoration as BoxDecoration).color, const Color(0xFF000000));
   });
 
   test('Google G artwork parses into the 48x48 box', () {

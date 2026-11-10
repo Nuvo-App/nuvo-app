@@ -206,7 +206,7 @@ class _SignInSheet extends StatelessWidget {
               key: const ValueKey('ob-apple'),
               label: ObCopy.signInApple,
               icon: Icons.apple,
-              fill: V13.navy,
+              fill: const Color(0xFF000000), // Apple HIG: pure black
               ink: V13.white,
               loading: busy == _Busy.apple,
               onTap: busy == _Busy.none ? onApple : null,

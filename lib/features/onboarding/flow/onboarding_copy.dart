@@ -34,6 +34,12 @@ abstract final class ObCopy {
 
   // ── S4 Sign in — "Save your spot" sheet ────────────────────────────────
   static const String loginHeadline = 'Race anything.';
+  static const List<String> loginPhrases = [
+    'Race anything.',
+    'Compete with anyone.',
+    'Prove it on camera.',
+    'Climb the board.',
+  ];
   static const String signInTitle = 'Save your spot';
   static const String signInSub = 'So your races, friends and level are yours.';
   static const String signInApple = 'Continue with Apple';

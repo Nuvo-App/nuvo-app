@@ -158,9 +158,12 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     // Layout must NOT depend on the keyboard: resizing the hero/labels as it
     // rises made the page jump under the finger. Only short phones go lean.
     final lean = tight;
-    final hero = tight ? 72.0 : 96.0;
+    final hero = tight
+        ? 0.0
+        : 96.0; // short phones: no logo, the field gets the room
 
     return OnboardingShell(
+      dark: true,
       step: OnboardingStep.email,
       heroHeight: hero,
       hero: const ObBrandMark(),
@@ -242,7 +245,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
         child: Text(
           _error!,
           key: const ValueKey('ob-email-error'),
-          style: V13.bodyStrong.copyWith(color: V13.danger),
+          style: V13.bodyStrong.copyWith(color: V13.coral),
         ),
       );
     }
@@ -274,7 +277,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
         child: Text(
           ObCopy.emailDisabledHint,
           key: const ValueKey('ob-email-hint'),
-          style: V13.caption,
+          style: V13.caption.copyWith(color: V13.white.withValues(alpha: 0.72)),
         ),
       );
     }
@@ -295,7 +298,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     TextInputType? keyboardType,
   }) {
     return SizedBox(
-      height: 60,
+      height: 64,
       child: TextField(
         key: key,
         controller: controller,
@@ -308,7 +311,8 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
         autocorrect: autocorrect,
         enableSuggestions: autocorrect,
         onSubmitted: onSubmitted,
-        style: V13.bodyStrong.copyWith(fontSize: 16),
+        cursorColor: V13.blue,
+        style: V13.bodyStrong.copyWith(fontSize: 17, color: V13.navy),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: V13.bodyStrong.copyWith(
@@ -321,9 +325,9 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
             horizontal: V13.gapLg,
             vertical: 18,
           ),
-          enabledBorder: _border(V13.navy),
-          focusedBorder: _border(V13.blue),
-          border: _border(V13.navy),
+          enabledBorder: _border(V13.white),
+          focusedBorder: _border(V13.sky),
+          border: _border(V13.white),
         ),
       ),
     );
@@ -383,7 +387,7 @@ class _TypoHint extends StatelessWidget {
         child: Text(
           ObCopy.emailTypoHintFor(domain),
           key: const ValueKey('ob-email-typo'),
-          style: V13.bodyStrong.copyWith(color: V13.blue),
+          style: V13.bodyStrong.copyWith(color: V13.sky),
         ),
       ),
     );

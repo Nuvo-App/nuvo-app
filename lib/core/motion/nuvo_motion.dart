@@ -233,6 +233,13 @@ abstract final class NuvoMotion {
   /// How long an award / info chip stays on screen.
   static const Duration tourChipHold = Duration(milliseconds: 1800);
 
+  /// Login typewriter: type, hold, backspace, gap between phrases.
+  static const Duration typeChar = Duration(milliseconds: 75);
+  static const Duration deleteChar = Duration(milliseconds: 35);
+  static const Duration typeHold = Duration(milliseconds: 2400);
+  static const Duration typeGap = Duration(milliseconds: 350);
+  static const Duration cursorBlink = Duration(milliseconds: 530);
+
   /// Login hero: one full race of the looping lane demo.
   static const Duration loginLoop = Duration(milliseconds: 6400);
 

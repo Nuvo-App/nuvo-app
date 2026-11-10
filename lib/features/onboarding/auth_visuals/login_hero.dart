@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/motion/motion.dart';
 import '../../../core/v13/tokens.dart';
 import '../flow/onboarding_copy.dart';
+import 'typewriter_text.dart';
 
 /// The login hero: one confident brand statement. The real Nuvo logo mark
 /// (spring scale-in, then a gentle vertical float) over one bold headline,
@@ -56,7 +57,10 @@ class _ObLoginHeroState extends State<ObLoginHero>
         final logoH = math.min(150.0, c.maxHeight * 0.36);
         return Stack(
           children: [
-            Positioned.fill(child: CustomPaint(painter: _PathPainter())),
+            // Texture only: dropped on short heroes so it can't collide with
+            // the two-line headline on small phones.
+            if (c.maxHeight >= 330)
+              Positioned.fill(child: CustomPaint(painter: _PathPainter())),
             Align(
               alignment: const Alignment(0, -0.15),
               child: Column(
@@ -92,18 +96,13 @@ class _ObLoginHeroState extends State<ObLoginHero>
                   SizedBox(height: logoH * 0.16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        ObCopy.loginHeadline,
-                        key: const ValueKey('ob-login-headline'),
-                        maxLines: 1,
-                        textAlign: TextAlign.center,
-                        style: V13.title.copyWith(
-                          fontSize: 42,
-                          height: 1.05,
-                          color: V13.white,
-                        ),
+                    child: ObTypewriter(
+                      phrases: ObCopy.loginPhrases,
+                      semanticLabel: ObCopy.loginHeadline,
+                      style: V13.title.copyWith(
+                        fontSize: 40,
+                        height: 1.08,
+                        color: V13.white,
                       ),
                     ),
                   ),

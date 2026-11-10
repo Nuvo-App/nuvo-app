@@ -318,9 +318,12 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     final locked = _phase == _Phase.locked;
     final tight = obTightScreen(context);
     final lean = tight; // never keyed to the keyboard: no jump as it rises
-    final hero = tight ? 72.0 : 96.0;
+    final hero = tight
+        ? 0.0
+        : 96.0; // short phones: no logo, the field gets the room
 
     return OnboardingShell(
+      dark: true,
       step: OnboardingStep.code,
       heroHeight: hero,
       hero: const ObBrandMark(),
@@ -338,7 +341,9 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
                   ObCopy.codeSentTo(email ?? 'your email'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: V13.caption,
+                  style: V13.caption.copyWith(
+                    color: V13.white.withValues(alpha: 0.72),
+                  ),
                 ),
               ),
               _TextAction(
@@ -403,7 +408,9 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
                           key: const ValueKey('ob-code-countdown'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: V13.bodyStrong.copyWith(color: V13.muted),
+                          style: V13.bodyStrong.copyWith(
+                            color: V13.white.withValues(alpha: 0.72),
+                          ),
                         )
                       : _TextAction(
                           key: const ValueKey('ob-code-resend'),
@@ -542,12 +549,12 @@ class _CodeBox extends StatelessWidget {
         ? V13.mint
         : error
         ? V13.coral.withValues(alpha: 0.35)
-        : V13.card;
+        : V13.white;
     final border = error
         ? V13.coral
         : active
-        ? V13.blue
-        : V13.navy;
+        ? V13.sky
+        : V13.white;
     final Widget content = verified
         ? _Pop(
             key: ValueKey('check-$index'),
@@ -653,10 +660,10 @@ class _StatusLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? text = verifying ? ObCopy.codeVerifying : error ?? note;
     final color = error != null
-        ? V13.danger
+        ? V13.coral
         : verifying
-        ? V13.muted
-        : V13.blue;
+        ? V13.white.withValues(alpha: 0.72)
+        : V13.sky;
     if (text == null) return const SizedBox.shrink();
     return Text(
       text,
@@ -688,7 +695,7 @@ class _TextAction extends StatelessWidget {
           child: Text(
             label,
             style: V13.bodyStrong.copyWith(
-              color: onTap == null ? V13.muted : V13.blue,
+              color: onTap == null ? V13.white.withValues(alpha: 0.4) : V13.sky,
             ),
           ),
         ),
