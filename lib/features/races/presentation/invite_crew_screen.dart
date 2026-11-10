@@ -1,3 +1,4 @@
+import '../../../core/offline/online_gate.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -233,7 +234,10 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
         const SizedBox(height: V13.gapMd),
         V13TextInput(
           controller: _searchController,
-          hint: 'Username or member ID',
+          enabled: appOnline(ref),
+          hint: appOnline(ref)
+              ? 'Username or member ID'
+              : 'Search needs internet',
           prefixIcon: const Icon(Icons.search_rounded, color: V13.muted),
           suffixIcon: _searching
               ? const Padding(
@@ -249,8 +253,10 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
               : null,
           onChanged: _onSearchChanged,
         ),
+        if (!appOnline(ref)) const NeedsInternetLine(),
         const SizedBox(height: V13.gapMd),
-        if (_searchError != null)
+        // Offline: the calm line above replaces any network error.
+        if (_searchError != null && appOnline(ref))
           _InlineState(
             icon: Icons.wifi_tethering_error_rounded,
             text: _searchError!,

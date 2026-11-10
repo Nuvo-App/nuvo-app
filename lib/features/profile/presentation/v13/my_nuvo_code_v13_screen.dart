@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -45,6 +46,15 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
     _loadInvite();
   }
 
+  /// Last minted link, kept on device so the code still shows offline.
+  String? _cachedUrl;
+
+  Future<File> _codeFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final uid = ref.read(authControllerProvider).user?.id ?? 'anon';
+    return File('${dir.path}/nuvo_my_code_$uid.txt');
+  }
+
   Future<void> _loadInvite() async {
     try {
       final invite = await ref
@@ -55,7 +65,24 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
         _invite = invite;
         _error = null;
       });
+      try {
+        await (await _codeFile()).writeAsString(invite.url);
+      } catch (_) {}
     } catch (e) {
+      // Offline: fall back to the last code minted on this device.
+      try {
+        final f = await _codeFile();
+        if (await f.exists()) {
+          final url = (await f.readAsString()).trim();
+          if (url.isNotEmpty && mounted) {
+            setState(() {
+              _cachedUrl = url;
+              _error = null;
+            });
+            return;
+          }
+        }
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _error = e);
     }
@@ -100,7 +127,7 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
         builder: (_) => const SizedBox.shrink(),
       );
     }
-    final invite = _invite;
+    final url = _invite?.url ?? _cachedUrl;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         V13.pagePad,
@@ -113,10 +140,10 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
           padding: const EdgeInsets.all(V13.gapXl),
           child: Column(
             children: [
-              if (invite == null)
+              if (url == null)
                 const V13Skeleton(height: 240, radius: V13.radiusCard)
               else
-                V13NuvoQr(data: invite.url),
+                V13NuvoQr(data: url),
               const SizedBox(height: V13.gapLg),
               Text(
                 username != null && username.isNotEmpty
@@ -132,18 +159,16 @@ class _MyNuvoCodeV13ScreenState extends ConsumerState<MyNuvoCodeV13Screen> {
         V13Button.primary(
           label: 'Share your code',
           icon: Icons.ios_share_rounded,
-          onPressed: invite == null
-              ? null
-              : () => shareMyNuvoLink(context, invite.url),
+          onPressed: url == null ? null : () => shareMyNuvoLink(context, url),
         ),
         const SizedBox(height: V13.gapMd),
         V13Button.secondary(
           label: 'Copy link',
           icon: Icons.link_rounded,
-          onPressed: invite == null
+          onPressed: url == null
               ? null
               : () async {
-                  await Clipboard.setData(ClipboardData(text: invite.url));
+                  await Clipboard.setData(ClipboardData(text: url));
                   if (context.mounted) {
                     showV13Toast(context, 'Link copied.');
                   }

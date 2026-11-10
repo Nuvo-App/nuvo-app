@@ -1,3 +1,4 @@
+import '../../../../core/offline/online_gate.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -143,6 +144,10 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
   }
 
   Future<void> _setNotifGroup(String label, List<String> cats, bool on) async {
+    if (!appOnlineNow(ref)) {
+      showV13Toast(context, 'Changing this needs internet.');
+      return;
+    }
     final prefs = _notifPrefs;
     if (prefs == null) return;
     final touched = cats.where(prefs.containsKey).toList();
@@ -193,6 +198,10 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
   }
 
   Future<void> _setActivityMapShared(bool on) async {
+    if (!appOnlineNow(ref)) {
+      showV13Toast(context, 'Changing this needs internet.');
+      return;
+    }
     final current = ref.read(profilePrefsProvider).valueOrNull;
     if (current == null) return;
     try {
@@ -208,6 +217,10 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
   }
 
   Future<void> _setMotionConsent(bool on) async {
+    if (!appOnlineNow(ref)) {
+      showV13Toast(context, 'Changing this needs internet.');
+      return;
+    }
     final previous = _motionConsent;
     setState(() => _motionConsent = on);
     try {
@@ -308,6 +321,10 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
   }
 
   Future<void> _deleteAccount() async {
+    if (!appOnlineNow(ref)) {
+      showV13Toast(context, 'Changing this needs internet.');
+      return;
+    }
     final confirmed = await showV13ConfirmSheet(
       context,
       title: 'Delete account?',

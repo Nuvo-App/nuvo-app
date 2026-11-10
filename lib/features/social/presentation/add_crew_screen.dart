@@ -1,3 +1,4 @@
+import '../../../core/offline/online_gate.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -151,7 +152,10 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
                   const SizedBox(height: V13.gapMd),
                   V13TextInput(
                     controller: _searchController,
-                    hint: 'Search Nuvo members',
+                    enabled: appOnline(ref),
+                    hint: appOnline(ref)
+                        ? 'Search Nuvo members'
+                        : 'Search needs internet',
                     autofocus: true,
                     textInputAction: TextInputAction.search,
                     prefixIcon: const Icon(
@@ -172,6 +176,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
                         : null,
                     onChanged: _onSearchChanged,
                   ),
+                  if (!appOnline(ref)) const NeedsInternetLine(),
                   const SizedBox(height: V13.gapMd),
                   // The other two ways in — scan theirs, show yours.
                   Row(

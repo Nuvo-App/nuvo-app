@@ -1,3 +1,4 @@
+import '../../../../core/offline/online_gate.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -332,7 +333,8 @@ class _EditProfileV13ScreenState extends ConsumerState<EditProfileV13Screen> {
                     label: 'Done',
                     size: V13ButtonSize.small,
                     loading: _saving,
-                    onPressed: _saving ? null : _save,
+                    // Profile edits are server writes — greyed offline.
+                    onPressed: _saving || !appOnline(ref) ? null : _save,
                   ),
                 ],
               ),
