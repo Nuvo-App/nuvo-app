@@ -77,6 +77,9 @@ void main() {
 
     testWidgets('S4 sheet $tag', skip: !shotsOn, (t) async {
       await boot(t, size, OnboardingStep.signIn, const ObSignInStep());
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
       await t.pump(const Duration(seconds: 1));
       await shot(t, 's4_$tag');
     });

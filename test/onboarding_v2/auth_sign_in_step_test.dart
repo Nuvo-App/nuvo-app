@@ -32,10 +32,8 @@ void main() {
     addTearDown(t.view.reset);
     await pump(t);
     expect(find.text('Save your spot'), findsOneWidget);
-    expect(
-      find.text('So your races, friends and level are yours.'),
-      findsOneWidget,
-    );
+    expect(find.text('Race anything.'), findsOneWidget); // the hero headline
+    expect(find.byKey(const ValueKey('ob-login-logo')), findsOneWidget);
     expect(find.text('Continue with Apple'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
     expect(find.text('Use email instead'), findsOneWidget);

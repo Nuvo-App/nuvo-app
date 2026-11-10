@@ -70,6 +70,9 @@ Future<void> loadShotFonts() async {
         final key = utf8.decode(message!.buffer.asUint8List());
         if (key == 'AssetManifest.bin') return encoded;
         if (key.startsWith('test/fonts/Manrope')) return bytes;
+        if (key.startsWith('assets/') && File(key).existsSync()) {
+          return ByteData.sublistView(File(key).readAsBytesSync());
+        }
         return null;
       });
 }

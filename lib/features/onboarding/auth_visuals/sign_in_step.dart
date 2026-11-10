@@ -116,32 +116,18 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
   @override
   Widget build(BuildContext context) {
     final short = MediaQuery.sizeOf(context).height < 640;
-    final sheetH = short ? 330.0 : 372.0;
+    final sheetH =
+        (short ? 300.0 : 316.0) + MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
-      // Flush, vivid: one coral field edge to edge, one focal card, one sheet.
+      // Full-bleed brand coral from the top edge through the sheet.
       color: V13.coral,
       child: Stack(
         children: [
           Positioned.fill(
             bottom: sheetH,
-            child: SafeArea(
+            child: const SafeArea(
               bottom: false,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: V13.gapXl,
-                    vertical: V13.gapLg,
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      key: const ValueKey('ob-login-hero'),
-                      width: 340,
-                      child: const ObLoginHero(),
-                    ),
-                  ),
-                ),
-              ),
+              child: ObLoginHero(key: ValueKey('ob-login-hero')),
             ),
           ),
           Positioned(
@@ -192,15 +178,9 @@ class _SignInSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final short = MediaQuery.sizeOf(context).height < 640;
     return Container(
       key: const ValueKey('ob-signin-sheet'),
-      padding: EdgeInsets.fromLTRB(
-        V13.pagePad,
-        V13.gapMd,
-        V13.pagePad,
-        V13.gapLg + bottom,
-      ),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 16 + bottom),
       decoration: const BoxDecoration(
         color: V13.card,
         borderRadius: BorderRadius.vertical(
@@ -216,23 +196,8 @@ class _SignInSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: V13.divider,
-                borderRadius: BorderRadius.circular(V13.radiusPill),
-              ),
-            ),
-          ),
-          SizedBox(height: short ? V13.gapSm : V13.gapLg),
-          Text(ObCopy.signInTitle, style: V13.title),
-          if (!short) ...[
-            const SizedBox(height: V13.gapXs),
-            Text(ObCopy.signInSub, style: V13.body.copyWith(color: V13.muted)),
-          ],
-          SizedBox(height: short ? V13.gapMd : V13.gapXl),
+          Text(ObCopy.signInTitle, style: V13.cardTitle),
+          const SizedBox(height: 16),
           AnimatedOpacity(
             duration: NuvoMotion.ctaFade,
             opacity: busy == _Busy.google ? 0.4 : 1,
@@ -280,7 +245,7 @@ class _SignInSheet extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 ObCopy.signInEmailLink,
-                style: V13.bodyStrong.copyWith(color: V13.blue),
+                style: V13.bodyStrong.copyWith(color: V13.navy),
               ),
             ),
           ),
@@ -378,13 +343,14 @@ class _LegalLineState extends State<_LegalLine> {
   @override
   Widget build(BuildContext context) {
     final link = V13.caption.copyWith(
-      color: V13.blue,
+      fontSize: 12,
+      color: V13.navy,
       fontWeight: FontWeight.w700,
       decoration: TextDecoration.underline,
     );
     return Text.rich(
       TextSpan(
-        style: V13.caption,
+        style: V13.caption.copyWith(fontSize: 12, color: V13.muted),
         children: [
           const TextSpan(text: 'By continuing you agree to the '),
           TextSpan(text: 'Terms', style: link, recognizer: _terms),
