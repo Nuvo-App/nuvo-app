@@ -332,384 +332,393 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: NuvoScrollBottomFade(
                 child:
                     SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Step progress (3 steps: race, profile, pass)
-                            Row(
-                              children: [
-                                for (var i = 0; i < 3; i++) ...[
-                                  Expanded(
-                                    child: Container(
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: i <= 1 ? V13.blue : V13.divider,
-                                        borderRadius: BorderRadius.circular(99),
+                          padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Step progress (3 steps: race, profile, pass)
+                              Row(
+                                children: [
+                                  for (var i = 0; i < 3; i++) ...[
+                                    Expanded(
+                                      child: Container(
+                                        height: 3,
+                                        decoration: BoxDecoration(
+                                          color: i <= 1
+                                              ? V13.blue
+                                              : V13.divider,
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  if (i < 2) const SizedBox(width: 4),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-
-                            NuvoFlipText(
-                              'Build your profile',
-                              style: V13.title.copyWith(
-                                fontSize: 32,
-                                letterSpacing: -0.9,
-                              ),
-                              delay: const Duration(milliseconds: 200),
-                              duration: const Duration(milliseconds: 1300),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'This is how your friends will see you in races.',
-                              style: V13.body.copyWith(
-                                color: V13.muted,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Live identity preview — the profile their crew
-                            // will see, assembling as they type.
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: V13.card,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: V13.navy, width: 2),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: V13.navy,
-                                    offset: Offset(0, 3),
-                                  ),
+                                    if (i < 2) const SizedBox(width: 4),
+                                  ],
                                 ],
                               ),
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    key: const ValueKey('onboarding-avatar'),
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: _openPhotoSheet,
-                                    child: Stack(
-                                      alignment: Alignment.bottomRight,
-                                      children: [
-                                        Container(
-                                          width: 64,
-                                          height: 64,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: V13.bg,
-                                            border: Border.all(
-                                              color: V13.navy,
-                                              width: 2,
-                                            ),
-                                          ),
-                                          clipBehavior: Clip.antiAlias,
-                                          alignment: Alignment.center,
-                                          child: _buildAvatarContent(),
-                                        ),
-                                        Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: V13.blue,
-                                            border: Border.all(
-                                              color: V13.navy,
-                                              width: 2,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons.camera_alt_rounded,
-                                            color: V13.card,
-                                            size: 12,
-                                          ),
-                                        ),
-                                      ],
+                              const SizedBox(height: 24),
+
+                              NuvoFlipText(
+                                'Build your profile',
+                                style: V13.title.copyWith(
+                                  fontSize: 32,
+                                  letterSpacing: -0.9,
+                                ),
+                                delay: const Duration(milliseconds: 200),
+                                duration: const Duration(milliseconds: 1300),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'This is how your friends will see you in races.',
+                                style: V13.body.copyWith(
+                                  color: V13.muted,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Live identity preview — the profile their crew
+                              // will see, assembling as they type.
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: V13.card,
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: V13.navy, width: 2),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: V13.navy,
+                                      offset: Offset(0, 3),
                                     ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        AnimatedSwitcher(
-                                          duration: const Duration(
-                                            milliseconds: 200,
-                                          ),
-                                          child: Text(
-                                            _nameController.text.trim().isEmpty
-                                                ? 'Your name'
-                                                : _nameController.text.trim(),
-                                            key: ValueKey(
-                                              _nameController.text.trim(),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      key: const ValueKey('onboarding-avatar'),
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _openPhotoSheet,
+                                      child: Stack(
+                                        alignment: Alignment.bottomRight,
+                                        children: [
+                                          Container(
+                                            width: 64,
+                                            height: 64,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: V13.bg,
+                                              border: Border.all(
+                                                color: V13.navy,
+                                                width: 2,
+                                              ),
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: V13.bodyStrong.copyWith(
-                                              color:
-                                                  _nameController.text
+                                            clipBehavior: Clip.antiAlias,
+                                            alignment: Alignment.center,
+                                            child: _buildAvatarContent(),
+                                          ),
+                                          Container(
+                                            width: 22,
+                                            height: 22,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: V13.blue,
+                                              border: Border.all(
+                                                color: V13.navy,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.camera_alt_rounded,
+                                              color: V13.card,
+                                              size: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            child: Text(
+                                              _nameController.text
                                                       .trim()
                                                       .isEmpty
+                                                  ? 'Your name'
+                                                  : _nameController.text.trim(),
+                                              key: ValueKey(
+                                                _nameController.text.trim(),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: V13.bodyStrong.copyWith(
+                                                color:
+                                                    _nameController.text
+                                                        .trim()
+                                                        .isEmpty
+                                                    ? V13.muted
+                                                    : V13.navy,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            username.isEmpty
+                                                ? '@handle'
+                                                : '@$username',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: V13.body.copyWith(
+                                              color: username.isEmpty
                                                   ? V13.muted
-                                                  : V13.navy,
+                                                  : V13.blue,
+                                              fontWeight: username.isEmpty
+                                                  ? FontWeight.w500
+                                                  : FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (MediaQuery.sizeOf(context).width >=
+                                        360) ...[
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: V13.blue.withValues(alpha: .1),
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                          border: Border.all(
+                                            color: V13.blue.withValues(
+                                              alpha: .35,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          username.isEmpty
-                                              ? '@handle'
-                                              : '@$username',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: V13.body.copyWith(
-                                            color: username.isEmpty
-                                                ? V13.muted
-                                                : V13.blue,
-                                            fontWeight: username.isEmpty
-                                                ? FontWeight.w500
-                                                : FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (MediaQuery.sizeOf(context).width >=
-                                      360) ...[
-                                    const SizedBox(width: 10),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: V13.blue.withValues(alpha: .1),
-                                        borderRadius: BorderRadius.circular(99),
-                                        border: Border.all(
-                                          color: V13.blue.withValues(
-                                            alpha: .35,
+                                        child: Text(
+                                          'LEVEL 1',
+                                          style: V13.label.copyWith(
+                                            color: V13.blue,
+                                            letterSpacing: 1.4,
+                                            fontSize: 10,
                                           ),
                                         ),
                                       ),
+                                    ],
+                                  ],
+                                ),
+                              ).animate().fadeIn(
+                                delay: const Duration(milliseconds: 350),
+                                duration: const Duration(milliseconds: 400),
+                              ),
+
+                              if (_avatarError != null) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
                                       child: Text(
-                                        'LEVEL 1',
-                                        style: V13.label.copyWith(
-                                          color: V13.blue,
-                                          letterSpacing: 1.4,
-                                          fontSize: 10,
+                                        _avatarError!,
+                                        style: V13.caption.copyWith(
+                                          fontSize: 13,
+                                          color: V13.danger,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_avatarDenied)
+                                      GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => launchUrl(
+                                          Uri.parse('app-settings:'),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 8,
+                                          ),
+                                          child: Text(
+                                            'Open Settings',
+                                            style: V13.caption.copyWith(
+                                              fontSize: 13,
+                                              color: V13.blue,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+
+                              V13TextInput(
+                                controller: _nameController,
+                                label: 'Full name',
+                                hint: 'Your name',
+                                textCapitalization: TextCapitalization.words,
+                              ),
+                              const SizedBox(height: 16),
+
+                              V13TextInput(
+                                controller: _usernameController,
+                                label: 'Username',
+                                hint: 'handle',
+                                prefixIcon: Padding(
+                                  padding: const EdgeInsets.only(left: 14),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: 1,
+                                    child: Text('@', style: V13.body),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Username availability feedback
+                              if (_usernameChecking)
+                                Text(
+                                  'Checking availability…',
+                                  style: V13.caption.copyWith(
+                                    fontSize: 13,
+                                    color: V13.muted,
+                                  ),
+                                )
+                              else if (_usernameFormatError(
+                                    username.toLowerCase(),
+                                  ) !=
+                                  null)
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.cancel_rounded,
+                                      color: V13.danger,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _usernameFormatError(
+                                          username.toLowerCase(),
+                                        )!,
+                                        style: V13.caption.copyWith(
+                                          fontSize: 13,
+                                          color: V13.danger,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ),
                                   ],
-                                ],
-                              ),
-                            ).animate().fadeIn(
-                              delay: const Duration(milliseconds: 350),
-                              duration: const Duration(milliseconds: 400),
-                            ),
-
-                            if (_avatarError != null) ...[
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _avatarError!,
-                                      style: V13.caption.copyWith(
-                                        fontSize: 13,
-                                        color: V13.danger,
-                                      ),
-                                    ),
-                                  ),
-                                  if (_avatarDenied)
-                                    GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () =>
-                                          launchUrl(Uri.parse('app-settings:')),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                          vertical: 8,
-                                        ),
-                                        child: Text(
-                                          'Open Settings',
-                                          style: V13.caption.copyWith(
-                                            fontSize: 13,
-                                            color: V13.blue,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                            const SizedBox(height: 24),
-
-                            V13TextInput(
-                              controller: _nameController,
-                              label: 'Full name',
-                              hint: 'Your name',
-                              textCapitalization: TextCapitalization.words,
-                            ),
-                            const SizedBox(height: 16),
-
-                            V13TextInput(
-                              controller: _usernameController,
-                              label: 'Username',
-                              hint: 'handle',
-                              prefixIcon: Padding(
-                                padding: const EdgeInsets.only(left: 14),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: 1,
-                                  child: Text('@', style: V13.body),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            // Username availability feedback
-                            if (_usernameChecking)
-                              Text(
-                                'Checking availability…',
-                                style: V13.caption.copyWith(
-                                  fontSize: 13,
-                                  color: V13.muted,
-                                ),
-                              )
-                            else if (_usernameFormatError(
-                                  username.toLowerCase(),
-                                ) !=
-                                null)
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.cancel_rounded,
-                                    color: V13.danger,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      _usernameFormatError(
-                                        username.toLowerCase(),
-                                      )!,
-                                      style: V13.caption.copyWith(
-                                        fontSize: 13,
-                                        color: V13.danger,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else if (username.length >= 3) ...[
-                              Row(
-                                children: [
-                                  Icon(
-                                    _usernameAvailable == true
-                                        ? Icons.check_circle_rounded
-                                        : Icons.cancel_rounded,
-                                    color: _usernameAvailable == true
-                                        ? V13.blue
-                                        : V13.danger,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
+                                )
+                              else if (username.length >= 3) ...[
+                                Row(
+                                  children: [
+                                    Icon(
                                       _usernameAvailable == true
-                                          ? '@$username is available'
-                                          : '@$username is taken',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: V13.caption.copyWith(
-                                        fontSize: 13,
-                                        color: _usernameAvailable == true
-                                            ? V13.blue
-                                            : V13.danger,
-                                        fontWeight: FontWeight.w700,
+                                          ? Icons.check_circle_rounded
+                                          : Icons.cancel_rounded,
+                                      color: _usernameAvailable == true
+                                          ? V13.blue
+                                          : V13.danger,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _usernameAvailable == true
+                                            ? '@$username is available'
+                                            : '@$username is taken',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: V13.caption.copyWith(
+                                          fontSize: 13,
+                                          color: _usernameAvailable == true
+                                              ? V13.blue
+                                              : V13.danger,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                              ],
 
-                            if (_error != null) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                _error!,
-                                style: V13.caption.copyWith(
-                                  fontSize: 13,
-                                  color: V13.danger,
+                              if (_error != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _error!,
+                                  style: V13.caption.copyWith(
+                                    fontSize: 13,
+                                    color: V13.danger,
+                                  ),
+                                ),
+                              ],
+
+                              const SizedBox(height: 16),
+
+                              _ConsentRow(
+                                value: _termsAccepted,
+                                onChanged: (v) =>
+                                    setState(() => _termsAccepted = v),
+                                child: Text(
+                                  "I agree to Nuvo's Terms of Service, "
+                                  'Privacy Policy and Community Guidelines.',
+                                  style: V13.caption.copyWith(fontSize: 13),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 48),
+                                child: Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    NuvoLegalLink(
+                                      label: 'Terms of Service',
+                                      uri: LegalLinks.termsUri,
+                                      fontSize: 13,
+                                    ),
+                                    NuvoLegalLink(
+                                      label: 'Privacy Policy',
+                                      uri: LegalLinks.privacyUri,
+                                      fontSize: 13,
+                                    ),
+                                    NuvoLegalLink(
+                                      label: 'Community Guidelines',
+                                      uri: LegalLinks.communityGuidelinesUri,
+                                      fontSize: 13,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _ConsentRow(
+                                value: _ageAttested,
+                                onChanged: (v) =>
+                                    setState(() => _ageAttested = v),
+                                child: Text(
+                                  'I am at least 13 years old.',
+                                  style: V13.caption.copyWith(fontSize: 13),
                                 ),
                               ),
                             ],
-
-                            const SizedBox(height: 16),
-
-                            _ConsentRow(
-                              value: _termsAccepted,
-                              onChanged: (v) =>
-                                  setState(() => _termsAccepted = v),
-                              child: Text(
-                                "I agree to Nuvo's Terms of Service, "
-                                'Privacy Policy and Community Guidelines.',
-                                style: V13.caption.copyWith(fontSize: 13),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 48),
-                              child: Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  NuvoLegalLink(
-                                    label: 'Terms of Service',
-                                    uri: LegalLinks.termsUri,
-                                    fontSize: 13,
-                                  ),
-                                  NuvoLegalLink(
-                                    label: 'Privacy Policy',
-                                    uri: LegalLinks.privacyUri,
-                                    fontSize: 13,
-                                  ),
-                                  NuvoLegalLink(
-                                    label: 'Community Guidelines',
-                                    uri: LegalLinks.communityGuidelinesUri,
-                                    fontSize: 13,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _ConsentRow(
-                              value: _ageAttested,
-                              onChanged: (v) =>
-                                  setState(() => _ageAttested = v),
-                              child: Text(
-                                'I am at least 13 years old.',
-                                style: V13.caption.copyWith(fontSize: 13),
-                              ),
-                            ),
-                          ],
+                          ),
+                        )
+                        .animate()
+                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                        .slideY(
+                          begin: 0.04,
+                          end: 0,
+                          duration: 320.ms,
+                          curve: Curves.easeOutCubic,
                         ),
-                      )
-                      .animate()
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.04,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
               ),
             ),
 

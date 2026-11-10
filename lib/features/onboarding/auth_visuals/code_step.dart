@@ -171,7 +171,6 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     final code = _code;
     final auth = ref.read(authControllerProvider.notifier);
     final flow = ref.read(onboardingFlowProvider.notifier);
-    final shell = OnboardingShellScope.of(context);
     setState(() {
       _phase = _Phase.verifying;
       _error = null;
@@ -193,10 +192,22 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     unawaited(NuvoHaptics.success());
     final account = ref.read(authControllerProvider).user?.email;
     if (account != null) await flow.attachAccount(account);
-    await Future<void>.delayed(NuvoMotion.verifiedHold);
-    final awarded = await flow.completeStep(OnboardingStep.code);
-    if (awarded > 0) shell.award(awarded);
+    // The VERIFIED moment holds until the player taps Continue (no timer
+    // moves them on).
   }
+
+  Future<void> _continue() async {
+    if (_phase != _Phase.verified || _continuing) return;
+    _continuing = true;
+    final shell = OnboardingShellScope.of(context);
+    final awarded = await ref
+        .read(onboardingFlowProvider.notifier)
+        .completeStep(OnboardingStep.code);
+    if (awarded > 0) shell.award(awarded);
+    _continuing = false;
+  }
+
+  bool _continuing = false;
 
   Future<void> _onVerifyFailed(Object e) async {
     if (isNetworkAuthError(e)) {
@@ -417,9 +428,13 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
       ),
       ctaLabel: _phase == _Phase.verifying
           ? ObCopy.codeVerifying
+          : _phase == _Phase.verified
+          ? ObCopy.next
           : ObCopy.codeVerifyCta,
-      ctaEnabled: _code.length == ObCodeStep.length && !_busy && !locked,
-      onCta: _verify,
+      ctaEnabled: _phase == _Phase.verified
+          ? true
+          : _code.length == ObCodeStep.length && !_busy && !locked,
+      onCta: _phase == _Phase.verified ? _continue : _verify,
       onBack: _busy ? null : flow.goBack,
     );
   }

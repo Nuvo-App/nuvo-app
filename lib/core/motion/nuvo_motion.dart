@@ -60,6 +60,10 @@ abstract final class NuvoMotion {
 
   // ── Exit ──────────────────────────────────────────────────────────────
   static const Duration exit = Duration(milliseconds: 260);
+
+  /// Transition input lock: taps that would complete a freshly shown step are
+  /// ignored this long (no accidental double-advance).
+  static const Duration stepInputLock = Duration(milliseconds: 600);
   static const Curve exitCurve = Curves.easeIn;
   static const double exitOffsetY = -12;
   static const double exitScale = 0.97;

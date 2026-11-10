@@ -172,7 +172,8 @@ Future<void> _walkOrLoopFree(
   );
   await tester.pumpAndSettle();
   final path = router.routerDelegate.currentConfiguration.uri.path;
-  final label = 'v2=$v2 replay=$replay start=$start ${user.email} '
+  final label =
+      'v2=$v2 replay=$replay start=$start ${user.email} '
       'complete=${user.onboardingComplete} -> $path chain=$chain';
   expect(tester.takeException(), isNull, reason: label);
   expect(chain.length <= 3, isTrue, reason: label);

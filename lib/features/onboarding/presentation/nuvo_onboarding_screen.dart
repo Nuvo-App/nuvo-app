@@ -225,10 +225,7 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
     _pageEnteredAt = DateTime.now();
     ref
         .read(analyticsProvider)
-        .onboardingStepViewed(
-          stepIndex: 2 + page,
-          stepName: 'story_p$page',
-        );
+        .onboardingStepViewed(stepIndex: 2 + page, stepName: 'story_p$page');
   }
 
   void _trackStepCompleted(int page) {
@@ -268,10 +265,7 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
   void _skip() {
     ref
         .read(analyticsProvider)
-        .onboardingAbandoned(
-          stepIndex: 2 + _page,
-          stepName: 'story_p$_page',
-        );
+        .onboardingAbandoned(stepIndex: 2 + _page, stepName: 'story_p$_page');
     _goToPage(_lastPage);
   }
 

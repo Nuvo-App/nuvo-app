@@ -92,9 +92,7 @@ class _ObNotifyOptInStepState extends ConsumerState<ObNotifyOptInStep> {
             ),
           ),
           const Positioned.fill(
-            child: IgnorePointer(
-              child: ColoredBox(color: Color(0x5207152D)),
-            ),
+            child: IgnorePointer(child: ColoredBox(color: Color(0x5207152D))),
           ),
           Align(
             alignment: Alignment.bottomCenter,
