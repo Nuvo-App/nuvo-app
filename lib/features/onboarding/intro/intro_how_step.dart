@@ -136,7 +136,6 @@ class _ObIntroHowStepState extends ConsumerState<ObIntroHowStep>
       ctaLabel: ObCopy.introBoardCta,
       onCta: () => _join(AuthIntent.signUp),
       onBack: flow.goBack,
-      onSkip: flow.skipIntros,
     );
   }
 }

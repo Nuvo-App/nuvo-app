@@ -190,11 +190,9 @@ void main() {
     expect(_ctaEnabled(tester), isTrue);
   });
 
-  testWidgets('copy: step counter and why-lines present', (tester) async {
+  testWidgets('copy: one title and only the username why-line', (tester) async {
     await pump(tester);
-    expect(find.text(ObCopy.playerCardStepCounter), findsOneWidget);
-    expect(find.text(ObCopy.playerCardNameWhy), findsOneWidget);
+    expect(find.text(ObCopy.playerCardTitle), findsOneWidget);
     expect(find.text(ObCopy.playerCardUsernameWhy), findsOneWidget);
-    expect(find.text(ObCopy.playerCardPhotoWhy), findsOneWidget);
   });
 }

@@ -239,7 +239,6 @@ void main() {
       await onHowStep(tester);
       expect(find.text(ObCopy.introBoardCta), findsOneWidget);
       expect(find.text(ObCopy.introBoardLogin), findsOneWidget);
-      expect(find.text(ObCopy.skip), findsOneWidget);
       final fourth = meTop(tester);
       expect(fourth, greaterThan(0));
 
@@ -282,11 +281,9 @@ void main() {
       expect(c.read(authIntentProvider), AuthIntent.signIn);
     });
 
-    testWidgets('Skip lands on the sheet', (tester) async {
-      final c = await onHowStep(tester);
-      await tester.tap(find.text(ObCopy.skip));
-      await _pumpFor(tester, 1);
-      expect(_step(c), OnboardingStep.signIn);
+    testWidgets('one clear choice: no Skip on S2', (tester) async {
+      await onHowStep(tester);
+      expect(find.text(ObCopy.skip), findsNothing);
     });
   });
 }

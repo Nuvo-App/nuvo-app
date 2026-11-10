@@ -297,14 +297,13 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
           ),
         ),
       ),
-      title: ObCopy.playerCardStepCounter,
+      title: ObCopy.playerCardTitle,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           V13TextInput(
             controller: _name,
             label: ObCopy.playerCardNameField,
-            helperText: ObCopy.playerCardNameWhy,
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.name],
@@ -692,7 +691,6 @@ class _PhotoRow extends StatelessWidget {
                         hasPhoto ? 'Photo added' : 'Add a photo',
                         style: V13.bodyStrong,
                       ),
-                      Text(ObCopy.playerCardPhotoWhy, style: V13.caption),
                     ],
                   ),
                 ),
