@@ -2,6 +2,7 @@
 // (docs/agents/08 provider graph, docs/agents/10 §A1): StateNotifierProvider is
 // not recreated on sign-out, so clearSnapshot() must null the cache timestamp
 // AND the in-flight future or a hung load wedges the tab until an app kill.
+import '../../../core/offline/auth_load.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -287,7 +288,7 @@ final arenaControllerProvider =
       // Deferred: a synchronous mutation during the kickoff would modify
       // other providers while this one is still initializing (Riverpod
       // asserts).
-      if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+      if (authCanLoad(ref.read(authControllerProvider))) {
         Future(() async {
           // Concurrent, never awaited: disk I/O must not delay the first fetch.
           unawaited(controller.hydrate());

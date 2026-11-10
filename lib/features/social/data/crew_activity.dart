@@ -6,6 +6,7 @@
 // crew domain-event log exists, crew-lifecycle notification rows — both
 // projected server-side by GET /crew/feed. Models live in
 // crew_activity_models.dart.
+import '../../../core/offline/auth_load.dart';
 import '../../../core/offline/outbox.dart';
 import 'dart:async';
 import 'package:nuvo/core/utils/json_safe.dart';
@@ -563,7 +564,7 @@ final crewActivityProvider =
     outbox: ref.read(outboxProvider),
   );
   var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
-  if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+  if (authCanLoad(ref.read(authControllerProvider))) {
     controller.load(force: false);
   }
   ref.listen<AuthState>(authControllerProvider, (prev, next) {

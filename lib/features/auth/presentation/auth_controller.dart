@@ -1,3 +1,4 @@
+import '../../../core/offline/user_snapshot.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -81,13 +82,29 @@ final authIntentProvider = StateProvider<AuthIntent>(
 );
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repo, {DemoAccountMarker? demoMarker})
-    : _marker = demoMarker ?? MemoryDemoAccountMarker(),
+  AuthController(
+    this._repo, {
+    DemoAccountMarker? demoMarker,
+    this.offlineUser,
+  }) : _marker = demoMarker ?? MemoryDemoAccountMarker(),
       super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
 
   final AuthRepository _repo;
+
+  /// Read-only: the last signed-in user saved on device (outside auth). Used
+  /// ONLY when the server is unreachable, so an offline cold open shows the
+  /// real person instead of an empty session. Never signs anyone in.
+  final Future<AuthUser?> Function()? offlineUser;
+
+  Future<AuthState> _offlineState() async {
+    AuthUser? user;
+    try {
+      user = await offlineUser?.call();
+    } catch (_) {}
+    return AuthState(status: AuthStatus.offline, user: user);
+  }
 
   // R1 (docs/statements/demo-account.md): remembers the last signed-in
   // account was the demo account so the next cold start opens clean.
@@ -143,15 +160,14 @@ class AuthController extends StateNotifier<AuthState> {
           status: AuthStatus.unauthenticated,
         ),
         // Keep tokens; the splash shows a retry rather than logging out.
-        RestoreUnreachable() => const AuthState(status: AuthStatus.offline),
+        RestoreUnreachable() => await _offlineState(),
       };
     } catch (e) {
       debugPrint('[AuthController] restore error (${e.runtimeType})');
       // An unexpected error is not proof the session is invalid — treat it as
       // offline so a retry is possible.
-      if (mounted) {
-        state = const AuthState(status: AuthStatus.offline);
-      }
+      final offline = await _offlineState();
+      if (mounted) state = offline;
     }
   }
 
@@ -372,6 +388,7 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
     return AuthController(
       ref.watch(authRepositoryProvider),
       demoMarker: FileDemoAccountMarker(),
+      offlineUser: userSnapshotStore.read,
     );
   },
 );

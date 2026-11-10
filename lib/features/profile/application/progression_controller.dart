@@ -1,3 +1,4 @@
+import '../../../core/offline/auth_load.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/cache/cache_store.dart';
@@ -467,7 +468,7 @@ final progressionControllerProvider =
     // Deferred: a synchronous mutation during the kickoff would modify
     // other providers while this one is still initializing (Riverpod
     // asserts).
-    if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+    if (authCanLoad(ref.read(authControllerProvider))) {
       Future(() => controller.load());
     }
     ref.listen<AuthState>(authControllerProvider, (prev, next) {

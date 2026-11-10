@@ -11,6 +11,7 @@
 // cache; force:true always refetches. Every screen reads state via
 // raceControllerProvider and calls mutations via .notifier — never a second
 // source of truth, never a direct RaceApi call.
+import '../../../core/offline/auth_load.dart';
 import '../../../core/offline/outbox.dart';
 import '../../../core/utils/friendly_error.dart';
 import 'dart:async';
@@ -1748,7 +1749,7 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
         ref.read(progressionControllerProvider.notifier).load();
       },
     );
-    if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+    if (authCanLoad(ref.read(authControllerProvider))) {
       // Deferred: kicking loadRaces inside the factory lets a synchronous
       // onMutated modify progressionController while this provider is still
       // initializing — Riverpod asserts on that in debug builds.

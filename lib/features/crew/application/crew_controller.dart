@@ -1,4 +1,5 @@
 // Canonical relationships shared by Crew, search, profiles and invite entry.
+import '../../../core/offline/auth_load.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -509,7 +510,7 @@ final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>(
   var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
   // Deferred: a synchronous mutation during the kickoff would modify other
   // providers while this one is still initializing (Riverpod asserts).
-  if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+  if (authCanLoad(ref.read(authControllerProvider))) {
     Future(() => controller.load(force: false));
   }
   ref.listen<AuthState>(authControllerProvider, (prev, next) {

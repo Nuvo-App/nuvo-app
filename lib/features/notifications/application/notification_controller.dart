@@ -1,5 +1,6 @@
 // The canonical notification inbox — docs/agents/18-data-freshness-contract.md.
 // The in-app list is the source of truth; push (phase F) only calls markStale().
+import '../../../core/offline/auth_load.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -371,7 +372,7 @@ final notificationControllerProvider =
   );
   // Deferred: a synchronous mutation during the kickoff would modify other
   // providers while this one is still initializing (Riverpod asserts).
-  if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+  if (authCanLoad(ref.read(authControllerProvider))) {
     Future(() => controller.load(force: false));
   }
   ref.listen<AuthState>(authControllerProvider, (prev, next) {

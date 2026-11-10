@@ -1,3 +1,4 @@
+import '../../../core/offline/reachability.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -84,6 +85,18 @@ class _MainShellState extends ConsumerState<MainShell>
     WidgetsBinding.instance.addObserver(this);
     unawaited(_syncPendingGraduation());
     unawaited(_flushOutbox());
+    // Reconnect without relaunch: probe Nuvo while offline; on recovery
+    // refetch every screen, flush the outbox, clear the Offline pill.
+    final reach = ref.read(reachabilityProvider);
+    _reach = reach;
+    reach.onReconnect = _onReconnect;
+    final outbox = ref.read(outboxProvider);
+    _outbox = outbox;
+    outbox.addListener(_onOutboxChanged);
+    if (ref.read(authControllerProvider).status == AuthStatus.offline) {
+      reach.reportOffline();
+    }
+    reach.start();
     // While anything is queued, retry on a gentle tick (backoff inside).
     _outboxTick = Timer.periodic(const Duration(seconds: 30), (_) {
       if (ref.read(outboxProvider).pendingCount > 0) _flushOutbox();
@@ -167,10 +180,47 @@ class _MainShellState extends ConsumerState<MainShell>
     WidgetsBinding.instance.removeObserver(this);
     _tabIn.dispose();
     _outboxTick?.cancel();
+    // No ref in dispose — use the references kept at init.
+    _outbox?.removeListener(_onOutboxChanged);
+    _reach
+      ?..onReconnect = null
+      ..stop();
     super.dispose();
   }
 
   Timer? _outboxTick;
+  ReachabilityMonitor? _reach;
+  Outbox? _outbox;
+
+  void _onOutboxChanged() {
+    if (ref.read(outboxProvider).lastReachable == false) {
+      ref.read(reachabilityProvider).reportOffline();
+    }
+  }
+
+  /// Back online: restore the session if launch was offline, refetch every
+  /// tab's data (errored loads recover), and send queued writes now.
+  Future<void> _onReconnect() async {
+    if (!mounted) return;
+    if (ref.read(authControllerProvider).status == AuthStatus.offline) {
+      // → authenticated → every provider's auth listener reloads.
+      await ref.read(authControllerProvider.notifier).retryRestore();
+    } else {
+      ref.read(raceControllerProvider.notifier).revalidate();
+      ref.read(arenaControllerProvider.notifier).revalidate();
+      ref.read(crewControllerProvider.notifier).revalidate();
+      unawaited(ref.read(crewActivityProvider.notifier).load(force: true));
+      unawaited(
+        ref.read(notificationControllerProvider.notifier).load(force: true),
+      );
+      unawaited(
+        ref.read(progressionControllerProvider.notifier).load(force: true),
+      );
+    }
+    final outbox = ref.read(outboxProvider)..lastReachable = true;
+    await outbox.flush(force: true);
+    if (mounted) setState(() {});
+  }
 
   /// Sends writes that were saved while offline (launch, resume, tick).
   Future<void> _flushOutbox({bool force = false}) async {
@@ -182,8 +232,10 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed)
+    if (state == AppLifecycleState.resumed) {
       unawaited(_flushOutbox(force: true));
+      unawaited(ref.read(reachabilityProvider).check());
+    }
     if (state == AppLifecycleState.resumed && _authIsUp) {
       // High-value user state, revalidated the moment the app comes forward.
       unawaited(refreshMotionCatalog(ref));
@@ -336,13 +388,16 @@ class _MainShellState extends ConsumerState<MainShell>
               child: IgnorePointer(
                 child: Center(
                   child: ListenableBuilder(
-                    listenable: ref.read(outboxProvider),
+                    listenable: Listenable.merge([
+                      ref.read(outboxProvider),
+                      ref.read(reachabilityProvider),
+                    ]),
                     builder: (context, _) {
                       final o = ref.read(outboxProvider);
                       final offline =
+                          !ref.read(reachabilityProvider).online ||
                           ref.watch(authControllerProvider).status ==
-                              AuthStatus.offline ||
-                          o.lastReachable == false;
+                              AuthStatus.offline;
                       if (!offline && o.pendingCount == 0) {
                         return const SizedBox.shrink();
                       }

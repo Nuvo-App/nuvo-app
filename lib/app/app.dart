@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../core/offline/user_snapshot.dart';
 import '../features/shell/presentation/fake_data_pill.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -104,6 +106,13 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
     // When the user becomes authenticated, drain any destination that was
     // stashed while they were logged out (link → sign-in → original target).
     ref.listen<AuthState>(authControllerProvider, (prev, next) async {
+      // Offline cold open shows the real user: save the signed-in person,
+      // forget them on a real sign-out (incl. the testing@ R1 clean start).
+      if (next.status == AuthStatus.authenticated && next.user != null) {
+        unawaited(userSnapshotStore.write(next.user!));
+      } else if (next.status == AuthStatus.unauthenticated) {
+        unawaited(userSnapshotStore.clear());
+      }
       if (prev?.status == AuthStatus.authenticated &&
           next.status == AuthStatus.unauthenticated) {
         ref.read(pushServiceProvider).onSignedOut();
