@@ -115,7 +115,7 @@ void main() {
     final h = await pump(t);
     await enter(t, '123456');
     await advance(t, 100);
-    expect(find.text('VERIFIED'), findsOneWidget);
+    expect(find.text("You're verified."), findsOneWidget);
     expect(h.state.step, OnboardingStep.code); // still holding
     await advance(t, 500);
     await advance(t, 500);

@@ -70,8 +70,10 @@ abstract final class NuvoMotion {
 
   // ── Idle float — hero cards / avatar tokens / badges only ─────────────
   static const Duration floatPeriod = Duration(milliseconds: 3200);
-  static const double floatAmplitude = 6;
-  static const double floatRotationDeg = 1.2;
+  // Hero art sits flat: no idle float anywhere (design rule, see AGENTS.md).
+  static const double floatAmplitude = 0;
+  // No tilt anywhere (design decision): float is vertical only.
+  static const double floatRotationDeg = 0;
 
   /// Random phase window, in seconds (0–1.6) so floats don't synchronize.
   static const double floatPhaseMax = 1.6;

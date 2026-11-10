@@ -15,7 +15,7 @@ import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
 import 'auth_layout.dart';
 import 'ob_shake.dart';
-import 'player_pass.dart';
+import 'brand_mark.dart';
 
 enum _Phase { idle, verifying, verified, error, locked }
 
@@ -315,35 +315,18 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
   Widget build(BuildContext context) {
     final flow = ref.read(onboardingFlowProvider.notifier);
     final email = ref.watch(onboardingFlowProvider.select((s) => s.email));
-    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
     final locked = _phase == _Phase.locked;
     final tight = obTightScreen(context);
-    final lean = keyboardUp || tight;
-    final below =
-        20 +
-        30 +
-        (lean ? 0 : 28) +
-        16 +
-        44 +
-        12 +
-        _boxHeight(context) +
-        8 +
-        _slotHeight +
-        12 +
-        44 +
-        40;
-    final hero = obHeroHeight(context, below: below, max: 280);
+    final lean = tight; // never keyed to the keyboard: no jump as it rises
+    final hero = tight ? 72.0 : 96.0;
 
     return OnboardingShell(
       step: OnboardingStep.code,
       heroHeight: hero,
-      hero: ObPlayerPass(
-        email: email ?? '',
-        stamp: _phase == _Phase.verified
-            ? ObStampState.verified
-            : ObStampState.none,
-      ),
-      title: ObCopy.codeTitle,
+      hero: const ObBrandMark(),
+      title: _phase == _Phase.verified
+          ? ObCopy.codeVerifiedTitle
+          : ObCopy.codeTitle,
       subtitle: lean ? null : ObCopy.codeSub,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

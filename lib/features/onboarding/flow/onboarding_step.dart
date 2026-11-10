@@ -120,6 +120,9 @@ extension OnboardingStepX on OnboardingStep {
 /// resolve silently (no XP, no screen) so the flow runs S9 -> Level Up.
 /// Re-enable a step by removing it here; nothing else changes.
 const Set<OnboardingStep> kCutSteps = {
+  // S9 promised a practice race that no longer exists (the tour is cut) and
+  // showed placeholder racers: cut until the Arena really has one.
+  OnboardingStep.firstRaceReady,
   OnboardingStep.arenaTour,
   OnboardingStep.notifyOptIn,
   OnboardingStep.tourCompete,

@@ -291,18 +291,26 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        V13.gapLg,
-        V13.gapMd,
-        V13.gapLg,
-        V13.gapSm,
-      ),
+      // THE onboarding header: 16pt sides, 44pt back at the left, the
+      // progress pill centered between two equal 56pt slots so it can never
+      // touch the back button, optional right action (Skip).
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
+        spacing: 12,
         children: [
           SizedBox(
-            width: 44,
+            width: 56,
             height: 44,
-            child: onBack == null ? null : _BackSquare(onTap: onBack!),
+            child: onBack == null
+                ? null
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: _BackSquare(onTap: onBack!),
+                    ),
+                  ),
           ),
           Expanded(
             child: rail
@@ -312,7 +320,7 @@ class _TopBar extends StatelessWidget {
                 : const SizedBox.shrink(),
           ),
           SizedBox(
-            width: 64,
+            width: 56,
             height: 44,
             child: onSkip == null
                 ? null

@@ -13,7 +13,7 @@ import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
 import 'auth_layout.dart';
 import 'email_utils.dart';
-import 'player_pass.dart';
+import 'brand_mark.dart';
 
 /// S5 — "What's your email?" The player-pass ticket fills as you type; the
 /// CTA is live on any valid address, errors sit inline under the field.
@@ -148,7 +148,6 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
   @override
   Widget build(BuildContext context) {
     final flow = ref.read(onboardingFlowProvider.notifier);
-    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
     final text = _ctrl.text;
     final valid = _valid;
     final typo = ObEmail.typoSuggestion(text);
@@ -156,29 +155,15 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     final tight = obTightScreen(context);
     // The title already asks for the email: drop the field label and the
     // subtitle when the keyboard (or a short phone) takes the room.
-    final lean = keyboardUp || tight;
-    // Everything under the hero: gap + title + subtitle + body + tail.
-    final below =
-        20 +
-        30 +
-        (lean ? 0 : 28) +
-        16 +
-        (lean ? 0 : 28) +
-        60 +
-        (_reviewer ? 80 : 0) +
-        8 +
-        _statusSlotHeight +
-        40;
-    final hero = obHeroHeight(context, below: below);
+    // Layout must NOT depend on the keyboard: resizing the hero/labels as it
+    // rises made the page jump under the finger. Only short phones go lean.
+    final lean = tight;
+    final hero = tight ? 72.0 : 96.0;
 
     return OnboardingShell(
       step: OnboardingStep.email,
       heroHeight: hero,
-      hero: ObPlayerPass(
-        email: text.trim(),
-        stamp: valid ? ObStampState.ready : ObStampState.none,
-        printing: _sending,
-      ),
+      hero: const ObBrandMark(),
       title: ObCopy.emailTitle,
       subtitle: lean ? null : ObCopy.emailSub,
       body: Column(

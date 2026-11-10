@@ -10,11 +10,11 @@ void main() {
     expect(kCutSteps, contains(OnboardingStep.notifyOptIn));
     expect(kCutSteps, contains(OnboardingStep.tourProfile));
     expect(kCutSteps, isNot(contains(OnboardingStep.levelUp)));
-    expect(kCutSteps, isNot(contains(OnboardingStep.firstRaceReady)));
+    expect(kCutSteps, contains(OnboardingStep.firstRaceReady));
   });
 
   test(
-    'shipped config: S9 is followed directly by Level Up, then graduates',
+    'shipped config: Q2 is followed directly by Level Up, then graduates',
     () async {
       TestWidgetsFlutterBinding.ensureInitialized();
       final c = OnboardingFlowController(
@@ -33,7 +33,6 @@ void main() {
         OnboardingStep.playerCard,
         OnboardingStep.questions1,
         OnboardingStep.questions2,
-        OnboardingStep.firstRaceReady,
       ]) {
         expect(c.state.step, s);
         await c.completeStep(s);

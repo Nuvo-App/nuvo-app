@@ -80,7 +80,6 @@ void main() {
       OnboardingStep.playerCard,
       OnboardingStep.questions1,
       OnboardingStep.questions2,
-      OnboardingStep.firstRaceReady,
       OnboardingStep.levelUp,
     ]);
   });

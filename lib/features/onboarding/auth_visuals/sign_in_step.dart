@@ -119,8 +119,9 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
     final sheetH =
         (short ? 300.0 : 316.0) + MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
-      // Full-bleed brand coral from the top edge through the sheet.
-      color: V13.coral,
+      // Full-bleed brand navy from the top edge through the sheet (white
+      // logo and headline pop; no orange).
+      color: V13.navy,
       child: Stack(
         children: [
           Positioned.fill(

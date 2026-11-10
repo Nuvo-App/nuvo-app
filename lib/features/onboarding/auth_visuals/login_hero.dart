@@ -102,7 +102,7 @@ class _ObLoginHeroState extends State<ObLoginHero>
                         style: V13.title.copyWith(
                           fontSize: 42,
                           height: 1.05,
-                          color: V13.navy,
+                          color: V13.white,
                         ),
                       ),
                     ),
@@ -137,7 +137,7 @@ class _PathPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = V13.navy
+        ..color = V13.white.withValues(alpha: 0.55)
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = 2.5,
@@ -149,7 +149,7 @@ class _PathPainter extends CustomPainter {
         p,
         7,
         Paint()
-          ..color = V13.navy
+          ..color = V13.blue
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.5,
       );
@@ -161,7 +161,7 @@ class _PathPainter extends CustomPainter {
       pole,
       pole.translate(0, -34),
       Paint()
-        ..color = V13.navy
+        ..color = V13.white
         ..strokeWidth = 2.5
         ..strokeCap = StrokeCap.round,
     );
@@ -175,14 +175,14 @@ class _PathPainter extends CustomPainter {
             cell,
             cell,
           ),
-          Paint()..color = (r + cI).isEven ? V13.navy : V13.white,
+          Paint()..color = (r + cI).isEven ? V13.white : V13.blue,
         );
       }
     }
     canvas.drawRect(
       Rect.fromLTWH(pole.dx + 1.5, pole.dy - 34, cell * 3, cell * 3),
       Paint()
-        ..color = V13.navy
+        ..color = V13.white
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );

@@ -60,6 +60,7 @@ abstract final class ObCopy {
   static const String playerPassLabel = 'PLAYER PASS';
 
   // ── S6 Code ────────────────────────────────────────────────────────────
+  static const String codeVerifiedTitle = "You're verified.";
   static const String codeTitle = 'Check your email.';
   static const String codeSub = 'Enter the 6 digit code.';
   static const String codeVerifying = 'Verifying...';

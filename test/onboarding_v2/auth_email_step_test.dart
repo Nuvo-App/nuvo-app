@@ -61,7 +61,7 @@ void main() {
 
   testWidgets('empty: stamp not verified, hint shown, CTA inert', (t) async {
     final h = await pump(t);
-    expect(find.text('Not verified yet'), findsOneWidget);
+    expect(find.byKey(const ValueKey('ob-brand-mark')), findsOneWidget);
     expect(find.text('Enter your email'), findsOneWidget);
     expect(find.text("What's your email?"), findsOneWidget);
     await t.tap(find.byKey(const ValueKey('onboarding-cta')));
@@ -81,7 +81,6 @@ void main() {
       find.byKey(const ValueKey('ob-email-field')),
     );
     expect(field.controller!.text, 'ava@gmail.com');
-    expect(find.text('Ready'), findsOneWidget);
     expect(find.text('Enter your email'), findsNothing);
   });
 

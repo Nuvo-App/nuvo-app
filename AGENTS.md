@@ -164,6 +164,14 @@ For all other changes, follow the task declaration format above.
 
 ---
 
+## Design rule: flat hero art (standing, from Akshay)
+Never use a floating, tilted or drop-shadow-floating card/hero element anywhere
+in the app: it reads as AI-generated. Hero art sits flat and flush on the
+background (`NuvoMotion.floatAmplitude` and `floatRotationDeg` are 0; keep
+them 0). Use the real Nuvo logo / app icon, real content (real player card,
+race path, board) or nothing. No fake logo tiles, no placeholder avatars as
+decoration. Drag handles only on sheets that truly drag.
+
 ## Demo account (testing@getnuvo.net)
 Rules R1-R4 in `docs/statements/demo-account.md` are a contract: clean cold open,
 sign-in skips onboarding, create-account walks it, fake-data pill for this
