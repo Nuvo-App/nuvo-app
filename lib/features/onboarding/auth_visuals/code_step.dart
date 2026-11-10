@@ -411,17 +411,24 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
                 label: ObCopy.codeResendLink,
                 onTap: _showTips,
               ),
-              _resendLeft > 0
-                  ? Text(
-                      ObCopy.codeResendIn(_resendLeft),
-                      key: const ValueKey('ob-code-countdown'),
-                      style: V13.bodyStrong.copyWith(color: V13.muted),
-                    )
-                  : _TextAction(
-                      key: const ValueKey('ob-code-resend'),
-                      label: ObCopy.codeResendNew,
-                      onTap: _resending || _busy ? null : _resend,
-                    ),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _resendLeft > 0
+                      ? Text(
+                          ObCopy.codeResendIn(_resendLeft),
+                          key: const ValueKey('ob-code-countdown'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: V13.bodyStrong.copyWith(color: V13.muted),
+                        )
+                      : _TextAction(
+                          key: const ValueKey('ob-code-resend'),
+                          label: ObCopy.codeResendNew,
+                          onTap: _resending || _busy ? null : _resend,
+                        ),
+                ),
+              ),
             ],
           ),
         ],

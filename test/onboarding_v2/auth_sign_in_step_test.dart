@@ -96,6 +96,23 @@ void main() {
     expect(find.byIcon(Icons.g_mobiledata_rounded), findsNothing);
   });
 
+  testWidgets('login sheet is not draggable: no drag handle', (t) async {
+    await pump(t);
+    final sheet = find.byKey(const ValueKey('ob-signin-sheet'));
+    expect(sheet, findsOneWidget);
+    final handles = find.descendant(
+      of: sheet,
+      matching: find.byWidgetPredicate(
+        (w) => w is Container && w.constraints?.maxHeight == 5,
+      ),
+    );
+    expect(handles, findsNothing);
+    // Nothing above the title either: the title is the sheet's first row.
+    final top = t.getTopLeft(sheet).dy;
+    final title = t.getTopLeft(find.text('Save your spot')).dy;
+    expect(title - top, lessThan(40));
+  });
+
   test('Google G artwork parses into the 48x48 box', () {
     final b = parseSvgPath(
       'M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 '

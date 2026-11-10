@@ -184,10 +184,15 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!lean) ...[
-            Text(ObCopy.emailFieldLabel, style: V13.bodyStrong),
-            const SizedBox(height: V13.gapSm),
-          ],
+          // ONE always-present slot (never a conditional list insert): the
+          // field below must keep the same Element across the keyboard
+          // opening, or the IME connection drops and typing dies.
+          lean
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(bottom: V13.gapSm),
+                  child: Text(ObCopy.emailFieldLabel, style: V13.bodyStrong),
+                ),
           _field(
             key: const ValueKey('ob-email-field'),
             controller: _ctrl,

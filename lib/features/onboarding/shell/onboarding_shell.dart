@@ -169,18 +169,36 @@ class OnboardingShell extends StatelessWidget {
     ),
   );
 
+  /// The body is always exactly one child (never a conditional insert).
+  Widget _bodySlot(double gap) => body == null
+      ? const SizedBox.shrink(key: ValueKey('ob-no-body'))
+      : Padding(
+          key: const ValueKey('ob-body'),
+          padding: EdgeInsets.only(top: gap),
+          child: _text(3, body!),
+        );
+
   List<Widget> _copyBlock() => [
     _text(1, Text(title, style: V13.title.copyWith(color: titleColor))),
-    if (subtitle != null) ...[
-      const SizedBox(height: V13.gapSm),
-      _text(
-        2,
-        Text(
-          subtitle!,
-          style: V13.body.copyWith(color: subtitleColor ?? V13.muted),
-        ),
-      ),
-    ],
+    // Always ONE slot, present or not: a conditional insert here would
+    // shift every widget after it (the body, with its text fields), and
+    // Flutter would re-create them — the keyboard drops and typing dies.
+    subtitle == null
+        ? const SizedBox.shrink(key: ValueKey('ob-no-subtitle'))
+        : Column(
+            key: const ValueKey('ob-subtitle'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: V13.gapSm),
+              _text(
+                2,
+                Text(
+                  subtitle!,
+                  style: V13.body.copyWith(color: subtitleColor ?? V13.muted),
+                ),
+              ),
+            ],
+          ),
   ];
 
   /// [fillHero] layout: the hero flexes to whatever the copy + CTA leave.
@@ -191,10 +209,7 @@ class OnboardingShell extends StatelessWidget {
         Expanded(child: _text(0, hero)),
         const SizedBox(height: V13.gapLg),
         ..._copyBlock(),
-        if (body != null) ...[
-          const SizedBox(height: V13.gapSm),
-          _text(3, body!),
-        ],
+        _bodySlot(V13.gapSm),
         const SizedBox(height: V13.gapSm),
       ],
     );
@@ -211,20 +226,21 @@ class OnboardingShell extends StatelessWidget {
             index: 0,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: V13.pagePad),
-              child: AnimatedContainer(
+              // Spring overshoot can dip below 0 when shrinking to a tiny
+              // hero (keyboard up): clamp, never hand layout a negative.
+              child: TweenAnimationBuilder<double>(
                 duration: reduce ? Duration.zero : NuvoMotion.springDuration,
                 curve: NuvoMotion.spring,
-                height: heroHeight,
+                tween: Tween<double>(end: heroHeight < 0 ? 0 : heroHeight),
                 child: hero,
+                builder: (context, h, child) =>
+                    SizedBox(height: h < 0 ? 0 : h, child: child),
               ),
             ),
           ),
           const SizedBox(height: V13.gapXl),
           ..._copyBlock(),
-          if (body != null) ...[
-            const SizedBox(height: V13.gapLg),
-            _text(3, body!),
-          ],
+          _bodySlot(V13.gapLg),
           const SizedBox(height: V13.gapSection),
         ],
       ),
