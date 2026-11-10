@@ -13,34 +13,36 @@ void main() {
     expect(kCutSteps, isNot(contains(OnboardingStep.firstRaceReady)));
   });
 
-  test('shipped config: S9 is followed directly by Level Up, then graduates',
-      () async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    final c = OnboardingFlowController(
-      store: OnboardingV2Store.memory(),
-      analytics: FakeAnalyticsService(),
-      onGraduate: () async {},
-      cutSteps: kCutSteps,
-    );
-    await c.restore();
-    for (final s in [
-      OnboardingStep.introRace,
-      OnboardingStep.introHow,
-      OnboardingStep.signIn,
-      OnboardingStep.email,
-      OnboardingStep.code,
-      OnboardingStep.playerCard,
-      OnboardingStep.questions1,
-      OnboardingStep.questions2,
-      OnboardingStep.firstRaceReady,
-    ]) {
-      expect(c.state.step, s);
-      await c.completeStep(s);
-    }
-    expect(c.state.step, OnboardingStep.levelUp);
-    expect(c.state.readyToGraduate, isFalse);
-    expect(await c.graduate(), isTrue);
-    await c.completeStep(OnboardingStep.levelUp);
-    expect(c.state.readyToGraduate, isTrue);
-  });
+  test(
+    'shipped config: S9 is followed directly by Level Up, then graduates',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final c = OnboardingFlowController(
+        store: OnboardingV2Store.memory(),
+        analytics: FakeAnalyticsService(),
+        onGraduate: () async {},
+        cutSteps: kCutSteps,
+      );
+      await c.restore();
+      for (final s in [
+        OnboardingStep.introRace,
+        OnboardingStep.introHow,
+        OnboardingStep.signIn,
+        OnboardingStep.email,
+        OnboardingStep.code,
+        OnboardingStep.playerCard,
+        OnboardingStep.questions1,
+        OnboardingStep.questions2,
+        OnboardingStep.firstRaceReady,
+      ]) {
+        expect(c.state.step, s);
+        await c.completeStep(s);
+      }
+      expect(c.state.step, OnboardingStep.levelUp);
+      expect(c.state.readyToGraduate, isFalse);
+      expect(await c.graduate(), isTrue);
+      await c.completeStep(OnboardingStep.levelUp);
+      expect(c.state.readyToGraduate, isTrue);
+    },
+  );
 }

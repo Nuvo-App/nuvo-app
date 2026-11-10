@@ -48,7 +48,9 @@ void main() {
     final h = await pump(t, social: social);
     await t.tap(find.byKey(const ValueKey('ob-apple')));
     await t.pump(const Duration(milliseconds: 50));
-    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     await _settle(t);
     expect(social.appleCalls, 1);
     expect(h.state.step, OnboardingStep.playerCard);

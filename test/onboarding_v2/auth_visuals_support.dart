@@ -138,7 +138,12 @@ class AuthHarness {
     child: MaterialApp(
       home: OnboardingShellScope(
         controller: shell,
-        child: Stack(children: [child, XpFlyOverlay(controller: shell)]),
+        child: Stack(
+          children: [
+            child,
+            XpFlyOverlay(controller: shell),
+          ],
+        ),
       ),
     ),
   );

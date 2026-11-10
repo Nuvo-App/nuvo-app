@@ -83,6 +83,7 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     required Future<void> Function() onGraduate,
     NuvoSounds sounds = const NoopNuvoSounds(),
     Set<OnboardingStep> cutSteps = const {},
+    this.inputLock = Duration.zero,
   }) : _cutSteps = cutSteps,
        _store = store,
        _analytics = analytics,
@@ -103,6 +104,15 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   final AnalyticsService _analytics;
   final Future<void> Function() _onGraduate;
   final NuvoSounds _sounds;
+
+  /// After a step appears (or advances), taps that would COMPLETE it are
+  /// ignored for this long: a double tap, or a tap meant for the previous
+  /// screen, can never skip a page. Zero in unit tests; the app sets 600ms.
+  final Duration inputLock;
+
+  /// What the app's provider uses. Widget tests that tap through steps
+  /// instantly zero it in a flutter_test_config.dart.
+  static Duration appInputLock = NuvoMotion.stepInputLock;
 
   /// Steps removed from this build's flow (see [kCutSteps]); always complete.
   final Set<OnboardingStep> _cutSteps;
@@ -194,6 +204,25 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
   /// moves to the earliest still-owed step. Fires `ob_step_completed` for
   /// [step] and `ob_step_viewed` for whatever comes next.
   Future<int> completeStep(OnboardingStep step) async {
+    // Single owner + idempotent: only the step on screen may advance the
+    // flow, and not during the transition lock. Completing OTHER steps
+    // (sign-in settling code/email ahead of itself) is not an advance.
+    if (!_completing.add(step)) return 0; // same step already in flight
+    try {
+      return await _completeOnce(step);
+    } finally {
+      _completing.remove(step);
+    }
+  }
+
+  final Set<OnboardingStep> _completing = {};
+
+  Future<int> _completeOnce(OnboardingStep step) async {
+    if (step == state.step &&
+        inputLock > Duration.zero &&
+        DateTime.now().difference(_enteredAt) < inputLock) {
+      return 0;
+    }
     await _store.ensureLoaded();
     final ms = _msOnStep();
     await _store.markStepCompleted(step.name);
@@ -458,6 +487,7 @@ final onboardingFlowProvider =
         analytics: ref.watch(analyticsProvider),
         sounds: ref.watch(nuvoSoundsProvider),
         cutSteps: kCutSteps,
+        inputLock: OnboardingFlowController.appInputLock,
         // The same server write the v1 story makes — the flag's meaning for
         // old builds is untouched (build plan: additive grant is Part E's).
         onGraduate: () =>
