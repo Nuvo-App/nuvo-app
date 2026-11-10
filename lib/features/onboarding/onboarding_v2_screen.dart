@@ -34,7 +34,11 @@ import 'tour/tour_profile_step.dart';
 /// flow) and signed-in-incomplete; a signed-in-COMPLETE account is bounced
 /// back to /arena by the host itself.
 class OnboardingV2Screen extends ConsumerStatefulWidget {
-  const OnboardingV2Screen({super.key});
+  const OnboardingV2Screen({super.key, this.sandbox = false});
+
+  /// Practice mode (Settings > Replay onboarding): isolated providers, a
+  /// visible tag, and leaving pops back instead of entering the Arena.
+  final bool sandbox;
 
   @override
   ConsumerState<OnboardingV2Screen> createState() => _OnboardingV2ScreenState();
@@ -49,7 +53,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authControllerProvider).user;
-      if (user != null && user.onboardingComplete) {
+      if (!widget.sandbox && user != null && user.onboardingComplete) {
         context.go('/arena');
         return;
       }
@@ -60,7 +64,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   Future<void> _restoreAndRoute(String? email) async {
     final flow = ref.read(onboardingFlowProvider.notifier);
     await flow.restore(accountEmail: email);
-    if (!mounted || email != null) return;
+    if (!mounted || email != null || widget.sandbox) return;
     // Explicit sign-out: land on the login sheet, not the intro.
     if (ref.read(explicitSignOutProvider)) {
       ref.read(explicitSignOutProvider.notifier).state = false;
@@ -103,6 +107,19 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       await ref.read(onboardingFlowProvider.notifier).graduate();
     }
     if (!mounted) return;
+    _leave();
+  }
+
+  /// Real flow: into the Arena. Practice mode: back to where it was opened.
+  void _leave() {
+    if (widget.sandbox) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/profile');
+      }
+      return;
+    }
     context.go('/arena');
   }
 
@@ -127,7 +144,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       );
     }
 
-    return OnboardingShellScope(
+    final flowBody = OnboardingShellScope(
       controller: _shell,
       child: Stack(
         children: [
@@ -148,6 +165,25 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
           XpFlyOverlay(controller: _shell),
         ],
       ),
+    );
+    if (!widget.sandbox) return flowBody;
+    // Practice mode: shift the flow's chrome down and tag it clearly.
+    final mq = MediaQuery.of(context);
+    return Stack(
+      children: [
+        MediaQuery(
+          data: mq.copyWith(
+            padding: mq.padding.copyWith(top: mq.padding.top + 30),
+          ),
+          child: flowBody,
+        ),
+        Positioned(
+          top: mq.padding.top + 4,
+          left: 0,
+          right: 0,
+          child: Center(child: _PracticeTag(onExit: _leave)),
+        ),
+      ],
     );
   }
 
@@ -189,4 +225,36 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     OnboardingStep.tourProfile => const ObTourProfileStep(),
     OnboardingStep.levelUp => const ObLevelUpStep(),
   };
+}
+
+/// "Practice mode" pill — always visible, tap to leave.
+class _PracticeTag extends StatelessWidget {
+  const _PracticeTag({required this.onExit});
+
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    return NuvoPressable(
+      key: const ValueKey('practice-tag'),
+      onTap: onExit,
+      borderRadius: BorderRadius.circular(V13.radiusPill),
+      semanticLabel: 'Practice mode. Nothing is saved. Tap to exit.',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: V13.sun,
+          borderRadius: BorderRadius.circular(V13.radiusPill),
+          border: Border.all(color: V13.navy, width: V13.outline),
+        ),
+        child: Text(
+          'Practice mode \u00b7 nothing is saved \u00b7 Exit',
+          style: V13.caption.copyWith(
+            color: V13.navy,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
 }

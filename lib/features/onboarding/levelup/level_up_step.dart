@@ -244,7 +244,7 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                 children: [
                   const Spacer(),
                   Opacity(
-                    opacity: avatarT,
+                    opacity: avatarT.clamp(0.0, 1.0),
                     child: Transform.translate(
                       offset: Offset(0, (1 - avatarT) * 140),
                       child: Transform.scale(
@@ -320,7 +320,7 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                   ),
                   SizedBox(height: size.height >= 780 ? 48 : V13.gapXl),
                   Opacity(
-                    opacity: avatarT,
+                    opacity: avatarT.clamp(0.0, 1.0),
                     child: NuvoNumberFlow(
                       value: rolled ? reward.toLevel : reward.fromLevel,
                       format: (v) => 'LEVEL $v',
@@ -370,7 +370,7 @@ class _ObLevelUpStepState extends ConsumerState<ObLevelUpStep>
                   ),
                   const SizedBox(height: V13.gapLg),
                   Opacity(
-                    opacity: ctaT,
+                    opacity: ctaT.clamp(0.0, 1.0),
                     child: Transform.translate(
                       offset: Offset(0, (1 - ctaT) * 60),
                       child: Padding(

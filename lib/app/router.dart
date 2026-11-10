@@ -23,6 +23,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/demo/presentation_demo.dart';
+import '../features/auth/presentation/auth_controller.dart';
 
 import '../core/widgets/bottom_nav.dart';
 import '../core/widgets/nuvo_motion.dart';
@@ -32,6 +34,7 @@ import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
+import '../features/onboarding/sandbox/onboarding_sandbox.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
 import '../features/onboarding/presentation/notification_permission_screen.dart';
 import '../features/onboarding/onboarding_v2_screen.dart';
@@ -262,6 +265,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // its _firstRunTarget still names the v1 routes below, which redirect
       // here when the flag is on ("destination depends only on onboarding
       // flags" preserved — the flags now just include a compile-time one).
+      // Practice mode (Settings > Replay onboarding): the whole v2 flow in an
+      // isolated sandbox, owner account only; nothing in it is saved.
+      GoRoute(
+        path: '/onboarding-practice',
+        redirect: (_, _) =>
+            canTogglePresentationMode(ref.read(authControllerProvider).user)
+            ? null
+            : '/arena',
+        pageBuilder: (_, state) => _authPage(state, const OnboardingSandbox()),
+      ),
       GoRoute(
         path: '/onboarding-v2',
         redirect: (_, state) => onboardingV2RouteRedirect(

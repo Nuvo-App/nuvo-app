@@ -95,10 +95,12 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
     final openedAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(analyticsProvider).screen(
-        'settings',
-        ms: DateTime.now().difference(openedAt).inMilliseconds,
-      );
+      ref
+          .read(analyticsProvider)
+          .screen(
+            'settings',
+            ms: DateTime.now().difference(openedAt).inMilliseconds,
+          );
     });
   }
 
@@ -662,6 +664,21 @@ class _SettingsV13ScreenState extends ConsumerState<SettingsV13Screen> {
                 value: presentationOn,
                 onChanged: _setPresentationMode,
               ),
+            ),
+          if (canTogglePresentation)
+            V13ListRow(
+              key: const ValueKey('settings-replay-onboarding'),
+              title: 'Replay onboarding',
+              subtitle: 'Practice mode. Nothing is saved.',
+              leading: const V13IconTile(
+                icon: Icons.school_rounded,
+                color: V13.mint,
+              ),
+              trailing: const Icon(
+                Icons.chevron_right_rounded,
+                color: V13.muted,
+              ),
+              onTap: () => context.push('/onboarding-practice'),
             ),
           if (canReplayDemo || kDebugMode)
             V13ListRow(

@@ -38,13 +38,16 @@ import 'package:nuvo/features/social/data/invite_repository.dart';
 import 'package:nuvo/features/social/social_providers.dart';
 
 class _FakeAuthRepo extends AuthRepository {
-  _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
+  _FakeAuthRepo({this.email = 'test@getnuvo.net'})
+    : super(AuthApi(), SecureTokenStore());
+
+  final String email;
 
   @override
-  Future<RestoreResult> restoreSession() async => const RestoreOk(
+  Future<RestoreResult> restoreSession() async => RestoreOk(
     AuthUser(
       id: 'user-1',
-      email: 'test@getnuvo.net',
+      email: email,
       fullName: 'Test User',
       username: 'testuser',
       onboardingComplete: true,
@@ -498,6 +501,37 @@ void main() {
     expect(find.text('Locked'), findsOneWidget);
     await shot(tester, 'v13_badges');
   });
+
+  for (final c in [
+    ('sideswifter2010@gmail.com', true),
+    ('test@getnuvo.net', false),
+    ('testing@getnuvo.net', false),
+  ]) {
+    testWidgets('Replay onboarding row: ${c.$1} -> ${c.$2}', (tester) async {
+      _size(tester);
+      await tester.pumpWidget(
+        _app(
+          const SettingsV13Screen(),
+          overrides: [
+            ..._overrides(),
+            authControllerProvider.overrideWith(
+              (ref) => AuthController(_FakeAuthRepo(email: c.$1)),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Help & contact'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-replay-onboarding')),
+        c.$2 ? findsOneWidget : findsNothing,
+      );
+    });
+  }
 
   testWidgets('tour: Replay tour shows in Settings > Help only when on', (
     tester,
