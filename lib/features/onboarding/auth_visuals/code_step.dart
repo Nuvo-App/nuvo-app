@@ -15,7 +15,6 @@ import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
 import 'auth_layout.dart';
 import 'ob_shake.dart';
-import 'brand_mark.dart';
 
 enum _Phase { idle, verifying, verified, error, locked }
 
@@ -318,14 +317,13 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
     final locked = _phase == _Phase.locked;
     final tight = obTightScreen(context);
     final lean = tight; // never keyed to the keyboard: no jump as it rises
-    final hero = tight
-        ? 0.0
-        : 80.0; // short phones: no logo, the field gets the room
 
     return OnboardingShell(
       step: OnboardingStep.code,
-      heroHeight: hero,
-      hero: const ObBrandMark(),
+      heroHeight: 0,
+      hero: const SizedBox.shrink(),
+      showRail: false,
+      titleSize: tight ? 26 : 34,
       title: _phase == _Phase.verified
           ? ObCopy.codeVerifiedTitle
           : ObCopy.codeTitle,

@@ -61,7 +61,7 @@ void main() {
 
   testWidgets('empty: stamp not verified, hint shown, CTA inert', (t) async {
     final h = await pump(t);
-    expect(find.byKey(const ValueKey('ob-brand-mark')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ob-email-field')), findsOneWidget);
     expect(find.text('Enter your email'), findsOneWidget);
     expect(find.text("What's your email?"), findsOneWidget);
     await t.tap(find.byKey(const ValueKey('onboarding-cta')));
@@ -78,7 +78,10 @@ void main() {
     await t.tap(find.byKey(const ValueKey('ob-chip-gmail.com')));
     await t.pump(const Duration(milliseconds: 600));
     final field = t.widget<TextField>(
-      find.byKey(const ValueKey('ob-email-field')),
+      find.descendant(
+        of: find.byKey(const ValueKey('ob-email-field')),
+        matching: find.byType(TextField),
+      ),
     );
     expect(field.controller!.text, 'ava@gmail.com');
     expect(find.text('Enter your email'), findsNothing);
@@ -93,7 +96,10 @@ void main() {
     await t.pump(const Duration(milliseconds: 100));
     await t.pump(const Duration(milliseconds: 600));
     final field = t.widget<TextField>(
-      find.byKey(const ValueKey('ob-email-field')),
+      find.descendant(
+        of: find.byKey(const ValueKey('ob-email-field')),
+        matching: find.byType(TextField),
+      ),
     );
     expect(field.controller!.text, 'ava@gmail.com');
     expect(find.byKey(const ValueKey('ob-email-typo')), findsNothing);

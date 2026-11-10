@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/motion/motion.dart';
 import '../../../core/v13/tokens.dart';
+import '../../../core/v13/widgets/v13_text_input.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../flow/onboarding_copy.dart';
@@ -13,7 +14,6 @@ import '../shell/onboarding_shell.dart';
 import '../shell/onboarding_shell_controller.dart';
 import 'auth_layout.dart';
 import 'email_utils.dart';
-import 'brand_mark.dart';
 
 /// S5 — "What's your email?" The player-pass ticket fills as you type; the
 /// CTA is live on any valid address, errors sit inline under the field.
@@ -158,49 +158,47 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     // Layout must NOT depend on the keyboard: resizing the hero/labels as it
     // rises made the page jump under the finger. Only short phones go lean.
     final lean = tight;
-    final hero = tight
-        ? 0.0
-        : 80.0; // short phones: no logo, the field gets the room
 
     return OnboardingShell(
       step: OnboardingStep.email,
-      heroHeight: hero,
-      hero: const ObBrandMark(),
+      // Minimal chrome like the best sign-in screens: header, a big title,
+      // one supporting line, one field, one button. No hero object.
+      heroHeight: 0,
+      hero: const SizedBox.shrink(),
+      showRail: false,
+      titleSize: tight ? 26 : 34,
       title: ObCopy.emailTitle,
       subtitle: lean ? null : ObCopy.emailSub,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ONE always-present slot (never a conditional list insert): the
-          // field below must keep the same Element across the keyboard
-          // opening, or the IME connection drops and typing dies.
-          lean
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.only(bottom: V13.gapSm),
-                  child: Text(ObCopy.emailFieldLabel, style: V13.bodyStrong),
-                ),
-          _field(
+          // The real v13 input (navy outline, blue focus ring) with the
+          // signature hard shadow. Always child 0: the TextField must keep
+          // the same Element across the keyboard opening.
+          V13TextInput(
             key: const ValueKey('ob-email-field'),
             controller: _ctrl,
             focusNode: _focus,
             autofocus: true,
+            hardShadow: true,
             keyboardType: TextInputType.emailAddress,
             textInputAction: _reviewer
                 ? TextInputAction.next
                 : TextInputAction.send,
             autofillHints: const [AutofillHints.email],
             autocorrect: false,
+            enableSuggestions: false,
             hint: 'you@email.com',
             onSubmitted: (_) => _reviewer ? _pwFocus.requestFocus() : _send(),
           ),
           if (_reviewer) ...[
             const SizedBox(height: V13.gapMd),
-            _field(
+            V13TextInput(
               key: const ValueKey('ob-email-password'),
               controller: _pw,
               focusNode: _pwFocus,
-              obscure: true,
+              hardShadow: true,
+              obscureText: true,
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.password],
               hint: ObCopy.reviewerPasswordLabel,
@@ -282,67 +280,6 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     }
     return const SizedBox.shrink(key: ValueKey('status-none'));
   }
-
-  Widget _field({
-    required Key key,
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required TextInputAction textInputAction,
-    required List<String> autofillHints,
-    required String hint,
-    required ValueChanged<String> onSubmitted,
-    bool autofocus = false,
-    bool obscure = false,
-    bool autocorrect = true,
-    TextInputType? keyboardType,
-  }) {
-    // The app's signature: navy outline + hard offset shadow. Focus turns
-    // the outline blue. (Always one DecoratedBox: the tree never changes.)
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(V13.radiusButton),
-        boxShadow: V13.shadow4,
-      ),
-      child: SizedBox(
-        height: 60,
-        child: TextField(
-          key: key,
-          controller: controller,
-          focusNode: focusNode,
-          autofocus: autofocus,
-          obscureText: obscure,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          autofillHints: autofillHints,
-          autocorrect: autocorrect,
-          enableSuggestions: autocorrect,
-          onSubmitted: onSubmitted,
-          style: V13.bodyStrong.copyWith(fontSize: 16),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: V13.bodyStrong.copyWith(
-              fontSize: 16,
-              color: V13.muted.withValues(alpha: 0.6),
-            ),
-            filled: true,
-            fillColor: V13.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: V13.gapLg,
-              vertical: 18,
-            ),
-            enabledBorder: _border(V13.navy),
-            focusedBorder: _border(V13.blue),
-            border: _border(V13.navy),
-          ),
-        ),
-      ),
-    );
-  }
-
-  OutlineInputBorder _border(Color c) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(V13.radiusButton),
-    borderSide: BorderSide(color: c, width: V13.outlineThick),
-  );
 }
 
 class _DomainChip extends StatelessWidget {

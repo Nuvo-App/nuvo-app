@@ -28,6 +28,8 @@ class V13TextInput extends StatelessWidget {
     this.inputFormatters,
     this.onChanged,
     this.onSubmitted,
+    this.focusNode,
+    this.hardShadow = false,
   });
 
   final TextEditingController? controller;
@@ -51,6 +53,10 @@ class V13TextInput extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+  final FocusNode? focusNode;
+
+  /// The signature hard offset navy shadow under the field (onboarding).
+  final bool hardShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -66,57 +72,68 @@ class V13TextInput extends StatelessWidget {
           Text(label!, style: V13.bodyStrong),
           const SizedBox(height: V13.gapSm),
         ],
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          textCapitalization: textCapitalization,
-          textInputAction: textInputAction,
-          obscureText: obscureText,
-          autocorrect: autocorrect,
-          enableSuggestions: enableSuggestions,
-          autofocus: autofocus,
-          enabled: enabled,
-          autofillHints: autofillHints,
-          inputFormatters: inputFormatters,
-          style: V13.body,
-          cursorColor: V13.blue,
-          onChanged: onChanged,
-          onSubmitted: onSubmitted,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: V13.body.copyWith(color: V13.muted),
-            filled: true,
-            fillColor: enabled ? V13.card : V13.bg,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            prefixIcon: prefixIcon,
-            suffixIcon: suffixIcon,
-            enabledBorder: border,
-            disabledBorder: border.copyWith(
-              borderSide: BorderSide(
-                color: V13.navy.withValues(alpha: .35),
-                width: V13.outline,
+        // Always one DecoratedBox so the TextField's element never moves.
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(V13.radiusButton),
+            boxShadow: hardShadow ? V13.shadow4 : const [],
+          ),
+          child: TextField(
+            focusNode: focusNode,
+            controller: controller,
+            keyboardType: keyboardType,
+            textCapitalization: textCapitalization,
+            textInputAction: textInputAction,
+            obscureText: obscureText,
+            autocorrect: autocorrect,
+            enableSuggestions: enableSuggestions,
+            autofocus: autofocus,
+            enabled: enabled,
+            autofillHints: autofillHints,
+            inputFormatters: inputFormatters,
+            style: V13.body,
+            cursorColor: V13.blue,
+            onChanged: onChanged,
+            onSubmitted: onSubmitted,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: V13.body.copyWith(color: V13.muted),
+              filled: true,
+              fillColor: enabled ? V13.card : V13.bg,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
               ),
-            ),
-            focusedBorder: border.copyWith(
-              borderSide: const BorderSide(color: V13.blue, width: V13.outline),
-            ),
-            errorBorder: border.copyWith(
-              borderSide: const BorderSide(
-                color: V13.coral,
-                width: V13.outline,
+              prefixIcon: prefixIcon,
+              suffixIcon: suffixIcon,
+              enabledBorder: border,
+              disabledBorder: border.copyWith(
+                borderSide: BorderSide(
+                  color: V13.navy.withValues(alpha: .35),
+                  width: V13.outline,
+                ),
               ),
-            ),
-            focusedErrorBorder: border.copyWith(
-              borderSide: const BorderSide(
-                color: V13.coral,
-                width: V13.outline,
+              focusedBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: V13.blue,
+                  width: V13.outline,
+                ),
               ),
+              errorBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: V13.coral,
+                  width: V13.outline,
+                ),
+              ),
+              focusedErrorBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: V13.coral,
+                  width: V13.outline,
+                ),
+              ),
+              // Errors render below in v13 chrome, not inside the border.
+              errorStyle: const TextStyle(height: 0, fontSize: 0),
             ),
-            // Errors render below in v13 chrome, not inside the border.
-            errorStyle: const TextStyle(height: 0, fontSize: 0),
           ),
         ),
         if (errorText != null) ...[

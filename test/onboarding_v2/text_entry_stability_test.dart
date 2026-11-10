@@ -79,7 +79,15 @@ void main() {
 
     await t.enterText(fieldFinder, 'ava@gmail.com');
     await _pumpFor(t, const Duration(seconds: 2));
-    expect(t.widget<TextField>(fieldFinder).controller!.text, 'ava@gmail.com');
+    expect(
+      t
+          .widget<TextField>(
+            find.descendant(of: fieldFinder, matching: find.byType(TextField)),
+          )
+          .controller!
+          .text,
+      'ava@gmail.com',
+    );
     expect(after.widget.focusNode.hasFocus, isTrue);
   });
 

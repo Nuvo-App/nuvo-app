@@ -61,7 +61,11 @@ class OnboardingShell extends StatelessWidget {
     this.dotCount = 2,
     this.heroHeight = 320,
     this.fillHero = false,
+    this.titleSize,
   });
+
+  /// Larger title (email/code): Manrope 800 at this size.
+  final double? titleSize;
 
   /// The hero takes every pixel the title/body/CTA leave free (no scroll,
   /// no fixed [heroHeight]) — the pre-auth intros use it so the hero owns
@@ -179,7 +183,13 @@ class OnboardingShell extends StatelessWidget {
         );
 
   List<Widget> _copyBlock() => [
-    _text(1, Text(title, style: V13.title.copyWith(color: titleColor))),
+    _text(
+      1,
+      Text(
+        title,
+        style: V13.title.copyWith(color: titleColor, fontSize: titleSize),
+      ),
+    ),
     // Always ONE slot, present or not: a conditional insert here would
     // shift every widget after it (the body, with its text fields), and
     // Flutter would re-create them — the keyboard drops and typing dies.

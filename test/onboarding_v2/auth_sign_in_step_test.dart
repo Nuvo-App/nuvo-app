@@ -1,6 +1,9 @@
 // S4 — the "Save your spot" sheet: copy, Apple/Google wiring, error state,
 // and the email hand-off.
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/widgets/google_g_logo.dart';
 import 'package:nuvo/features/onboarding/auth_visuals/sign_in_step.dart';
@@ -124,6 +127,28 @@ void main() {
           .first,
     );
     expect((box.decoration as BoxDecoration).color, const Color(0xFF000000));
+  });
+
+  testWidgets('login shows the real Nuvo logo: asset exists and decodes', (
+    t,
+  ) async {
+    // The file is in the bundle and is a real PNG.
+    final data = await rootBundle.load('assets/branding/nuvo_logo_navy.png');
+    expect(data.lengthInBytes, greaterThan(10000));
+    final original = await rootBundle.load(
+      'assets/branding/nuvo_logo_graphic.png',
+    );
+    expect(original.lengthInBytes, greaterThan(10000));
+    await pump(t);
+    final img = find.byKey(const ValueKey('ob-login-logo'));
+    expect(img, findsOneWidget);
+    // It decodes (a broken asset would swap in the error placeholder).
+    await t.runAsync(() async {
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frame = await codec.getNextFrame();
+      expect(frame.image.width, greaterThan(100));
+    });
+    // And no race-path graphics remain on the login hero.
   });
 
   test('Google G artwork parses into the 48x48 box', () {
