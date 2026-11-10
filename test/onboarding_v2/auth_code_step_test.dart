@@ -119,6 +119,11 @@ void main() {
     expect(h.state.step, OnboardingStep.code); // still holding
     await advance(t, 500);
     await advance(t, 500);
+    // No timer moves the player on: still holding until they tap Next.
+    expect(h.state.step, OnboardingStep.code);
+    await t.tap(find.byKey(const ValueKey('onboarding-cta')));
+    await t.tap(find.byKey(const ValueKey('onboarding-cta')));
+    await advance(t, 500);
     expect(h.state.step, OnboardingStep.playerCard);
     expect(h.state.totalXp, 10);
   });

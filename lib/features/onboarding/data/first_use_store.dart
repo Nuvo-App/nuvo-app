@@ -116,7 +116,8 @@ class FirstUseStore {
     await _persist();
   }
 
-  static String _normalize(String accountKey) => accountKey.trim().toLowerCase();
+  static String _normalize(String accountKey) =>
+      accountKey.trim().toLowerCase();
 
   Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -141,6 +142,4 @@ class FirstUseStore {
   }
 }
 
-final firstUseStoreProvider = Provider<FirstUseStore>(
-  (ref) => FirstUseStore(),
-);
+final firstUseStoreProvider = Provider<FirstUseStore>((ref) => FirstUseStore());

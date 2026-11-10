@@ -147,12 +147,27 @@ void main() {
       }
     });
 
-    testWidgets('early Next auto-plays and lands on the how-it-works screen', (
+    testWidgets('early Next plays the win but waits for a second tap', (
       tester,
     ) async {
       final c = await onRaceStep(tester);
       await tester.tap(cta());
       await _pumpFor(tester, 2.5);
+      expect(_step(c), OnboardingStep.introRace);
+      await tester.tap(cta());
+      await _pumpFor(tester, 1);
+      expect(_step(c), OnboardingStep.introHow);
+    });
+
+    testWidgets('double tap on Next after the win advances exactly one', (
+      tester,
+    ) async {
+      final c = await onRaceStep(tester);
+      await tester.tap(cta());
+      await _pumpFor(tester, 2.5);
+      await tester.tap(cta());
+      await tester.tap(cta());
+      await _pumpFor(tester, 1);
       expect(_step(c), OnboardingStep.introHow);
     });
 
@@ -198,6 +213,8 @@ void main() {
       await _pumpFor(tester, 2.5);
       await tester.tap(cta());
       await _pumpFor(tester, 2.5);
+      await tester.tap(cta());
+      await _pumpFor(tester, 1);
       expect(find.byType(ObIntroHowStep), findsOneWidget);
       return c;
     }

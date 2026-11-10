@@ -113,8 +113,8 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
     _auto.addListener(_onRaceClock);
     _auto.addStatusListener((status) {
       if (status != AnimationStatus.completed) return;
+      // The win plays out; the player continues with an explicit tap.
       _finishDuel();
-      _advance();
     });
     _armIdlePointer();
   }
@@ -167,8 +167,9 @@ class _ObIntroRaceStepState extends ConsumerState<ObIntroRaceStep>
     await obAdvance(context, ref, OnboardingStep.introRace);
   }
 
-  /// Next — pressable any time. Early presses fast-forward the duel to its
-  /// scripted win inside [NuvoMotion.duelAutoPlay] before advancing.
+  /// Next — pressable any time. An early press fast-forwards the duel to its
+  /// scripted win inside [NuvoMotion.duelAutoPlay]; it never advances on
+  /// its own, a second tap continues.
   void _onNext() {
     if (_advanced) return;
     if (_ended) {
