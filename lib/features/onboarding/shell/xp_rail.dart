@@ -201,6 +201,7 @@ class _XpFlyOverlayState extends State<XpFlyOverlay>
   }
 
   void _pump() {
+    if (!mounted) return;
     if (NuvoMotion.reduceMotionOf(context)) {
       int? n;
       while ((n = widget.controller.nextPendingFly()) != null) {

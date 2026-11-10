@@ -2,6 +2,7 @@
 // and the email hand-off.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/core/widgets/google_g_logo.dart';
 import 'package:nuvo/features/onboarding/auth_visuals/sign_in_step.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
 
@@ -84,5 +85,25 @@ void main() {
     await _settle(t);
     expect(h.state.step, OnboardingStep.email);
     expect(h.state.totalXp, 0);
+  });
+
+  testWidgets('login screen: no back arrow, real multicolour Google G', (
+    t,
+  ) async {
+    await pump(t);
+    expect(find.byIcon(Icons.arrow_back_rounded), findsNothing);
+    expect(find.byIcon(Icons.arrow_back), findsNothing);
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
+    expect(find.byType(GoogleGLogo), findsOneWidget);
+    expect(find.byIcon(Icons.g_mobiledata_rounded), findsNothing);
+  });
+
+  test('Google G artwork parses into the 48x48 box', () {
+    final b = parseSvgPath(
+      'M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 '
+      '5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z',
+    ).getBounds();
+    expect(b.right, closeTo(48, 1.2));
+    expect(b.left, greaterThan(20));
   });
 }

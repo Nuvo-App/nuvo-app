@@ -231,6 +231,9 @@ abstract final class NuvoMotion {
   /// How long an award / info chip stays on screen.
   static const Duration tourChipHold = Duration(milliseconds: 1800);
 
+  /// Login hero: one full race of the looping lane demo.
+  static const Duration loginLoop = Duration(milliseconds: 6400);
+
   /// Scrim opacity (navy at 72%).
   static const double tourScrimOpacity = 0.72;
 

@@ -5,13 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/legal_links.dart';
 import '../../../core/motion/motion.dart';
+import '../../../core/widgets/google_g_logo.dart';
 import '../../../core/v13/tokens.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../flow/onboarding_copy.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
-import '../intro/intro_how_step.dart';
-import '../shell/onboarding_shell.dart';
+import '../shell/onboarding_shell.dart' show obAdvance;
+import 'login_hero.dart';
 import '../shell/onboarding_shell_controller.dart';
 import 'ob_shake.dart';
 import 'social_sign_in.dart';
@@ -114,46 +115,61 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
 
   @override
   Widget build(BuildContext context) {
-    final flow = ref.read(onboardingFlowProvider.notifier);
-    return Stack(
-      children: [
-        OnboardingShell(
-          step: OnboardingStep.signIn,
-          fillHero: true,
-          // The REAL S2 hero, live and sharp (Akshay: the login screen must feel
-          // full, not a blurred backdrop) — one widget, so S2 and S4 cannot drift apart.
-          hero: const KeyedSubtree(
-            key: ValueKey('ob-board-backdrop'),
-            child: _SheetAwareHero(),
-          ),
-          title: '',
-          // The S3 CTA sits behind the sheet (continuity), disabled.
-          ctaLabel: ObCopy.introBoardCta,
-          ctaEnabled: false,
-          onBack: flow.goBack,
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: _rise, curve: NuvoMotion.spring)),
-            child: ObShake(
-              key: _shake,
-              child: _SignInSheet(
-                busy: _busy,
-                error: _error,
-                onApple: () => _social(_Busy.apple),
-                onGoogle: () => _social(_Busy.google),
-                onEmail: _useEmail,
+    final short = MediaQuery.sizeOf(context).height < 640;
+    final sheetH = short ? 330.0 : 372.0;
+    return ColoredBox(
+      // Flush, vivid: one coral field edge to edge, one focal card, one sheet.
+      color: V13.coral,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            bottom: sheetH,
+            child: SafeArea(
+              bottom: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: V13.gapXl,
+                    vertical: V13.gapLg,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      key: const ValueKey('ob-login-hero'),
+                      width: 340,
+                      child: const ObLoginHero(),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(parent: _rise, curve: NuvoMotion.spring),
+                  ),
+              child: ObShake(
+                key: _shake,
+                child: _SignInSheet(
+                  busy: _busy,
+                  error: _error,
+                  onApple: () => _social(_Busy.apple),
+                  onGoogle: () => _social(_Busy.google),
+                  onEmail: _useEmail,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -237,7 +253,7 @@ class _SignInSheet extends StatelessWidget {
             child: _AuthButton(
               key: const ValueKey('ob-google'),
               label: ObCopy.signInGoogle,
-              icon: Icons.g_mobiledata_rounded,
+              leading: const GoogleGLogo(size: 22),
               fill: V13.card,
               ink: V13.navy,
               loading: busy == _Busy.google,
@@ -279,7 +295,8 @@ class _AuthButton extends StatelessWidget {
   const _AuthButton({
     super.key,
     required this.label,
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.fill,
     required this.ink,
     required this.loading,
@@ -287,7 +304,8 @@ class _AuthButton extends StatelessWidget {
   });
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? leading;
   final Color fill;
   final Color ink;
   final bool loading;
@@ -318,7 +336,7 @@ class _AuthButton extends StatelessWidget {
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, color: ink, size: 26),
+                  leading ?? Icon(icon, color: ink, size: 26),
                   const SizedBox(width: V13.gapSm),
                   Flexible(
                     child: Text(
@@ -375,44 +393,6 @@ class _LegalLineState extends State<_LegalLine> {
         ],
       ),
       textAlign: TextAlign.center,
-    );
-  }
-}
-
-/// Lays the live S2 hero out in the room ABOVE the sheet (so the board
-/// shows, not just the phone), scaled down to fit; on very short screens
-/// the sheet simply covers it, as before.
-class _SheetAwareHero extends StatelessWidget {
-  const _SheetAwareHero();
-
-  /// Approximate sheet height (title, two buttons, link, legal).
-  static const double _sheet = 375;
-  static const double _natural = 470;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        // The hero slot starts under the rail (~70) and runs behind the
-        // sheet; lay the story out in the strip that is actually visible.
-        final screenH = MediaQuery.sizeOf(context).height;
-        final sheet = screenH < 640 ? 335.0 : _sheet;
-        final avail = (screenH - sheet - 76).clamp(120.0, 520.0);
-        final Widget hero = avail >= 420
-            ? const ObIntroHowHero()
-            : FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: c.maxWidth,
-                  height: _natural,
-                  child: const ObIntroHowHero(),
-                ),
-              );
-        return Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(width: c.maxWidth, height: avail, child: hero),
-        );
-      },
     );
   }
 }
