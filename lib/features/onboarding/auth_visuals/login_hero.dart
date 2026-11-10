@@ -85,7 +85,7 @@ class _ObLoginHeroState extends State<ObLoginHero>
                       );
                     },
                     child: Image.asset(
-                      'assets/branding/nuvo_logo_graphic.png',
+                      'assets/branding/nuvo_logo_navy.png',
                       key: const ValueKey('ob-login-logo'),
                       height: logoH,
                       fit: BoxFit.contain,
@@ -102,7 +102,7 @@ class _ObLoginHeroState extends State<ObLoginHero>
                       style: V13.title.copyWith(
                         fontSize: 40,
                         height: 1.08,
-                        color: V13.white,
+                        color: V13.navy,
                       ),
                     ),
                   ),
@@ -136,7 +136,7 @@ class _PathPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = V13.white.withValues(alpha: 0.55)
+        ..color = V13.navy
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = 2.5,
@@ -148,7 +148,7 @@ class _PathPainter extends CustomPainter {
         p,
         7,
         Paint()
-          ..color = V13.blue
+          ..color = V13.navy
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.5,
       );
@@ -160,7 +160,7 @@ class _PathPainter extends CustomPainter {
       pole,
       pole.translate(0, -34),
       Paint()
-        ..color = V13.white
+        ..color = V13.navy
         ..strokeWidth = 2.5
         ..strokeCap = StrokeCap.round,
     );
@@ -174,14 +174,14 @@ class _PathPainter extends CustomPainter {
             cell,
             cell,
           ),
-          Paint()..color = (r + cI).isEven ? V13.white : V13.blue,
+          Paint()..color = (r + cI).isEven ? V13.navy : V13.white,
         );
       }
     }
     canvas.drawRect(
       Rect.fromLTWH(pole.dx + 1.5, pole.dy - 34, cell * 3, cell * 3),
       Paint()
-        ..color = V13.white
+        ..color = V13.navy
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );

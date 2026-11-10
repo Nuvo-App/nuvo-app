@@ -119,9 +119,8 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
     final sheetH =
         (short ? 300.0 : 316.0) + MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
-      // Full-bleed brand navy from the top edge through the sheet (white
-      // logo and headline pop; no orange).
-      color: V13.navy,
+      // White top (navy logo + headline) over an electric-blue sheet.
+      color: V13.white,
       child: Stack(
         children: [
           Positioned.fill(
@@ -183,7 +182,7 @@ class _SignInSheet extends StatelessWidget {
       key: const ValueKey('ob-signin-sheet'),
       padding: EdgeInsets.fromLTRB(24, 24, 24, 16 + bottom),
       decoration: const BoxDecoration(
-        color: V13.card,
+        color: V13.blue,
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(V13.radiusCardLg),
         ),
@@ -197,7 +196,10 @@ class _SignInSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(ObCopy.signInTitle, style: V13.cardTitle),
+          Text(
+            ObCopy.signInTitle,
+            style: V13.cardTitle.copyWith(color: V13.white),
+          ),
           const SizedBox(height: 16),
           AnimatedOpacity(
             duration: NuvoMotion.ctaFade,
@@ -232,7 +234,7 @@ class _SignInSheet extends StatelessWidget {
               error!,
               key: const ValueKey('ob-signin-error'),
               textAlign: TextAlign.center,
-              style: V13.bodyStrong.copyWith(color: V13.danger),
+              style: V13.bodyStrong.copyWith(color: V13.sun),
             ),
           ],
           const SizedBox(height: V13.gapSm),
@@ -246,7 +248,7 @@ class _SignInSheet extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 ObCopy.signInEmailLink,
-                style: V13.bodyStrong.copyWith(color: V13.navy),
+                style: V13.bodyStrong.copyWith(color: V13.white),
               ),
             ),
           ),
@@ -345,13 +347,16 @@ class _LegalLineState extends State<_LegalLine> {
   Widget build(BuildContext context) {
     final link = V13.caption.copyWith(
       fontSize: 12,
-      color: V13.navy,
+      color: V13.white,
       fontWeight: FontWeight.w700,
       decoration: TextDecoration.underline,
     );
     return Text.rich(
       TextSpan(
-        style: V13.caption.copyWith(fontSize: 12, color: V13.muted),
+        style: V13.caption.copyWith(
+          fontSize: 12,
+          color: V13.white.withValues(alpha: 0.85),
+        ),
         children: [
           const TextSpan(text: 'By continuing you agree to the '),
           TextSpan(text: 'Terms', style: link, recognizer: _terms),

@@ -160,10 +160,9 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     final lean = tight;
     final hero = tight
         ? 0.0
-        : 96.0; // short phones: no logo, the field gets the room
+        : 80.0; // short phones: no logo, the field gets the room
 
     return OnboardingShell(
-      dark: true,
       step: OnboardingStep.email,
       heroHeight: hero,
       hero: const ObBrandMark(),
@@ -245,7 +244,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
         child: Text(
           _error!,
           key: const ValueKey('ob-email-error'),
-          style: V13.bodyStrong.copyWith(color: V13.coral),
+          style: V13.bodyStrong.copyWith(color: V13.danger),
         ),
       );
     }
@@ -277,7 +276,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
         child: Text(
           ObCopy.emailDisabledHint,
           key: const ValueKey('ob-email-hint'),
-          style: V13.caption.copyWith(color: V13.white.withValues(alpha: 0.72)),
+          style: V13.caption,
         ),
       );
     }
@@ -297,37 +296,44 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
     bool autocorrect = true,
     TextInputType? keyboardType,
   }) {
-    return SizedBox(
-      height: 64,
-      child: TextField(
-        key: key,
-        controller: controller,
-        focusNode: focusNode,
-        autofocus: autofocus,
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        textInputAction: textInputAction,
-        autofillHints: autofillHints,
-        autocorrect: autocorrect,
-        enableSuggestions: autocorrect,
-        onSubmitted: onSubmitted,
-        cursorColor: V13.blue,
-        style: V13.bodyStrong.copyWith(fontSize: 17, color: V13.navy),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: V13.bodyStrong.copyWith(
-            fontSize: 16,
-            color: V13.muted.withValues(alpha: 0.6),
+    // The app's signature: navy outline + hard offset shadow. Focus turns
+    // the outline blue. (Always one DecoratedBox: the tree never changes.)
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(V13.radiusButton),
+        boxShadow: V13.shadow4,
+      ),
+      child: SizedBox(
+        height: 60,
+        child: TextField(
+          key: key,
+          controller: controller,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          obscureText: obscure,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          autofillHints: autofillHints,
+          autocorrect: autocorrect,
+          enableSuggestions: autocorrect,
+          onSubmitted: onSubmitted,
+          style: V13.bodyStrong.copyWith(fontSize: 16),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: V13.bodyStrong.copyWith(
+              fontSize: 16,
+              color: V13.muted.withValues(alpha: 0.6),
+            ),
+            filled: true,
+            fillColor: V13.card,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: V13.gapLg,
+              vertical: 18,
+            ),
+            enabledBorder: _border(V13.navy),
+            focusedBorder: _border(V13.blue),
+            border: _border(V13.navy),
           ),
-          filled: true,
-          fillColor: V13.card,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: V13.gapLg,
-            vertical: 18,
-          ),
-          enabledBorder: _border(V13.white),
-          focusedBorder: _border(V13.sky),
-          border: _border(V13.white),
         ),
       ),
     );
@@ -387,7 +393,7 @@ class _TypoHint extends StatelessWidget {
         child: Text(
           ObCopy.emailTypoHintFor(domain),
           key: const ValueKey('ob-email-typo'),
-          style: V13.bodyStrong.copyWith(color: V13.sky),
+          style: V13.bodyStrong.copyWith(color: V13.blue),
         ),
       ),
     );

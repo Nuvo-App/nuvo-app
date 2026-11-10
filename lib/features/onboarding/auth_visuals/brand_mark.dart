@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// The real Nuvo logo (white M, navy shadow, blue dot) flat on the navy
-/// page — the same mark as the login, left-aligned as the email/code
+/// The real Nuvo logo (navy variant, blue dot) flat on the white
+/// top section — the same mark as the login, left-aligned as the email/code
 /// header. No tile, no shadow, no tilt, no float.
 class ObBrandMark extends StatelessWidget {
   const ObBrandMark({super.key});
@@ -12,11 +12,11 @@ class ObBrandMark extends StatelessWidget {
       builder: (context, c) {
         final room = c.maxHeight.isFinite ? c.maxHeight : 88.0;
         return Align(
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.bottomLeft,
           child: Image.asset(
-            'assets/branding/nuvo_logo_graphic.png',
+            'assets/branding/nuvo_logo_navy.png',
             key: const ValueKey('ob-brand-mark'),
-            height: (room - 8).clamp(0.0, 88.0),
+            height: (room - 12).clamp(0.0, 84.0),
             fit: BoxFit.contain,
             semanticLabel: 'Nuvo',
             errorBuilder: (_, _, _) => SizedBox(height: room),

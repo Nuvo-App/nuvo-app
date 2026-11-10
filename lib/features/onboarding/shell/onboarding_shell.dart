@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/motion/motion.dart';
@@ -62,12 +61,7 @@ class OnboardingShell extends StatelessWidget {
     this.dotCount = 2,
     this.heroHeight = 320,
     this.fillHero = false,
-    this.dark = false,
   });
-
-  /// Pre-auth "brand" treatment shared with the login: full-bleed navy,
-  /// white type, no rail (email + code).
-  final bool dark;
 
   /// The hero takes every pixel the title/body/CTA leave free (no scroll,
   /// no fixed [heroHeight]) — the pre-auth intros use it so the hero owns
@@ -127,12 +121,12 @@ class OnboardingShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shell = OnboardingShellScope.of(context);
-    final rail = dark ? false : (showRail ?? step.showsRail);
-    final dots = dark ? false : (showDots ?? step.showsDots);
+    final rail = showRail ?? step.showsRail;
+    final dots = showDots ?? step.showsDots;
     final reduce = NuvoMotion.reduceMotionOf(context);
 
-    final scaffold = Scaffold(
-      backgroundColor: dark ? V13.navy : background,
+    return Scaffold(
+      backgroundColor: background,
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
@@ -158,7 +152,6 @@ class OnboardingShell extends StatelessWidget {
                   enabled: ctaEnabled,
                   onTap: onCta,
                   reduce: reduce,
-                  dark: dark,
                 ),
               ],
             ),
@@ -166,12 +159,6 @@ class OnboardingShell extends StatelessWidget {
         ],
       ),
     );
-    return dark
-        ? AnnotatedRegion<SystemUiOverlayStyle>(
-            value: SystemUiOverlayStyle.light,
-            child: scaffold,
-          )
-        : scaffold;
   }
 
   Widget _text(int index, Widget child) => NuvoEnter(
@@ -192,15 +179,7 @@ class OnboardingShell extends StatelessWidget {
         );
 
   List<Widget> _copyBlock() => [
-    _text(
-      1,
-      Text(
-        title,
-        style: V13.title.copyWith(
-          color: titleColor ?? (dark ? V13.white : null),
-        ),
-      ),
-    ),
+    _text(1, Text(title, style: V13.title.copyWith(color: titleColor))),
     // Always ONE slot, present or not: a conditional insert here would
     // shift every widget after it (the body, with its text fields), and
     // Flutter would re-create them — the keyboard drops and typing dies.
@@ -215,11 +194,7 @@ class OnboardingShell extends StatelessWidget {
                 2,
                 Text(
                   subtitle!,
-                  style: V13.body.copyWith(
-                    color:
-                        subtitleColor ??
-                        (dark ? V13.white.withValues(alpha: 0.72) : V13.muted),
-                  ),
+                  style: V13.body.copyWith(color: subtitleColor ?? V13.muted),
                 ),
               ),
             ],
@@ -447,14 +422,12 @@ class _CtaDock extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     required this.reduce,
-    this.dark = false,
   });
 
   final String label;
   final bool enabled;
   final VoidCallback? onTap;
   final bool reduce;
-  final bool dark;
 
   static const double height = 56;
   static const double sideMargin = 16;
@@ -475,23 +448,16 @@ class _CtaDock extends StatelessWidget {
             onTap: interactive ? onTap : null,
             enabled: interactive,
             borderRadius: BorderRadius.circular(V13.radiusButton),
-            shadow: dark ? null : V13.shadow4,
+            shadow: V13.shadow4,
             semanticLabel: label,
             child: Container(
               key: const ValueKey('onboarding-cta'),
               height: height,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: dark
-                    ? (interactive
-                          ? V13.white
-                          : V13.white.withValues(alpha: 0.14))
-                    : (interactive ? V13.blue : V13.card),
+                color: interactive ? V13.blue : V13.card,
                 borderRadius: BorderRadius.circular(V13.radiusButton),
-                border: Border.all(
-                  color: dark ? V13.white.withValues(alpha: 0.0) : V13.navy,
-                  width: V13.outlineThick,
-                ),
+                border: Border.all(color: V13.navy, width: V13.outlineThick),
               ),
               child: AnimatedSwitcher(
                 duration: NuvoMotion.ctaFade,
@@ -499,11 +465,7 @@ class _CtaDock extends StatelessWidget {
                   label,
                   key: ValueKey(label),
                   style: V13.buttonLabel.copyWith(
-                    color: dark
-                        ? (interactive
-                              ? V13.navy
-                              : V13.white.withValues(alpha: 0.5))
-                        : (interactive ? V13.white : V13.muted),
+                    color: interactive ? V13.white : V13.muted,
                   ),
                 ),
               ),
