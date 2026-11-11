@@ -8,6 +8,7 @@ import '../auth/presentation/auth_controller.dart';
 import 'auth_visuals/code_step.dart';
 import 'auth_visuals/email_step.dart';
 import 'auth_visuals/sign_in_step.dart';
+import 'data/first_run_flag.dart';
 import 'flow/onboarding_flow_controller.dart';
 import 'flow/onboarding_step.dart';
 import 'intro/intro_how_step.dart';
@@ -65,8 +66,13 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     final flow = ref.read(onboardingFlowProvider.notifier);
     await flow.restore(accountEmail: email);
     if (!mounted || email != null || widget.sandbox) return;
-    // Explicit sign-out: land on the login sheet, not the intro.
-    if (ref.read(explicitSignOutProvider)) {
+    // The intro opens on the very first open ONLY. After that (or after an
+    // explicit sign-out) a signed-out user lands on the login sheet.
+    final firstRun = ref.read(firstRunFlagProvider);
+    final seenBefore = await firstRun.isDone();
+    if (!mounted) return;
+    if (!seenBefore) await firstRun.markDone();
+    if (ref.read(explicitSignOutProvider) || seenBefore) {
       ref.read(explicitSignOutProvider.notifier).state = false;
       ref.read(authIntentProvider.notifier).state = AuthIntent.signIn;
       final s = ref.read(onboardingFlowProvider).step;

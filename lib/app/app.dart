@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../core/offline/user_snapshot.dart';
+import '../features/onboarding/data/first_run_flag.dart';
 import '../features/shell/presentation/fake_data_pill.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -109,6 +110,9 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
       // Offline cold open shows the real user: save the signed-in person,
       // forget them on a real sign-out (incl. the testing@ R1 clean start).
       if (next.status == AuthStatus.authenticated && next.user != null) {
+        // Anyone who has ever been signed in has been through the front
+        // door: the intro must never reappear on this device.
+        unawaited(ref.read(firstRunFlagProvider).markDone());
         unawaited(userSnapshotStore.write(next.user!));
       } else if (next.status == AuthStatus.unauthenticated) {
         unawaited(userSnapshotStore.clear());

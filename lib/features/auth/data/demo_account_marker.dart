@@ -20,6 +20,14 @@ abstract class DemoAccountMarker {
 
 /// File-backed marker (production).
 class FileDemoAccountMarker implements DemoAccountMarker {
+  /// Local files a clean cold start (R1) deletes. Includes the first-run flag
+  /// (`FirstRunFlag.fileName`) so the intro opens again like a first install.
+  static const wipedFileNames = [
+    'nuvo_onboarding_v2.json',
+    'nuvo_first_use.json',
+    'nuvo_first_run_done',
+  ];
+
   Future<Directory> _dir() => getApplicationDocumentsDirectory();
 
   Future<File> _file() async =>
@@ -54,10 +62,7 @@ class FileDemoAccountMarker implements DemoAccountMarker {
     try {
       final dir = await _dir();
       // The onboarding-v2 progress file and the first-use education flags.
-      for (final name in const [
-        'nuvo_onboarding_v2.json',
-        'nuvo_first_use.json',
-      ]) {
+      for (final name in wipedFileNames) {
         final f = File('${dir.path}/$name');
         if (await f.exists()) await f.delete();
       }
