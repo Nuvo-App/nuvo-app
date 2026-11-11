@@ -50,7 +50,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(milliseconds: 100));
       final s = c.read(onboardingFlowProvider);
-      expect(s.step, OnboardingStep.levelUp);
+      expect(s.step, OnboardingStep.arenaTour);
       expect(s.xpAwarded[OnboardingStep.firstRaceReady], 5);
       shell.dispose();
     },
@@ -64,7 +64,7 @@ void main() {
       expect(find.text('First to 10'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('onboarding-cta')));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(c.read(onboardingFlowProvider).step, OnboardingStep.levelUp);
+      expect(c.read(onboardingFlowProvider).step, OnboardingStep.arenaTour);
       // The timer must not double-award.
       await tester.pump(const Duration(seconds: 3));
       expect(

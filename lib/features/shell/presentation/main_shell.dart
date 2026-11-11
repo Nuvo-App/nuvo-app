@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/offline/outbox.dart';
 import '../../../core/v13/v13.dart';
 import '../../onboarding/data/onboarding_v2_store.dart';
+import '../../onboarding/flow/onboarding_copy.dart';
+import '../../onboarding/flow/welcome_reward.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../arena/presentation/arena_controller.dart';
@@ -85,6 +87,13 @@ class _MainShellState extends ConsumerState<MainShell>
     WidgetsBinding.instance.addObserver(this);
     unawaited(_syncPendingGraduation());
     unawaited(_flushOutbox());
+    // A fresh account that just finished onboarding gets one small welcome
+    // toast (a reward, never a gate).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !ref.read(welcomeRewardProvider)) return;
+      ref.read(welcomeRewardProvider.notifier).state = false;
+      showV13Toast(context, ObCopy.welcomeToast);
+    });
     // Reconnect without relaunch: probe Nuvo while offline; on recovery
     // refetch every screen, flush the outbox, clear the Offline pill.
     final reach = ref.read(reachabilityProvider);

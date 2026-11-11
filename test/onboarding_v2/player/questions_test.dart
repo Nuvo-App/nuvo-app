@@ -78,7 +78,7 @@ void main() {
     await tester.tap(find.text(ObCopy.skip));
     await tester.pump(const Duration(milliseconds: 100));
     final s = c.read(onboardingFlowProvider);
-    expect(s.step, OnboardingStep.levelUp);
+    expect(s.step, OnboardingStep.firstRaceReady);
     expect(s.answerQ1, isNull);
     expect(s.xpAwarded[OnboardingStep.questions2], 10);
   });
@@ -93,7 +93,7 @@ void main() {
     await tester.tap(_cta());
     await tester.pump(const Duration(milliseconds: 100));
     final s = c.read(onboardingFlowProvider);
-    expect(s.step, OnboardingStep.levelUp);
+    expect(s.step, OnboardingStep.firstRaceReady);
     expect(s.xpAwarded[OnboardingStep.questions2], 10);
   });
 
@@ -102,7 +102,7 @@ void main() {
     await tester.tap(find.text(ObCopy.skip));
     await tester.pump(const Duration(milliseconds: 100));
     final s = c.read(onboardingFlowProvider);
-    expect(s.step, OnboardingStep.levelUp);
+    expect(s.step, OnboardingStep.firstRaceReady);
     expect(s.answerQ2, isNull);
     expect(s.xpAwarded[OnboardingStep.questions2], 10);
   });

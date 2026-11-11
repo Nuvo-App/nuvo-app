@@ -15,6 +15,15 @@ abstract final class ObCopy {
   static const String nuvoCrew = 'Nuvo Crew';
 
   // ── S1 Intro — Race anything ───────────────────────────────────────────
+  static const String introProveTitle = 'Prove it on camera.';
+  static const String introProveSub =
+      'Nuvo counts every rep. No faking, no arguing.';
+  static const String introClimbTitle = 'Climb the board.';
+  static const String introClimbSub =
+      'Every proof moves you up. Friends see it live.';
+  static const String introStart = 'Get started';
+  static const String welcomeToast =
+      'Welcome to Nuvo. +100 XP, you are Level 2.';
   static const String introRaceTitle = 'Race anything.';
   static const String introRaceSub =
       'Pushups, reading, anything. Beat your friends.';

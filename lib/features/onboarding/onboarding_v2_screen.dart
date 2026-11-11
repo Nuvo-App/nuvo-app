@@ -10,9 +10,9 @@ import 'auth_visuals/email_step.dart';
 import 'auth_visuals/sign_in_step.dart';
 import 'data/first_run_flag.dart';
 import 'flow/onboarding_flow_controller.dart';
+import 'flow/welcome_reward.dart';
 import 'flow/onboarding_step.dart';
-import 'intro/intro_how_step.dart';
-import 'intro/intro_race_step.dart';
+import 'intro/intro_pages_step.dart';
 import 'levelup/level_up_step.dart';
 import 'player/first_race_ready_step.dart';
 import 'player/player_card_step.dart';
@@ -77,7 +77,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       ref.read(explicitSignOutProvider.notifier).state = false;
       ref.read(authIntentProvider.notifier).state = AuthIntent.signIn;
       final s = ref.read(onboardingFlowProvider).step;
-      if (s == OnboardingStep.introRace || s == OnboardingStep.introHow) {
+      if (s == OnboardingStep.introRace) {
         await flow.skipIntros();
       }
     }
@@ -110,8 +110,15 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     // graduate() never blocks on the network (it falls back to a pending
     // local graduation + background retry), so this always enters Arena.
     // Level Up's own CTA already graduated → don't write twice.
-    if (!next.completed.contains(OnboardingStep.levelUp)) {
-      await ref.read(onboardingFlowProvider.notifier).graduate();
+    // Level Up is cut (no gate): graduate right here. (When the celebration
+    // step is shipped again, its own CTA graduates and this is skipped.)
+    if (kCutSteps.contains(OnboardingStep.levelUp) ||
+        !next.completed.contains(OnboardingStep.levelUp)) {
+      final ok = await ref.read(onboardingFlowProvider.notifier).graduate();
+      if (ok && !widget.sandbox) {
+        // A small reward, not a gate: one welcome toast inside the app.
+        ref.read(welcomeRewardProvider.notifier).state = true;
+      }
     }
     if (!mounted) return;
     _leave();
@@ -216,8 +223,8 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   Widget _stepScreen(OnboardingStep step) => switch (step) {
     // Retired: auto-completed by the controller, never rendered.
     OnboardingStep.splash => const SizedBox.shrink(),
-    OnboardingStep.introRace => const ObIntroRaceStep(),
-    OnboardingStep.introHow => const ObIntroHowStep(),
+    OnboardingStep.introRace => const ObIntroPagesStep(),
+    OnboardingStep.introHow => const SizedBox.shrink(), // cut
     OnboardingStep.signIn => const ObSignInStep(),
     OnboardingStep.email => const ObEmailStep(),
     OnboardingStep.code => const ObCodeStep(),

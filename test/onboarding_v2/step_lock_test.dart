@@ -24,7 +24,7 @@ void main() {
       c.completeStep(OnboardingStep.introRace),
       c.completeStep(OnboardingStep.introRace),
     ]);
-    expect(c.state.step, OnboardingStep.introHow);
+    expect(c.state.step, OnboardingStep.signIn);
   });
 
   test('a tap during the 600ms lock cannot skip the next page', () async {
@@ -36,9 +36,9 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 650));
     // ...a real tap works, and an immediate second one cannot skip.
     await c.completeStep(OnboardingStep.introRace);
-    expect(c.state.step, OnboardingStep.introHow);
-    await c.completeStep(OnboardingStep.introHow);
-    expect(c.state.step, OnboardingStep.introHow);
+    expect(c.state.step, OnboardingStep.signIn);
+    await c.completeStep(OnboardingStep.signIn);
+    expect(c.state.step, OnboardingStep.signIn); // inside the new lock
   });
 
   test('late callback for an earlier step never advances the flow', () async {
@@ -46,19 +46,19 @@ void main() {
     await c.restore();
     await c.completeStep(OnboardingStep.introRace);
     await c.completeStep(OnboardingStep.introRace); // stale
-    expect(c.state.step, OnboardingStep.introHow);
+    expect(c.state.step, OnboardingStep.signIn);
   });
 
   test('going back then Next advances one step, not two', () async {
     final c = _c();
     await c.restore();
     await c.completeStep(OnboardingStep.introRace);
-    await c.completeStep(OnboardingStep.introHow);
-    expect(c.state.step, OnboardingStep.signIn);
+    await c.completeStep(OnboardingStep.signIn);
+    expect(c.state.step, OnboardingStep.email);
     c.goBack();
-    expect(c.state.step, OnboardingStep.introHow);
-    await c.completeStep(OnboardingStep.introHow);
     expect(c.state.step, OnboardingStep.signIn);
+    await c.completeStep(OnboardingStep.signIn);
+    expect(c.state.step, OnboardingStep.email);
   });
 
   test('full shipped flow visits every screen once, in order', () async {
@@ -73,14 +73,10 @@ void main() {
     }
     expect(seen, [
       OnboardingStep.introRace,
-      OnboardingStep.introHow,
       OnboardingStep.signIn,
       OnboardingStep.email,
       OnboardingStep.code,
       OnboardingStep.playerCard,
-      OnboardingStep.questions1,
-      OnboardingStep.questions2,
-      OnboardingStep.levelUp,
     ]);
   });
 }

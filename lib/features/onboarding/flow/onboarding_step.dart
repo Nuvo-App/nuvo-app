@@ -120,6 +120,13 @@ extension OnboardingStepX on OnboardingStep {
 /// resolve silently (no XP, no screen) so the flow runs S9 -> Level Up.
 /// Re-enable a step by removing it here; nothing else changes.
 const Set<OnboardingStep> kCutSteps = {
+  // The rethought flow (docs/redesign/onboarding-screen-plan.md): one
+  // swipeable intro, sign-in, minimal setup, straight into the app. No
+  // second intro page, no questions, no level-up gate.
+  OnboardingStep.introHow,
+  OnboardingStep.questions1,
+  OnboardingStep.questions2,
+  OnboardingStep.levelUp,
   // S9 promised a practice race that no longer exists (the tour is cut) and
   // showed placeholder racers: cut until the Arena really has one.
   OnboardingStep.firstRaceReady,

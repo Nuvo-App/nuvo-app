@@ -6,6 +6,7 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
+import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/shell/onboarding_shell_controller.dart';
 
 class FakeAuthRepo extends AuthRepository {
@@ -27,6 +28,14 @@ Widget playerHarness({
     analyticsProvider.overrideWithValue(FakeAnalyticsService()),
     authControllerProvider.overrideWith(
       (ref) => AuthController(FakeAuthRepo()),
+    ),
+    // These tests exercise every step's widget: nothing is cut here.
+    onboardingFlowProvider.overrideWith(
+      (ref) => OnboardingFlowController(
+        store: store,
+        analytics: FakeAnalyticsService(),
+        onGraduate: () async {},
+      ),
     ),
     ...overrides,
   ],

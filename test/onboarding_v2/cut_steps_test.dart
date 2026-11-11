@@ -5,16 +5,32 @@ import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
 
 void main() {
-  test('shipped flow cuts every placeholder tour step and keeps the rest', () {
-    expect(kCutSteps, contains(OnboardingStep.arenaTour));
-    expect(kCutSteps, contains(OnboardingStep.notifyOptIn));
-    expect(kCutSteps, contains(OnboardingStep.tourProfile));
-    expect(kCutSteps, isNot(contains(OnboardingStep.levelUp)));
-    expect(kCutSteps, contains(OnboardingStep.firstRaceReady));
+  test('shipped flow: intro, sign-in, email, code, player card only', () {
+    for (final s in [
+      OnboardingStep.introHow,
+      OnboardingStep.questions1,
+      OnboardingStep.questions2,
+      OnboardingStep.levelUp,
+      OnboardingStep.firstRaceReady,
+      OnboardingStep.arenaTour,
+      OnboardingStep.notifyOptIn,
+      OnboardingStep.tourProfile,
+    ]) {
+      expect(kCutSteps, contains(s), reason: s.name);
+    }
+    for (final s in [
+      OnboardingStep.introRace,
+      OnboardingStep.signIn,
+      OnboardingStep.email,
+      OnboardingStep.code,
+      OnboardingStep.playerCard,
+    ]) {
+      expect(kCutSteps, isNot(contains(s)), reason: s.name);
+    }
   });
 
   test(
-    'shipped config: Q2 is followed directly by Level Up, then graduates',
+    'shipped config: the player card is the last step, then it graduates',
     () async {
       TestWidgetsFlutterBinding.ensureInitialized();
       final c = OnboardingFlowController(
@@ -26,22 +42,17 @@ void main() {
       await c.restore();
       for (final s in [
         OnboardingStep.introRace,
-        OnboardingStep.introHow,
         OnboardingStep.signIn,
         OnboardingStep.email,
         OnboardingStep.code,
         OnboardingStep.playerCard,
-        OnboardingStep.questions1,
-        OnboardingStep.questions2,
       ]) {
         expect(c.state.step, s);
+        expect(c.state.readyToGraduate, isFalse);
         await c.completeStep(s);
       }
-      expect(c.state.step, OnboardingStep.levelUp);
-      expect(c.state.readyToGraduate, isFalse);
-      expect(await c.graduate(), isTrue);
-      await c.completeStep(OnboardingStep.levelUp);
       expect(c.state.readyToGraduate, isTrue);
+      expect(await c.graduate(), isTrue);
     },
   );
 }
