@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/motion/motion.dart';
 import '../../../core/v13/tokens.dart';
+import '../../races/presentation/widgets/rive_movement_preview.dart';
 
 /// The five intro demos. Each is ONE purposeful, flat animation that shows
-/// the thing the page says — nothing decorative. They draw straight on the
-/// page's color field (no card, no shadow, no tilt) and loop on [t] in 0..1.
-/// With reduce-motion the page passes the finished frame (t = 1).
+/// the thing the page says. They draw straight on the page's color field (no
+/// card, no shadow, no tilt) and play ONCE over [t] in 0..1, then hold the
+/// final frame. With reduce-motion the page passes t = 1.
 class IntroDemo extends StatelessWidget {
   const IntroDemo({super.key, required this.kind, required this.t});
 
@@ -17,11 +18,11 @@ class IntroDemo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (kind == 1) return _RepDemo(t: t);
     return RepaintBoundary(
       child: CustomPaint(
         painter: switch (kind) {
           0 => _RacePainter(t),
-          1 => _RepPainter(t),
           2 => _BoardPainter(t),
           3 => _CrewPainter(t),
           _ => _LevelPainter(t),
@@ -32,72 +33,89 @@ class IntroDemo extends StatelessWidget {
   }
 }
 
-final _stroke = Paint()
+Paint get _stroke => Paint()
   ..color = V13.navy
   ..style = PaintingStyle.stroke
   ..strokeWidth = 3
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round;
 
+/// Soft ease with a little overshoot (the app's spring).
 double _ease(double x) => NuvoMotion.spring.transform(x.clamp(0.0, 1.0));
 
-void _text(
-  Canvas c,
-  String s,
-  Offset at, {
-  double size = 22,
-  Color color = V13.navy,
-  bool center = true,
-}) {
+/// Gentle ease-out for counters (no overshoot: numbers never overshoot).
+double _out(double x) {
+  final v = x.clamp(0.0, 1.0);
+  return 1 - math.pow(1 - v, 3).toDouble();
+}
+
+TextPainter _tp(String s, double size, Color color, {double? maxWidth}) {
   final tp = TextPainter(
     text: TextSpan(
       text: s,
       style: V13.title.copyWith(fontSize: size, color: color, height: 1),
     ),
+    maxLines: 1,
+    ellipsis: '…',
     textDirection: TextDirection.ltr,
-  )..layout();
-  tp.paint(c, center ? at - Offset(tp.width / 2, tp.height / 2) : at);
+  )..layout(maxWidth: maxWidth ?? double.infinity);
+  return tp;
 }
 
-/// 1 — three racers run the lane; YOU (blue) wins.
+void _textAt(
+  Canvas c,
+  String s,
+  Offset center, {
+  double size = 22,
+  Color color = V13.navy,
+}) {
+  final tp = _tp(s, size, color);
+  tp.paint(c, center - Offset(tp.width / 2, tp.height / 2));
+}
+
+/// 1 — three racers run the lane; YOU (blue ring) wins.
 class _RacePainter extends CustomPainter {
   _RacePainter(this.t);
   final double t;
 
   @override
   void paint(Canvas c, Size s) {
-    const speeds = [0.86, 1.0, 0.7];
-    final laneH = math.min(54.0, s.height / 4.2);
+    const speeds = [0.84, 1.0, 0.68];
+    final laneH = math.min(60.0, s.height / 4.0);
     final top = (s.height - laneH * 3) / 2;
-    final x0 = 28.0, x1 = s.width - 56.0;
+    final x0 = 30.0;
+    final x1 = s.width - 70.0;
+    final run = _out((t - 0.05) / 0.85);
     for (var i = 0; i < 3; i++) {
       final y = top + laneH * i + laneH / 2;
-      canvas(c, y, x0, x1, s.width);
-      final p = ((t * 1.15) * speeds[i]).clamp(0.0, 1.0);
+      final enter = _ease((t - i * 0.06) / 0.25); // lanes ease in, staggered
+      final lane = _stroke..strokeWidth = 2.5;
+      c.drawLine(Offset(x0, y), Offset(x0 + (x1 + 12 - x0) * enter, y), lane);
+      // finish flag
+      if (enter > 0.6) {
+        final fx = x1 + 26;
+        c.drawLine(Offset(fx, y + 14), Offset(fx, y - 18), _stroke);
+        for (var r = 0; r < 2; r++) {
+          for (var k = 0; k < 2; k++) {
+            c.drawRect(
+              Rect.fromLTWH(fx + 1 + k * 7, y - 18 + r * 7, 7, 7),
+              Paint()..color = (r + k).isEven ? V13.navy : V13.white,
+            );
+          }
+        }
+      }
+      final p = (run * speeds[i]).clamp(0.0, 1.0);
       final x = x0 + (x1 - x0) * p;
       final you = i == 1;
+      final r = 18.0 * enter;
       c.drawCircle(
         Offset(x, y),
-        17,
+        r,
         Paint()..color = you ? V13.blue : V13.white,
       );
-      c.drawCircle(Offset(x, y), 17, _stroke);
-      if (you) _text(c, 'YOU', Offset(x, y), size: 9, color: V13.white);
-    }
-  }
-
-  void canvas(Canvas c, double y, double x0, double x1, double w) {
-    c.drawLine(Offset(x0, y), Offset(x1 + 14, y), _stroke..strokeWidth = 2);
-    _stroke.strokeWidth = 3;
-    // checkered flag
-    final fx = x1 + 22;
-    c.drawLine(Offset(fx, y + 14), Offset(fx, y - 18), _stroke);
-    for (var r = 0; r < 2; r++) {
-      for (var k = 0; k < 2; k++) {
-        c.drawRect(
-          Rect.fromLTWH(fx + 1 + k * 7, y - 18 + r * 7, 7, 7),
-          Paint()..color = (r + k).isEven ? V13.navy : V13.white,
-        );
+      c.drawCircle(Offset(x, y), r, _stroke);
+      if (you && enter > 0.8) {
+        _textAt(c, 'YOU', Offset(x, y), size: 9, color: V13.white);
       }
     }
   }
@@ -106,93 +124,160 @@ class _RacePainter extends CustomPainter {
   bool shouldRepaint(_RacePainter o) => o.t != t;
 }
 
-/// 2 — a stick figure squats, the counter ticks 1-2-3 on each bottom.
-class _RepPainter extends CustomPainter {
-  _RepPainter(this.t);
+/// 2 — the app's own jumping-jack figure (the AI Motion preview rig) with a
+/// rep counter that counts to 3 once and the AI-verified tag.
+class _RepDemo extends StatelessWidget {
+  const _RepDemo({required this.t});
   final double t;
 
   @override
-  void paint(Canvas c, Size s) {
-    final cx = s.width * 0.36;
-    final floorY = s.height * 0.82;
-    final reps = (t * 3).floor().clamp(0, 2);
-    final phase = (t * 3) % 1.0; // 0..1 within a rep
-    final depth = math.sin(phase * math.pi); // 0 standing .. 1 bottom
-    final hip = Offset(cx - 24 * depth, floorY - 94 + 42 * depth);
-    final knee = Offset(cx + 28 * depth, floorY - 47 + 4 * depth);
-    final foot = Offset(cx, floorY);
-    final shoulder = hip.translate(14 * depth, -58 + 6 * depth);
-    final head = shoulder.translate(4 * depth, -24);
-    c.drawLine(Offset(cx - 40, floorY), Offset(cx + 70, floorY), _stroke);
-    c.drawLine(foot, knee, _stroke);
-    c.drawLine(knee, hip, _stroke);
-    c.drawLine(hip, shoulder, _stroke);
-    c.drawLine(shoulder, shoulder.translate(34 * depth, 8 * depth), _stroke);
-    c.drawCircle(head, 13, Paint()..color = V13.white);
-    c.drawCircle(head, 13, _stroke);
-    final shown = (phase > 0.5 ? reps + 1 : reps).clamp(0, 3);
-    final pop = phase > 0.5
-        ? 1 + 0.25 * math.sin((phase - 0.5) * 2 * math.pi)
-        : 1.0;
-    _text(c, '$shown', Offset(s.width * 0.74, s.height * 0.46), size: 84 * pop);
-    if (t > 0.92) {
-      _text(c, 'VERIFIED', Offset(s.width * 0.74, s.height * 0.72), size: 16);
-    }
+  Widget build(BuildContext context) {
+    final count = (_out((t - 0.1) / 0.7) * 3).round().clamp(0, 3);
+    final verified = _ease((t - 0.82) / 0.18);
+    return LayoutBuilder(
+      builder: (context, c) {
+        final side = math.min(c.maxHeight, c.maxWidth * 0.62);
+        return Row(
+          children: [
+            SizedBox.square(
+              dimension: side,
+              child: RiveJumpingJackPreview(
+                fallback: Icon(
+                  Icons.accessibility_new_rounded,
+                  size: side * .5,
+                  color: V13.navy,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '$count',
+                      style: V13.hugeNumber.copyWith(
+                        fontSize: math.min(96, c.maxHeight * 0.5),
+                        color: V13.navy,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Opacity(
+                      opacity: verified.clamp(0.0, 1.0),
+                      child: Transform.translate(
+                        offset: Offset(0, 8 * (1 - verified.clamp(0.0, 1.0))),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: V13.white,
+                            borderRadius: BorderRadius.circular(V13.radiusPill),
+                            border: Border.all(
+                              color: V13.navy,
+                              width: V13.outline,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.check_circle_rounded,
+                                size: 16,
+                                color: V13.blue,
+                              ),
+                              const SizedBox(width: 6),
+                              Text('AI verified', style: V13.caption),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
-
-  @override
-  bool shouldRepaint(_RepPainter o) => o.t != t;
 }
 
-/// 3 — YOU climb from 3rd to 1st.
+/// 3 — a real leaderboard: rank, avatar, name, score. The highlighted row is
+/// the player ("You", blue, with a person avatar); it climbs from 3rd to 1st
+/// as its score counts up, the rows it passes slide down.
 class _BoardPainter extends CustomPainter {
   _BoardPainter(this.t);
   final double t;
 
   @override
   void paint(Canvas c, Size s) {
-    final rowH = math.min(52.0, s.height / 4);
-    final w = s.width - 56;
-    const names = ['Maya', 'Leo', 'YOU'];
-    const scores = [68.0, 54.0, 24.0];
-    final climb = _ease((t - 0.15) / 0.55);
-    // YOU rank position 2 -> 0; the others shift down.
-    double slot(int i) {
-      if (i == 2) return 2 - 2 * climb;
-      return i + climb * (i < 2 ? 1 : 0);
-    }
-
+    final rowH = math.min(58.0, s.height / 3.4);
+    final w = s.width - 8;
+    final x0 = 4.0;
+    final climb = _ease((t - 0.3) / 0.45);
+    final count = _out((t - 0.3) / 0.45);
+    const names = ['Maya', 'Leo', 'You'];
+    const base = [68.0, 54.0, 24.0];
+    // slot (0 = top): the player 2 -> 0; the two above shift down by one.
+    double slot(int i) => i == 2 ? 2 - 2 * climb : i + climb;
     final top = (s.height - rowH * 3) / 2;
-    for (var i = 0; i < 3; i++) {
-      final y = top + slot(i) * rowH;
+    // Draw the player last so it passes OVER the others.
+    for (final i in [0, 1, 2]) {
+      final enter = _ease((t - i * 0.08) / 0.3);
+      if (enter <= 0) continue;
+      final y = top + slot(i) * rowH + (1 - enter) * 24;
       final you = i == 2;
+      final score = base[i] + (you ? 52 * count : 0);
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(28, y + 4, w, rowH - 8),
-        const Radius.circular(14),
+        Rect.fromLTWH(x0, y + 4, w, rowH - 8),
+        const Radius.circular(16),
+      );
+      c.saveLayer(
+        rect.outerRect.inflate(4),
+        Paint()..color = Color.fromRGBO(0, 0, 0, enter.clamp(0.0, 1.0)),
       );
       c.drawRRect(rect, Paint()..color = you ? V13.blue : V13.white);
       c.drawRRect(rect, _stroke..strokeWidth = 2.5);
-      _stroke.strokeWidth = 3;
-      final score = scores[i] + (you ? 50 * climb : 0);
-      _text(
-        c,
-        names[i],
-        Offset(52, y + rowH / 2),
-        size: 18,
-        color: you ? V13.white : V13.navy,
-        center: false,
-      );
-      final tp = TextPainter(
-        text: TextSpan(
-          text: score.round().toString(),
-          style: V13.title.copyWith(
-            fontSize: 18,
-            color: you ? V13.white : V13.navy,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(c, Offset(28 + w - 18 - tp.width, y + rowH / 2 - tp.height / 2));
+      final fg = you ? V13.white : V13.navy;
+      final cy = y + rowH / 2;
+      // rank
+      final rank = (slot(i) + 0.5).floor() + 1;
+      _textAt(c, '$rank', Offset(x0 + 24, cy), size: 17, color: fg);
+      // avatar
+      final av = Offset(x0 + 62, cy);
+      c.drawCircle(av, 17, Paint()..color = you ? V13.white : V13.sky);
+      c.drawCircle(av, 17, _stroke..strokeWidth = 2.5);
+      if (you) {
+        final head = Paint()..color = V13.blue;
+        c.drawCircle(av.translate(0, -4), 5, head);
+        c.drawArc(
+          Rect.fromCenter(center: av.translate(0, 11), width: 18, height: 16),
+          math.pi,
+          math.pi,
+          true,
+          head,
+        );
+      } else {
+        _textAt(c, names[i][0], av, size: 15, color: V13.navy);
+      }
+      // name
+      final name = _tp(names[i], 18, fg);
+      name.paint(c, Offset(x0 + 92, cy - name.height / 2));
+      // score
+      final sc = _tp(score.round().toString(), 20, fg);
+      sc.paint(c, Offset(x0 + w - 20 - sc.width, cy - sc.height / 2));
+      c.restore();
     }
   }
 
@@ -210,68 +295,115 @@ class _CrewPainter extends CustomPainter {
     final center = Offset(s.width / 2, s.height / 2);
     const labels = ['A', 'M', 'L', 'S'];
     const colors = [V13.coral, V13.sun, V13.mint, V13.white];
-    final r = math.min(s.width, s.height) * 0.34;
+    final r = math.min(s.width * 0.34, s.height * 0.34);
+    final face = math.min(26.0, r * 0.42);
     for (var i = 0; i < 4; i++) {
       final a = -math.pi / 2 + i * math.pi / 2 + math.pi / 4;
       final pos = center + Offset(math.cos(a), math.sin(a)) * r;
-      final p = _ease((t - 0.12 - i * 0.16) / 0.3);
+      final p = _ease((t - 0.15 - i * 0.14) / 0.32);
       if (p <= 0) continue;
-      final end = Offset.lerp(center, pos, p)!;
+      final end = Offset.lerp(center, pos, p.clamp(0.0, 1.2))!;
       c.drawLine(center, end, _stroke..strokeWidth = 2);
-      _stroke.strokeWidth = 3;
-      c.drawCircle(end, 26 * p, Paint()..color = colors[i]);
-      c.drawCircle(end, 26 * p, _stroke);
-      if (p > 0.6) _text(c, labels[i], end, size: 20);
+      c.drawCircle(end, face * p, Paint()..color = colors[i]);
+      c.drawCircle(end, face * p, _stroke..strokeWidth = 3);
+      if (p > 0.6) _textAt(c, labels[i], end, size: face * 0.8);
     }
-    c.drawCircle(center, 32, Paint()..color = V13.blue);
-    c.drawCircle(center, 32, _stroke);
-    _text(c, 'YOU', center, size: 14, color: V13.white);
+    final core = _ease(t / 0.2);
+    c.drawCircle(center, 32 * core, Paint()..color = V13.blue);
+    c.drawCircle(center, 32 * core, _stroke..strokeWidth = 3);
+    if (core > 0.7) _textAt(c, 'You', center, size: 15, color: V13.white);
   }
 
   @override
   bool shouldRepaint(_CrewPainter o) => o.t != t;
 }
 
-/// 5 — XP fills, LEVEL 1 becomes LEVEL 2.
+/// 5 — XP fills, the number counts up, LEVEL 1 becomes LEVEL 2 with a soft
+/// overshoot.
 class _LevelPainter extends CustomPainter {
   _LevelPainter(this.t);
   final double t;
 
   @override
   void paint(Canvas c, Size s) {
-    final fill = ((t - 0.1) / 0.6).clamp(0.0, 1.0);
-    final level2 = fill >= 1.0;
-    final barW = s.width - 80;
+    final fill = _out((t - 0.12) / 0.55);
+    final level2 = fill >= 0.995;
+    final barW = s.width - 8;
+    final barY = s.height * 0.64;
     final bar = RRect.fromRectAndRadius(
-      Rect.fromLTWH(40, s.height * 0.62, barW, 28),
-      const Radius.circular(14),
+      Rect.fromLTWH(4, barY, barW, 30),
+      const Radius.circular(15),
     );
     c.drawRRect(bar, Paint()..color = V13.white);
     c.save();
     c.clipRRect(bar);
     c.drawRect(
-      Rect.fromLTWH(40, s.height * 0.62, barW * fill, 28),
+      Rect.fromLTWH(4, barY, barW * fill, 30),
       Paint()..color = V13.blue,
     );
     c.restore();
-    c.drawRRect(bar, _stroke);
+    c.drawRRect(bar, _stroke..strokeWidth = 3);
     final pop = level2
-        ? 1 + 0.18 * math.sin(((t - 0.7) / 0.2).clamp(0.0, 1.0) * math.pi)
+        ? 1 +
+              0.16 *
+                  _ease((t - 0.72) / 0.28) *
+                  (1 - _out((t - 0.72) / 0.28)) *
+                  3
         : 1.0;
-    _text(
+    _textAt(
       c,
       level2 ? 'LEVEL 2' : 'LEVEL 1',
-      Offset(s.width / 2, s.height * 0.34),
-      size: 54 * pop,
+      Offset(s.width / 2, s.height * 0.32),
+      size: math.min(58.0, s.width * 0.16) * pop,
     );
-    _text(
+    _textAt(
       c,
       '+${(100 * fill).round()} XP',
-      Offset(s.width / 2, s.height * 0.82),
+      Offset(s.width / 2, barY + 62),
       size: 20,
     );
   }
 
   @override
   bool shouldRepaint(_LevelPainter o) => o.t != t;
+}
+
+/// Soft, flat background shapes that drift slowly behind the pages (depth
+/// without shadows): overlapping translucent circles, parallaxed by the page
+/// position and the slow [drift] phase.
+class CloudsPainter extends CustomPainter {
+  CloudsPainter({required this.pos, required this.drift});
+
+  final double pos;
+  final double drift; // 0..1 loop
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final paint = Paint()..color = V13.white.withValues(alpha: 0.28);
+    void cloud(double bx, double by, double scale, double depth) {
+      final dx =
+          bx * s.width -
+          pos * 70 * depth +
+          math.sin(drift * 2 * math.pi + bx * 9) * 14 * depth;
+      final dy =
+          by * s.height + math.cos(drift * 2 * math.pi + by * 7) * 6 * depth;
+      final r = 34 * scale;
+      for (final o in const [
+        Offset(0, 0),
+        Offset(1.1, -0.35),
+        Offset(2.2, 0),
+        Offset(1.1, 0.35),
+      ]) {
+        canvas.drawCircle(Offset(dx + o.dx * r, dy + o.dy * r), r, paint);
+      }
+    }
+
+    cloud(0.08, 0.14, 1.0, 1.0);
+    cloud(0.62, 0.3, 0.7, 0.6);
+    cloud(0.2, 0.55, 1.3, 1.4);
+    cloud(0.78, 0.68, 0.9, 0.9);
+  }
+
+  @override
+  bool shouldRepaint(CloudsPainter o) => o.pos != pos || o.drift != drift;
 }

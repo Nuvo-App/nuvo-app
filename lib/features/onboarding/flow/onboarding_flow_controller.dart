@@ -261,6 +261,22 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     );
   }
 
+  /// End of the intro (Get started or Skip): the intro is done and the player
+  /// lands on the create-account choice page (never back on the intro).
+  Future<void> finishIntro({bool skipped = false}) async {
+    if (skipped) {
+      await _skip(
+        from: state.step,
+        skipped: const [OnboardingStep.introRace, OnboardingStep.introHow],
+      );
+    } else {
+      await completeStep(OnboardingStep.introRace);
+    }
+    if (state.step == OnboardingStep.signIn) {
+      _setStep(OnboardingStep.createAccount);
+    }
+  }
+
   /// S8 Skip — the questions resolve unanswered but still pay out
   /// (spec: "+10 XP after Q2 or skip").
   Future<void> skipQuestions() async {

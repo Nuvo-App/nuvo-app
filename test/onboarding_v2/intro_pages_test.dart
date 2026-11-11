@@ -12,6 +12,7 @@ import 'package:nuvo/features/onboarding/data/first_run_flag.dart';
 import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
+import 'package:nuvo/features/onboarding/intro/intro_demos.dart';
 import 'package:nuvo/features/onboarding/onboarding_v2_screen.dart';
 import 'package:nuvo/features/onboarding/shell/ob_progress.dart';
 
@@ -151,12 +152,17 @@ void main() {
       await _tapNext(t);
     }
     final cta = find.byKey(const ValueKey('onboarding-cta'));
+    // Wait out the arrival dwell, then ONE deliberate tap.
+    for (var i = 0; i < 15; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
     await t.tap(cta);
     await t.tap(cta, warnIfMissed: false);
     for (var i = 0; i < 12; i++) {
       await t.pump(const Duration(milliseconds: 100));
     }
-    expect(_step(c), OnboardingStep.signIn);
+    expect(_step(c), OnboardingStep.createAccount);
+    expect(c.read(authIntentProvider), AuthIntent.signUp);
   });
 
   testWidgets('Skip leaves from any page', (t) async {
@@ -166,7 +172,7 @@ void main() {
     for (var i = 0; i < 12; i++) {
       await t.pump(const Duration(milliseconds: 100));
     }
-    expect(_step(c), OnboardingStep.signIn);
+    expect(_step(c), OnboardingStep.createAccount);
   });
 
   testWidgets('reduce motion: pages show their finished frame, no loops', (
@@ -176,4 +182,109 @@ void main() {
     await t.pump(const Duration(seconds: 6));
     expect(find.text('Race anything.'), findsOneWidget);
   });
+
+  testWidgets('landing on the last page never navigates by itself', (t) async {
+    final c = await _boot(t);
+    for (var i = 0; i < 4; i++) {
+      await _tapNext(t);
+    }
+    expect(find.text('Level up.'), findsOneWidget);
+    for (var i = 0; i < 60; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(_step(c), OnboardingStep.introRace); // waits for the tap
+    expect(find.text('Get started'), findsOneWidget);
+  });
+
+  testWidgets('a double tap on Next from page 4 lands on 5 and stays', (
+    t,
+  ) async {
+    final c = await _boot(t);
+    for (var i = 0; i < 3; i++) {
+      await _tapNext(t);
+    }
+    final cta = find.byKey(const ValueKey('onboarding-cta'));
+    await t.tap(cta);
+    await t.tap(cta, warnIfMissed: false); // the stray second tap
+    for (var i = 0; i < 12; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Level up.'), findsOneWidget);
+    expect(_step(c), OnboardingStep.introRace);
+  });
+
+  testWidgets('animations play once and hold (no loop, no replay)', (t) async {
+    await _boot(t);
+    double demoT() => t.widget<IntroDemo>(find.byType(IntroDemo).first).t;
+    await t.pump(const Duration(seconds: 4));
+    expect(demoT(), 1.0);
+    await t.pump(const Duration(seconds: 3));
+    expect(demoT(), 1.0); // still holding: it did not loop
+    await _tapNext(t);
+    await t.pump(const Duration(seconds: 4));
+    await t.drag(
+      find.byKey(const ValueKey('ob-intro-pages')),
+      const Offset(300, 0),
+    ); // back to page 1
+    for (var i = 0; i < 15; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Race anything.'), findsOneWidget);
+    // Revisiting shows the final frame immediately, not a replay.
+    expect(demoT(), 1.0);
+  });
+
+  for (final size in [
+    const Size(320, 568),
+    const Size(360, 640),
+    const Size(390, 844),
+    const Size(430, 932),
+  ]) {
+    for (final scale in [1.0, 1.5]) {
+      testWidgets('no overflow on any page at ${size.width}x${size.height} '
+          'text x$scale', (t) async {
+        t.view.devicePixelRatio = 1;
+        t.view.physicalSize = size;
+        addTearDown(t.view.reset);
+        final c = ProviderContainer(
+          overrides: [
+            firstRunFlagProvider.overrideWithValue(MemoryFirstRunFlag()),
+            onboardingV2StoreProvider.overrideWithValue(
+              OnboardingV2Store.memory(),
+            ),
+            analyticsProvider.overrideWithValue(FakeAnalyticsService()),
+            authControllerProvider.overrideWith(
+              (ref) => AuthController(_NoSession()),
+            ),
+          ],
+        );
+        addTearDown(c.dispose);
+        await t.pumpWidget(
+          UncontrolledProviderScope(
+            container: c,
+            child: MaterialApp(
+              builder: (ctx, child) => MediaQuery(
+                data: MediaQuery.of(
+                  ctx,
+                ).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: const OnboardingV2Screen(),
+            ),
+          ),
+        );
+        for (var i = 0; i < 20; i++) {
+          await t.pump(const Duration(milliseconds: 100));
+        }
+        for (var p = 0; p < 5; p++) {
+          await t.pump(const Duration(seconds: 4));
+          expect(t.takeException(), isNull, reason: 'page ${p + 1}');
+          // The CTA and the title are fully on screen.
+          final cta = t.getRect(find.byKey(const ValueKey('onboarding-cta')));
+          expect(cta.bottom, lessThanOrEqualTo(size.height));
+          if (p < 4) await _tapNext(t);
+        }
+      });
+    }
+  }
 }

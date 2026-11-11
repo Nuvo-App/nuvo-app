@@ -233,8 +233,16 @@ abstract final class NuvoMotion {
   /// How long an award / info chip stays on screen.
   static const Duration tourChipHold = Duration(milliseconds: 1800);
 
-  /// Intro demos: one loop of a page's single animation.
-  static const Duration introLoop = Duration(milliseconds: 4200);
+  /// Intro demos: a page's single animation plays ONCE over this span and
+  /// holds its last frame.
+  static const Duration introPlay = Duration(milliseconds: 3200);
+
+  /// Slow drift of the soft background shapes.
+  static const Duration introDrift = Duration(seconds: 26);
+
+  /// The CTA on the last intro page ignores taps this long after arriving
+  /// (a double-tap on Next must never also fire Get started).
+  static const Duration introLastDwell = Duration(milliseconds: 900);
 
   /// Login typewriter: type, hold, backspace, gap between phrases.
   static const Duration typeChar = Duration(milliseconds: 75);

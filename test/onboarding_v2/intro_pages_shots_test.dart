@@ -75,9 +75,12 @@ void main() {
     testWidgets('intro pages ${e.key}', skip: !on, (t) async {
       await _boot(t, e.value);
       for (var p = 0; p < 5; p++) {
-        // let the page's single animation reach a telling frame
-        await t.pump(const Duration(milliseconds: 2900));
-        await shot(t, 'intro_${e.key}_$p');
+        await t.pump(const Duration(milliseconds: 700));
+        await shot(t, 'intro_${e.key}_${p}_a');
+        await t.pump(const Duration(milliseconds: 1000));
+        await shot(t, 'intro_${e.key}_${p}_b');
+        await t.pump(const Duration(milliseconds: 2000));
+        await shot(t, 'intro_${e.key}_${p}_c');
         if (p < 4) await _tapNext(t);
       }
     });

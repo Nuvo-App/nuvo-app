@@ -310,7 +310,8 @@ void main() {
 
     expect(rig.step, OnboardingStep.introRace);
     await tap(find.byKey(const ValueKey('ob-intro-skip'))); // 1
-    expect(rig.step, OnboardingStep.signIn);
+    // The intro ends on the CREATE ACCOUNT choice page (Apple/Google/email).
+    expect(rig.step, OnboardingStep.createAccount);
     await tap(find.byKey(const ValueKey('ob-apple'))); // 2
     expect(rig.step, OnboardingStep.playerCard);
     await t.enterText(find.byType(TextField).first, 'Ava Lee');
@@ -337,7 +338,8 @@ void main() {
     }
 
     await tap('ob-intro-skip'); // 1
-    await tap('ob-email-link'); // 2
+    expect(rig.step, OnboardingStep.createAccount);
+    await tap('ob-create-email'); // 2 (explicit choice)
     await t.enterText(
       find.byKey(const ValueKey('ob-email-field')),
       'ava@gmail.com',
