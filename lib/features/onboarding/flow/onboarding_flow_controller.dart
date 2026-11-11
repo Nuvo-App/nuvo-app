@@ -433,6 +433,7 @@ class OnboardingFlowController extends StateNotifier<OnboardingFlowState> {
     final completed = {
       ..._stepSet(_store.completedSteps),
       OnboardingStep.splash,
+      OnboardingStep.createAccount, // a page, not a step: never owed
       ..._cutSteps,
     };
     final awarded = <OnboardingStep, int>{};

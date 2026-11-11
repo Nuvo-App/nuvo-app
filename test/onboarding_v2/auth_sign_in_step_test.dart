@@ -148,13 +148,13 @@ void main() {
     // And no race-path graphics remain on the login hero.
   });
 
-  testWidgets("Create one link goes to email as sign-up", (t) async {
+  testWidgets("Create one opens the account-choice page (sign-up)", (t) async {
     final h = await pump(t);
     final link = find.byKey(const ValueKey('ob-create-link'));
     expect(link, findsOneWidget);
     await t.tap(link);
     await _settle(t);
-    expect(h.state.step, OnboardingStep.email);
+    expect(h.state.step, OnboardingStep.createAccount);
     expect(h.container.read(authIntentProvider), AuthIntent.signUp);
   });
 

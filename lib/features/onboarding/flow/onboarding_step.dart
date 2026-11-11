@@ -73,9 +73,12 @@ extension OnboardingStepX on OnboardingStep {
   String get analyticsName => name;
 
   /// The step after this one, or null at [OnboardingStep.levelUp].
-  OnboardingStep? get next => index + 1 < OnboardingStep.values.length
-      ? OnboardingStep.values[index + 1]
-      : null;
+  OnboardingStep? get next {
+    final n = index + 1 < OnboardingStep.values.length
+        ? OnboardingStep.values[index + 1]
+        : null;
+    return n == OnboardingStep.createAccount ? null : n; // a page, not a step
+  }
 
   /// The step before this one, or null at [OnboardingStep.splash].
   OnboardingStep? get previous =>

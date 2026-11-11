@@ -7,6 +7,12 @@ import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
 import 'package:nuvo/features/onboarding/flow/xp_table.dart';
 
+/// The linear steps (createAccount is a page, never owed).
+final _linear = [
+  for (final s in OnboardingStep.values)
+    if (s != OnboardingStep.createAccount) s,
+];
+
 void main() {
   // completeStep fires a haptic — the binding makes it a silent no-op.
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +29,7 @@ OnboardingFlowController _controller(OnboardingV2Store store) =>
 /// Drives [c] through [count] steps using each step's real completion seam.
 Future<void> _walk(OnboardingFlowController c, int count) async {
   for (var i = 0; i < count; i++) {
-    final step = OnboardingStep.values[i];
+    final step = _linear[i];
     switch (step) {
       case OnboardingStep.arenaTour:
         c.proofStarted();
@@ -41,8 +47,8 @@ void _group() {
   group('kill + relaunch resume', () {
     // One iteration per step boundary — after completing steps 0..k the
     // relaunched flow must owe step k+1 and refuse to re-award step k.
-    for (var k = 0; k < OnboardingStep.values.length; k++) {
-      final done = OnboardingStep.values[k];
+    for (var k = 0; k < _linear.length; k++) {
+      final done = _linear[k];
       test(
         'after ${done.name} resumes at the next owed step, no double XP',
         () async {
@@ -107,7 +113,7 @@ void _group() {
       final store1 = OnboardingV2Store.memory();
       final c1 = _controller(store1);
       await c1.restore();
-      await _walk(c1, OnboardingStep.values.length); // incl. levelUp
+      await _walk(c1, _linear.length); // incl. levelUp
 
       final store2 = OnboardingV2Store.fromSnapshot(store1.toJson());
       final c2 = _controller(store2);
@@ -150,6 +156,7 @@ void _group() {
           OnboardingStep.splash,
           OnboardingStep.introRace,
           OnboardingStep.introHow,
+          OnboardingStep.createAccount, // never owed
         });
         expect(c.state.step, OnboardingStep.signIn);
         expect(c.state.totalXp, 10);
@@ -162,7 +169,10 @@ void _group() {
         });
         final c2 = _controller(store2);
         await c2.restore();
-        expect(c2.state.completed, {OnboardingStep.splash});
+        expect(c2.state.completed, {
+          OnboardingStep.splash,
+          OnboardingStep.createAccount,
+        });
         expect(c2.state.step, OnboardingStep.introRace);
         expect(c2.state.totalXp, 0);
       },
