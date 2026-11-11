@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/analytics/analytics_service.dart';
+import 'package:nuvo/core/motion/motion.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
@@ -64,6 +65,14 @@ Future<void> _tapNext(WidgetTester t) async {
 
 OnboardingStep _step(ProviderContainer c) =>
     c.read(onboardingFlowProvider).step;
+
+/// Real frames, like a device (one big pump would collapse every mark into
+/// a single frame).
+Future<void> _run(WidgetTester t, int ms) async {
+  for (var i = 0; i < ms ~/ 100; i++) {
+    await t.pump(const Duration(milliseconds: 100));
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -287,4 +296,161 @@ void main() {
       });
     }
   }
+
+  testWidgets('no page is ever skipped: swipes and taps visit 1..5 in order', (
+    t,
+  ) async {
+    final c = await _boot(t);
+    const titles = [
+      'Race anything.',
+      'Prove it on camera.',
+      'Climb the board.',
+      'Race with your crew.',
+      'Level up.',
+    ];
+    final visited = <int>[];
+    int current() => [
+      for (var i = 0; i < titles.length; i++)
+        if (find.text(titles[i]).evaluate().isNotEmpty &&
+            t.getRect(find.text(titles[i]).first).center.dx.abs() < 400 &&
+            t.getRect(find.text(titles[i]).first).left >= 0)
+          i,
+    ].last;
+    visited.add(current());
+    Future<void> swipe() async {
+      await t.drag(
+        find.byKey(const ValueKey('ob-intro-pages')),
+        const Offset(-380, 0),
+      );
+      for (var i = 0; i < 14; i++) {
+        await t.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    // Mix swipes and taps.
+    await swipe();
+    visited.add(current());
+    await _tapNext(t);
+    visited.add(current());
+    await swipe();
+    visited.add(current());
+    await _tapNext(t);
+    visited.add(current());
+    expect(visited, [0, 1, 2, 3, 4]);
+    expect(_step(c), OnboardingStep.introRace); // still inside the intro
+    // Flinging past the last page does nothing: page 5 is the last.
+    await t.fling(
+      find.byKey(const ValueKey('ob-intro-pages')),
+      const Offset(-500, 0),
+      3000,
+    );
+    for (var i = 0; i < 14; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Level up.'), findsOneWidget);
+    expect(_step(c), OnboardingStep.introRace);
+  });
+
+  testWidgets('Skip is the only way out before the last page', (t) async {
+    final c = await _boot(t);
+    for (var i = 0; i < 3; i++) {
+      await _tapNext(t);
+      expect(_step(c), OnboardingStep.introRace);
+    }
+    await t.tap(find.byKey(const ValueKey('ob-intro-skip')));
+    for (var i = 0; i < 12; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(_step(c), OnboardingStep.createAccount);
+  });
+
+  testWidgets('each page fires its climax haptic once; level-up fires last', (
+    t,
+  ) async {
+    final rec = <String>[];
+    NuvoHaptics.recorder = rec;
+    addTearDown(() => NuvoHaptics.recorder = null);
+    await _boot(t);
+    await _run(t, 6000);
+    expect(rec.where((e) => e == 'burst').length, 1); // race climax
+    expect(rec.where((e) => e == 'tick').length, greaterThanOrEqualTo(3));
+    expect(rec, contains('thud')); // the held breath before it
+    expect(rec.indexOf('thud'), lessThan(rec.indexOf('burst')));
+    rec.clear();
+    for (var i = 0; i < 4; i++) {
+      await _tapNext(t);
+      await _run(t, 6000);
+    }
+    // Page 5 played: ticks up the bar, the thud, then the strong burst.
+    expect(rec.where((e) => e == 'burst').length, greaterThanOrEqualTo(1));
+    expect(rec.last, 'burst'); // the level-up break is the last, biggest hit
+    // Replaying (revisit) fires nothing again.
+    final before = rec.length;
+    await t.drag(
+      find.byKey(const ValueKey('ob-intro-pages')),
+      const Offset(380, 0),
+    );
+    await _run(t, 2000);
+    expect(rec.length, before);
+  });
+
+  testWidgets('reduce motion: final frames, one light haptic, no ticks', (
+    t,
+  ) async {
+    final rec = <String>[];
+    NuvoHaptics.recorder = rec;
+    addTearDown(() => NuvoHaptics.recorder = null);
+    await _boot(t, reduce: true);
+    await _run(t, 7000);
+    expect(rec, ['light']);
+    await _tapNext(t);
+    expect(rec.where((e) => e != 'light'), isEmpty);
+  });
+
+  testWidgets('progress completes the intro only when level-up lands', (
+    t,
+  ) async {
+    await _boot(t);
+    for (var i = 0; i < 4; i++) {
+      await _tapNext(t);
+    }
+    double frac() {
+      final bar = t.getSize(find.byKey(const ValueKey('ob-progress')));
+      final fill = t
+          .getSize(
+            find.descendant(
+              of: find.byKey(const ValueKey('ob-progress')),
+              matching: find.byType(FractionallySizedBox),
+            ),
+          )
+          .width;
+      return fill / (bar.width - 5);
+    }
+
+    await _run(t, 500); // page 5 just arrived
+    final early = frac();
+    await _run(t, 6000); // the level-up has landed
+    final landed = frac();
+    expect(landed, greaterThan(early));
+    expect(landed, closeTo(ObProgress.fractionFor(5), 0.02));
+  });
+
+  test('soft spring (leaderboard climb) barely overshoots', () {
+    var peak = 0.0;
+    for (var i = 0; i <= 100; i++) {
+      peak = peak > NuvoMotion.softSpring.transform(i / 100)
+          ? peak
+          : NuvoMotion.softSpring.transform(i / 100);
+    }
+    expect(peak, lessThan(1.03));
+    expect(NuvoMotion.softSpring.transform(1), 1);
+    // ...while the regular spring is livelier (kept for pops and slams).
+    var loud = 0.0;
+    for (var i = 0; i <= 100; i++) {
+      loud = loud > NuvoMotion.spring.transform(i / 100)
+          ? loud
+          : NuvoMotion.spring.transform(i / 100);
+    }
+    expect(loud, greaterThan(peak));
+  });
 }

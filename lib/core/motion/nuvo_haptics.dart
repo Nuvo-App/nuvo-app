@@ -11,11 +11,37 @@ import '../v13/motion.dart';
 /// level-up; the success pattern (light → 70 ms → medium → 70 ms → heavy)
 /// for level-up and email verified.
 abstract final class NuvoHaptics {
+  /// Tests set this to capture the calls (name per call).
+  static List<String>? recorder;
+  static void _rec(String name) => recorder?.add(name);
+
+  /// A small tick: a beat on the way to a payoff (reps, overtakes, crew
+  /// joining, XP ticks).
+  static void tick() {
+    _rec('tick');
+    V13Haptics.select();
+  }
+
+  /// A held breath: the anticipation thud right before the payoff.
+  static void thud() {
+    _rec('thud');
+    if (v13HapticsEnabled) HapticFeedback.mediumImpact();
+  }
+
+  /// The payoff: one strong hit at the climax of a page.
+  static void burst() {
+    _rec('burst');
+    if (v13HapticsEnabled) HapticFeedback.heavyImpact();
+  }
+
   /// Chips, page dots, XP ticks.
   static void select() => V13Haptics.select();
 
   /// Every physical press.
-  static void light() => V13Haptics.light();
+  static void light() {
+    _rec('light');
+    V13Haptics.light();
+  }
 
   /// Step completed / Track advance.
   static void medium() => V13Haptics.confirm();

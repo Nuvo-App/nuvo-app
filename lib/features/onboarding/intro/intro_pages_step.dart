@@ -54,6 +54,9 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
 
   /// Pages whose animation has already played (never replays on revisit).
   final Set<int> _played = {};
+
+  /// Haptic marks already fired in the current play.
+  final Set<int> _fired = {};
   int _page = 0;
   bool _started = false;
   bool _animatingPage = false;
@@ -71,8 +74,10 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
+    _play.addListener(_onPlayTick);
     if (NuvoMotion.reduceMotionOf(context)) {
       _play.value = 1; // finished frames, no motion at all
+      NuvoHaptics.light();
     } else {
       _drift.repeat();
       _playPage(0);
@@ -82,21 +87,62 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
   @override
   void dispose() {
     _dwell?.cancel();
+    _burstTimer?.cancel();
     _controller.dispose();
     _play.dispose();
     _drift.dispose();
     super.dispose();
   }
 
+  /// Fires the page's haptic marks as the play passes them (once each).
+  void _onPlayTick() {
+    if (NuvoMotion.reduceMotionOf(context)) return;
+    final marks = introHapticMarks[_page];
+    for (var i = 0; i < marks.length; i++) {
+      if (_play.value >= marks[i].$1 && _fired.add(i)) {
+        switch (marks[i].$2) {
+          case 'tick':
+            NuvoHaptics.tick();
+          case 'thud':
+            NuvoHaptics.thud();
+          case 'burst':
+            NuvoHaptics.burst();
+          case 'success':
+            // thud, then a strong burst a beat later (a cancellable timer:
+            // nothing is left pending when the page is disposed)
+            NuvoHaptics.thud();
+            _burstTimer?.cancel();
+            _burstTimer = Timer(NuvoMotion.introBurstGap, NuvoHaptics.burst);
+        }
+      }
+    }
+    // Page 5: the intro's progress completes when the level-up lands.
+    final reached =
+        _page == _pages.length - 1 &&
+        _play.value >= introClimax[_pages.length - 1];
+    if (reached != _levelLanded) setState(() => _levelLanded = reached);
+  }
+
+  bool _levelLanded = false;
+  Timer? _burstTimer;
+
   void _playPage(int i) {
+    _fired.clear();
     if (NuvoMotion.reduceMotionOf(context)) {
+      // Final state, one light haptic, nothing moves.
       _play.value = 1;
+      NuvoHaptics.light();
       return;
     }
+    _play.duration = i == _pages.length - 1
+        ? NuvoMotion.introPlayLong
+        : NuvoMotion.introPlay;
     if (_played.add(i)) {
       _play.forward(from: 0); // first visit: play once
     } else {
-      _play.value = 1; // revisit: hold the final frame
+      // revisit: hold the final frame, silently (marks first, then jump)
+      _fired.addAll([for (var k = 0; k < introHapticMarks[i].length; k++) k]);
+      _play.value = 1;
     }
   }
 
@@ -127,10 +173,15 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
       return;
     }
     final reduce = NuvoMotion.reduceMotionOf(context);
+    if (reduce) {
+      // No slide under reduce-motion (animateToPage asserts on zero length).
+      _controller.jumpToPage(_page + 1);
+      return;
+    }
     _animatingPage = true;
     try {
       await _controller.nextPage(
-        duration: reduce ? Duration.zero : NuvoMotion.enter,
+        duration: NuvoMotion.enter,
         curve: NuvoMotion.spring,
       );
     } finally {
@@ -211,7 +262,15 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 220),
                             child: ObProgressBar(
-                              done: ObProgress.doneForIntroPage(_page),
+                              done:
+                                  ObProgress.doneForIntroPage(_page) +
+                                  (_page == _pages.length - 1 &&
+                                          (_levelLanded ||
+                                              NuvoMotion.reduceMotionOf(
+                                                context,
+                                              ))
+                                      ? 1
+                                      : 0),
                               light: true,
                             ),
                           ),
@@ -252,6 +311,7 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
                   : AlwaysStoppedAnimation(_played.contains(i) ? 1.0 : 0.0),
               onReplay: () {
                 if (i == _page && !NuvoMotion.reduceMotionOf(context)) {
+                  _fired.clear();
                   _play.forward(from: 0); // explicit tap only
                 }
               },

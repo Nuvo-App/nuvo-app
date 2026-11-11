@@ -74,14 +74,27 @@ void main() {
   }.entries) {
     testWidgets('intro pages ${e.key}', skip: !on, (t) async {
       await _boot(t, e.value);
+      const climax = [0.80, 0.80, 0.72, 0.62, 0.82];
+      var elapsed = 2000; // _boot already ran 2s on page 1
       for (var p = 0; p < 5; p++) {
-        await t.pump(const Duration(milliseconds: 700));
-        await shot(t, 'intro_${e.key}_${p}_a');
-        await t.pump(const Duration(milliseconds: 1000));
-        await shot(t, 'intro_${e.key}_${p}_b');
-        await t.pump(const Duration(milliseconds: 2000));
-        await shot(t, 'intro_${e.key}_${p}_c');
-        if (p < 4) await _tapNext(t);
+        final d = p == 4 ? 5400 : 4200;
+        final marks = [
+          ((climax[p] - 0.16) * d).round(), // anticipation
+          ((climax[p] + 0.03) * d).round(), // climax
+          d - 100, // settle
+        ];
+        const names = ['a', 'b', 'c'];
+        for (var m = 0; m < 3; m++) {
+          while (elapsed < marks[m]) {
+            await t.pump(const Duration(milliseconds: 100));
+            elapsed += 100;
+          }
+          await shot(t, 'intro_${e.key}_${p}_${names[m]}');
+        }
+        if (p < 4) {
+          await _tapNext(t);
+          elapsed = 1200;
+        }
       }
     });
   }

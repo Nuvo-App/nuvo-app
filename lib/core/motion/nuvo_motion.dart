@@ -233,9 +233,20 @@ abstract final class NuvoMotion {
   /// How long an award / info chip stays on screen.
   static const Duration tourChipHold = Duration(milliseconds: 1800);
 
+  /// A (nearly) critically damped spring as a Curve: lands without visible
+  /// overshoot (< 1%). Use where the app's regular spring would bounce too
+  /// much (e.g. the leaderboard climb).
+  static const Curve softSpring = _SoftSpringCurve();
+
   /// Intro demos: a page's single animation plays ONCE over this span and
   /// holds its last frame.
-  static const Duration introPlay = Duration(milliseconds: 3200);
+  static const Duration introPlay = Duration(milliseconds: 4200);
+
+  /// The level-up page is the biggest moment: it gets more room.
+  static const Duration introPlayLong = Duration(milliseconds: 5400);
+
+  /// Gap between the thud and the strong burst at the level-up climax.
+  static const Duration introBurstGap = Duration(milliseconds: 90);
 
   /// Slow drift of the soft background shapes.
   static const Duration introDrift = Duration(seconds: 26);
@@ -301,6 +312,27 @@ class _NuvoSpringCurve extends Curve {
   /// Stateless deterministic math — one shared simulation is safe to reuse.
   static final SpringSimulation _sim = SpringSimulation(
     NuvoMotion.springDescription,
+    0,
+    1,
+    0,
+  );
+
+  @override
+  double transform(double t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    return _sim.x(t * _seconds);
+  }
+}
+
+
+/// mass 1 / stiffness 300 / damping 34 (zeta ~0.98): no visible overshoot.
+class _SoftSpringCurve extends Curve {
+  const _SoftSpringCurve();
+
+  static const double _seconds = 0.6;
+  static final SpringSimulation _sim = SpringSimulation(
+    SpringDescription(mass: 1, stiffness: 300, damping: 34),
     0,
     1,
     0,
