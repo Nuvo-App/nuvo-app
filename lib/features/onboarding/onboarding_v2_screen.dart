@@ -68,11 +68,12 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     if (!mounted || email != null || widget.sandbox) return;
     // The intro opens on the very first open ONLY. After that (or after an
     // explicit sign-out) a signed-out user lands on the login sheet.
+    final explicit = ref.read(explicitSignOutProvider);
     final firstRun = ref.read(firstRunFlagProvider);
-    final seenBefore = await firstRun.isDone();
+    final seenBefore = explicit || await firstRun.isDone();
     if (!mounted) return;
     if (!seenBefore) await firstRun.markDone();
-    if (ref.read(explicitSignOutProvider) || seenBefore) {
+    if (seenBefore) {
       ref.read(explicitSignOutProvider.notifier).state = false;
       ref.read(authIntentProvider.notifier).state = AuthIntent.signIn;
       final s = ref.read(onboardingFlowProvider).step;

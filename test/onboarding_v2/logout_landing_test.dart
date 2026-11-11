@@ -8,6 +8,7 @@ import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
+import 'package:nuvo/features/onboarding/data/first_run_flag.dart';
 import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
@@ -29,6 +30,7 @@ Future<OnboardingStep> _land(
   await store.attachAccount(previousEmail); // the account that just left
   final c = ProviderContainer(
     overrides: [
+      firstRunFlagProvider.overrideWithValue(MemoryFirstRunFlag()),
       onboardingV2StoreProvider.overrideWithValue(store),
       analyticsProvider.overrideWithValue(FakeAnalyticsService()),
       authControllerProvider.overrideWith((ref) => AuthController(_Repo())),
