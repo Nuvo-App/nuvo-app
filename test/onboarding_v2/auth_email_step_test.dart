@@ -2,7 +2,9 @@
 // send wiring, inline errors.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/core/motion/motion.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
+import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/onboarding/auth_visuals/email_step.dart';
 import 'package:nuvo/features/onboarding/auth_visuals/email_utils.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
@@ -161,5 +163,32 @@ void main() {
     expect(h.auth.startedFor, isEmpty);
     expect(h.auth.reviewerSignIns, ['testing@getnuvo.net|testing123|signIn']);
     expect(h.state.step, isNot(OnboardingStep.email));
+  });
+
+  testWidgets('Have an account? / New here? toggles the intent in place', (
+    t,
+  ) async {
+    t.view.devicePixelRatio = 1;
+    t.view.physicalSize = const Size(390, 844);
+    addTearDown(t.view.reset);
+    final h = await pump(t);
+    expect(find.byKey(const ValueKey('ob-intent-toggle')), findsOneWidget);
+    expect(find.text('New to Nuvo? Create an account'), findsOneWidget);
+    // Staggered entrances start on timers: give them frames to finish.
+    for (var i = 0; i < 12; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    final pressable = find.ancestor(
+      of: find.byKey(const ValueKey('ob-intent-toggle')),
+      matching: find.byType(NuvoPressable),
+    );
+    expect(pressable, findsOneWidget);
+    await t.tap(pressable);
+    await t.pump(const Duration(milliseconds: 300));
+    expect(h.container.read(authIntentProvider), AuthIntent.signUp);
+    expect(find.text('Have an account? Sign in'), findsOneWidget);
+    await t.tap(find.text('Have an account? Sign in'));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(h.container.read(authIntentProvider), AuthIntent.signIn);
   });
 }

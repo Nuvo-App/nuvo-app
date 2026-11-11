@@ -233,6 +233,26 @@ void main() {
       expect(field.top, greaterThan(0));
     },
   );
+
+  for (final size in [const Size(390, 844), const Size(320, 568)]) {
+    testWidgets('CTA keeps a clear gap above the keyboard at ${size.width}', (
+      t,
+    ) async {
+      t.view.devicePixelRatio = 1;
+      t.view.physicalSize = size;
+      addTearDown(t.view.reset);
+      final h = AuthHarness();
+      await t.runAsync(() => h.startAt(OnboardingStep.email));
+      await t.pumpWidget(h.app(const ObEmailStep()));
+      await _pumpFor(t, const Duration(seconds: 1));
+      final kb = size.height > 700 ? 336.0 : 260.0;
+      t.view.viewInsets = FakeViewPadding(bottom: kb);
+      addTearDown(t.view.resetViewInsets);
+      await _pumpFor(t, const Duration(seconds: 2));
+      final cta = t.getRect(find.byKey(const ValueKey('onboarding-cta')));
+      expect(size.height - kb - cta.bottom, greaterThanOrEqualTo(16));
+    });
+  }
 }
 
 class _NoSession extends AuthRepository {

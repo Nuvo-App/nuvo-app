@@ -108,8 +108,9 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
     if (awarded > 0) shell.award(awarded);
   }
 
-  Future<void> _useEmail() async {
+  Future<void> _useEmail({AuthIntent intent = AuthIntent.signIn}) async {
     if (_busy != _Busy.none) return;
+    ref.read(authIntentProvider.notifier).state = intent;
     await obAdvance(context, ref, OnboardingStep.signIn);
   }
 
@@ -119,8 +120,9 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
     final sheetH =
         (short ? 300.0 : 316.0) + MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
-      // White top (navy logo + headline) over an electric-blue sheet.
-      color: V13.white,
+      // Navy field where the UNMODIFIED real logo (white M) reads, over an
+      // electric-blue sheet.
+      color: V13.navy,
       child: Stack(
         children: [
           Positioned.fill(
@@ -150,6 +152,7 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
                   onApple: () => _social(_Busy.apple),
                   onGoogle: () => _social(_Busy.google),
                   onEmail: _useEmail,
+                  onCreate: () => _useEmail(intent: AuthIntent.signUp),
                 ),
               ),
             ),
@@ -167,6 +170,7 @@ class _SignInSheet extends StatelessWidget {
     required this.onApple,
     required this.onGoogle,
     required this.onEmail,
+    required this.onCreate,
   });
 
   final _Busy busy;
@@ -174,6 +178,7 @@ class _SignInSheet extends StatelessWidget {
   final VoidCallback onApple;
   final VoidCallback onGoogle;
   final VoidCallback onEmail;
+  final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +254,36 @@ class _SignInSheet extends StatelessWidget {
               child: Text(
                 ObCopy.signInEmailLink,
                 style: V13.bodyStrong.copyWith(color: V13.white),
+              ),
+            ),
+          ),
+          NuvoPressable(
+            onTap: busy == _Busy.none ? onCreate : null,
+            enabled: busy == _Busy.none,
+            semanticLabel: ObCopy.signInCreate,
+            child: Container(
+              key: const ValueKey('ob-create-link'),
+              height: 44,
+              alignment: Alignment.center,
+              child: Text.rich(
+                TextSpan(
+                  style: V13.bodyStrong.copyWith(color: V13.white),
+                  children: [
+                    TextSpan(
+                      text: ObCopy.signInNoAccount,
+                      style: V13.body.copyWith(
+                        color: V13.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                    TextSpan(
+                      text: ObCopy.signInCreateWord,
+                      style: const TextStyle(
+                        decoration: TextDecoration.underline,
+                        decorationColor: V13.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

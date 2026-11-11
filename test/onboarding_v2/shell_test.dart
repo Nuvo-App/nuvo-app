@@ -87,9 +87,9 @@ void main() {
       final after = tester.getRect(_cta());
       final screenH =
           tester.view.physicalSize.height / tester.view.devicePixelRatio;
-      // The dock's bottom edge sits exactly on top of the keyboard.
+      // The dock rides above the keyboard with a clear 20pt gap.
       expect(after.bottom, lessThan(before.bottom));
-      expect(after.bottom, closeTo(screenH - 300, 1));
+      expect(after.bottom, closeTo(screenH - 300 - 20, 1));
       shell.dispose();
     });
 

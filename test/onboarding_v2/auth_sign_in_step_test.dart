@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/widgets/google_g_logo.dart';
+import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/onboarding/auth_visuals/sign_in_step.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
 
@@ -133,12 +134,8 @@ void main() {
     t,
   ) async {
     // The file is in the bundle and is a real PNG.
-    final data = await rootBundle.load('assets/branding/nuvo_logo_navy.png');
+    final data = await rootBundle.load('assets/branding/nuvo_logo_graphic.png');
     expect(data.lengthInBytes, greaterThan(10000));
-    final original = await rootBundle.load(
-      'assets/branding/nuvo_logo_graphic.png',
-    );
-    expect(original.lengthInBytes, greaterThan(10000));
     await pump(t);
     final img = find.byKey(const ValueKey('ob-login-logo'));
     expect(img, findsOneWidget);
@@ -149,6 +146,16 @@ void main() {
       expect(frame.image.width, greaterThan(100));
     });
     // And no race-path graphics remain on the login hero.
+  });
+
+  testWidgets("Create one link goes to email as sign-up", (t) async {
+    final h = await pump(t);
+    final link = find.byKey(const ValueKey('ob-create-link'));
+    expect(link, findsOneWidget);
+    await t.tap(link);
+    await _settle(t);
+    expect(h.state.step, OnboardingStep.email);
+    expect(h.container.read(authIntentProvider), AuthIntent.signUp);
   });
 
   test('Google G artwork parses into the 48x48 box', () {

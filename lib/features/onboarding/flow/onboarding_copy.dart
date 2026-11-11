@@ -44,6 +44,11 @@ abstract final class ObCopy {
   static const String signInSub = 'So your races, friends and level are yours.';
   static const String signInApple = 'Continue with Apple';
   static const String signInGoogle = 'Continue with Google';
+  static const String signInNoAccount = "Don't have an account? ";
+  static const String signInCreateWord = 'Create one';
+  static const String signInCreate = "Don't have an account? Create one";
+  static const String emailHaveAccount = 'Have an account? Sign in';
+  static const String emailNewHere = 'New to Nuvo? Create an account';
   static const String signInEmailLink = 'Use email instead';
   static const String signInLegal =
       'By continuing you agree to the Terms and Privacy Policy';

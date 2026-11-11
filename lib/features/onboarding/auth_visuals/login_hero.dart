@@ -80,7 +80,7 @@ class _ObLoginHeroState extends State<ObLoginHero>
                       );
                     },
                     child: Image.asset(
-                      'assets/branding/nuvo_logo_navy.png',
+                      'assets/branding/nuvo_logo_graphic.png',
                       key: const ValueKey('ob-login-logo'),
                       height: logoH,
                       fit: BoxFit.contain,
@@ -97,7 +97,7 @@ class _ObLoginHeroState extends State<ObLoginHero>
                       style: V13.title.copyWith(
                         fontSize: 40,
                         height: 1.08,
-                        color: V13.navy,
+                        color: V13.white,
                       ),
                     ),
                   ),

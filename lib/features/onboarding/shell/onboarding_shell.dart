@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -449,7 +447,8 @@ class _CtaDock extends StatelessWidget {
     return AnimatedPadding(
       duration: reduce ? Duration.zero : NuvoMotion.springDuration,
       curve: NuvoMotion.spring,
-      padding: EdgeInsets.only(bottom: math.max(keyboard, 16.0)),
+      // A clear 20pt gap above the keyboard (never flush against it).
+      padding: EdgeInsets.only(bottom: keyboard > 0 ? keyboard + 20 : 16.0),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: sideMargin),
         child: CtaPop(

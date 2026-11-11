@@ -219,6 +219,7 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
               child: _status(typo, chips, valid),
             ),
           ),
+          const _IntentToggle(),
         ],
       ),
       ctaLabel: _sending
@@ -331,6 +332,40 @@ class _TypoHint extends StatelessWidget {
           ObCopy.emailTypoHintFor(domain),
           key: const ValueKey('ob-email-typo'),
           style: V13.bodyStrong.copyWith(color: V13.blue),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Have an account? Sign in" / "New to Nuvo? Create an account": flips the
+/// auth intent in place (no navigation, nothing re-created).
+class _IntentToggle extends ConsumerWidget {
+  const _IntentToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signUp = ref.watch(authIntentProvider) == AuthIntent.signUp;
+    return NuvoPressable(
+      onTap: () {
+        ref.read(authIntentProvider.notifier).state = signUp
+            ? AuthIntent.signIn
+            : AuthIntent.signUp;
+      },
+      semanticLabel: signUp ? ObCopy.emailHaveAccount : ObCopy.emailNewHere,
+      child: SizedBox(
+        key: const ValueKey('ob-intent-toggle'),
+        height: 44,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            signUp ? ObCopy.emailHaveAccount : ObCopy.emailNewHere,
+            style: V13.bodyStrong.copyWith(
+              color: V13.blue,
+              decoration: TextDecoration.underline,
+              decorationColor: V13.blue,
+            ),
+          ),
         ),
       ),
     );
