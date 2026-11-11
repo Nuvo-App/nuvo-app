@@ -101,7 +101,10 @@ class _ObEmailStepState extends ConsumerState<ObEmailStep> {
       return;
     }
     // Signed in: settle the account, then complete code (+XP) and email.
-    final signedIn = ref.read(authControllerProvider).user?.email;
+    final signedInUser = ref.read(authControllerProvider).user;
+    // Existing / seeded complete account (R2): straight to the app.
+    if (signedInUser?.onboardingComplete == true) return;
+    final signedIn = signedInUser?.email;
     if (signedIn != null) await flow.attachAccount(signedIn);
     final awarded = await flow.completeStep(OnboardingStep.code);
     await flow.completeStep(OnboardingStep.email);

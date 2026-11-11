@@ -238,6 +238,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     OnboardingStep.tourCrew => const ObTourCrewStep(),
     OnboardingStep.tourProfile => const ObTourProfileStep(),
     OnboardingStep.levelUp => const ObLevelUpStep(),
+    OnboardingStep.createAccount => const ObSignInStep(create: true),
   };
 }
 

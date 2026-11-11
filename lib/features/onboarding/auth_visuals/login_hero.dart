@@ -53,7 +53,12 @@ class _ObLoginHeroState extends State<ObLoginHero>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final logoH = math.min(190.0, c.maxHeight * 0.44);
+        // Short hero (small phone + the 3-button create sheet): the logo
+        // alone; the typewriter needs ~110pt more than that.
+        final showHeadline = c.maxHeight >= 250;
+        final logoH = showHeadline
+            ? math.min(190.0, c.maxHeight * 0.44)
+            : math.max(0.0, c.maxHeight - 24);
         return Stack(
           children: [
             Align(
@@ -88,19 +93,20 @@ class _ObLoginHeroState extends State<ObLoginHero>
                       errorBuilder: (_, _, _) => SizedBox(height: logoH),
                     ),
                   ),
-                  SizedBox(height: logoH * 0.16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: ObTypewriter(
-                      phrases: ObCopy.loginPhrases,
-                      semanticLabel: ObCopy.loginHeadline,
-                      style: V13.title.copyWith(
-                        fontSize: 40,
-                        height: 1.08,
-                        color: V13.white,
+                  if (showHeadline) SizedBox(height: logoH * 0.16),
+                  if (showHeadline)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: ObTypewriter(
+                        phrases: ObCopy.loginPhrases,
+                        semanticLabel: ObCopy.loginHeadline,
+                        style: V13.title.copyWith(
+                          fontSize: 40,
+                          height: 1.08,
+                          color: V13.white,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

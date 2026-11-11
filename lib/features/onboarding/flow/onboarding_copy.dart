@@ -58,6 +58,9 @@ abstract final class ObCopy {
   static const String signInCreate = "Don't have an account? Create one";
   static const String emailHaveAccount = 'Have an account? Sign in';
   static const String emailNewHere = 'New to Nuvo? Create an account';
+  static const String createTitle = 'Create your account';
+  static const String createEmail = 'Continue with email';
+  static const String createHaveAccount = 'Have an account? Sign in';
   static const String signInEmailLink = 'Use email instead';
   static const String signInLegal =
       'By continuing you agree to the Terms and Privacy Policy';

@@ -56,6 +56,12 @@ enum OnboardingStep {
 
   /// S15 — LEVEL UP, the one full-bleed blue screen.
   levelUp,
+
+  /// "Create one": the account-choice page (Apple / Google / email). Not a
+  /// linear step — reached only by goTo from the login sheet, always cut
+  /// (auto-complete). Last in the enum so `previous` of every real step is
+  /// unchanged.
+  createAccount,
 }
 
 extension OnboardingStepX on OnboardingStep {
@@ -120,6 +126,7 @@ extension OnboardingStepX on OnboardingStep {
 /// resolve silently (no XP, no screen) so the flow runs S9 -> Level Up.
 /// Re-enable a step by removing it here; nothing else changes.
 const Set<OnboardingStep> kCutSteps = {
+  OnboardingStep.createAccount,
   // The rethought flow (docs/redesign/onboarding-screen-plan.md): one
   // swipeable intro, sign-in, minimal setup, straight into the app. No
   // second intro page, no questions, no level-up gate.

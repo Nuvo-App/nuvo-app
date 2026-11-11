@@ -24,7 +24,12 @@ enum _Busy { none, apple, google }
 /// calls; "Use email instead" continues to S5. A social sign-in verifies the
 /// account, so it settles the email + code steps and lands the same +10.
 class ObSignInStep extends ConsumerStatefulWidget {
-  const ObSignInStep({super.key});
+  const ObSignInStep({super.key, this.create = false});
+
+  /// The "Create one" page: the same screen, but the player must CHOOSE how
+  /// to create the account (Apple, Google or email) — email is never a
+  /// default.
+  final bool create;
 
   @override
   ConsumerState<ObSignInStep> createState() => _ObSignInStepState();
@@ -100,7 +105,11 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
     // BEFORE signIn: completing a step other than the current one does not
     // move the pointer, so the flow goes straight to S7 with no flash of
     // the email screen (and no keyboard pop).
-    final email = ref.read(authControllerProvider).user?.email;
+    final signedIn = ref.read(authControllerProvider).user;
+    // An EXISTING account (onboarding already complete) logs straight in:
+    // the router takes it to the app. It never walks any onboarding step.
+    if (signedIn?.onboardingComplete == true) return;
+    final email = signedIn?.email;
     if (email != null) await flow.attachAccount(email);
     final awarded = await flow.completeStep(OnboardingStep.code);
     await flow.completeStep(OnboardingStep.email);
@@ -114,11 +123,38 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
     await obAdvance(context, ref, OnboardingStep.signIn);
   }
 
+  /// Sign-in sheet -> "Create one": open the account-choice page.
+  void _openCreate() {
+    if (_busy != _Busy.none) return;
+    ref.read(authIntentProvider.notifier).state = AuthIntent.signUp;
+    ref
+        .read(onboardingFlowProvider.notifier)
+        .goTo(OnboardingStep.createAccount);
+  }
+
+  /// Create page -> "Continue with email" (an explicit choice).
+  Future<void> _createWithEmail() async {
+    if (_busy != _Busy.none) return;
+    final flow = ref.read(onboardingFlowProvider.notifier);
+    ref.read(authIntentProvider.notifier).state = AuthIntent.signUp;
+    await flow.completeStep(OnboardingStep.signIn); // not current: no advance
+    flow.goTo(OnboardingStep.email);
+  }
+
+  /// Create page -> "Have an account? Sign in".
+  void _backToSignIn() {
+    if (_busy != _Busy.none) return;
+    ref.read(authIntentProvider.notifier).state = AuthIntent.signIn;
+    ref.read(onboardingFlowProvider.notifier).goTo(OnboardingStep.signIn);
+  }
+
   @override
   Widget build(BuildContext context) {
     final short = MediaQuery.sizeOf(context).height < 640;
     final sheetH =
-        (short ? 300.0 : 316.0) + MediaQuery.paddingOf(context).bottom;
+        (short ? 300.0 : 316.0) +
+        (widget.create ? 68.0 : 0.0) +
+        MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
       // Navy field where the UNMODIFIED real logo (white M) reads, over an
       // electric-blue sheet.
@@ -151,8 +187,11 @@ class _ObSignInStepState extends ConsumerState<ObSignInStep>
                   error: _error,
                   onApple: () => _social(_Busy.apple),
                   onGoogle: () => _social(_Busy.google),
+                  create: widget.create,
                   onEmail: _useEmail,
-                  onCreate: () => _useEmail(intent: AuthIntent.signUp),
+                  onCreate: _openCreate,
+                  onCreateEmail: _createWithEmail,
+                  onSignIn: _backToSignIn,
                 ),
               ),
             ),
@@ -171,8 +210,14 @@ class _SignInSheet extends StatelessWidget {
     required this.onGoogle,
     required this.onEmail,
     required this.onCreate,
+    required this.create,
+    required this.onCreateEmail,
+    required this.onSignIn,
   });
 
+  final bool create;
+  final VoidCallback onCreateEmail;
+  final VoidCallback onSignIn;
   final _Busy busy;
   final String? error;
   final VoidCallback onApple;
@@ -202,7 +247,7 @@ class _SignInSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            ObCopy.signInTitle,
+            create ? ObCopy.createTitle : ObCopy.signInTitle,
             style: V13.cardTitle.copyWith(color: V13.white),
           ),
           const SizedBox(height: 16),
@@ -242,51 +287,83 @@ class _SignInSheet extends StatelessWidget {
               style: V13.bodyStrong.copyWith(color: V13.sun),
             ),
           ],
-          const SizedBox(height: V13.gapSm),
-          NuvoPressable(
-            onTap: busy == _Busy.none ? onEmail : null,
-            enabled: busy == _Busy.none,
-            semanticLabel: ObCopy.signInEmailLink,
-            child: Container(
-              key: const ValueKey('ob-email-link'),
-              height: 48,
-              alignment: Alignment.center,
-              child: Text(
-                ObCopy.signInEmailLink,
-                style: V13.bodyStrong.copyWith(color: V13.white),
-              ),
+          if (create) ...[
+            const SizedBox(height: V13.gapMd),
+            _AuthButton(
+              key: const ValueKey('ob-create-email'),
+              label: ObCopy.createEmail,
+              icon: Icons.mail_outline_rounded,
+              fill: V13.card,
+              ink: V13.navy,
+              loading: false,
+              onTap: busy == _Busy.none ? onCreateEmail : null,
             ),
-          ),
-          NuvoPressable(
-            onTap: busy == _Busy.none ? onCreate : null,
-            enabled: busy == _Busy.none,
-            semanticLabel: ObCopy.signInCreate,
-            child: Container(
-              key: const ValueKey('ob-create-link'),
-              height: 44,
-              alignment: Alignment.center,
-              child: Text.rich(
-                TextSpan(
-                  style: V13.bodyStrong.copyWith(color: V13.white),
-                  children: [
-                    TextSpan(
-                      text: ObCopy.signInNoAccount,
-                      style: V13.body.copyWith(
-                        color: V13.white.withValues(alpha: 0.85),
-                      ),
-                    ),
-                    TextSpan(
-                      text: ObCopy.signInCreateWord,
-                      style: const TextStyle(
-                        decoration: TextDecoration.underline,
-                        decorationColor: V13.white,
-                      ),
-                    ),
-                  ],
+            const SizedBox(height: V13.gapSm),
+            NuvoPressable(
+              onTap: busy == _Busy.none ? onSignIn : null,
+              enabled: busy == _Busy.none,
+              semanticLabel: ObCopy.createHaveAccount,
+              child: Container(
+                key: const ValueKey('ob-have-account-link'),
+                height: 44,
+                alignment: Alignment.center,
+                child: Text(
+                  ObCopy.createHaveAccount,
+                  style: V13.bodyStrong.copyWith(
+                    color: V13.white,
+                    decoration: TextDecoration.underline,
+                    decorationColor: V13.white,
+                  ),
                 ),
               ),
             ),
-          ),
+          ] else ...[
+            const SizedBox(height: V13.gapSm),
+            NuvoPressable(
+              onTap: busy == _Busy.none ? onEmail : null,
+              enabled: busy == _Busy.none,
+              semanticLabel: ObCopy.signInEmailLink,
+              child: Container(
+                key: const ValueKey('ob-email-link'),
+                height: 48,
+                alignment: Alignment.center,
+                child: Text(
+                  ObCopy.signInEmailLink,
+                  style: V13.bodyStrong.copyWith(color: V13.white),
+                ),
+              ),
+            ),
+            NuvoPressable(
+              onTap: busy == _Busy.none ? onCreate : null,
+              enabled: busy == _Busy.none,
+              semanticLabel: ObCopy.signInCreate,
+              child: Container(
+                key: const ValueKey('ob-create-link'),
+                height: 44,
+                alignment: Alignment.center,
+                child: Text.rich(
+                  TextSpan(
+                    style: V13.bodyStrong.copyWith(color: V13.white),
+                    children: [
+                      TextSpan(
+                        text: ObCopy.signInNoAccount,
+                        style: V13.body.copyWith(
+                          color: V13.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                      TextSpan(
+                        text: ObCopy.signInCreateWord,
+                        style: const TextStyle(
+                          decoration: TextDecoration.underline,
+                          decorationColor: V13.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
           const _LegalLine(),
         ],
       ),

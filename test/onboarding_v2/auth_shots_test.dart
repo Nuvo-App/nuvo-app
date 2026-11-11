@@ -84,6 +84,20 @@ void main() {
       await shot(t, 's4_$tag');
     });
 
+    testWidgets('S4 create $tag', skip: !shotsOn, (t) async {
+      await boot(
+        t,
+        size,
+        OnboardingStep.createAccount,
+        const ObSignInStep(create: true),
+      );
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
+      await t.pump(const Duration(seconds: 1));
+      await shot(t, 's4c_$tag');
+    });
+
     testWidgets('S5 empty $tag', skip: !shotsOn, (t) async {
       await boot(
         t,

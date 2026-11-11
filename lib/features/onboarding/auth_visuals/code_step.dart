@@ -189,7 +189,10 @@ class _ObCodeStepState extends ConsumerState<ObCodeStep>
         .unfocus(); // the keyboard drops, the ticket returns to take its stamp
     NuvoHaptics.medium();
     unawaited(NuvoHaptics.success());
-    final account = ref.read(authControllerProvider).user?.email;
+    final accountUser = ref.read(authControllerProvider).user;
+    // Existing account: the router takes it to the app; do not walk steps.
+    if (accountUser?.onboardingComplete == true) return;
+    final account = accountUser?.email;
     if (account != null) await flow.attachAccount(account);
     // The VERIFIED moment holds until the player taps Continue (no timer
     // moves them on).
