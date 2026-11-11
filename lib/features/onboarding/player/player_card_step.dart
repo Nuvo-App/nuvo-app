@@ -277,7 +277,7 @@ class _ObPlayerCardStepState extends ConsumerState<ObPlayerCardStep> {
     // the slot and the card scales down to fit so the fields keep the room.
     final heroHeight = keyboard
         ? 104.0
-        : obHeroHeight(context, tall: 232, small: 188);
+        : obHeroHeight(context, tall: 168, small: 140);
 
     return OnboardingShell(
       step: OnboardingStep.playerCard,

@@ -24,6 +24,7 @@ import 'package:nuvo/features/onboarding/data/onboarding_v2_store.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_flow_controller.dart';
 import 'package:nuvo/features/onboarding/flow/onboarding_step.dart';
 import 'package:nuvo/features/onboarding/onboarding_v2_screen.dart';
+import 'package:nuvo/features/onboarding/player/player_card_step.dart';
 
 import 'auth_visuals_support.dart';
 
@@ -66,6 +67,12 @@ class _ScriptedAuth extends FakeAuth {
   Future<void> signInWithGoogle(String idToken) async => _in(account);
 
   @override
+  Future<void> completeOnboarding() async {
+    final u = state.user;
+    if (u != null) _in(u.copyWith(onboardingComplete: true));
+  }
+
+  @override
   Future<void> signInReviewer(
     String email,
     String password, {
@@ -93,7 +100,11 @@ Future<void> _pumpFor(WidgetTester t, [int ms = 1500]) async {
   }
 }
 
-Future<_Rig> _boot(WidgetTester t, AuthUser account) async {
+Future<_Rig> _boot(
+  WidgetTester t,
+  AuthUser account, {
+  bool firstOpen = false,
+}) async {
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = const Size(390, 844);
   addTearDown(t.view.reset);
@@ -105,7 +116,11 @@ Future<_Rig> _boot(WidgetTester t, AuthUser account) async {
       onboardingV2StoreProvider.overrideWithValue(OnboardingV2Store.memory()),
       analyticsProvider.overrideWithValue(FakeAnalyticsService()),
       // Not the first open: a signed-out user lands on the login sheet.
-      firstRunFlagProvider.overrideWithValue(MemoryFirstRunFlag(done: true)),
+      firstRunFlagProvider.overrideWithValue(
+        MemoryFirstRunFlag(done: !firstOpen),
+      ),
+      obUsernameCheckerProvider.overrideWithValue((u) async => true),
+      obPlayerSaveProvider.overrideWithValue((save) async {}),
     ],
   );
   addTearDown(container.dispose);
@@ -274,5 +289,71 @@ void main() {
     await _tapKey(t, 'ob-have-account-link');
     expect(rig.step, OnboardingStep.signIn);
     expect(find.byKey(const ValueKey('ob-create-link')), findsOneWidget);
+  });
+
+  // ── Taps from the very first open to inside the app ─────────────────────
+  // (docs/redesign/onboarding-screen-plan.md; typing is not a tap.)
+  testWidgets('tap count: first open -> inside the app via Apple <= 4', (
+    t,
+  ) async {
+    final rig = await _boot(
+      t,
+      _user('ava@gmail.com', complete: false),
+      firstOpen: true,
+    );
+    var taps = 0;
+    Future<void> tap(Finder f) async {
+      taps++;
+      await t.tap(f);
+      await _pumpFor(t, 1200);
+    }
+
+    expect(rig.step, OnboardingStep.introRace);
+    await tap(find.byKey(const ValueKey('ob-intro-skip'))); // 1
+    expect(rig.step, OnboardingStep.signIn);
+    await tap(find.byKey(const ValueKey('ob-apple'))); // 2
+    expect(rig.step, OnboardingStep.playerCard);
+    await t.enterText(find.byType(TextField).first, 'Ava Lee');
+    await t.enterText(find.byType(TextField).at(1), 'avalee');
+    await _pumpFor(t, 800);
+    await tap(find.byKey(const ValueKey('player-card-terms'))); // 3
+    await tap(find.byKey(const ValueKey('onboarding-cta'))); // 4
+    expect(rig.location, '/arena');
+    expect(taps, lessThanOrEqualTo(4));
+  });
+
+  testWidgets('tap count: first open -> inside the app via email <= 7', (
+    t,
+  ) async {
+    final rig = await _boot(
+      t,
+      _user('ava@gmail.com', complete: false),
+      firstOpen: true,
+    );
+    var taps = 0;
+    Future<void> tap(String key) async {
+      taps++;
+      await _tapKey(t, key);
+    }
+
+    await tap('ob-intro-skip'); // 1
+    await tap('ob-email-link'); // 2
+    await t.enterText(
+      find.byKey(const ValueKey('ob-email-field')),
+      'ava@gmail.com',
+    );
+    await _pumpFor(t, 400);
+    await tap('onboarding-cta'); // 3 Send code
+    await t.enterText(find.byKey(const ValueKey('ob-code-field')), '123456');
+    await _pumpFor(t, 1500); // auto-verifies on the 6th digit
+    await tap('onboarding-cta'); // 4 Next on the verified screen
+    expect(rig.step, OnboardingStep.playerCard);
+    await t.enterText(find.byType(TextField).first, 'Ava Lee');
+    await t.enterText(find.byType(TextField).at(1), 'avalee');
+    await _pumpFor(t, 800);
+    await tap('player-card-terms'); // 5
+    await tap('onboarding-cta'); // 6
+    expect(rig.location, '/arena');
+    expect(taps, lessThanOrEqualTo(7));
   });
 }

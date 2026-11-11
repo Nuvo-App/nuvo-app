@@ -233,6 +233,9 @@ abstract final class NuvoMotion {
   /// How long an award / info chip stays on screen.
   static const Duration tourChipHold = Duration(milliseconds: 1800);
 
+  /// Intro demos: one loop of a page's single animation.
+  static const Duration introLoop = Duration(milliseconds: 4200);
+
   /// Login typewriter: type, hold, backspace, gap between phrases.
   static const Duration typeChar = Duration(milliseconds: 75);
   static const Duration deleteChar = Duration(milliseconds: 35);

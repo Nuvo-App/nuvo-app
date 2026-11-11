@@ -6,12 +6,15 @@ import '../../../core/v13/tokens.dart';
 import '../flow/onboarding_copy.dart';
 import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
+import '../shell/ob_progress.dart';
 import '../shell/onboarding_shell.dart' show obAdvance;
+import 'intro_demos.dart';
 
-/// The whole intro: three swipeable value screens (what it is, how it
-/// proves, why it's fun), one color field each, no cards and nothing to tap
-/// through but the single button. Skip leaves at any time. Shown on the very
-/// first app open only.
+/// The intro: five swipeable pages that explain the app (race, prove it on
+/// camera, the board, your crew, levels). One flat animation per page, one
+/// Continue button, Skip always available, and a progress bar that only
+/// appears from page 2 (see [ObProgress] for the exact formula). Shown on the
+/// very first app open only.
 class ObIntroPagesStep extends ConsumerStatefulWidget {
   const ObIntroPagesStep({super.key});
 
@@ -20,45 +23,65 @@ class ObIntroPagesStep extends ConsumerStatefulWidget {
 }
 
 class _Page {
-  const _Page(this.color, this.icon, this.title, this.body);
+  const _Page(this.color, this.title, this.body);
   final Color color;
-  final IconData icon;
   final String title;
   final String body;
 }
 
 const _pages = [
-  _Page(
-    V13.sky,
-    Icons.sports_score_rounded,
-    ObCopy.introRaceTitle,
-    ObCopy.introRaceSub,
-  ),
-  _Page(
-    V13.mint,
-    Icons.videocam_rounded,
-    ObCopy.introProveTitle,
-    ObCopy.introProveSub,
-  ),
-  _Page(
-    V13.lilac,
-    Icons.leaderboard_rounded,
-    ObCopy.introClimbTitle,
-    ObCopy.introClimbSub,
-  ),
+  _Page(V13.sky, ObCopy.introRaceTitle, ObCopy.introRaceSub),
+  _Page(V13.mint, ObCopy.introProveTitle, ObCopy.introProveSub),
+  _Page(V13.lilac, ObCopy.introClimbTitle, ObCopy.introClimbSub),
+  _Page(V13.sun, ObCopy.introCrewTitle, ObCopy.introCrewSub),
+  _Page(V13.sky, ObCopy.introLevelTitle, ObCopy.introLevelSub),
 ];
 
-class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep> {
+class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
+    with SingleTickerProviderStateMixin {
   final _controller = PageController();
+  late final AnimationController _loop = AnimationController(
+    vsync: this,
+    duration: NuvoMotion.introLoop,
+  );
   int _page = 0;
+  bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ObProgress.reset();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (NuvoMotion.reduceMotionOf(context)) {
+      _loop.value = 1; // the finished frame, static
+    } else {
+      _loop.repeat();
+    }
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _loop.dispose();
     super.dispose();
   }
 
   bool get _last => _page == _pages.length - 1;
+
+  void _onPage(int i) {
+    setState(() => _page = i);
+    if (!NuvoMotion.reduceMotionOf(context)) {
+      _loop
+        ..value = 0
+        ..repeat();
+    }
+  }
 
   void _next() {
     if (_last) {
@@ -82,58 +105,62 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(24, 8, 8, 0),
               child: SizedBox(
                 height: 44,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: NuvoPressable(
-                    onTap: flow.skipIntros,
-                    semanticLabel: ObCopy.skip,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: Text(
-                        ObCopy.skip,
-                        key: const ValueKey('ob-intro-skip'),
-                        style: V13.bodyStrong.copyWith(color: V13.navy),
+                child: Row(
+                  children: [
+                    Expanded(
+                      // Hidden on page 1; honest progress from page 2 on.
+                      child: _page == 0
+                          ? const SizedBox.shrink()
+                          : Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 220,
+                                ),
+                                child: ObProgressBar(
+                                  done: ObProgress.doneForIntroPage(_page),
+                                  light: true,
+                                ),
+                              ),
+                            ),
+                    ),
+                    NuvoPressable(
+                      onTap: flow.skipIntros,
+                      semanticLabel: ObCopy.skip,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: Text(
+                          ObCopy.skip,
+                          key: const ValueKey('ob-intro-skip'),
+                          style: V13.bodyStrong.copyWith(color: V13.navy),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
             Expanded(
-              child: PageView(
+              child: PageView.builder(
                 key: const ValueKey('ob-intro-pages'),
                 controller: _controller,
-                onPageChanged: (i) => setState(() => _page = i),
-                children: [for (final p in _pages) _PageBody(page: p)],
+                itemCount: _pages.length,
+                onPageChanged: _onPage,
+                itemBuilder: (context, i) => _PageBody(
+                  page: _pages[i],
+                  kind: i,
+                  loop: _loop,
+                  active: i == _page,
+                ),
               ),
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var i = 0; i < _pages.length; i++)
-                  AnimatedContainer(
-                    duration: NuvoMotion.springDuration,
-                    curve: NuvoMotion.spring,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: i == _page ? 22 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: i == _page ? V13.navy : Colors.transparent,
-                      borderRadius: BorderRadius.circular(V13.radiusPill),
-                      border: Border.all(color: V13.navy, width: V13.outline),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: NuvoPressable(
                 onTap: _next,
                 borderRadius: BorderRadius.circular(V13.radiusButton),
@@ -166,9 +193,17 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep> {
 }
 
 class _PageBody extends StatelessWidget {
-  const _PageBody({required this.page});
+  const _PageBody({
+    required this.page,
+    required this.kind,
+    required this.loop,
+    required this.active,
+  });
 
   final _Page page;
+  final int kind;
+  final Animation<double> loop;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -177,19 +212,26 @@ class _PageBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Spacer(flex: 2),
-          Icon(page.icon, size: 112, color: V13.navy),
-          const Spacer(),
+          Expanded(
+            flex: 5,
+            child: active
+                ? AnimatedBuilder(
+                    animation: loop,
+                    builder: (context, _) =>
+                        IntroDemo(kind: kind, t: loop.value),
+                  )
+                : IntroDemo(kind: kind, t: 1),
+          ),
           Text(
             page.title,
-            style: V13.title.copyWith(fontSize: 40, height: 1.05),
+            style: V13.title.copyWith(fontSize: 38, height: 1.05),
           ),
           const SizedBox(height: 12),
           Text(
             page.body,
             style: V13.body.copyWith(fontSize: 17, color: V13.navy),
           ),
-          const Spacer(flex: 2),
+          const SizedBox(height: 24),
         ],
       ),
     );

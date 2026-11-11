@@ -102,7 +102,7 @@ extension OnboardingStepX on OnboardingStep {
   /// (player card onward). Pre-auth screens — splash, intros, the sheet,
   /// email and code — carry dots or the rail alone, so no path ever runs
   /// behind their copy.
-  bool get showsTrack => showsRail && index >= OnboardingStep.playerCard.index;
+  bool get showsTrack => false; // the track is retired (flat, calm pages)
 
   /// Steps the user may pass without acting — S1–S2 (Skip), the two
   /// starter questions (skippable), and the tour stops (Skip tour).

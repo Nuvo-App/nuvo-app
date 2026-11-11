@@ -8,6 +8,7 @@ import '../flow/onboarding_flow_controller.dart';
 import '../flow/onboarding_step.dart';
 import 'cta_pop.dart';
 import 'onboarding_shell_controller.dart';
+import 'ob_progress.dart';
 import 'track_painter.dart';
 import 'xp_rail.dart';
 
@@ -321,7 +322,14 @@ class _TopBar extends StatelessWidget {
                   ),
           ),
           Expanded(
-            child: rail
+            child: ObProgress.doneForStep(step) != null
+                ? Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: ObProgressBar(done: ObProgress.doneForStep(step)!),
+                    ),
+                  )
+                : rail
                 ? XpRail(controller: shell)
                 : dots
                 ? _Dots(index: dotIndex, count: dotCount)

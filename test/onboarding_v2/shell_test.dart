@@ -102,27 +102,15 @@ void main() {
       await tester.pumpWidget(
         _app(
           shell: shell,
-          step: OnboardingStep.playerCard,
+          step: OnboardingStep.arenaTour,
           disableAnimations: true,
         ),
       );
       await tester.pump();
-      final painter =
-          tester
-                  .widget<CustomPaint>(
-                    find.descendant(
-                      of: find.byType(TrackBackground),
-                      matching: find.byType(CustomPaint),
-                    ),
-                  )
-                  .painter
-              as TrackPainter;
-      // Under reduce-motion the camera teleports — zero frames of pan.
-      expect(painter.pathProgress, 5);
-      expect(painter.beadProgress, 5);
-      expect(painter.avatarProgress, 5);
+      // The track is retired (flat pages): nothing pans, content renders.
+      expect(find.byType(TrackBackground), findsNothing);
       expect(
-        find.text('Step ${OnboardingStep.playerCard.index}'),
+        find.text('Step ${OnboardingStep.arenaTour.index}'),
         findsOneWidget,
       );
       shell.dispose();
@@ -130,7 +118,9 @@ void main() {
 
     testWidgets('XP rail fills only after the +N flight lands', (tester) async {
       final shell = OnboardingShellController();
-      await tester.pumpWidget(_app(shell: shell, step: OnboardingStep.code));
+      await tester.pumpWidget(
+        _app(shell: shell, step: OnboardingStep.arenaTour),
+      );
       await tester.pumpAndSettle();
       expect(find.text('0 XP'), findsOneWidget);
 
@@ -153,7 +143,11 @@ void main() {
     ) async {
       final shell = OnboardingShellController();
       await tester.pumpWidget(
-        _app(shell: shell, step: OnboardingStep.code, disableAnimations: true),
+        _app(
+          shell: shell,
+          step: OnboardingStep.arenaTour,
+          disableAnimations: true,
+        ),
       );
       await tester.pumpAndSettle();
       shell.award(30);
@@ -173,7 +167,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(XpRail), findsNothing);
 
-      await tester.pumpWidget(_app(shell: shell, step: OnboardingStep.code));
+      await tester.pumpWidget(
+        _app(shell: shell, step: OnboardingStep.arenaTour),
+      );
       await tester.pumpAndSettle();
       expect(find.byType(XpRail), findsOneWidget);
       shell.dispose();
