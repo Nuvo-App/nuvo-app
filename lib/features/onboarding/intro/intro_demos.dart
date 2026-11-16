@@ -6,44 +6,65 @@ import '../../../core/motion/motion.dart';
 import '../../../core/v13/tokens.dart';
 import '../../races/presentation/widgets/rive_movement_preview.dart';
 
-/// The five intro moments. Every page has ONE story told with the same
-/// shape — anticipation (a slow-down, a held beat), a CLIMAX (burst, ring
-/// wave, camera push, strong haptic) and a settle — and plays ONCE over
-/// [t] in 0..1, then holds the final frame. Flat fills only: no shadows, no
-/// tilt, no floating cards.
-///
-/// Climax time (real t) per page, and the haptic marks the page fires as the
-/// play passes them (see [introHapticMarks]).
-const introClimax = [0.80, 0.80, 0.72, 0.62, 0.82];
+// The five intro scenes (see docs/redesign/onboarding-v2-motion-brief.md).
+//
+// Every scene is a FULL-SCREEN layer drawn edge to edge under the text and
+// the CTA: no clip, no inner demo box. The page's hero lives in [stage] (the
+// zone between the header and the title block, with >= 20px margins); effects
+// (ring waves, confetti, flashes) are drawn in screen space and fade out
+// before they would ever need cropping. Each page tells one idea with the
+// same shape — anticipation (a slow-down, a held beat), a CLIMAX (burst, ring
+// waves, camera push, strong haptic) and a settle — and plays ONCE over t in
+// 0..1, then holds its final frame. Flat fills only.
 
-/// (t, kind) — kind is 'tick' | 'thud' | 'burst' | 'success'.
+/// Climax time (fraction of the play) per page.
+const introClimax = [0.88, 0.86, 0.78, 0.64, 0.82];
+
+/// (t, kind) haptic marks per page — 'tick' | 'thud' | 'burst' | 'success'.
 const introHapticMarks = <List<(double, String)>>[
-  // 1 race: three ticks while the line is drawn, a held breath, the finish
-  [
-    (0.18, 'tick'),
-    (0.32, 'tick'),
-    (0.46, 'tick'),
-    (0.58, 'thud'),
-    (0.80, 'burst'),
-  ],
-  // 2 reps: a tick per rep, the held breath before rep 3, the verify
-  [(0.22, 'tick'), (0.36, 'tick'), (0.50, 'thud'), (0.80, 'burst')],
-  // 3 board: a tick per overtake, the payoff on 1st
-  [(0.36, 'tick'), (0.50, 'tick'), (0.72, 'burst')],
-  // 4 crew: a tick as each friend joins (escalating), the payoff
-  [
-    (0.10, 'tick'),
-    (0.26, 'tick'),
-    (0.38, 'tick'),
-    (0.46, 'tick'),
-    (0.62, 'burst'),
-  ],
-  // 5 level: slow ticks up the bar, the held breath, the break
+  // 1 race: launch ticks, the held breath as the crawl begins, ticks while
+  // it crawls, the finish
   [
     (0.20, 'tick'),
     (0.32, 'tick'),
-    (0.44, 'tick'),
-    (0.56, 'tick'),
+    (0.42, 'tick'),
+    (0.52, 'thud'),
+    (0.66, 'tick'),
+    (0.76, 'tick'),
+    (0.88, 'burst'),
+  ],
+  // 2 reps
+  [
+    (0.26, 'tick'),
+    (0.42, 'tick'),
+    (0.52, 'thud'),
+    (0.70, 'tick'),
+    (0.86, 'burst'),
+  ],
+  // 3 board: four overtakes then the top
+  [
+    (0.36, 'tick'),
+    (0.48, 'tick'),
+    (0.60, 'tick'),
+    (0.70, 'thud'),
+    (0.78, 'burst'),
+  ],
+  // 4 crew: a tick per arrival (escalating), the payoff
+  [
+    (0.12, 'tick'),
+    (0.24, 'tick'),
+    (0.34, 'tick'),
+    (0.42, 'tick'),
+    (0.49, 'tick'),
+    (0.55, 'tick'),
+    (0.64, 'burst'),
+  ],
+  // 5 level: slow ticks up the ring, the held breath, the break
+  [
+    (0.18, 'tick'),
+    (0.30, 'tick'),
+    (0.42, 'tick'),
+    (0.54, 'tick'),
     (0.66, 'tick'),
     (0.74, 'tick'),
     (0.78, 'thud'),
@@ -51,34 +72,33 @@ const introHapticMarks = <List<(double, String)>>[
   ],
 ];
 
-/// How hard the camera pushes in at each page's climax (fraction of scale).
-const _push = [0.05, 0.06, 0.04, 0.04, 0.10];
-
+/// One scene. Fills its parent; [stage] is where the hero is laid out.
 class IntroDemo extends StatelessWidget {
-  const IntroDemo({super.key, required this.kind, required this.t});
+  const IntroDemo({
+    super.key,
+    required this.kind,
+    required this.t,
+    required this.stage,
+  });
 
   final int kind;
   final double t;
+  final Rect stage;
 
   @override
   Widget build(BuildContext context) {
-    final Widget body = kind == 1
-        ? _RepDemo(t: t)
-        : RepaintBoundary(
-            child: CustomPaint(
-              painter: switch (kind) {
-                0 => _RacePainter(t),
-                2 => _BoardPainter(t),
-                3 => _CrewPainter(t),
-                _ => _LevelPainter(t),
-              },
-              child: const SizedBox.expand(),
-            ),
-          );
-    // Camera push: a brief scale pulse right at the climax.
-    final push = _push[kind] * _bump((t - introClimax[kind]) / 0.28);
-    if (push <= 0) return body;
-    return Transform.scale(scale: 1 + push, child: body);
+    if (kind == 1) return _JackScene(t: t, stage: stage);
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: switch (kind) {
+          0 => _RaceScene(t, stage),
+          2 => _BoardScene(t, stage),
+          3 => _CrewScene(t, stage),
+          _ => _LevelScene(t, stage),
+        },
+        size: Size.infinite,
+      ),
+    );
   }
 }
 
@@ -91,36 +111,32 @@ Paint _line(double w, [Color c = V13.navy]) => Paint()
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round;
 
-/// The app's spring (a little overshoot) — for pops and slams.
+Paint _fill(Color c) => Paint()..color = c;
+
+/// The app's spring (a little overshoot): pops and slams.
 double _pop(double x) => NuvoMotion.spring.transform(x.clamp(0.0, 1.0));
 
-/// Almost no overshoot — for travel and climbs.
+/// Almost no overshoot: travel and climbs.
 double _soft(double x) => NuvoMotion.softSpring.transform(x.clamp(0.0, 1.0));
 
-/// Ease-out for counters (numbers never overshoot).
 double _out(double x) {
   final v = x.clamp(0.0, 1.0);
   return 1 - math.pow(1 - v, 3).toDouble();
 }
 
-/// A burst progress delayed by [d] but still ending exactly at 1.
-double _stag(double bt, double d) => (bt - d) / (1 - d);
+double _inOut(double x) {
+  final v = x.clamp(0.0, 1.0);
+  return v < 0.5 ? 4 * v * v * v : 1 - math.pow(-2 * v + 2, 3).toDouble() / 2;
+}
+
+double _seg(double t, double a, double b) =>
+    ((t - a) / (b - a)).clamp(0.0, 1.0);
 
 /// 0 -> 1 -> 0 over x in [0,1]; 0 outside.
 double _bump(double x) => (x <= 0 || x >= 1) ? 0 : math.sin(x * math.pi);
 
-/// Time dilation: real time [s, e] runs at [factor] speed in story time, so
-/// the page visibly slows down for suspense, then speeds up after. Returns
-/// story time in 0..1.
-double _dilate(double t, double s, double e, double factor) {
-  final total = s + (e - s) * factor + (1 - e);
-  final story = t <= s
-      ? t
-      : t <= e
-      ? s + (t - s) * factor
-      : s + (e - s) * factor + (t - e);
-  return (story / total).clamp(0.0, 1.0);
-}
+/// Burst progress delayed by [d] that still ends exactly at 1.
+double _stag(double bt, double d) => (bt - d) / (1 - d);
 
 TextPainter _tp(String s, double size, Color color) => TextPainter(
   text: TextSpan(
@@ -141,44 +157,23 @@ void _textAt(
   tp.paint(c, center - Offset(tp.width / 2, tp.height / 2));
 }
 
-const _confetti = [V13.navy, V13.white, V13.sun, V13.coral, V13.blue, V13.mint];
+const _confettiColors = [
+  V13.navy,
+  V13.white,
+  V13.sun,
+  V13.coral,
+  V13.blue,
+  V13.mint,
+];
 
-/// Flat particles bursting out of [at]; [bt] 0..1 since the burst.
-void _particles(
-  Canvas c,
-  Offset at,
-  double bt, {
-  int count = 16,
-  double reach = 120,
-  double size = 7,
-}) {
-  if (bt <= 0 || bt >= 1) return;
-  final e = _out(bt);
-  final paint = Paint();
-  for (var i = 0; i < count; i++) {
-    final a = i * 2 * math.pi / count + (i.isEven ? 0.18 : -0.12);
-    final r = reach * (0.55 + 0.45 * ((i * 7) % 5) / 4) * e;
-    final p = at + Offset(math.cos(a), math.sin(a)) * (14 + r);
-    paint.color = _confetti[i % _confetti.length].withValues(
-      alpha: 1 - bt * bt,
-    );
-    final s = size * (1 - bt * 0.6);
-    if (i % 3 == 0) {
-      c.drawRect(Rect.fromCenter(center: p, width: s * 1.6, height: s), paint);
-    } else {
-      c.drawCircle(p, s, paint);
-    }
-  }
-}
-
-/// An expanding ring that fades.
-void _ring(
+/// A ring wave that expands and fades; it always vanishes before bt == 1.
+void _wave(
   Canvas c,
   Offset at,
   double bt, {
   double from = 10,
-  double to = 150,
-  double width = 5,
+  required double to,
+  double width = 6,
   Color color = V13.navy,
 }) {
   if (bt <= 0 || bt >= 1) return;
@@ -186,617 +181,841 @@ void _ring(
   c.drawCircle(
     at,
     from + (to - from) * e,
-    _line(width * (1 - bt) + 1, color.withValues(alpha: 1 - bt)),
+    _line(width * (1 - bt) + 1, color.withValues(alpha: (1 - bt) * (1 - bt))),
   );
 }
 
-// ── 1. RACE: one line, drawn toward the finish ─────────────────────────
-
-/// A single race line is drawn across the screen by YOU (blue); two rivals
-/// chase close behind. Near the end the page SLOWS for suspense, then YOU
-/// cross first — ring wave, particles, "1st".
-class _RacePainter extends CustomPainter {
-  _RacePainter(this.t);
-  final double t;
-
-  @override
-  void paint(Canvas c, Size s) {
-    const slowS = 0.50, slowE = 0.80, factor = 0.16;
-    final climax = introClimax[0];
-    final u = _dilate(t, slowS, slowE, factor);
-    final uEnd = _dilate(slowE, slowS, slowE, factor);
-    final prog = (u / uEnd).clamp(0.0, 1.0);
-
-    final a = Offset(28, s.height * 0.68);
-    final b = Offset(s.width - 56, s.height * 0.34);
-    final path = Path()
-      ..moveTo(a.dx, a.dy)
-      ..cubicTo(
-        s.width * 0.35,
-        s.height * 0.95,
-        s.width * 0.55,
-        s.height * 0.05,
-        b.dx,
-        b.dy,
-      );
-    final metric = path.computeMetrics().first;
-    final len = metric.length;
-
-    // The line itself: faint full course, bold part already drawn.
-    c.drawPath(path, _line(3, V13.navy.withValues(alpha: 0.18)));
-    final drawn = metric.extractPath(0, len * prog);
-    c.drawPath(drawn, _line(5));
-
-    // Rivals: white dots chasing; they close in during the slow region.
-    final suspense = ((t - slowS) / (slowE - slowS)).clamp(0.0, 1.0);
-    for (var i = 0; i < 2; i++) {
-      final gap = (i == 0 ? 0.09 : 0.16) * (1 - 0.7 * suspense);
-      final rp = (prog - gap).clamp(0.0, 1.0);
-      final pos = metric.getTangentForOffset(len * rp)!.position;
-      c.drawCircle(pos, 12, Paint()..color = V13.white);
-      c.drawCircle(pos, 12, _line(3));
-    }
-
-    // YOU.
-    final you = metric.getTangentForOffset(len * prog)!.position;
-    final pop = _pop((t - 0.04) / 0.2);
-    c.drawCircle(you, 19 * pop, Paint()..color = V13.blue);
-    c.drawCircle(you, 19 * pop, _line(3.5));
-    if (pop > 0.8) _textAt(c, 'YOU', you, size: 10, color: V13.white);
-
-    // Finish: a flag at the end of the line.
-    final fx = b.dx + 26;
-    c.drawLine(Offset(fx, b.dy + 16), Offset(fx, b.dy - 24), _line(3));
-    for (var r = 0; r < 3; r++) {
-      for (var k = 0; k < 2; k++) {
-        c.drawRect(
-          Rect.fromLTWH(fx + 1 + k * 8, b.dy - 24 + r * 8, 8, 8),
-          Paint()..color = (r + k).isEven ? V13.navy : V13.white,
-        );
-      }
-    }
-
-    // CLIMAX: crossing first.
-    final bt = (t - climax) / (1 - climax);
-    _ring(c, b, bt, to: math.min(s.width, s.height) * 0.55, width: 6);
-    _ring(
-      c,
-      b,
-      _stag(bt, 0.12),
-      to: math.min(s.width, s.height) * 0.4,
-      width: 4,
-      color: V13.blue,
+/// Flat confetti that bursts out of [origin] and FALLS across the screen
+/// (gravity), fading well before it reaches the bottom — nothing is ever
+/// cropped mid-shape by a container.
+void _confettiFall(
+  Canvas c,
+  Offset origin,
+  double bt,
+  Size screen, {
+  int count = 34,
+  double spread = 1.0,
+}) {
+  if (bt <= 0 || bt >= 1) return;
+  final tau = bt * 1.6;
+  final paint = Paint();
+  for (var i = 0; i < count; i++) {
+    final r1 = ((i * 53) % 97) / 97.0;
+    final r2 = ((i * 31) % 89) / 89.0;
+    final a = -math.pi / 2 + (r1 - 0.5) * math.pi * 1.5 * spread;
+    final speed = 260 + 360 * r2;
+    final x = origin.dx + math.cos(a) * speed * tau * 0.55;
+    final y = origin.dy + math.sin(a) * speed * tau * 0.55 + 520 * tau * tau;
+    final fade = bt < 0.6 ? 1.0 : (1 - (bt - 0.6) / 0.4);
+    paint.color = _confettiColors[i % _confettiColors.length].withValues(
+      alpha: fade,
     );
-    _particles(c, b, bt, count: 18, reach: 110);
-    if (t >= climax) {
-      final p = _pop(bt * 2.4);
-      final r = RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: b.translate(-8, -62),
-          width: 66 * p,
-          height: 38 * p,
-        ),
-        Radius.circular(19 * p),
+    final s = 5.0 + 5.0 * r1;
+    c.save();
+    c.translate(x, y);
+    c.rotate(tau * (2 + r2 * 6) * (i.isEven ? 1 : -1));
+    if (i % 3 == 0) {
+      c.drawCircle(Offset.zero, s * 0.7, paint);
+    } else {
+      c.drawRect(
+        Rect.fromCenter(center: Offset.zero, width: s * 1.8, height: s),
+        paint,
       );
-      c.drawRRect(r, Paint()..color = V13.white);
-      c.drawRRect(r, _line(3));
-      if (p > 0.7) _textAt(c, '1st', b.translate(-8, -62), size: 19);
     }
+    c.restore();
+  }
+}
+
+/// A full-screen white flash that decays.
+void _flash(
+  Canvas c,
+  Size screen,
+  double bt, {
+  double strength = 0.55,
+  double span = 0.16,
+}) {
+  if (bt <= 0 || bt >= span) return;
+  c.drawRect(
+    Offset.zero & screen,
+    _fill(V13.white.withValues(alpha: strength * (1 - bt / span))),
+  );
+}
+
+// ── 1. RACE ─────────────────────────────────────────────────────────────
+
+/// The old onboarding's route (thick navy S-curve with a thin blue progress
+/// stroke, a start dot, the Nuvo flag) scaled to the stage. YOU launch, then
+/// the page CRAWLS toward the finish with the rivals closing in, then SPRINTS
+/// across the line.
+class _RaceScene extends CustomPainter {
+  _RaceScene(this.t, this.stage);
+  final double t;
+  final Rect stage;
+
+  /// Route progress with the speed profile: ease-in launch, the crawl, then
+  /// the sprint. 0..1 along the route.
+  double get _progress {
+    if (t < 0.12) return 0;
+    if (t < 0.50) return 0.72 * _inOut(_seg(t, 0.12, 0.50) * 0.92 + 0.0);
+    if (t < 0.80) return 0.72 + 0.21 * _seg(t, 0.50, 0.80); // the crawl
+    if (t < 0.88) return 0.93 + 0.07 * _out(_seg(t, 0.80, 0.88)); // the sprint
+    return 1.0;
   }
 
   @override
-  bool shouldRepaint(_RacePainter o) => o.t != t;
-}
+  void paint(Canvas c, Size s) {
+    final climax = introClimax[0];
+    final bt = (t - climax) / (1 - climax);
+    // Leave headroom above the finish for the "1st" pill (never into the header).
+    final d = stage.deflate(20);
+    final r = Rect.fromLTRB(d.left, d.top + 56, d.right - 24, d.bottom);
+    Offset p(double fx, double fy) =>
+        Offset(r.left + r.width * fx, r.top + r.height * fy);
+    // The old route, spread over the stage.
+    final path = Path()
+      ..moveTo(p(0.04, 0.86).dx, p(0.04, 0.86).dy)
+      ..cubicTo(
+        p(0.24, 0.04).dx,
+        p(0.24, 0.04).dy,
+        p(0.60, 1.0).dx,
+        p(0.60, 1.0).dy,
+        p(0.80, 0.14).dx,
+        p(0.80, 0.14).dy,
+      );
+    final m = path.computeMetrics().first;
+    final len = m.length;
+    final end = m.getTangentForOffset(len)!.position;
+    final start = m.getTangentForOffset(0)!.position;
+    final prog = _progress;
 
-// ── 2. PROVE IT: the app's jumping-jack figure + scan, reps, verify ────
+    // Camera: a slow push toward the finish during the crawl, easing back.
+    final push =
+        0.07 * _inOut(_seg(t, 0.50, 0.80)) * (1 - 0.6 * _seg(t, 0.88, 1.0));
+    c.save();
+    c.translate(end.dx, end.dy);
+    c.scale(1 + push);
+    c.translate(-end.dx, -end.dy);
 
-class _RepDemo extends StatelessWidget {
-  const _RepDemo({required this.t});
-  final double t;
+    // Route: draws in, then the blue progress stroke follows YOU.
+    final reveal = _out(_seg(t, 0.0, 0.14));
+    c.drawPath(m.extractPath(0, len * reveal), _line(14, V13.navy));
+    c.drawPath(m.extractPath(0, len * prog), _line(6, V13.blue));
+    c.drawCircle(start, 10, _fill(V13.blue));
+    c.drawCircle(start, 10, _line(3));
+
+    // Rivals close the gap during the crawl.
+    final tension = _seg(t, 0.50, 0.86);
+    for (var i = 0; i < 2; i++) {
+      final gap = (i == 0 ? 0.16 : 0.28) * (1 - 0.82 * tension);
+      final rp = (prog - gap).clamp(0.0, 1.0);
+      if (prog <= 0.001) continue;
+      final pos = m.getTangentForOffset(len * rp)!.position;
+      c.drawCircle(pos, 11, _fill(V13.white));
+      c.drawCircle(pos, 11, _line(3));
+    }
+
+    // Finish flag (the old Nuvo flag shape), popping at the payoff.
+    _flag(c, end, 1.5 + 0.5 * _bump(bt * 2.4));
+
+    // YOU: the old racer dot, bigger — navy core, white center, blue halo.
+    if (prog > 0.001) {
+      final pos = m.getTangentForOffset(len * prog)!.position;
+      final pop = _pop(_seg(t, 0.10, 0.22));
+      final halo = 22 + 6 * _bump(((t * 6) % 1.0)) + 10 * tension;
+      c.drawCircle(pos, halo * pop, _fill(V13.blue.withValues(alpha: 0.28)));
+      c.drawCircle(pos, 14 * pop, _fill(V13.navy));
+      c.drawCircle(pos, 6.5 * pop, _fill(V13.white));
+    }
+    c.restore();
+
+    // PAYOFF, in screen space.
+    _flash(c, s, bt, strength: 0.6);
+    final reach = math.max(s.width, s.height);
+    _wave(c, end, bt, to: reach * 0.7, width: 10, color: V13.navy);
+    _wave(c, end, _stag(bt, 0.10), to: reach * 0.55, width: 7, color: V13.blue);
+    _wave(c, end, _stag(bt, 0.20), to: reach * 0.4, width: 4, color: V13.white);
+    _confettiFall(c, end, bt, s);
+    if (t >= climax) {
+      final pp = _pop(bt * 2.6);
+      final w = 120.0 * pp, h = 62.0 * pp;
+      final center = Offset(
+        (end.dx - 34).clamp(70.0, s.width - 70),
+        math.max(end.dy - 74, stage.top + 36),
+      );
+      final rr = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: center, width: w, height: h),
+        Radius.circular(31 * pp),
+      );
+      c.drawRRect(rr, _fill(V13.white));
+      c.drawRRect(rr, _line(4));
+      if (pp > 0.6) _textAt(c, '1st', center, size: 34 * pp);
+    }
+  }
+
+  void _flag(Canvas c, Offset anchor, double scale) {
+    final poleX = anchor.dx + 12 * scale;
+    final top = anchor.dy - 24 * scale;
+    final bottom = anchor.dy + 16 * scale;
+    c.drawLine(Offset(poleX, top), Offset(poleX, bottom), _line(2.4 * scale));
+    final flag = Path()
+      ..moveTo(poleX + scale, top + scale)
+      ..cubicTo(
+        poleX + 9 * scale,
+        top - 3 * scale,
+        poleX + 18 * scale,
+        top + 7 * scale,
+        poleX + 27 * scale,
+        top + 3 * scale,
+      )
+      ..lineTo(poleX + 27 * scale, top + 19 * scale)
+      ..cubicTo(
+        poleX + 18 * scale,
+        top + 23 * scale,
+        poleX + 9 * scale,
+        top + 13 * scale,
+        poleX + scale,
+        top + 19 * scale,
+      )
+      ..close();
+    c.drawPath(flag, _fill(V13.blue));
+    c.drawPath(flag, _line(1.6 * scale));
+  }
 
   @override
-  Widget build(BuildContext context) {
+  bool shouldRepaint(_RaceScene o) => o.t != t || o.stage != stage;
+}
+
+// ── 2. JUMPING JACKS ────────────────────────────────────────────────────
+
+/// The app's real jumping-jack figure, LARGE and centered; a full-bleed scan
+/// frame at the screen edges; a rep ring around the figure; slow-mo on the
+/// last rep; a huge VERIFIED stamp slam.
+class _JackScene extends StatelessWidget {
+  const _JackScene({required this.t, required this.stage});
+  final double t;
+  final Rect stage;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, c) => _build(context, Size(c.maxWidth, c.maxHeight)),
+  );
+
+  Widget _build(BuildContext context, Size screen) {
     final climax = introClimax[1];
-    final done = t >= climax;
-    // Reps 1-2 land fast; rep 3 is the slow, held one.
-    final count = t >= climax
-        ? 3
-        : t >= 0.36
-        ? 2
-        : t >= 0.22
-        ? 1
-        : 0;
     final bt = (t - climax) / (1 - climax);
-    return LayoutBuilder(
-      builder: (context, c) {
-        final side = math.min(c.maxHeight, c.maxWidth * 0.58);
-        final figure = Rect.fromLTWH(0, (c.maxHeight - side) / 2, side, side);
-        final rw = c.maxWidth - side - 8;
-        final ringR = math.min(rw * 0.42, c.maxHeight * 0.26);
-        final ringC = Offset(side + 8 + rw / 2, c.maxHeight * 0.4);
-        return Stack(
-          children: [
-            Positioned.fromRect(
-              rect: figure,
-              child: RiveJumpingJackPreview(
-                fallback: Icon(
-                  Icons.accessibility_new_rounded,
-                  size: side * .5,
-                  color: V13.navy,
+    final done = t >= climax;
+    final count = done ? 3 : (t >= 0.42 ? 2 : (t >= 0.26 ? 1 : 0));
+    final side = math.min(stage.width * 0.66, stage.height * 0.78);
+    final center = stage.center;
+    // camera push at the climax (scale on a transparent layer: no edges)
+    final push = 0.06 * _bump(bt * 2.2);
+    final dim = 0.16 * _inOut(_seg(t, 0.50, 0.70)) * (done ? 0 : 1);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // slow-mo: the field dims slightly while the last rep crawls
+        if (dim > 0)
+          Positioned.fill(
+            child: ColoredBox(color: V13.navy.withValues(alpha: dim)),
+          ),
+        Transform.scale(
+          scale: 1 + push,
+          alignment: Alignment(
+            (center.dx / screen.width) * 2 - 1,
+            (center.dy / screen.height) * 2 - 1,
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned(
+                left: center.dx - side / 2,
+                top: center.dy - side / 2,
+                width: side,
+                height: side,
+                child: RiveJumpingJackPreview(
+                  fallback: Icon(
+                    Icons.accessibility_new_rounded,
+                    size: side * .5,
+                    color: V13.navy,
+                  ),
                 ),
               ),
-            ),
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(painter: _RepFx(t, figure, ringC, ringR)),
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: CustomPaint(painter: _JackFx(t, stage, side)),
+                ),
               ),
-            ),
-            Positioned(
-              left: ringC.dx - ringR,
-              top: ringC.dy - ringR,
-              width: ringR * 2,
-              height: ringR * 2,
-              child: Center(
+              // counter
+              Positioned(
+                left: stage.left + 30,
+                top: stage.top + 22,
+                width: stage.width * 0.5,
                 child: Transform.scale(
-                  scale: done ? 1 + 0.35 * _bump(bt * 3) : 1,
-                  child: Text(
-                    '$count',
-                    style: V13.hugeNumber.copyWith(
-                      fontSize: ringR * 1.15,
-                      color: V13.navy,
-                      height: 1,
+                  scale: done ? 1 + 0.5 * _bump(bt * 2.6) : 1,
+                  alignment: Alignment.topLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '$count',
+                          style: V13.hugeNumber.copyWith(
+                            fontSize: math.min(88, stage.height * 0.24),
+                            color: V13.navy,
+                            height: 0.9,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            '/ 3 reps',
+                            style: V13.bodyStrong.copyWith(color: V13.navy),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-            if (done)
-              Positioned(
-                left: ringC.dx - rw / 2,
-                width: rw,
-                top: ringC.dy + ringR + 14,
-                child: Center(
-                  child: Transform.scale(
-                    // Stamp slam: oversized, snaps down onto the page.
-                    scale: 1 + 0.9 * (1 - _pop(bt * 3)),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: V13.white,
-                          borderRadius: BorderRadius.circular(V13.radiusPill),
-                          border: Border.all(
-                            color: V13.navy,
-                            width: V13.outlineThick,
+              // the stamp
+              if (done)
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  top: stage.bottom - 64,
+                  child: Center(
+                    child: Transform.scale(
+                      scale: 1 + 1.4 * (1 - _pop(bt * 2.8)),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 12,
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.verified_rounded,
-                              size: 18,
-                              color: V13.blue,
-                            ),
-                            const SizedBox(width: 6),
-                            Text('VERIFIED', style: V13.label),
-                          ],
+                          decoration: BoxDecoration(
+                            color: V13.white,
+                            borderRadius: BorderRadius.circular(V13.radiusPill),
+                            border: Border.all(color: V13.navy, width: 4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.verified_rounded,
+                                size: 28,
+                                color: V13.blue,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'VERIFIED',
+                                style: V13.title.copyWith(fontSize: 26),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        );
-      },
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _RepFx extends CustomPainter {
-  _RepFx(this.t, this.figure, this.ringC, this.ringR);
+class _JackFx extends CustomPainter {
+  _JackFx(this.t, this.stage, this.side);
   final double t;
-  final Rect figure;
-  final Offset ringC;
-  final double ringR;
+  final Rect stage;
+  final double side;
 
   @override
   void paint(Canvas c, Size s) {
     final climax = introClimax[1];
-    // Scan brackets: start wide and LOCK onto the figure.
-    final lock = _soft((t - 0.06) / 0.24);
-    final inset = 22 * (1 - lock) - 4;
-    final r = figure.inflate(-inset.clamp(-4, 40).toDouble());
-    final arm = math.min(r.width, r.height) * 0.18;
-    final pulse = 1 + 0.06 * _bump((t - climax) / 0.18);
-    final br = Rect.fromCenter(
-      center: r.center,
-      width: r.width * pulse,
-      height: r.height * pulse,
+    final bt = (t - climax) / (1 - climax);
+    final center = stage.center;
+
+    // Full-bleed scan frame: brackets slide in from beyond the screen edges
+    // and lock at 14px, then tighten a touch during the slow-mo rep.
+    final lockIn = _soft(_seg(t, 0.0, 0.22));
+    final tighten = 8 * _inOut(_seg(t, 0.50, 0.84));
+    final inset = -60 + (14 + 60) * lockIn + tighten;
+    final frame = Rect.fromLTRB(
+      inset,
+      math.max(inset, stage.top - 24 + tighten),
+      s.width - inset,
+      math.min(s.height - inset, stage.bottom + 24 - tighten),
     );
+    final arm = 34.0;
     final col = t >= climax ? V13.blue : V13.navy;
-    final p = _line(4, col);
-    for (final corner in [
-      [br.topLeft, 1.0, 1.0],
-      [br.topRight, -1.0, 1.0],
-      [br.bottomLeft, 1.0, -1.0],
-      [br.bottomRight, -1.0, -1.0],
+    final p = _line(5, col);
+    for (final k in [
+      [frame.topLeft, 1.0, 1.0],
+      [frame.topRight, -1.0, 1.0],
+      [frame.bottomLeft, 1.0, -1.0],
+      [frame.bottomRight, -1.0, -1.0],
     ]) {
-      final o = corner[0] as Offset;
-      final dx = corner[1] as double, dy = corner[2] as double;
+      final o = k[0] as Offset;
+      final dx = k[1] as double, dy = k[2] as double;
       c.drawLine(o, o.translate(arm * dx, 0), p);
       c.drawLine(o, o.translate(0, arm * dy), p);
     }
 
-    // Rep ring: three segments. 1 and 2 fill quickly; 3 CRAWLS (the held,
-    // slowed rep) until the verify snaps it shut.
-    final rect = Rect.fromCircle(center: ringC, radius: ringR);
-    c.drawCircle(ringC, ringR, _line(7, V13.navy.withValues(alpha: 0.16)));
-    const gap = 0.10;
+    // Rep ring around the figure: two quick segments, then the crawl.
+    final rr = side * 0.52;
+    final rect = Rect.fromCircle(center: center, radius: rr);
+    c.drawCircle(center, rr, _line(9, V13.navy.withValues(alpha: 0.14)));
+    const gap = 0.16;
     final seg = (2 * math.pi - 3 * gap) / 3;
     double fillFor(int i) {
-      switch (i) {
-        case 0:
-          return _out((t - 0.14) / 0.10);
-        case 1:
-          return _out((t - 0.28) / 0.10);
-        default:
-          // crawl: 0 -> 0.9 over 0.42..0.78, then snap to 1 at the climax
-          final crawl = ((t - 0.42) / 0.36).clamp(0.0, 1.0) * 0.9;
-          return t >= introClimax[1] ? 1.0 : crawl;
-      }
+      if (i == 0) return _out(_seg(t, 0.18, 0.28));
+      if (i == 1) return _out(_seg(t, 0.34, 0.44));
+      if (t >= introClimax[1]) return 1.0;
+      return 0.92 * _seg(t, 0.46, 0.84); // the crawl
     }
 
     for (var i = 0; i < 3; i++) {
-      final start = -math.pi / 2 + i * (seg + gap);
-      c.drawArc(rect, start, seg * fillFor(i), false, _line(8, V13.blue));
+      final a0 = -math.pi / 2 + i * (seg + gap);
+      c.drawArc(rect, a0, seg * fillFor(i), false, _line(12, V13.blue));
     }
 
-    // Climax: ring wave + particles from the counter.
-    final bt = (t - climax) / (1 - climax);
-    _ring(
-      c,
-      ringC,
-      bt,
-      from: ringR,
-      to: ringR * 2.6,
-      width: 6,
-      color: V13.blue,
-    );
-    _ring(c, ringC, _stag(bt, 0.12), from: ringR, to: ringR * 2.0, width: 4);
-    _particles(c, ringC, bt, count: 18, reach: ringR * 2.2);
+    // PAYOFF.
+    _flash(c, s, bt, strength: 0.6);
+    final reach = math.max(s.width, s.height);
+    _wave(c, center, bt, from: rr, to: reach * 0.7, width: 10, color: V13.blue);
+    _wave(c, center, _stag(bt, 0.12), from: rr, to: reach * 0.55, width: 6);
+    _confettiFall(c, center, bt, s);
   }
 
   @override
-  bool shouldRepaint(_RepFx o) => o.t != t;
+  bool shouldRepaint(_JackFx o) => o.t != t || o.stage != stage;
 }
 
-// ── 3. BOARD: climb to 1st (almost no overshoot) ───────────────────────
+// ── 3. LEADERBOARD ──────────────────────────────────────────────────────
 
-class _BoardPainter extends CustomPainter {
-  _BoardPainter(this.t);
+/// Five big rows. YOU start 5th and overtake four rows (a slide each, almost
+/// no overshoot); the last pass is the slow one. Then #1: flash, waves,
+/// confetti.
+class _BoardScene extends CustomPainter {
+  _BoardScene(this.t, this.stage);
   final double t;
+  final Rect stage;
+
+  // (start, end) of each overtake leg in t; the last is the slow one.
+  static const _legs = [(0.28, 0.38), (0.40, 0.50), (0.52, 0.62), (0.70, 0.78)];
 
   @override
   void paint(Canvas c, Size s) {
     final climax = introClimax[2];
-    final rowH = math.min(58.0, s.height / 3.4);
-    final w = s.width - 8;
-    const x0 = 4.0;
-    // The climb: critically damped (no bounce), with a slow final approach.
-    // YOU reach 1st exactly at the climax: fast at first, then a slow,
-    // held final approach.
-    final x = ((t - 0.26) / (climax - 0.26)).clamp(0.0, 1.0);
-    final u = x < 0.5
-        ? 1.2 * x
-        : 0.6 + 0.4 * (1 - math.pow(1 - (x - 0.5) / 0.5, 2).toDouble());
-    final climb = _soft(u);
-    final count = _out(x);
-    const names = ['Maya', 'Leo', 'You'];
-    const base = [68.0, 54.0, 24.0];
-    double slot(int i) => i == 2 ? 2 - 2 * climb : i + climb;
-    final top = (s.height - rowH * 3) / 2;
     final bt = (t - climax) / (1 - climax);
-
-    for (final i in [0, 1, 2]) {
-      final enter = _pop((t - i * 0.08) / 0.3);
+    final rh = math.min(66.0, stage.height / 5.2);
+    final left = stage.left + 20;
+    final w = stage.width - 40;
+    final top = stage.top + 26 + (stage.height - 26 - rh * 5) / 2;
+    final leg = [
+      for (var k = 0; k < _legs.length; k++)
+        // the last pass holds under #1 (the beat), then slides on the climax
+        k == 3
+            ? _inOut(_seg(t, _legs[k].$1, _legs[k].$2))
+            : _soft(_seg(t, _legs[k].$1, _legs[k].$2)),
+    ];
+    // The slower last leg eases in more gently.
+    final legSum = leg.fold<double>(0, (a, b) => a + b);
+    // Rows: 0..3 are the others; row i is passed by leg (3 - i).
+    const names = ['Maya', 'Leo', 'Sam', 'Alex'];
+    const base = [96.0, 84.0, 70.0, 58.0];
+    final order = <int>[0, 1, 2, 3, 4];
+    for (final i in [0, 1, 2, 3, 4]) {
+      final you = i == 4;
+      final slot = you ? 4 - legSum : i + leg[3 - i];
+      final enter = _pop(_seg(t, i * 0.05, 0.22 + i * 0.05));
       if (enter <= 0) continue;
-      final y = top + slot(i) * rowH + (1 - enter.clamp(0.0, 1.0)) * 24;
-      final you = i == 2;
-      final score = base[i] + (you ? 52 * count : 0);
+      final y = top + slot * rh + (1 - enter.clamp(0.0, 1.0)) * 36;
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x0, y + 4, w, rowH - 8),
-        const Radius.circular(16),
+        Rect.fromLTWH(left, y + 4, w, rh - 8),
+        Radius.circular(rh * 0.3),
       );
+      final fg = you ? V13.white : V13.navy;
       c.saveLayer(
-        rect.outerRect.inflate(6),
+        rect.outerRect.inflate(14),
         Paint()..color = Color.fromRGBO(0, 0, 0, enter.clamp(0.0, 1.0)),
       );
-      c.drawRRect(rect, Paint()..color = you ? V13.blue : V13.white);
-      c.drawRRect(rect, _line(2.5));
-      // 1st-place flash: a bright outline pulse on the player's row.
-      if (you && bt > 0 && bt < 0.5) {
+      c.drawRRect(rect, _fill(you ? V13.blue : V13.white));
+      c.drawRRect(rect, _line(3));
+      if (you && bt > 0 && bt < 0.6) {
         c.drawRRect(
-          rect.inflate(4 + 6 * bt),
-          _line(4, V13.sun.withValues(alpha: 1 - bt * 2)),
+          rect.inflate(5 + 8 * bt),
+          _line(5, V13.sun.withValues(alpha: 1 - bt / 0.6)),
         );
       }
-      final fg = you ? V13.white : V13.navy;
-      final cy = y + rowH / 2;
-      final rank = (slot(i) + 0.5).floor() + 1;
-      _textAt(c, '$rank', Offset(x0 + 24, cy), size: 17, color: fg);
-      final av = Offset(x0 + 62, cy);
-      c.drawCircle(av, 17, Paint()..color = you ? V13.white : V13.sky);
-      c.drawCircle(av, 17, _line(2.5));
+      final cy = y + rh / 2;
+      final rank = (slot + 0.5).floor() + 1;
+      _textAt(c, '$rank', Offset(left + 26, cy), size: rh * 0.36, color: fg);
+      final av = Offset(left + 70, cy);
+      final ar = rh * 0.32;
+      c.drawCircle(av, ar, _fill(you ? V13.white : V13.sky));
+      c.drawCircle(av, ar, _line(3));
       if (you) {
-        final head = Paint()..color = V13.blue;
-        c.drawCircle(av.translate(0, -4), 5, head);
+        final head = _fill(V13.blue);
+        c.drawCircle(av.translate(0, -ar * 0.22), ar * 0.3, head);
         c.drawArc(
-          Rect.fromCenter(center: av.translate(0, 11), width: 18, height: 16),
+          Rect.fromCenter(
+            center: av.translate(0, ar * 0.68),
+            width: ar * 1.1,
+            height: ar,
+          ),
           math.pi,
           math.pi,
           true,
           head,
         );
       } else {
-        _textAt(c, names[i][0], av, size: 15);
+        _textAt(c, names[i][0], av, size: ar * 0.95);
       }
-      final name = _tp(names[i], 18, fg);
-      name.paint(c, Offset(x0 + 92, cy - name.height / 2));
-      final sc = _tp(score.round().toString(), 20, fg);
-      sc.paint(c, Offset(x0 + w - 20 - sc.width, cy - sc.height / 2));
+      final nm = _tp(you ? 'You' : names[i], rh * 0.34, fg);
+      nm.paint(c, Offset(left + 106, cy - nm.height / 2));
+      final score = you ? 30 + 70 * (legSum / 4) : base[i];
+      final sc = _tp(score.round().toString(), rh * 0.38, fg);
+      sc.paint(c, Offset(left + w - 24 - sc.width, cy - sc.height / 2));
       c.restore();
     }
-
-    // CLIMAX: YOU hit 1st — ring waves + particles from the top row.
-    final topRow = Offset(s.width / 2, top + rowH / 2);
-    _ring(
-      c,
-      topRow,
-      bt,
-      from: 20,
-      to: s.width * 0.55,
-      width: 6,
-      color: V13.blue,
-    );
-    _ring(c, topRow, _stag(bt, 0.14), from: 20, to: s.width * 0.4, width: 4);
-    _particles(c, topRow, bt, count: 20, reach: s.width * 0.32);
+    // PAYOFF at the top row.
+    final topRow = Offset(left + w / 2, top + rh / 2);
+    _flash(c, s, bt, strength: 0.5);
+    final reach = math.max(s.width, s.height);
+    _wave(c, topRow, bt, from: 24, to: reach * 0.65, width: 9, color: V13.blue);
+    _wave(c, topRow, _stag(bt, 0.12), from: 24, to: reach * 0.5, width: 5);
+    _confettiFall(c, topRow, bt, s);
+    // "#1" crown tag drops onto the top row.
+    if (t >= climax) {
+      final p = _pop(bt * 2.6);
+      final r = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: topRow.translate(w / 2 - 56, -rh * 0.62),
+          width: 78 * p,
+          height: 36 * p,
+        ),
+        Radius.circular(18 * p),
+      );
+      c.drawRRect(r, _fill(V13.sun));
+      c.drawRRect(r, _line(3));
+      if (p > 0.7) _textAt(c, '#1', r.center, size: 20 * p);
+    }
+    if (order.isEmpty) return;
   }
 
   @override
-  bool shouldRepaint(_BoardPainter o) => o.t != t;
+  bool shouldRepaint(_BoardScene o) => o.t != t || o.stage != stage;
 }
 
-// ── 4. CREW: friends join with escalating rhythm, then the crew lands ──
+// ── 4. CREW ─────────────────────────────────────────────────────────────
 
-class _CrewPainter extends CustomPainter {
-  _CrewPainter(this.t);
+/// Six faces swoop in from BEYOND the screen edges on curved paths and settle
+/// (spring) into a ring around YOU; a counter pops per arrival; at the climax
+/// the links draw in, the ring pulses and the count slams to 6.
+class _CrewScene extends CustomPainter {
+  _CrewScene(this.t, this.stage);
   final double t;
+  final Rect stage;
+
+  static const _joins = [0.08, 0.20, 0.30, 0.38, 0.45, 0.51];
+  static const _colors = [
+    V13.coral,
+    V13.sun,
+    V13.mint,
+    V13.white,
+    V13.sky,
+    V13.lilac,
+  ];
+  static const _labels = ['A', 'M', 'L', 'S', 'J', 'K'];
 
   @override
   void paint(Canvas c, Size s) {
     final climax = introClimax[3];
-    final center = Offset(s.width / 2, s.height / 2);
-    const labels = ['A', 'M', 'L', 'S'];
-    const colors = [V13.coral, V13.sun, V13.mint, V13.white];
-    // Faster and faster: 0.10, 0.26, 0.38, 0.46.
-    const joins = [0.10, 0.26, 0.38, 0.46];
-    final r = math.min(s.width * 0.34, s.height * 0.34);
-    final face = math.min(26.0, r * 0.42);
-    for (var i = 0; i < 4; i++) {
-      final a = -math.pi / 2 + i * math.pi / 2 + math.pi / 4;
-      final pos = center + Offset(math.cos(a), math.sin(a)) * r;
-      final p = _pop((t - joins[i]) / 0.22);
-      if (p <= 0) continue;
-      final end = Offset.lerp(center, pos, p.clamp(0.0, 1.1))!;
-      c.drawLine(center, end, _line(2.5));
-      c.drawCircle(end, face * p, Paint()..color = colors[i]);
-      c.drawCircle(end, face * p, _line(3));
-      if (p > 0.6) _textAt(c, labels[i], end, size: face * 0.8);
-      // a small ripple at each arrival
-      _ring(
-        c,
-        end,
-        (t - joins[i] - 0.1) / 0.16,
-        from: face,
-        to: face * 1.9,
-        width: 3,
+    final bt = (t - climax) / (1 - climax);
+    final center = stage.center.translate(16, 26);
+    final r = math.min(stage.width * 0.29, stage.height * 0.30);
+    final face = math.min(34.0, r * 0.44);
+    // pulse of the whole crew at the climax
+    final pulse = 1 + 0.07 * _bump(bt * 2.4);
+
+    // Links first (behind the faces), drawn in at the climax.
+    final link = _out(_seg(t, climax - 0.02, climax + 0.14));
+    final homes = <Offset>[];
+    for (var i = 0; i < 6; i++) {
+      final a = -math.pi / 2 + i * math.pi / 3 + math.pi / 6;
+      homes.add(center + Offset(math.cos(a), math.sin(a)) * r * pulse);
+    }
+    for (var i = 0; i < 6; i++) {
+      if (link <= 0) break;
+      c.drawLine(
+        center,
+        Offset.lerp(center, homes[i], link)!,
+        _line(4, V13.navy),
       );
     }
-    final core = _pop(t / 0.18);
-    final bt = (t - climax) / (1 - climax);
-    final beat = 1 + 0.16 * _bump(bt * 3);
-    c.drawCircle(center, 32 * core * beat, Paint()..color = V13.blue);
-    c.drawCircle(center, 32 * core * beat, _line(3));
-    if (core > 0.7) _textAt(c, 'You', center, size: 15, color: V13.white);
 
-    // CLIMAX: the crew is assembled.
-    _ring(
+    var joined = 0;
+    for (var i = 0; i < 6; i++) {
+      final p = _seg(t, _joins[i], _joins[i] + 0.20);
+      if (p <= 0) continue;
+      if (p >= 0.6) joined = i + 1;
+      // from beyond the screen edge, along a curve, spring-settled
+      final a = -math.pi / 2 + i * math.pi / 3 + math.pi / 6;
+      final dir = Offset(math.cos(a), math.sin(a));
+      final far = center + dir * (math.max(s.width, s.height) * 0.75);
+      final bend =
+          Offset(-dir.dy, dir.dx) * (s.width * 0.25) * (i.isEven ? 1 : -1);
+      final e = _pop(p);
+      final ctrl = Offset.lerp(far, homes[i], 0.5)! + bend;
+      // quadratic bezier from far -> home with spring-timed parameter
+      final u = e.clamp(0.0, 1.1);
+      final pos =
+          (far * ((1 - u) * (1 - u))) +
+          (ctrl * (2 * (1 - u) * u)) +
+          (homes[i] * (u * u));
+      c.drawCircle(pos, face, _fill(_colors[i]));
+      c.drawCircle(pos, face, _line(4));
+      _textAt(c, _labels[i], pos, size: face * 0.85);
+      // ripple on arrival
+      _wave(
+        c,
+        homes[i],
+        _seg(t, _joins[i] + 0.14, _joins[i] + 0.30),
+        from: face,
+        to: face * 2.1,
+        width: 4,
+        color: V13.navy,
+      );
+    }
+
+    // YOU, the anchor.
+    final core = _pop(_seg(t, 0.0, 0.16));
+    final coreR = (face * 1.35) * core * (1 + 0.14 * _bump(bt * 2.6));
+    c.drawCircle(center, coreR, _fill(V13.blue));
+    c.drawCircle(center, coreR, _line(5));
+    if (core > 0.6)
+      _textAt(c, 'You', center, size: face * 0.8, color: V13.white);
+
+    // The counter (top-left, clear of the formation) pops per arrival,
+    // then slams to 6.
+    final cnt = t >= climax ? 6 : joined;
+    final popBeat = t >= climax ? _bump(bt * 2.4) * 0.5 : 0.0;
+    final label = _tp(
+      '$cnt',
+      math.min(60, stage.height * 0.18) * (1 + popBeat),
+      V13.navy,
+    );
+    label.paint(c, Offset(stage.left + 28, stage.top + 8));
+    final sub = _tp('in your crew', 16, V13.navy);
+    sub.paint(c, Offset(stage.left + 28, stage.top + 8 + label.height + 4));
+
+    // PAYOFF.
+    _flash(c, s, bt, strength: 0.5);
+    final reach = math.max(s.width, s.height);
+    _wave(
       c,
       center,
       bt,
-      from: 34,
-      to: math.min(s.width, s.height) * 0.62,
-      width: 6,
+      from: coreR,
+      to: reach * 0.7,
+      width: 10,
       color: V13.blue,
     );
-    _ring(
-      c,
-      center,
-      _stag(bt, 0.12),
-      from: 34,
-      to: math.min(s.width, s.height) * 0.46,
-      width: 4,
-    );
-    _particles(c, center, bt, count: 18, reach: r * 1.5);
-    if (t >= climax) {
-      final p = _pop(bt * 2.4);
-      _textAt(
-        c,
-        'Crew of 4',
-        Offset(s.width / 2, s.height * 0.94),
-        size: 22 * p,
-      );
-    }
+    _wave(c, center, _stag(bt, 0.12), from: coreR, to: reach * 0.55, width: 6);
+    _confettiFall(c, center, bt, s, count: 26);
   }
 
   @override
-  bool shouldRepaint(_CrewPainter o) => o.t != t;
+  bool shouldRepaint(_CrewScene o) => o.t != t || o.stage != stage;
 }
 
-// ── 5. LEVEL UP: the biggest moment ────────────────────────────────────
+// ── 5. LEVEL UP ─────────────────────────────────────────────────────────
 
-/// The XP bar fills with suspense: fast, then it CRAWLS toward the edge and
-/// HOLDS a beat at 98%. Then it breaks: flash, three screen-wide shock rings,
-/// camera push, LEVEL 1 rolls to LEVEL 2 with weight, particles, a badge
-/// slams in.
-class _LevelPainter extends CustomPainter {
-  _LevelPainter(this.t);
+/// A big XP ring. It fills fast, CRAWLS, HOLDS with a rising tremble, then
+/// BREAKS: the ring shatters outward, shock rings, a flash, a camera push,
+/// LEVEL 1 -> 2 slams in, the badge lands.
+class _LevelScene extends CustomPainter {
+  _LevelScene(this.t, this.stage);
   final double t;
+  final Rect stage;
 
-  double get _fill {
+  double get _fillAmt {
     final climax = introClimax[4];
     if (t >= climax) return 1.0;
     if (t < 0.08) return 0;
-    if (t < 0.50) return _out((t - 0.08) / 0.42) * 0.9;
-    if (t < 0.78) return 0.9 + 0.08 * ((t - 0.50) / 0.28); // the crawl
-    return 0.98; // the held beat
+    if (t < 0.50) return _out(_seg(t, 0.08, 0.50)) * 0.9;
+    if (t < 0.78) return 0.9 + 0.08 * _seg(t, 0.50, 0.78);
+    return 0.98;
   }
 
   @override
   void paint(Canvas c, Size s) {
     final climax = introClimax[4];
     final bt = (t - climax) / (1 - climax);
-    final fill = _fill;
-    final center = Offset(s.width / 2, s.height * 0.42);
+    // Ring + XP + badge are laid out as one block, centered in the stage.
+    final rr = math.min(stage.width * 0.34, (stage.height - 104) / 2);
+    final block = 2 * rr + 104;
+    final center = Offset(
+      stage.center.dx,
+      stage.top + (stage.height - block) / 2 + rr,
+    );
+    final fill = _fillAmt;
 
-    // Flash: the whole field blinks white for a moment.
-    if (bt > 0 && bt < 0.18) {
-      c.drawRect(
-        Offset.zero & s,
-        Paint()..color = V13.white.withValues(alpha: 0.6 * (1 - bt / 0.18)),
+    // Anticipation tremble (rises through the hold), then the camera push.
+    final hold = _seg(t, 0.74, 0.82);
+    final trem = t < climax
+        ? Offset(math.sin(t * 190) * 2.4 * hold, math.cos(t * 230) * 2.0 * hold)
+        : Offset.zero;
+    final push = 0.10 * _bump(bt * 2.0);
+    c.save();
+    c.translate(center.dx + trem.dx, center.dy + trem.dy);
+    c.scale(1 + push);
+    c.translate(-center.dx, -center.dy);
+
+    final rect = Rect.fromCircle(center: center, radius: rr);
+    if (t < climax) {
+      c.drawCircle(center, rr, _line(16, V13.navy.withValues(alpha: 0.14)));
+      c.drawArc(
+        rect,
+        -math.pi / 2,
+        2 * math.pi * fill,
+        false,
+        _line(18, V13.blue),
+      );
+      // a bright head that leads the fill
+      final a = -math.pi / 2 + 2 * math.pi * fill;
+      final head = center + Offset(math.cos(a), math.sin(a)) * rr;
+      c.drawCircle(head, 13 + 4 * hold, _fill(V13.white));
+      c.drawCircle(head, 13 + 4 * hold, _line(4));
+    } else {
+      // The ring SHATTERS: 12 arcs fly outward and fade.
+      final e = _out(bt * 1.4);
+      for (var i = 0; i < 12; i++) {
+        final a0 = i * math.pi / 6;
+        final mid = a0 + math.pi / 12;
+        final shift = Offset(math.cos(mid), math.sin(mid)) * (rr * 1.15 * e);
+        final alpha = (1 - _seg(bt, 0.1, 0.8)).clamp(0.0, 1.0);
+        if (alpha <= 0) continue;
+        c.drawArc(
+          rect.shift(shift),
+          a0 + 0.04,
+          math.pi / 6 - 0.08,
+          false,
+          _line(18 * (1 - 0.6 * e), V13.blue.withValues(alpha: alpha)),
+        );
+      }
+      // after the break a calm settled ring remains
+      final rest = _soft(_seg(bt, 0.3, 0.8));
+      c.drawCircle(
+        center,
+        rr * (0.6 + 0.4 * rest),
+        _line(10, V13.blue.withValues(alpha: rest)),
       );
     }
 
-    // Bar.
-    final barW = s.width - 8;
-    final barY = s.height * 0.70;
-    final bar = RRect.fromRectAndRadius(
-      Rect.fromLTWH(4, barY, barW, 32),
-      const Radius.circular(16),
-    );
-    c.drawRRect(bar, Paint()..color = V13.white);
-    c.save();
-    c.clipRRect(bar);
-    c.drawRect(
-      Rect.fromLTWH(4, barY, barW * fill, 32),
-      Paint()..color = V13.blue,
-    );
-    c.restore();
-    c.drawRRect(bar, _line(3));
-
-    // Number: counts up with the bar.
-    final xp = (100 * (fill / 0.98).clamp(0.0, 1.0)).round();
-    final xpSize = 22.0 * (t >= climax ? 1 + 0.4 * _bump(bt * 2.5) : 1);
+    // LEVEL numeral: 1, then 2 slams in big and settles.
+    final labelY = center.dy - rr * 0.46;
     _textAt(
       c,
-      '+${t >= climax ? 100 : math.min(98, xp)} XP',
-      Offset(s.width / 2, barY + 62),
-      size: xpSize,
+      'LEVEL',
+      Offset(center.dx, labelY),
+      size: rr * 0.20,
+      color: V13.navy,
     );
-
-    // LEVEL: rolls with weight at the climax.
-    final size = math.min(60.0, s.width * 0.17);
-    final roll = _pop((t - climax) / 0.14);
-    c.save();
-    c.clipRect(Rect.fromLTWH(0, center.dy - size, s.width, size * 2));
     if (t < climax) {
-      _textAt(c, 'LEVEL 1', center, size: size);
+      _textAt(c, '1', center.translate(0, rr * 0.08), size: rr * 0.95);
     } else {
-      final slide = size * 1.4;
-      // old leaves upward, new slams in from below, oversized then settles
+      final slam = _pop(_seg(bt, 0.0, 0.26));
+      final size = rr * 0.95 * (1 + 0.9 * (1 - slam));
+      final oldA = (1 - _seg(bt, 0.0, 0.12)).clamp(0.0, 1.0);
+      if (oldA > 0)
+        _textAt(
+          c,
+          '1',
+          center.translate(0, rr * 0.08),
+          size: rr * 0.95 * (1 - 0.5 * (1 - oldA)),
+          color: V13.navy.withValues(alpha: oldA),
+        );
       _textAt(
         c,
-        'LEVEL 1',
-        center.translate(0, -slide * roll),
-        size: size * (1 - 0.1 * roll),
-      );
-      _textAt(
-        c,
-        'LEVEL 2',
-        center.translate(0, slide * (1 - roll)),
-        size: size * (1 + 0.28 * (1 - roll)),
+        '2',
+        center.translate(0, rr * 0.08),
+        size: size,
+        color: V13.navy.withValues(alpha: slam.clamp(0.0, 1.0)),
       );
     }
     c.restore();
 
-    // Three screen-wide shock rings + particles.
-    final reach = math.max(s.width, s.height) * 0.8;
-    _ring(c, center, bt, from: 20, to: reach, width: 9, color: V13.white);
-    _ring(
+    // XP count under the ring.
+    final xp = t >= climax ? 100 : math.min(98, (100 * (fill / 0.98)).round());
+    _textAt(
       c,
-      center,
-      _stag(bt, 0.10),
-      from: 20,
-      to: reach * 0.85,
-      width: 6,
-      color: V13.navy,
+      '+$xp XP',
+      Offset(s.width / 2, center.dy + rr + 40),
+      size: 30 * (t >= climax ? 1 + 0.35 * _bump(bt * 2.4) : 1),
     );
-    _ring(
-      c,
-      center,
-      _stag(bt, 0.20),
-      from: 20,
-      to: reach * 0.7,
-      width: 4,
-      color: V13.blue,
-    );
-    _particles(
+
+    // PAYOFF in screen space.
+    _flash(c, s, bt, strength: 0.7, span: 0.18);
+    final reach = math.max(s.width, s.height);
+    _wave(
       c,
       center,
       bt,
-      count: 28,
-      reach: math.min(s.width, s.height) * 0.5,
-      size: 8,
+      from: rr,
+      to: reach * 0.85,
+      width: 12,
+      color: V13.white,
     );
+    _wave(
+      c,
+      center,
+      _stag(bt, 0.08),
+      from: rr,
+      to: reach * 0.7,
+      width: 8,
+      color: V13.navy,
+    );
+    _wave(
+      c,
+      center,
+      _stag(bt, 0.16),
+      from: rr,
+      to: reach * 0.55,
+      width: 5,
+      color: V13.blue,
+    );
+    _confettiFall(c, center, bt, s, count: 40);
 
-    // Badge slam (after the number lands).
-    final bb = (t - (climax + 0.08)) / 0.14;
+    // Badge slams in.
+    final bb = _seg(t, climax + 0.10, climax + 0.22);
     if (bb > 0) {
       final p = _pop(bb);
-      final w = 150.0 * p, h = 40.0 * p;
+      final w = 190.0 * p, h = 50.0 * p;
+      final cy = center.dy + rr + 82;
       final r = RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(s.width / 2, s.height * 0.12),
-          width: w,
-          height: h,
-        ),
-        Radius.circular(20 * p),
+        Rect.fromCenter(center: Offset(s.width / 2, cy), width: w, height: h),
+        Radius.circular(25 * p),
       );
-      c.drawRRect(r, Paint()..color = V13.sun);
-      c.drawRRect(r, _line(3));
-      if (p > 0.7) {
-        _textAt(
-          c,
-          'Day One badge',
-          Offset(s.width / 2, s.height * 0.12),
-          size: 15 * p,
-        );
-      }
+      c.drawRRect(r, _fill(V13.sun));
+      c.drawRRect(r, _line(4));
+      if (p > 0.7) _textAt(c, 'Day One badge', r.center, size: 19 * p);
     }
   }
 
   @override
-  bool shouldRepaint(_LevelPainter o) => o.t != t;
+  bool shouldRepaint(_LevelScene o) => o.t != t || o.stage != stage;
 }
 
 /// Soft, flat background shapes that drift slowly behind the pages (depth
-/// without shadows), parallaxed by the page position and the slow [drift].
+/// without shadows); full-screen, so no shape is ever cut by a container.
 class CloudsPainter extends CustomPainter {
   CloudsPainter({required this.pos, required this.drift});
 
@@ -805,7 +1024,7 @@ class CloudsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size s) {
-    final paint = Paint()..color = V13.white.withValues(alpha: 0.28);
+    final paint = Paint()..color = V13.white.withValues(alpha: 0.26);
     void cloud(double bx, double by, double scale, double depth) {
       final dx =
           bx * s.width -

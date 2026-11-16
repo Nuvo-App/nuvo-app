@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -226,26 +227,71 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
       ),
       child: AnimatedBuilder(
         animation: Listenable.merge([_controller, _drift]),
-        builder: (context, _) => ColoredBox(
-          color: _field,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: CloudsPainter(pos: _pos, drift: _drift.value),
+        builder: (context, _) => LayoutBuilder(
+          builder: (context, box) {
+            final mq = MediaQuery.of(context);
+            final screen = Size(box.maxWidth, box.maxHeight);
+            // The hero's stage: between the header and the title block.
+            final compact = screen.height < 640;
+            final textBlock = compact ? 150.0 : 190.0;
+            const cta = 88.0;
+            final top = mq.padding.top + 56;
+            final bottom = screen.height - mq.padding.bottom - cta - textBlock;
+            final stage = Rect.fromLTRB(
+              0,
+              top,
+              screen.width,
+              math.max(top + 120, bottom),
+            );
+            return ColoredBox(
+              color: _field,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        painter: CloudsPainter(pos: _pos, drift: _drift.value),
+                      ),
+                    ),
                   ),
-                ),
+                  // Full-screen scenes (no clip, no box): the page's scene
+                  // and its neighbour slide as whole layers with parallax.
+                  for (var i = 0; i < _pages.length; i++)
+                    if ((i - _pos).abs() < 1.05)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Opacity(
+                            opacity: (1 - (i - _pos).abs()).clamp(0.0, 1.0),
+                            child: Transform.translate(
+                              offset: Offset(
+                                (i - _pos) * screen.width * 0.5,
+                                0,
+                              ),
+                              child: AnimatedBuilder(
+                                animation: _play,
+                                builder: (context, _) => IntroDemo(
+                                  kind: i,
+                                  stage: stage,
+                                  t: i == _page
+                                      ? _play.value
+                                      : (_played.contains(i) ? 1.0 : 0.0),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  SafeArea(child: _content(compact)),
+                ],
               ),
-              SafeArea(child: _content()),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _content() {
+  Widget _content(bool compact) {
     return Column(
       children: [
         Padding(
@@ -303,12 +349,7 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
             onPageChanged: _onPage,
             itemBuilder: (context, i) => _PageBody(
               page: _pages[i],
-              kind: i,
-              pos: _pos,
-              index: i,
-              t: i == _page
-                  ? _play
-                  : AlwaysStoppedAnimation(_played.contains(i) ? 1.0 : 0.0),
+              compact: compact,
               onReplay: () {
                 if (i == _page && !NuvoMotion.reduceMotionOf(context)) {
                   _fired.clear();
@@ -353,49 +394,28 @@ class _ObIntroPagesStepState extends ConsumerState<ObIntroPagesStep>
 class _PageBody extends StatelessWidget {
   const _PageBody({
     required this.page,
-    required this.kind,
-    required this.pos,
-    required this.index,
-    required this.t,
+    required this.compact,
     required this.onReplay,
   });
 
   final _Page page;
-  final int kind;
-  final double pos;
-  final int index;
-  final Animation<double> t;
+  final bool compact;
   final VoidCallback onReplay;
 
   @override
   Widget build(BuildContext context) {
-    // Parallax: the demo drifts against the swipe and softens as it leaves.
-    final delta = (index - pos).clamp(-1.0, 1.0);
-    final demoShift = delta * 90;
-    final demoFade = (1 - delta.abs() * 0.8).clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: LayoutBuilder(
         builder: (context, c) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // The scene shows through here; a tap on it replays (explicit).
             Expanded(
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
+                behavior: HitTestBehavior.translucent,
                 onTap: onReplay,
-                child: Opacity(
-                  opacity: demoFade,
-                  child: Transform.translate(
-                    offset: Offset(demoShift, 0),
-                    child: ClipRect(
-                      child: AnimatedBuilder(
-                        animation: t,
-                        builder: (context, _) =>
-                            IntroDemo(kind: kind, t: t.value),
-                      ),
-                    ),
-                  ),
-                ),
+                child: const SizedBox.expand(),
               ),
             ),
             // Scales down (never overflows) on small screens / large type.
@@ -411,12 +431,20 @@ class _PageBody extends StatelessWidget {
                     children: [
                       Text(
                         page.title,
-                        style: V13.title.copyWith(fontSize: 38, height: 1.05),
+                        style: V13.title.copyWith(
+                          fontSize: compact ? 30 : 38,
+                          height: 1.05,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         page.body,
-                        style: V13.body.copyWith(fontSize: 17, color: V13.navy),
+                        style: V13.body.copyWith(
+                          fontSize: compact ? 15 : 17,
+                          color: V13.navy,
+                        ),
+                        maxLines: compact ? 2 : null,
+                        overflow: compact ? TextOverflow.ellipsis : null,
                       ),
                       const SizedBox(height: 24),
                     ],
